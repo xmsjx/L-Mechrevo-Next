@@ -1015,6 +1015,11 @@ public class MechrevoHw : IDisposable
 	{
 		get
 		{
+			// NUC/UMI 30 系键盘是 HID 单键 RGB；GCU 不回报 KeyboardType，按 HID 能力补入口。
+			if (IsIntelNucMachine || IsUmiMachine)
+			{
+				return true;
+			}
 			if (!Capabilities.Keyboard)
 			{
 				return KeyboardStatusSeen;

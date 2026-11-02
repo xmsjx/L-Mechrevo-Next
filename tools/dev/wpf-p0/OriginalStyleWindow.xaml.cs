@@ -3772,6 +3772,21 @@ public partial class OriginalStyleWindow : Window
         try
         {
             long now = Environment.TickCount64;
+            MechrevoHw? nucHw = _backendProbe?.Hw;
+            bool nucKeyboard = nucHw?.IsIntelNucMachine == true || nucHw?.IsUmiMachine == true;
+            if (nucKeyboard && (code == 177 || code == 178 || code == 185 || code == 193
+                || (code >= 59 && code <= 63)))
+            {
+                if (now - _lastBrightnessHotkeyTick < 250)
+                {
+                    return;
+                }
+                _lastBrightnessHotkeyTick = now;
+                int next = ((_lastKbdHotkeyLevel < 0 ? 1 : _lastKbdHotkeyLevel) + 1) % 3;
+                _lastKbdHotkeyLevel = next;
+                ShowNucKeyboardOsd(next);
+                return;
+            }
             if (code >= 59 && code <= 63)
             {
                 if (now - _lastBrightnessHotkeyTick < 120)
@@ -3967,6 +3982,18 @@ public partial class OriginalStyleWindow : Window
         OsdService.Show(LightChannelGlyph("Keyboard/Ctrl"), WpfStrings.OsdLighting,
             white ? Math.Clamp(clamped, 0, 2) + "/2" : clamped + "/4");
         Logger.WriteError("[kbd-osd] ACPI 亮度 → " + clamped + "/4");
+    }
+
+    /// <summary>NUC/UMI 单键 RGB 键盘：Fn+F8 由固件切三档，LM 只提示不写 HID。</summary>
+    private void ShowNucKeyboardOsd(int level)
+    {
+        int clamped = Math.Clamp(level, 0, 2);
+        _lastKeyboardBrightnessOsd = clamped;
+        string text = clamped <= 0
+            ? WpfStrings.L("关", "Off")
+            : (clamped >= 2 ? WpfStrings.L("高", "High") : WpfStrings.L("低", "Low"));
+        OsdService.Show(LightChannelGlyph("Keyboard/Ctrl"), WpfStrings.OsdLighting, text);
+        Logger.WriteError("[kbd-osd] NUC 键盘亮度 → " + clamped + "/2");
     }
 
     // OSD 交互参考：OpenRevo (https://github.com/faintonce/open-revo, GPL-3.0)。
@@ -8936,7 +8963,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             LightChannelSettings keyboard = MechrevoLite.Hardware.LightingSettingsStore.Load("Keyboard/Ctrl", "Single");
-            if (keyboard.PowerExplicit)
+            if (keyboard.PowerExplicit && !IsNucLike(_backendProbe.Hw))
             {
                 _syncingLighting = true;
                 KeyboardLightSwitch.IsChecked = keyboard.PowerOn;
