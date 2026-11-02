@@ -101,3 +101,25 @@ tools/dev/wpf-p0/bin-alt/
 
 
 tools/dev/nuc-perfkey-probe/perfkey-*.txt
+
+# ── 八、历史诊断包 / 验证截图 / 一次性开发脚本（不进仓库）────────────────
+# 这些是跑出来的证据或一次性 patch/log 脚本，历史价值由 git 提交记录保留；
+# ⛔ 不再把原始诊断包、UI 验证截图、下载数据和临时脚本塞进仓库。
+docs/diag-packs/
+docs/screenshots/
+docs/notes/downloads-*/
+docs/MainWindow-After2-*.txt
+
+tools/dev/__pycache__/
+tools/dev/*.pyc
+tools/dev/_*.py
+tools/dev/append_log_*.py
+tools/dev/append_changelog_*.py
+tools/dev/write_log_*.py
+tools/dev/write_logs_*.py
+tools/dev/*marker*.txt
+tools/dev/reg_*.json
+tools/dev/*_dump.txt
+tools/dev/mojibake*.txt
+tools/dev/wpf-p0/preview*.png
+
