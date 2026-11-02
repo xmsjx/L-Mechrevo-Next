@@ -46,6 +46,18 @@
                 <Setter Property="FontWeight" Value="Normal" />
             </Style>
 
+            <Style TargetType="ToolTip">
+                <Setter Property="Background" Value="{DynamicResource PopupBrush}" />
+                <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Padding" Value="8,5" />
+                <Setter Property="HasDropShadow" Value="False" />
+                <Setter Property="FontFamily" Value="{DynamicResource AppFontFamily}" />
+                <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
+                <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
+            </Style>
+
             <Style x:Key="MutedText" TargetType="TextBlock">
                 <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
                 <Setter Property="FontSize" Value="12" />
