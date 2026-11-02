@@ -123,7 +123,10 @@ jobs:
           & $sevenZip x "installer-src/files/GCU/GCU.7z" "-oinstaller-src/files/GCU" -y
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $sevenZa = "${env:ProgramFiles}\7-Zip\7za.exe"
-          if (-not (Test-Path $sevenZa)) { throw "7za.exe not found" }
+          if (-not (Test-Path $sevenZa)) {
+            $sevenZa = $sevenZip
+          }
+          if (-not (Test-Path $sevenZa)) { throw "7za.exe/7z.exe not found" }
           Copy-Item $sevenZa "installer-src/files/GCU/7za.exe" -Force
 
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
