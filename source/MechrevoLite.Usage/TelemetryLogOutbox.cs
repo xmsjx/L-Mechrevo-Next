@@ -15,14 +15,14 @@ namespace MechrevoLite.Usage;
 //  - 落盘失败向上抛出，由 UsageTelemetry.PersistLog 记 "usage log backlog write failed"（可观测）
 internal sealed class TelemetryLogOutbox
 {
-	// 上游常量：32 批。这里保留同名常量，实际上限由 AppConfig 覆盖。
+	// 旧版常量：32 批。这里保留同名常量，实际上限由 AppConfig 覆盖。
 	internal const int MaxBatches = 32;
 
 	internal const int MinBatches = 8;
 
 	internal const int AbsoluteMaxBatches = 128;
 
-	// 上游单批上限 131072 B（序列化后）；这里放宽到 196608 留出 JSON 包装余量再判。
+	// 旧版单批上限 131072 B（序列化后）；这里放宽到 196608 留出 JSON 包装余量再判。
 	internal const int MaxEntryBytes = 196608;
 
 	// 隔离的坏条目最多保留这么多，再坏的按最旧淘汰，避免 *.invalid 无限堆积吃满磁盘。

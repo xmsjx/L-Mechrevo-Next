@@ -1,8 +1,7 @@
-// 来源：_upstream\0.290.6\decomp\MechrevoLite.Hardware\LegacyMifsWmi.cs（作者 0.290.6 实现，语义照抄）。
 // 用途：老机型（无 GCU 的新通路）通过 WMI 类 root\WMI:MICommonInterface 读写**内置性能档**：
 //   读 = MiInterface(InData[1]=250) 后解析 OutData；写 = MiInterface(InData[1]=251) 后再回读确认。
-//   档位映射沿用作者口径：内部 0/1/2 <-> MIFS 2/0/1，回读 1 与 3 都算档位 2。
-// 许可/署名：与上游同一实现，见 THIRD-PARTY-NOTICES.md 与 LICENSES\。
+//   档位映射沿用协议口径：内部 0/1/2 <-> MIFS 2/0/1，回读 1 与 3 都算档位 2。
+// 许可/署名：与旧版同一实现，见 THIRD-PARTY-NOTICES.md 与 LICENSES\。
 // ⚠️ 2026-10-15 C-1 第 1 步：纯增量底座。
 // ✅ 2026-10-15 C-1 第 2 步（本轮）：已接线 —— 由 MechrevoBackendOrder.Probe() 按有序候选表探测，
 //    探中即 ActiveBackend=LegacyMifs（见 MechrevoHw.ConnectAsync / ApplyLegacyBackendAsync）。

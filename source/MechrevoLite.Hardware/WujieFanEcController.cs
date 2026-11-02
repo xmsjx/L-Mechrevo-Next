@@ -11,7 +11,7 @@ namespace MechrevoLite.Hardware;
 /// 这是无界 EC 风扇占空比实际可写的通道；占空比目标为主扇 0x1804、副扇 0x1809（0..200 = 0..100%），
 /// 温度 0x043E，转速 0x0464/0x046C（大端）。</para>
 ///
-/// <para>默认走 **table 后端**（0x0F20/0x0F50 前 8 字节 + 0x0727 bit6 锁存；上游 WUJIE 实机已验证），
+/// <para>默认走 **table 后端**（0x0F20/0x0F50 前 8 字节 + 0x0727 bit6 锁存；旧版 WUJIE 实机已验证），
 /// 目标不变时停写、EC 自己保持；direct 25Hz 直写保留为回退/对照（只写主扇会让副扇被 EC 斜坡挪到 0）。</para>
 ///
 /// <para>安全：45℃ 以下不接管（EC 低温会停转）；副扇 20% 下限；≥85℃ 强制 100%；≥95℃ 停止交还 EC；
@@ -643,7 +643,7 @@ internal sealed class WujieFanEcController : IDisposable
 			secondaryTemp = gpuTemp;
 		}
 		int gpuTarget = (secondaryTemp >= 85) ? 100 : ResolveDuty(_gpuTemps, _gpuDuties, _validGpu, secondaryTemp);
-		// table 后端沿用上游 WUJIE 实测口径：5% 下限（EC 自身约 1745 RPM 地板）；direct 仍保持 20%。
+		// table 后端沿用旧版 WUJIE 实测口径：5% 下限（EC 自身约 1745 RPM 地板）；direct 仍保持 20%。
 		if (cpuTarget < WujieFanEc.TableFanFloorPercent)
 		{
 			cpuTarget = WujieFanEc.TableFanFloorPercent;

@@ -6,7 +6,7 @@ namespace MechrevoLite.Hardware;
 /// 2026-10-29（A5 · 真 bug：Logo/灯带选「混合(Mix)」被固件直接关灯）：
 /// 灯带 / Logo / 铰链 / 同步四个**非键盘**灯效通道的 <c>color.isCircular</c> 口径 —— **逐通道 × 逐效果**一张表。
 ///
-/// <para><b>为什么必须逐效果</b>（协议依据 <c>docs\notes\GCU灯效协议-按反编译校正.md</c> §2/§3/§3b）：
+/// <para><b>为什么必须逐效果</b>（协议依据 <c>协议核对记录</c> §2/§3/§3b）：
 /// <c>isCircular</c> 决定 GCU 下发给 HID 的**颜色模式字节 b2</c>：</para>
 /// <list type="bullet">
 /// <item><c>ColorBlocks == 0</c> ⇒ <c>b2 = 0</c>（不发颜色，用固件自带色）</item>
@@ -81,7 +81,7 @@ internal static class LightbarColorPolicy
 
 	/// <summary>
 	/// <c>color.isCircular</c> 的**逐通道 × 逐效果**取值（true ⇒ b2=8 多段循环；false ⇒ b2=1 单色）。
-	/// <para>证据逐条对应 <c>docs\notes\GCU灯效协议-按反编译校正.md</c>：</para>
+	/// <para>证据逐条对应 <c>协议核对记录</c>：</para>
 	/// <list type="bullet">
 	/// <item><b>灯带</b>（§3b 表第一行）：<c>1 Single</c> ⇒ false（并把整条刷成 <c>ColorBuffer[0]</c>）；
 	/// <c>5 Rainbow</c> ⇒ **true**（厂商自塞 7 色 + <c>ColorBlocks=7</c>）；

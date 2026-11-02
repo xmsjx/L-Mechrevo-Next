@@ -26,7 +26,7 @@ internal sealed class LidStateChangedEventArgs : EventArgs
 /// 用**现有等价 API** 实现（HID：<c>KeyboardRgb.StopCurrentEffect()</c>/<c>KbPowerSyncFromHardware(false)</c>/
 /// <c>ApplyKeyboardLightAsync()</c>；EC/固件：<c>BackendProbe.SetKeyboardPowerAsync(false)</c>/
 /// <c>ApplyKeyboardLightAsync()</c>）。</para>
-/// <para>⚠️ 旧 <c>Aura.ApplyBrightness</c> / <c>InputDispatcher.GetBacklight</c> 在可得的反编译源里是
+/// <para>⚠️ 旧 <c>Aura.ApplyBrightness</c> / <c>InputDispatcher.GetBacklight</c> 在可得的协议核对源里是
 /// **空实现（stub）**（见基线提交 <c>d8c59545:source/MechrevoLite/Aura.cs</c> / <c>InputDispatcher.cs</c>），
 /// 没有可照搬的真实算法 ⇒ 本服务**不伪造**任何 Aura 行为，只按“关/恢复”两个语义调用现有 API ✅。</para>
 /// <para>⚠️ 不真实合盖：<see cref="RunSelfCheck" /> 用**合成 lParam** 校验 GUID/常量/解析，不触发硬件。</para>
@@ -36,7 +36,7 @@ internal sealed class LidSwitchService : IDisposable
     /// <summary>旧 LIDSWITCH_STATE_CHANGE GUID（与 <c>NativeMethods.PowerSettingGuid</c> 同一来源）。</summary>
     internal static readonly Guid LidSwitchGuid = NativeMethods.PowerSettingGuid.LIDSWITCH_STATE_CHANGE;
 
-    /// <summary>期望的 GUID 字面量（自检用；防止上游常量被误改）。</summary>
+    /// <summary>期望的 GUID 字面量（自检用；防止旧版常量被误改）。</summary>
     internal static readonly Guid ExpectedLidSwitchGuid = new("ba3e0f4d-b817-4094-a2d1-d56379e6a0f3");
 
     private const uint DeviceNotifyWindowHandle = 0u;

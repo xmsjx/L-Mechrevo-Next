@@ -5403,7 +5403,7 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 				}
 				else
 				{
-					// 2026-10-09（① 通用 per-key 分支补 ID， 对齐）：作者 SetLightEffect 对
+					// 2026-10-09（① 通用 per-key 分支补 ID， 对齐）：旧版 SetLightEffect 对
 					// **所有主题、每一项**都构造 ["ID"]=i（顺序 ID,R,G,B，取值来源＝该项在 ColorBuffer 中的序号，
 					// 0-based）。我们原先只有 40 系分支（上方，产物一字未动）与单分区分支带 ID，非 40 系的
 					// per-key 键盘（单键 RGB 机型 HID 掉线后回落 MQTT）落到这里 ⇒ 无 ID ⇒ 按我们自己的诊断口径
@@ -5428,7 +5428,7 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 			// 2026-10-09（灯带 bisect 开关）：外面再套 LightbarIdFixEnabled（默认 true）。
 			// ⚠️ 该开关为 false 时**整块不执行** ⇒ 这些主题一个字段都不改，仍发通用 7 段
 			// 「无 ID」ColorBuffer 帧（键只有 R/G/B）＝与 18.6 逐字一致，且不再打 lightbar payload 行。
-			// 2026-10-09（③ 扩展到铰链 / 同步， 核对）：作者 SetLightEffect 对这四个灯条主题
+			// 2026-10-09（③ 扩展到铰链 / 同步， 核对）：旧版 SetLightEffect 对这四个灯条主题
 			// **一视同仁**都带 ID（没有主题白名单），且他的 SupportsLightTopic 认 hingelight/synclight；
 			// 我们原先只补了灯带/Logo，且 SupportsLightTopic 直接拒收 Hinge/Sync ⇒ 这两行连报文都发不出去。
 			// 现把补 ID 扩到 4 个主题；主题可达性见下方 SupportsLightTopic/LightTopicToQuickSwitchKey。
@@ -6046,7 +6046,7 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 		{
 			return _hw.SupportsKeyboard;
 		}
-		// 2026-10-09（③， 对齐）：作者对四个灯条主题分别判各自的 Supports*
+		// 2026-10-09（③， 对齐）：旧版对四个灯条主题分别判各自的 Supports*
 		// 我们原先只认 logolight/lightbar ⇒ HidLightbar_Hinge/Ctrl 与 HidLightbar_Sync/Ctrl 被
 		// 整条拒收（SetLightPower/SetLightEffect 都返回 false）＝这两行**开关和效果都发不出去**，
 		// 不只是"能开关不能改效果"。现补上 hinge/sync 两个键与能力位。

@@ -5,10 +5,10 @@ using MechrevoLite.Hardware;
 namespace MechrevoLite.Battery;
 
 /// <summary>
-/// 2026-10-10（限充真效果判据 · 按上游 Leo-stro/mechrevo-charge-limit 口径）：
-/// 与 <see cref="ChargeLimitEvidence"/> **同层**的第二份证据 —— 上游口径的"真效果"判据。
+/// 2026-10-10（限充真效果判据 · 按旧版 Leo-stro/mechrevo-charge-limit 口径）：
+/// 与 <see cref="ChargeLimitEvidence"/> **同层**的第二份证据 —— 旧版口径的"真效果"判据。
 ///
-/// 背景（上游做法，实测机 = 无界 15X，非 50 系）：
+/// 背景（旧版做法，实测机 = 无界 15X，非 50 系）：
 /// ① 写 0x07B9=上限、0x07C3 原值先存后置 4，保持约 2.5s 让固件 store_limit() 把上限抄进存储区 0x087F；
 /// ② 还原 0x07C3 并**回读确认**（失败重试一次）；
 /// ③ 之后再等约 7s，读 **0x0742 的 bit2 = 1** 才算"真的生效"。
@@ -93,7 +93,7 @@ internal static class ChargeLimitEffectEvidence
 
 	/// <summary>
 	/// 一次寄存器写入**已回读确认**之后调用：异步等门控还原完成、再等 <see cref="EcChargeLimit.EffectCheckDelayMs"/>ms，
-	/// 然后只读探测并给出上游口径的判定。
+	/// 然后只读探测并给出旧版口径的判定。
 	/// ⚠️ 全程异步（<see cref="Task.Run"/> + await），**不阻塞 UI 线程**，也不持任何锁等待。
 	/// </summary>
 	internal static void Begin(int limit)
@@ -126,7 +126,7 @@ internal static class ChargeLimitEffectEvidence
 		{
 			generation = ++_generation;
 		}
-		// 先取"这次写入安排的门控还原任务"的快照：判据必须等门控**还原完成**之后再计时（上游顺序）。
+		// 先取"这次写入安排的门控还原任务"的快照：判据必须等门控**还原完成**之后再计时（旧版顺序）。
 		Task gateRestore = EcChargeLimit.GateRestoreCompleted;
 		_ = Task.Run(async delegate
 		{

@@ -308,7 +308,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 					bool clockAvailable = RyzenSmuService.SupportsClock(_smu.CpuCodeName);
 					if (clockAvailable)
 					{
-						// 2026-10-05 coread: 固定/限制频率**确实没有 Getter**（上游也只有 Set*），
+						// 2026-10-05 coread: 固定/限制频率**确实没有 Getter**（旧版也只有 Set*），
 						// 这里给一个专门的说明键，免得和"CO 不可回读"混为一谈。
 						optionList.Add(new CpuTuningOption("amd-clock", "CpuTuneClock", 1000m, RyzenSmuService.MaximumClock(_smu.CpuCodeName), "MHz", null, CanWrite: true, null, "CpuTuneClockNoReadback"));
 					}
@@ -349,7 +349,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 					_fmax = ProbeFMax(_smu);
 					text2 += "; FMax: " + _fmax.Detail;
 					// 状态键：有可写项 + 有被拒项 = 部分可用（CpuTuneSmuPartial）；全部可写 =
-					// CpuTuneSmuReady；一个可写项都没有 = CpuTuneUnsupported。键名沿用上游 CpuTune* 体系。
+					// CpuTuneSmuReady；一个可写项都没有 = CpuTuneUnsupported。键名沿用旧版 CpuTune* 体系。
 					string statusKey;
 					if (optionList.Any((CpuTuningOption o) => o.CanWrite))
 					{
@@ -368,7 +368,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 				// ==================================================================================
 				// 2026-10-10 intel（⑦B，用户原话「intel功能合并」）：**Intel 分支**（替换原 step-7B 留桩）。
 				//
-				// 逐字对齐上游（作者 0.290.6 `RuntimeCpuTuning.Probe` 的 Intel 段）：
+				// 逐字对齐旧版（旧版 `RuntimeCpuTuning.Probe` 的 Intel 段）：
 				//   1) 惰性载入外部 PawnIO\LMechrevo.IntelMSR.bin（签名模块；载入失败 -> CpuTuneProbeFailed）；
 				//   2) 对 domain 0（core）/ 2（cache）各探一次：Probe() 读能力(命令 1) + 当前值(命令 16)；
 				//      * intel-core / intel-cache —— 电压偏移，范围 -150..0 mV；CanWrite 还要看
@@ -402,7 +402,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 							intelDomain.VoltageSupported && !_denied.Contains(optionId)));
 						if (domain == 0 && !IsHybrid() && intelDomain.RatioSupported)
 						{
-							// 倍频只写 domain 0；混合架构（P/E 核）上作者不给这一项。
+							// 倍频只写 domain 0；混合架构（P/E 核）上旧版也不提供这一项。
 							optionList.Add(new CpuTuningOption("intel-ratio", "CpuTuneRatio", 8m, intelDomain.MaximumRatio, "x",
 								intelDomain.Ratio, !_denied.Contains("intel-ratio")));
 						}
@@ -411,7 +411,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 					}
 					catch (Exception ex)
 					{
-						// 单个 domain 探失败不影响另一个（与上游一致：只把原因写进 Detail）。
+						// 单个 domain 探失败不影响另一个（与旧版一致：只把原因写进 Detail）。
 						detailList.Add($"domain {domain}: {ex.Message}");
 					}
 				}
@@ -445,7 +445,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 	//   * 只有写、没有读（ShimadaPeak）    -> 不猜也不试读，说明"可写但无法回读校验"；
 	//   * 有读命令                        -> 真读一条，成功给值（含原始 response[0]），失败给固件状态码。
 	//
-	// ⚠️ 参数语义未确认（参考实现按绝对 MHz 打包，作者却说是 -1000..+200 的偏移）。
+	// ⚠️ 参数语义未确认（参考实现按绝对 MHz 打包，旧版却说是 -1000..+200 的偏移）。
 	//    所以这里**同时**带出"掩码后的值"与"原始 response[0]"，让用户/报告能自己判定。
 	// ==========================================================================================
 	private CpuFMaxProbe ProbeFMax(RyzenSmuService smu)
@@ -754,7 +754,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 				if (id.StartsWith("intel-", StringComparison.Ordinal))
 				{
 					// ==============================================================================
-					// 2026-10-10 intel（⑦B）：Intel 写入路径（上游 0.290.6 的 Intel 段，逐字对齐）。
+					// 2026-10-10 intel（⑦B）：Intel 写入路径（旧版 0.290.6 的 Intel 段，逐字对齐）。
 					//   * intel-core  -> domain 0 的电压偏移；intel-cache -> domain 2 的电压偏移；
 					//   * intel-ratio -> domain 0 的倍频（offsetMv=null）。
 					//   * ⚠️ 写入必须**回读一致**（IntelOcMailbox.WriteVerified）才走到下一行；
@@ -824,7 +824,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 					if (text.StartsWith("intel-", StringComparison.Ordinal))
 					{
 						// =========================================================================
-						// 2026-10-10 intel（⑦B）：Intel 恢复路径（上游 0.290.6 的 Intel 段，逐字对齐）。
+						// 2026-10-10 intel（⑦B）：Intel 恢复路径（旧版 0.290.6 的 Intel 段，逐字对齐）。
 						//   * 写回的是 **IntelOcMailbox 里探针第一次成功读到的基线**（Probe 时 TryAdd），
 						//     不是"猜测的默认值"；
 						//   * domain 0（core，含倍频）与 domain 2（cache）各恢复一次；
@@ -1702,7 +1702,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 	}
 
 	// 2026-10-10 intel（⑦B）：混合架构（P 核 + E 核）判定 —— CPUID.07H:EDX bit15 = Hybrid。
-	// 上游拿它决定"要不要给 intel-ratio（倍频）这一项"：混合架构上倍频语义不明确，故不给。
+	// 旧版拿它决定"要不要给 intel-ratio（倍频）这一项"：混合架构上倍频语义不明确，故不给。
 	// ⚠️ 这个位在**老 Intel**（非混合）上是 0 -> 照常给倍频；在 AMD/未知厂商上也返回 false，
 	//    但那时 Intel 分支根本走不到（调用点只在 IsIntel() 之后）。
 	internal static bool IsHybrid()

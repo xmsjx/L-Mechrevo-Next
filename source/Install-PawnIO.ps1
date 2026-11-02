@@ -2,13 +2,12 @@
 # L-Mechrevo — PawnIO 驱动安装脚本（本仓库自有脚本，非第三方代码）。
 #
 # 2026-10-10 合规：PawnIO 内核驱动本身是 GPL-2.0（https://github.com/namazso/PawnIO）。
-#   我们**不随程序分发**该驱动：本脚本在用户显式点击「下载 PawnIO 驱动」后，从上游官方发布
+#   我们**不随程序分发**该驱动：本脚本在用户显式点击「下载 PawnIO 驱动」后，从旧版官方发布
 #   自行下载，校验 SHA-256 与 Authenticode 签名后才静默安装。因此 L-Mechrevo 不承担驱动
 #   的再分发义务。许可文本（若需要）：LICENSES\GPL-2.0.txt（未随包提供，仅备注）。
 #   已按要求重新核对：namazso/PawnIO.Setup 最新发布仍为 2.2.0（GitHub API，2026-03-15 发布），
 #   其资产 sha256 摘要 = 本脚本 $expectedHash，两者一致 —— 固定值未过期。
 #
-# 恢复来源：_upstream\0.290.6\extract\{app}\Install-PawnIO.ps1（我们自己的上一个发布版本），
 #   原文 2339 B，仅在此处追加本注释块，其余内容逐字节保留。
 #   installer-src\install_script.iss 现在会把它发到 {app}\，因为
 #   source\MechrevoLite\CpuTuningForm.cs 仍以 {app}\Install-PawnIO.ps1 启动它。

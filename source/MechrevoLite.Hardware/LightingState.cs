@@ -188,7 +188,7 @@ internal static class LightingState
 	/// 2026-10-12（用户澄清「我加的部分是为非单键RGB键盘的分流」）：**GCU/MQTT <c>Keyboard/Ctrl</c>
 	/// 电源通道该不该被使用** —— 那条分流是**人为加的**，唯一用途是给**非单键 RGB**
 	/// （<c>KeyboardType∈{1,2}</c>）的键盘做分流；单键 RGB 机型（如耀世的 <c>KeyboardType=7</c>）
-	/// 走**作者自制的 HID 自定义帧**那条路 ⇒ ⛔ 永远不该收到 GCU 的键盘电源/效果下发。
+	/// 走**内置的 HID 自定义帧**那条路 ⇒ ⛔ 永远不该收到 GCU 的键盘电源/效果下发。
 	/// <para>⚠️ 这就是"分流泄漏"：<c>Program.RestoreKeyboardLightingAsync</c> 等恢复/熄灯路径原来
 	/// **不看键盘类型**就发 <c>IssueLightPower("Keyboard/Ctrl", on:false)</c> ⇒ 单键机型被反复压灭
 	/// （机主日志里那些 <c>SetLightPower(Keyboard/Ctrl, False) confirmed</c>）。</para>
@@ -222,11 +222,11 @@ internal static class LightingState
 	/// <summary>
 	/// 2026-10-12（窄化 GCU 分流 gate）：开机 / 唤醒 / 空闲恢复时**要不要补发** <c>Keyboard/Ctrl</c> 的
 	/// <c>on</c>。
-	/// <para>⭐ 作者既有的两条语义各归各位：</para>
+	/// <para>⭐ 既有的两条语义各归各位：</para>
 	/// <list type="bullet">
 	/// <item><b>非单键机型</b>（GCU 分流族，<c>KeyboardType∈{1,2}</c>）⇒ 逐字走既有
 	/// <see cref="ShouldRestoreKeyboardPower" />（这次是临时熄过灯就必发，否则只在固件报 Off 时发）。</item>
-	/// <item><b>单键机型</b>（走作者自制的 HID 自定义帧）⇒ 与作者 UI 的 HID 直通分支**同一句**语义
+	/// <item><b>单键机型</b>（走内置的 HID 自定义帧）⇒ 与旧版 UI 的 HID 直通分支**同一句**语义
 	/// （<c>SettingsForm</c>：<c>(service != null &amp;&amp; hw != null &amp;&amp; hw.IsConnected &amp;&amp;
 	/// !hw.KeyboardPower) ? SetKeyboardPower(on: true) : null</c>）——⛔ 固件电源已经报 On 时**不补发**：
 	/// 固件电源为 Off 时 HID 帧不可见（必须先上电），为 On 时再发一遍只是多一次电源抖动。</item>

@@ -37,7 +37,7 @@ internal static class LightCompatibilitySwitches
 	/// 2026-10-09（① 通用 per-key 分支补 ID）：通用 per-key 分支（非 40 系、非单分区的键盘）
 	/// 的 ColorBuffer 之前不带 ID ⇒ 按我们自己的诊断口径「无 ID ⇒ 整条 SetEffectALL 不生效」，
 	/// 单键键盘 HID 掉线回落到 MQTT 时灯效/颜色会静默失效。本开关默认 on ⇒ 该分支复用
-	/// BuildColorBufferWithIds（作者 0.290.6 的口径：每个主题每一项都带 ID=i，顺序 ID,R,G,B）。
+	/// BuildColorBufferWithIds（旧版 的口径：每个主题每一项都带 ID=i，顺序 ID,R,G,B）。
 	/// </summary>
 	internal const bool EnablePerKeyColorBufferIdFix = true;
 
@@ -92,7 +92,7 @@ internal static class LightCompatibilitySwitches
 	/// <summary>最终生效值：true=通用 per-key 分支的 ColorBuffer 带 ID（默认）；false=不带 ID（0.291.2 旧行为）。</summary>
 	internal static bool PerKeyColorBufferIdFixEnabled => ResolveCached(ref _perKeyIdFix, PerKeyIdFixEnvironmentVariable, EnablePerKeyColorBufferIdFix).Value;
 
-	/// <summary>最终生效值：true=ordinal→kind 判据（默认，作者 0.290.6 口径）；false=0.291.2 旧判据。</summary>
+	/// <summary>最终生效值：true=ordinal→kind 判据（默认，旧版 口径）；false=0.291.2 旧判据。</summary>
 	internal static bool KeyboardKindModelEnabled => ResolveCached(ref _keyboardKindModel, KeyboardKindModelEnvironmentVariable, EnableKeyboardKindModel).Value;
 
 	/// <summary>

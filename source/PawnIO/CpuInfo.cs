@@ -233,7 +233,7 @@ public static class CpuInfo
 	//            AND 第二层 SKU 层级判据（这个 SKU 厂商固件放不放行）
 	//
 	// 为什么必须补第二层（证据）：
-	//   * 上游 0.290.6 只有第一层：CurveCommand(DetectedAmdCodeName).HasValue。
+	//   * 旧版 0.290.6 只有第一层：CurveCommand(DetectedAmdCodeName).HasValue。
 	//     它回答的是"SMU 命令表里有没有这条命令"，**没有**回答"这颗 SKU 厂商放不放"。
 	//   * 【本机实测】AMD Ryzen 7 8745H（Hawk Point，CPUID 表判为 Phoenix）：
 	//     --cpu-tuning-probe 报 StatusKey=CpuTuneSmuReady，Options 里 amd-co(-30..0 CO) 与
@@ -250,7 +250,7 @@ public static class CpuInfo
 	// 分家族处理（**不一刀切**）：
 	//   * APU 家族（Zen4 + Zen5，完整名单见下面的 step7A-uvtier2 小节）：
 	//     第一层 AND 名称是 9 级（IsRyzen9Tier()）。
-	//   * **其它家族：保持上游 CPUID 行为，不额外收紧**。例：桌面 Zen4 Raphael 的 R7 是支持
+	//   * **其它家族：保持旧版 CPUID 行为，不额外收紧**。例：桌面 Zen4 Raphael 的 R7 是支持
 	//     Curve Optimizer 的，不能被本补丁误关；Renoir/Lucienne 世代（旧白名单里的
 	//     4900H / 4800H / 4600H，其中 4800H 是 R7）也属"其它家族"，CurveCommand 有值即放行
 	//     —— 与旧白名单允许这些具体型号的结论一致。
@@ -288,8 +288,8 @@ public static class CpuInfo
 	// 因此需要层级过滤的族（IsSkuTierFilteredApuFamily）为：
 	//   * Zen4 APU：Phoenix（7x4xH）/ Phoenix2（8x4xU 一档）/ HawkPoint（8x4xH）
 	//   * Zen5 APU：StrixPoint（Ryzen AI 3xx）/ StrixHalo（RYZEN AI MAX）/ KrackanPoint /
-	//     KrackanPoint2（作者表 CurveCommand 里没有 KrackanPoint2，第一层已否决；列在这里
-	//     只为将来作者表补齐时行为一致）
+	//     KrackanPoint2（旧版表 CurveCommand 里没有 KrackanPoint2，第一层已否决；列在这里
+	//     只为将来旧版表补齐时行为一致）
 	//   * RYZEN AI MAX（Strix Halo，如 "AMD RYZEN AI MAX+ 395"）按规则①**应当支持**：
 	//     它命中 ClassifyUvSkuTier() 的第 1 条（含 "RYZEN AI MAX"）-> Tier9 -> 放行。
 	//     已用自检样例验证（tools\uvshot，含 "MAX+" 变体）。
@@ -297,7 +297,7 @@ public static class CpuInfo
 	//   * **其它家族：沿用上一轮策略，不收紧**（用户规则只针对锐龙 AI / APU 系列）：
 	//     桌面 Raphael / DragonRange / GraniteRidge / Vermeer / Matisse，以及 Zen3 及更早的
 	//     Renoir / Cezanne / Lucienne / Rembrandt / Vangogh / FireFlight 等，一律
-	//     "CurveCommand 有值即放行"，与上游 0.290.6 行为一致。
+	//     "CurveCommand 有值即放行"，与旧版 0.290.6 行为一致。
 	//     ⚠️ 若日后要把桌面家族也按层级收紧，那属于**收紧**行为（会关掉桌面 R7 的 CO），
 	//        需用户确认后再动，见本轮报告的"未确定项"。
 	//
@@ -320,7 +320,7 @@ public static class CpuInfo
 	// 两层判据（cpu 为调用方已探测到的代号；probe 用驱动返回的代号，其余用 CPUID 代号）。
 	internal static bool IsSupportedUV(CpuCodeName cpu)
 	{
-		// 第一层：代号家族必须有这条 SMU curve 命令（上游 CPUID 判据，原样保留）。
+		// 第一层：代号家族必须有这条 SMU curve 命令（旧版 CPUID 判据，原样保留）。
 		if (!RyzenSmuService.CurveCommand(cpu).HasValue)
 		{
 			return false;
@@ -366,7 +366,7 @@ public static class CpuInfo
 	{
 		if (!IsSkuTierFilteredApuFamily(cpu))
 		{
-			// 其它家族：保持上游 CPUID 行为，不收紧。
+			// 其它家族：保持旧版 CPUID 行为，不收紧。
 			return null;
 		}
 		if (ClassifyUvSkuTier(name) == UvSkuTier.Tier9)

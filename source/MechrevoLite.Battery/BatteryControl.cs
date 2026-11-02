@@ -210,7 +210,7 @@ public static class BatteryControl
 			{
 				Logger.WriteLine($"EC 充电阈值已确认：上限 {appliedPercent}%（0x{1977:X3} 已写并回读确认，含 bit7 掩码）；复充下限 0x{2000:X3} 按上游口径**不再写入**、交由固件推导（期望值 {EcChargeLimit.LowerValueFor(appliedPercent)}%，只读比对见紧随的观察日志）");
 				CommitChargeLimit(appliedPercent);
-				// 2026-10-10（限充真效果判据 · 按上游口径）：上面只证明"寄存器写进去了"（旧判据）。
+				// 2026-10-10（限充真效果判据 · 按旧版口径）：上面只证明"寄存器写进去了"（旧判据）。
 				// 真效果 = 门控还原完成后再等 7s，读 0x0742 bit2=1。异步执行，不阻塞 UI，也不改任何状态。
 				ChargeLimitEffectEvidence.Begin(appliedPercent);
 			}

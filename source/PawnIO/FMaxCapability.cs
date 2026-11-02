@@ -35,7 +35,7 @@ internal enum FMaxCapability
 // ==============================================================================================
 // 一个代号上 FMax 的完整"配方"：命令 ID + 邮箱地址组 + 读命令的 arg0。
 //
-// 地址是 SMN（PCI 配置空间间接访问）地址，与上游 ZenStates-Core 的 RSMU 邮箱是同一组，
+// 地址是 SMN（PCI 配置空间间接访问）地址，与旧版 ZenStates-Core 的 RSMU 邮箱是同一组，
 // 也就是本仓库**已有的 PSMU 邮箱通路**（SendPsmuRaw -> MailboxRaw 用的就是这些寄存器语义）：
 //     ZenStates-Core 为 GPL-3.0（https://github.com/irusanov/ZenStates-Core），与本项目
 //     GPL-3.0-only 相容；许可文本见 LICENSES\GPL-3.0.txt。
@@ -54,7 +54,7 @@ internal enum FMaxCapability
 //    Genoa / StormPeak / Bergamo / Turin / TurinD / Mero（以及 Milan / Chagall / Rome / Naples）都落在
 //    default -> CpuFamily.Unknown，于是 RyzenSmuService.Initialize() 的 `Family != Unknown` 过不去、
 //    服务根本不初始化 —— 那几个代号的能力虽然在这张表里，却永远到不了邮箱。**随后两轮已经把
-//    GetFamily 按 RyzenSMU.p k_addridx + 上游 settings 分档补齐**（RyzenSmuService.GetFamily，
+//    GetFamily 按 RyzenSMU.p k_addridx + 旧版 settings 分档补齐**（RyzenSmuService.GetFamily，
 //    现在只剩 Undefined 是 Unknown），所以这些代号能真正走到邮箱了。
 //    同一轮还加了一道**族驱动命令白名单**（RyzenSmuService.LegacyFamilyCommandsApproved）：补家族
 //    只为"能初始化 + FMax 可达"，Stapm/Fast/Slow/Thm/CoGfx 这些按家族选命令的老通路对新补齐的代号

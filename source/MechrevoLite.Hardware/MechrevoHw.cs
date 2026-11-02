@@ -3005,7 +3005,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	}
 
 	// ===== 2026-10-15（C-1 第 2 步）：老机型 MICommonInterface 后端 ==========================
-	// 对照《差异与合并计划》A-22 与作者 0.290.6 实现。⚠️ 全段只在 UsesLegacyMifs 为真时才有动作；
+	// 对照《差异与合并计划》A-22 与旧版 实现。⚠️ 全段只在 UsesLegacyMifs 为真时才有动作；
 	// 本机（没有该 WMI 类）走不到这里任何一行 ⇒ 行为与改动前逐项一致。
 
 	/// <summary>

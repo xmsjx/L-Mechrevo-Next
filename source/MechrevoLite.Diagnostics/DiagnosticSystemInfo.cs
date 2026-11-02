@@ -85,8 +85,8 @@ stringBuilder.Append(DiagnosticBackendRouteInfo.Build());
 		AppendCapabilities(stringBuilder);
 		AppendPowerInput(stringBuilder);
 		// 2026-10-10（诊断补采 · 限充 EC 寄存器）：把限充相关 EC 寄存器**只读**探测一遍写进包 ——
-		// 0x07B9（实时上限）/ 0x07D0（复充下限：上游不写、LM 自 2026-10-10 起也停写，只读比对固件推导值）/ 0x07C3（产品线门控）/ 0x0742（上游口径的"生效位"）/
-		// 0x0770（ROMID 首字节）/ 0x087F（固件存储区，上游指明是 H2RAM 盲区）。
+		// 0x07B9（实时上限）/ 0x07D0（复充下限：旧版不写、LM 自 2026-10-10 起也停写，只读比对固件推导值）/ 0x07C3（产品线门控）/ 0x0742（旧版口径的"生效位"）/
+		// 0x0770（ROMID 首字节）/ 0x087F（固件存储区，旧版指明是 H2RAM 盲区）。
 		// ⚠️ 有了这一节，下一份诊断包才能直接判别"被外部改回"还是"写进去了但没生效"。
 		// ⛔ 纯只读：不写 EC/注册表/配置，不改写入行为，不改任何状态；读不到就如实写"不可读 + 原因"。
 		AppendChargeLimitEc(stringBuilder);

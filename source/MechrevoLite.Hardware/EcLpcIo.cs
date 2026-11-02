@@ -9,7 +9,7 @@ namespace MechrevoLite.Hardware;
 /// <summary>
 /// LPC / SuperIO EC 寄存器窗口通道（经 PawnIO 的 <c>LpcIO</c> 模块，slot 1 = <c>0x4E</c>/<c>0x4F</c>）。
 ///
-/// <para><b>为什么再开一条通道</b>：EC 的访问方式<b>不止一套</b>，实测与上游共确认四条：
+/// <para><b>为什么再开一条通道</b>：EC 的访问方式<b>不止一套</b>，实测与旧版共确认四条：
 /// ① ACPI EC 标准端口 <c>0x62</c>/<c>0x66</c>（命令 <c>0x92</c> 读 XRAM / <c>0x80</c> 读标准空间）
 /// —— 由 <see cref="EcPortIo"/> 走 <c>LpcACPIEC</c> 模块；
 /// ② <b>LPC EC-RAM 命令协议（本类）</b> —— 端口对 <c>0x2E</c>/<c>0x2F</c>（slot 0）
@@ -20,12 +20,12 @@ namespace MechrevoLite.Hardware;
 /// ③ 厂商控制台 7.3 的 <c>0x2E</c>/<c>0x2F</c> ＋ <c>Write_EC_Init</c> 解锁前置；
 /// ④ 斗战者的物理内存窗口 <c>0xFE800400</c>（长 <c>0xFF</c>，只覆盖标准空间）。</para>
 ///
-/// <para>⚠️ <b>四套的地址空间不同，绝不能跨套搬地址。</b> 例：两个上游都自称在读「EC 版本」，
+/// <para>⚠️ <b>四套的地址空间不同，绝不能跨套搬地址。</b> 例：两个旧版都自称在读「EC 版本」，
 /// 但一个说 <c>0xC411</c>、一个说 <c>0x8410~0x8413</c> —— 这不可能是笔误，只能是两套空间。
 /// 本类存在的意义就是把第 ② 套打通，从而能读/写 <c>0xC4xx</c>/<c>0xC8xx</c> 段
 /// （蛟龙控制台口径：EC 版本 <c>0xC411</c>、风扇目标 <c>0xC83C</c>/<c>0xC83D</c>、接管掩码 <c>0xB20</c>）。</para>
 ///
-/// <para><b>槽位选择</b>：上游 <c>LpcIO.p</c> 注释写明
+/// <para><b>槽位选择</b>：旧版 <c>LpcIO.p</c> 注释写明
 /// <i>"Slot 0 is at 0x2e/0x2f, slot 1 at 0x4e/0x4f"</i>。
 /// <b>两个槽位都支持</b>：默认（<see cref="TryReadByte"/>）走 <b>slot 1</b>，
 /// 因为 <c>JiaolongControl</c> 的 <c>ECMemoryTable</c> 用的就是
@@ -64,7 +64,7 @@ namespace MechrevoLite.Hardware;
 /// </summary>
 internal static class EcLpcIo
 {
-	// ── LPC/SuperIO 的两个槽位（上游 LpcIO.p：slot 0 = 0x2E/0x2F、slot 1 = 0x4E/0x4F）──
+	// ── LPC/SuperIO 的两个槽位（旧版 LpcIO.p：slot 0 = 0x2E/0x2F、slot 1 = 0x4E/0x4F）──
 	//
 	//  ⭐ 协议事实：两个槽位是**同一套 SuperIO 协议**的两个端口基址（不是两套协议），
 	//    用 `ioctl_select_slot(0|1)` 切换；子寄存器语义（0x11 地址高 · 0x10 地址低 · 0x12 数据）**完全相同**。
@@ -78,10 +78,10 @@ internal static class EcLpcIo
 
 	internal const ulong SlotOne = 1;
 
-	/// <summary>默认槽位 = slot 1（蛟龙控制台口径，上游 ECMemoryTable 用的就是它）。</summary>
+	/// <summary>默认槽位 = slot 1（蛟龙控制台口径，旧版 ECMemoryTable 用的就是它）。</summary>
 	internal const ulong DefaultSlot = SlotOne;
 
-	/// <summary>槽位 → 索引端口（上游 LpcIO.p：slot 0 = 0x2E、slot 1 = 0x4E）。</summary>
+	/// <summary>槽位 → 索引端口（旧版 LpcIO.p：slot 0 = 0x2E、slot 1 = 0x4E）。</summary>
 	internal static ushort IndexPortFor(ulong slot)
 	{
 		return (slot == SlotZero) ? ((ushort)0x2E) : ((ushort)0x4E);
@@ -104,7 +104,7 @@ internal static class EcLpcIo
 
 	private const string ModuleResourceName = "LMechrevo.LpcIO.bin";
 
-	// ⚠️ 与 EcPortIo 的 "Global\Access_EC" 不同：上游 LpcIO.p 的注释点名了这个互斥体
+	// ⚠️ 与 EcPortIo 的 "Global\Access_EC" 不同：旧版 LpcIO.p 的注释点名了这个互斥体
 	private const string MutexName = "Global\\Access_ISABUS.HTP.Method";
 
 	internal const int TimeoutMs = 250;
@@ -246,7 +246,7 @@ internal static class EcLpcIo
 	/// 只读：**指定槽位**读 EC 一个字节。
 	///
 	/// <para>⭐ 为什么要能换槽位：slot 0（<c>0x2E</c>/<c>0x2F</c>）与 slot 1（<c>0x4E</c>/<c>0x4F</c>）
-	/// 是**同一套 SuperIO 协议**的两个端口基址、指向**同一片 XRAM**（上游 <c>LpcIO.p</c>：
+	/// 是**同一套 SuperIO 协议**的两个端口基址、指向**同一片 XRAM**（旧版 <c>LpcIO.p</c>：
 	/// <i>"Slot 0 is at 0x2e/0x2f, slot 1 at 0x4e/0x4f"</i>）。
 	/// 同一地址在两个槽位各读一次，即可把「**读回全 <c>0xFF</c> 是槽位不对**」与
 	/// 「**本机读不到**」分开 —— 只读一个槽位时这两种失败长得一样。</para>

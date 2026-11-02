@@ -9,7 +9,6 @@ namespace PawnIO;
 // ==============================================================================================
 // 2026-10-10 intel（⑦B）：Intel OC 邮箱（MSR 0x150）通路。
 //
-// 来源：上游（作者 0.290.6）`PawnIO\IntelOcMailbox.cs`（5,973 B / 244 行）**逐字移植**（含量程与位布局），
 //      协议来源 kitsunyan/intel-undervolt（GPL-3.0）—— 署名见 THIRD-PARTY-NOTICES.md §1.3。
 //      模块二进制 = LMechrevo.IntelMSR.bin（PawnIO.Modules，LGPL-2.1-or-later），
 //      见 source\L-Mechrevo.csproj 的 <EmbeddedResource> 与 THIRD-PARTY-NOTICES.md §1.2 B4。
@@ -19,7 +18,7 @@ namespace PawnIO;
 //      上**永远不会执行**，**未经过任何真机 Intel 写入验证**。切勿在没有 Intel 真机的情况下
 //      用手写工具或单元测试去调 Apply/WriteVerified —— 那是真的写 MSR。
 //
-// 关键语义（A-31 / A-32，作者在 0.290.6 的收口）：
+// 关键语义（A-31 / A-32，旧版在 0.290.6 的收口）：
 //   * Command()    —— 写 MSR 0x150：bit63 置位表示"有请求"，(domain<<40) | (command<<32) | value；
 //                     写完再读同一条 MSR，取 bit32..39 当作响应码，非 0 = 固件拒绝。
 //                     command 17 = 写入，16 = 读回，1 = 读能力。

@@ -6,12 +6,12 @@
 // 派生声明 / Derived-work notice:
 //   * 本文件的 SMU 命令表（CurveCommand / CurvePerCoreCommand / CurveReadCommand / ClockCommand /
 //     Stapm / Fast / Slow / Thm / CoGfx）与邮箱地址表（GetMp1Addrs / GetPsmuAddrs）是**派生作品**：
-//     它们与下列上游逐条同源（命令 ID / 通道 / 参数打包 / 调用顺序），
+//     它们与下列旧版逐条同源（命令 ID / 通道 / 参数打包 / 调用顺序），
 //     L-Mechrevo 只是把它们重写成按代号的 C# 表并补了守卫（逐条对照见 ATTRIBUTION-CO-ADDENDUM.md）：
 //         seerge/g-helper   app/Pawn/RyzenSmu.cs  https://github.com/seerge/g-helper           (GPL-3.0)
 //         irusanov/ZenStates-Core                 https://github.com/irusanov/ZenStates-Core    (GPL-3.0)
 //         FlyGoat/RyzenAdj  lib/api.c             https://github.com/FlyGoat/RyzenAdj           (LGPL-3.0)
-//     注：本仓库**保留了一份与 g-helper 上游逐字节相同**的参考副本
+//     注：本仓库**保留了一份与 g-helper 旧版逐字节相同**的参考副本
 //         diagnostics\smudbg-reference-20261005\key-files\ghelper_RyzenSmu.cs
 //         （22,317 B，SHA-256 07925B97DEF1A77D4A7F5D1D3B896032B0D10BF3DF635B0CCE6E603D5EEDDE35），
 //         它就是这张表的来源文件。
@@ -160,9 +160,9 @@ public sealed class RyzenSmuService : IDisposable
 	// 与上面的 SetCoAll（全核写）**完全并列**：本方法不改 SetCoAll / ClockCommand / Publish 的
 	// 任何既有语义，只是在**已实测通过**的代号上多提供一条逐核写路径。
 	//
-	// 命令 / 位宽 / 编码（全部来自上游 ZenStates-Core，且台式机实测确认）：
+	// 命令 / 位宽 / 编码（全部来自旧版 ZenStates-Core，且台式机实测确认）：
 	//   * 命令 ID  = MP1 0x35（Mp1Smu.SMU_MSG_SetDldoPsmMargin；Zen3Settings.cs:22 =
-	//                "SetPsmMarginSingleCore"，上游在 Vermeer 上走的就是它）；
+	//                "SetPsmMarginSingleCore"，旧版在 Vermeer 上走的就是它）；
 	//   * 通道     = MP1 邮箱（GetMp1Addrs(Matisse 家族) —— Matisse/Vermeer 共用同一组地址）；
 	//   * margin   = **16 位二补码**（Utils.cs:178-184 MakePsmMarginArg：(margin<0?0x100000:0)+margin 再 &0xFFFF；
 	//                -5 -> 0xFFFB）。注意：LM 自己的 EncodeCurve 编成 **低 20 位**，两者**不同**，
@@ -170,7 +170,7 @@ public sealed class RyzenSmuService : IDisposable
 	//   * arg0     = (ccd << 28) | ((core % 8) << 20) | margin
 	//                （Cpu.cs:929-940 MakeCoreMask + SetPsmMarginSingleCore.cs:20-27 的
 	//                 [31-28]ccd | [27-24]ccx | [23-20]core | [15-0]margin 布局）。
-	//                本仓库**没有 APOB 解析**，所以沿用上游在无映射时的假设：每 CCD 8 核，
+	//                本仓库**没有 APOB 解析**，所以沿用旧版在无映射时的假设：每 CCD 8 核，
 	//                ccd = core / 8、localCore = core % 8。8 核单 CCD 的 5700X 上 ccd 恒 0，
 	//                这个假设实际未被使用（arg0 会打进日志，可逐条核对）。
 	//
@@ -213,7 +213,7 @@ public sealed class RyzenSmuService : IDisposable
 	// ==========================================================================================
 	// 2026-10-10 co-attribution: **本文件按代号的 SMU 命令表是派生作品**（不是自创的命令 ID）。
 	//
-	// 逐组来源、许可、"像到什么程度"（完整逐条对照 / 上游 URL / blob 校验见
+	// 逐组来源、许可、"像到什么程度"（完整逐条对照 / 旧版 URL / blob 校验见
 	// ATTRIBUTION-CO-ADDENDUM.md；清单见 THIRD-PARTY-NOTICES.md S6/S7/S8；许可文本见 LICENSES\）：
 	//
 	//  ① seerge/g-helper — `app/Pawn/RyzenSmu.cs`  (GPL-3.0)
@@ -238,38 +238,37 @@ public sealed class RyzenSmuService : IDisposable
 	//         - 邮箱事务     MailboxRaw / SendMp1 / SendPsmu / GetMp1Addrs / GetPsmuAddrs 的算法**与全部
 	//                        12 组 SMN 地址常量** == g-helper :434-589。
 	//     * 本仓库保留的参考副本 `diagnostics\smudbg-reference-20261005\key-files\ghelper_RyzenSmu.cs`
-	//       与上述上游**逐字节相同**（22,317 B，SHA-256 07925B97DEF1A77D4A7F5D1D3B896032B0D10BF3DF635B0CCE6E603D5EEDDE35）。
+	//       与上述旧版**逐字节相同**（22,317 B，SHA-256 07925B97DEF1A77D4A7F5D1D3B896032B0D10BF3DF635B0CCE6E603D5EEDDE35）。
 	//
 	//  ② irusanov/ZenStates-Core  (GPL-3.0)  https://github.com/irusanov/ZenStates-Core
 	//     * 每核 CO 写（CurvePerCoreCommand + EncodePerCoreCurveArg + SetCoPerCore）：
 	//         MP1 0x35 = `Mp1Smu.SMU_MSG_SetDldoPsmMargin`（Zen3Settings.cs:22）；
-	//         arg0 = (ccd<<28)|((core%8)<<20)|(margin&0xFFFF) 与上游 `Cpu.cs:932-940 MakeCoreMask`
+	//         arg0 = (ccd<<28)|((core%8)<<20)|(margin&0xFFFF) 与旧版 `Cpu.cs:932-940 MakeCoreMask`
 	//         + `SetPsmMarginSingleCore.cs:20-29`（`(coreMask & 0xfff00000) | Utils.MakePsmMarginArg(margin)`）
 	//         **逐位相同**；margin 的 16 位二补码同 `Utils.cs:180-184`。→ **identical**。
-	//         （唯一差异是 ccd/core 的取值来源：上游读 APOB 核心映射，本仓库假设每 CCD 8 核。）
 	//     * CO 回读（CurveReadCommand）：0xE1（APUSettings1_Phoenix.cs:19）、0xC3（…_Cezanne.cs:8）、
 	//         0x2F（…_Rembrandt.cs:8）、0xAF（…_Strix.cs:11）、0xD5（Zen4Settings.cs:39）、
-	//         0xA3（Zen5Settings_ShimadaPeak.cs:35）、0x7C（Zen2Settings.cs:35，上游自注 "// Not sure"）；
+	//         0xA3（Zen5Settings_ShimadaPeak.cs:35）、0x7C（Zen2Settings.cs:35，旧版自注 "// Not sure"）；
 	//         通道 = Rsmu（= 本文件的 PSMU 邮箱），arg0 = coreMask，同
 	//         `Commands/GetPsmMarginSingleCore.cs:9-16`。→ **ID / 通道 / arg 语义 identical**。
-	//         ⚠️ `DecodeCurveMargin` 的"32 位 -> 20 位 -> 16 位"解码阶梯**没有**上游对应物，
-	//            是本仓库自己的判定 —— 别把它当成上游定义。
+	//         ⚠️ `DecodeCurveMargin` 的"32 位 -> 20 位 -> 16 位"解码阶梯**没有**旧版对应物，
+	//            是本仓库自己的判定 —— 别把它当成旧版定义。
 	//     * 全核 CO 的 Vermeer 行（PSMU 0x0B）：值 = `Zen2Settings.cs:34
 	//         Rsmu.SMU_MSG_SetAllDldoPsmMargin = 0xB; // Not sure`（Zen3Settings 继承）；
-	//         上游 Zen3 **自己**的写命令是 MP1 0x36（Zen3Settings.cs:23）。该行 g-helper / RyzenAdj 都没有。
-	//     * 全核 CO 的 Raphael 行（PSMU 0x07）：= `Zen4Settings.cs:37`；但上游运行期选择器
+	//         旧版 Zen3 **自己**的写命令是 MP1 0x36（Zen3Settings.cs:23）。该行 g-helper / RyzenAdj 都没有。
+	//     * 全核 CO 的 Raphael 行（PSMU 0x07）：= `Zen4Settings.cs:37`；但旧版运行期选择器
 	//         （`SetPsmMarginAllCores.cs:92-94`）会**先发 MP1 0x36** —— 我们与 g-helper/RyzenAdj 一样走
-	//         PSMU 0x07（同一张上游表里的另一个条目 + 不同的通道优先级）。
+	//         PSMU 0x07（同一张旧版表里的另一个条目 + 不同的通道优先级）。
 	//     * 固定频率 OC 的 ID：Matisse/Vermeer MP1 0x24/0x26/0x25 = Zen2Settings.cs:60-63；
 	//         Raphael 族 PSMU 0x5D/0x5F/0x5E = Zen4Settings.cs:23-25；
 	//         Renoir 族 MP1 0x2F/0x31/0x30 = APUSettings1.cs:96-98；
 	//         Mobile 族 PSMU 0x17/0x19/0x18 = APUSettings1.cs:34-36。→ **identical（ID + 通道）**。
 	//     * 功率/温度 ID：Raven 0x1A/0x1B/0x1C/0x1F（APUSettings0.cs:65-70）、Renoir 族 0x14/0x15/0x16/0x19
 	//         （APUSettings1.cs:73-78）、Raphael 族 0x4F/0x3E/0x5F/0x3F（Zen4Settings.cs:66-72）。
-	//         ⚠️ 但通道**优先级**不同：上游 `Commands/SetSmuLimit.cs` / `SetTctlMax.cs` 是"先 Rsmu 后 Mp1"，
+	//         ⚠️ 但通道**优先级**不同：旧版 `Commands/SetSmuLimit.cs` / `SetTctlMax.cs` 是"先 Rsmu 后 Mp1"，
 	//         本表（同 g-helper / RyzenAdj）是"先 Mp1"。
-	//     * 打包**有意的差异**：上游 `Utils.MakePsmMarginArg` 把 CO margin 编低 **16** 位（-5 -> 0xFFFB），
-	//         本文件 `EncodeCurve` 编低 **20** 位（-5 -> 0xFFFFB）—— 这是本仓库自己的约定，不是上游的。
+	//     * 打包**有意的差异**：旧版 `Utils.MakePsmMarginArg` 把 CO margin 编低 **16** 位（-5 -> 0xFFFB），
+	//         本文件 `EncodeCurve` 编低 **20** 位（-5 -> 0xFFFFB）—— 这是本仓库自己的约定，不是旧版的。
 	//     * FMax（PBO boost limit）部分另有独立声明，见下方 FMax 小节的"来源与许可"。
 	//
 	//  ③ FlyGoat/RyzenAdj  (LGPL-3.0)  https://github.com/FlyGoat/RyzenAdj  （`lib/api.c`）
@@ -291,16 +290,16 @@ public sealed class RyzenSmuService : IDisposable
 	//         本轮**没有**定位到 UXTU 的对应源码行，因此只作**礼节性致谢**记入清单，
 	//         **不声称**已核对的 ID 匹配。
 	//
-	//  ④ 明确"没找到上游"的两处（**本轮不改**，只登记，见 addendum §8）：
-	//     * Zen1/Zen+ 的 ClockCommand 行（MP1 0x23 / 0x39 / 0x24）在上游 master 里**找不到**：
+	//  ④ 明确"没找到旧版"的两处（**本轮不改**，只登记，见 addendum §8）：
+	//     * Zen1/Zen+ 的 ClockCommand 行（MP1 0x23 / 0x39 / 0x24）在旧版 master 里**找不到**：
 	//       ZenSettings.cs:51-53 是 0x37 / 0x39 / 0x37，而 0x23 / 0x24 在它表里是
 	//       `AcBtcStartCal` / `AcBtcStopCal`（ZenSettings.cs:57-59）。疑似老版本转录或误抄。
-	//     * 温度命令的 Matisse 族用 0x3E（= 上游 Zen3Settings.cs:17）；真 Zen2 上游是 0x3D
+	//     * 温度命令的 Matisse 族用 0x3E（= 旧版 Zen3Settings.cs:17）；真 Zen2 旧版是 0x3D
 	//       （Zen2Settings.cs:55）——本仓库的 CpuFamily.Matisse 同时涵盖 Matisse 与 Vermeer。
 	//
 	//  ⑤ 结论：g-helper（GPL-3.0）、ZenStates-Core（GPL-3.0）、RyzenAdj（LGPL-3.0）、UXTU（GPL-3.0）
 	//     与本项目 GPL-3.0-only **全部相容**；许可文本见 LICENSES\GPL-3.0.txt（LGPL-2.1 模块另有
-	//     LICENSES\LGPL-2.1.txt）；第三方清单见 THIRD-PARTY-NOTICES.md；逐条对照与上游 URL 见
+	//     LICENSES\LGPL-2.1.txt）；第三方清单见 THIRD-PARTY-NOTICES.md；逐条对照与旧版 URL 见
 	//     ATTRIBUTION-CO-ADDENDUM.md。
 	// ==========================================================================================
 	// 2026-10-05 step7A (upstream 0.290.6 A-33): per-codename command tables replace the old
@@ -429,16 +428,16 @@ public sealed class RyzenSmuService : IDisposable
 	// 2026-10-05 coread: **只读** CO 回读命令表（每核一条 GetDldoPsmMargin）。
 	//
 	// 来源（与 LM 同一套通道，已实测）：
-	//   * 上游引擎 ZenStates-Core 的 *Settings.cs 里 Rsmu.SMU_MSG_GetDldoPsmMargin：
+	//   * 旧版引擎 ZenStates-Core 的 *Settings.cs 里 Rsmu.SMU_MSG_GetDldoPsmMargin：
 	//       Phoenix / Phoenix2 / HawkPoint          = 0xE1  (APUSettings1_Phoenix.cs)
 	//       Cezanne                                 = 0xC3  (APUSettings1_Cezanne.cs)
 	//       Rembrandt / Mendocino                   = 0x2F  (APUSettings1_Rembrandt.cs; Mendocino 同族)
 	//       StrixPoint / StrixHalo / KrackanPoint   = 0xAF  (APUSettings1_Strix.cs)
 	//       Raphael / GraniteRidge / DragonRange    = 0xD5  (Zen4Settings.cs)
 	//       ShimadaPeak (Zen5)                      = 0xA3  (Zen5Settings_ShimadaPeak.cs)
-	//       其余（Renoir / Lucienne / VanGogh / Picasso / RavenRidge / Zen1 / Zen2 ...）上游留 0
+	//       其余（Renoir / Lucienne / VanGogh / Picasso / RavenRidge / Zen1 / Zen2 ...）旧版留 0
 	//       —— **没有**读命令，本表返回 null = 不可回读，绝不猜 ID 盲试。
-	//   * 通道：SMU_MSG_GetDldoPsmMargin 在上游一律是 **Rsmu（= 本文件的 PSMU 邮箱）** 属性，
+	//   * 通道：SMU_MSG_GetDldoPsmMargin 在旧版一律是 **Rsmu（= 本文件的 PSMU 邮箱）** 属性，
 	//     所以读走 SendPsmu/GetPsmuAddrs，与写命令（Phoenix MP1 0x4C 全核写）用的是同一颗 SMU。
 	//   * 本机实测（Ryzen 7 8745H / Phoenix / SMU 0x4C6500，2026-10-05 只读）：
 	//     PSMU 0xE1 + arg0 = 裸核号 0..7 -> 全部 status OK(0x01)，resp[0] = 0x00000000。
@@ -458,23 +457,23 @@ public sealed class RyzenSmuService : IDisposable
 	//       （Mp1Smu.SMU_MSG_SetDldoPsmMargin = 0x35、SetAllDldoPsmMargin = 0x36），
 	//       **没有任何 Get 命令** —— Zen3 表里没有读命令。
 	//     * 唯一候选是 Zen3Settings 从 Zen2Settings **继承**下来的
-	//       Rsmu.SMU_MSG_GetDldoPsmMargin = 0x7C，但上游自己在同一行写着：
+	//       Rsmu.SMU_MSG_GetDldoPsmMargin = 0x7C，但旧版自己在同一行写着：
 	//           Rsmu.SMU_MSG_GetDldoPsmMargin = 0x7C; // Not sure      (Zen2Settings.cs:35)
 	//       （Zen3Settings.cs:4 `class Zen3Settings : Zen2Settings` 继承它且没有清零；
 	//         Zen2Settings.cs:11-13 的 RSMU 地址 0x3B10524/0x3B10570/0x3B10A40
 	//         与 RyzenSMU.p 的 k_addrinfo[0]（Matisse/Vermeer 共用，RyzenSMU.p:195,214）
 	//         以及本文件 GetPsmuAddrs(Matisse) 完全一致，即"RSMU == 我们的 PSMU"。）
-	//     * 上游确实**会**在 Vermeer 上发这条命令（GetPsmMarginSingleCore.cs:15-16 在
+	//     * 旧版确实**会**在 Vermeer 上发这条命令（GetPsmMarginSingleCore.cs:15-16 在
 	//       Rsmu.SMU_MSG_GetDldoPsmMargin > 0 时走 RSMU；arg0 = core<<20，见
 	//       SettingsForm.cs:2008-2029 + Cpu.cs:932-940），但"会试"≠"验证过"：
-	//       上游 UI 只按**写**命令使能（SettingsForm.cs:364-365），读失败被静默吞掉
+	//       旧版 UI 只按**写**命令使能（SettingsForm.cs:364-365），读失败被静默吞掉
 	//       （InitPBO()，SettingsForm.cs:482-488），素材里**没有任何实测佐证**。
 	//     * 结论：注释原文就是 `// Not sure` = 不确定。按本仓库"绝不猜 ID 盲试"的规矩，
 	//       Vermeer / Chagall / Milan / Matisse / CastlePeak 一律**不写进表**（等实测）。
 	//       候选值与可信度、以及复现实验的只读步骤见 修改日志 的"待确认"清单。
 	//     * 顺带（写表差异，本轮**不动**）：我们的 Vermeer 写命令 PSMU 0x0B 正是同一块
-	//       Zen2 RSMU 表里的 SetAllDldoPsmMargin = 0xB（同样 `// Not sure`），而上游 Zen3
-	//       自己的写命令是 MP1 0x36（Zen3Settings.cs:23），且上游优先用 MP1
+	//       Zen2 RSMU 表里的 SetAllDldoPsmMargin = 0xB（同样 `// Not sure`），而旧版 Zen3
+	//       自己的写命令是 MP1 0x36（Zen3Settings.cs:23），且旧版优先用 MP1
 	//       （SetPsmMarginAllCores.cs:92-94）。这条差异只做报告，改写入需用户单独决定。
 	// ------------------------------------------------------------------------------------------
 	// 2026-10-05 percore-product: **Vermeer 放开**（上面的 vermeer-audit 已被实测取代）。
@@ -482,7 +481,7 @@ public sealed class RyzenSmuService : IDisposable
 	//   用户台式机实测报告 D:\Downloads\SMU-CO-corewrite-20261005-230824.txt
 	//   （AMD Ryzen 7 5700X / Vermeer / family Matisse / SMU 0x00384C00 / 8 物理核）：
 	//     * 只读候选探针：PSMU 0x7C 每核一条 -> 8 核全部 status=OK(0x01)，
-	//       返回 0xFFFFFFF1 -> CO -15 —— 即上游标着 `// Not sure` 的 0x7C **在这台机器上确实可用**；
+	//       返回 0xFFFFFFF1 -> CO -15 —— 即旧版标着 `// Not sure` 的 0x7C **在这台机器上确实可用**；
 	//     * 逐核写校验（MP1 0x35，16 位 margin）：只写核 0 = -5 -> core0 从 -15 变 -5、
 	//       其余 7 核不变 -> verdict = CORE-WRITE-OK，说明"每核读"读的正是"每核写"写的那张表；
 	//     * 恢复（逐核写回 0 + SetCoAll(0) + DisableOc()）-> 恢复后 8 核全部读回 0。
@@ -521,8 +520,8 @@ public sealed class RyzenSmuService : IDisposable
 		case CpuCodeName.StrixPoint:
 		case CpuCodeName.StrixHalo:
 		case CpuCodeName.KrackanPoint:
-			// KrackanPoint2 **故意不列**：上游把 KrackanPoint2 也映射到 APUSettings1_Strix
-			// （Hardware\SMU.cs:323，读命令同样是 0xAF），所以"上游没有它的读命令"这句话
+			// KrackanPoint2 **故意不列**：旧版把 KrackanPoint2 也映射到 APUSettings1_Strix
+			// （Hardware\SMU.cs:323，读命令同样是 0xAF），所以"旧版没有它的读命令"这句话
 			// 是错的（2026-10-05 vermeer-audit 更正）。真正的原因是**我们的 CurveCommand
 			// 里没有它的写命令**——CO 选项根本不会出现（RuntimeCpuTuning 只在
 			// curveCommandPresent 时才看回读），列了只会让"可回读"变成空头支票。仍然不猜。
@@ -535,7 +534,7 @@ public sealed class RyzenSmuService : IDisposable
 			return 163u;
 		case CpuCodeName.Vermeer:
 			// 2026-10-05 percore-product: 0x7C，台式机实测 CANDIDATE-OK（依据见上方整段注释）。
-			// 上游来源：Zen3Settings 从 Zen2Settings.cs:35 继承的
+			// 旧版来源：Zen3Settings 从 Zen2Settings.cs:35 继承的
 			// Rsmu.SMU_MSG_GetDldoPsmMargin = 0x7C;  // Not sure（同族 RSMU 地址与本文件
 			// GetPsmuAddrs(Matisse) 完全一致 = RSMU 就是我们的 PSMU），现已由实测确认。
 			return 124u;
@@ -1065,7 +1064,7 @@ public sealed class RyzenSmuService : IDisposable
 	//        Genoa/StormPeak/Bergamo/Turin/TurinD 与 Raphael/DragonRange/GraniteRidge/ShimadaPeak 同一条；
 	//        Milan/Chagall 与 Matisse/Vermeer/CastlePeak/Rome 同一条；
 	//        Mero 与 Renoir/Cezanne/VanGogh/Phoenix/... 同一条（APU 条）。
-	//   ③ 本仓库 修改日志.txt:6676-6686（上一轮的读表审计，对照上游 ZenStates-Core）：上游把
+	//   ③ 本仓库 修改日志.txt:6676-6686（上一轮的读表审计，对照旧版 ZenStates-Core）：旧版把
 	//      Genoa/StormPeak/Bergamo/Turin/TurinD 归到 **Zen4Settings/Zen5Settings**（= Raphael/GraniteRidge
 	//      那一档，Rsmu 0xD5 由 Zen5Settings 继承），把 **Mero 与 VanGogh 放进同一个
 	//      APUSettings1_VanGogh** —— 而 VanGogh 在本文件就是 CpuFamily.Mobile。
@@ -1096,7 +1095,7 @@ public sealed class RyzenSmuService : IDisposable
 	// 2026-10-10 fmax-family-guard（用户决定 ②）：**Rome / Naples 一并补上**，同一份依据 ——
 	//    * Rome（Zen2 EPYC，CPUID 17h/31，pkg_type != 7）：k_addridx = 组0（桌面组）；RyzenSMU.p 的三条
 	//      PM 表 case 都把它与 Matisse/Vermeer/CastlePeak/Chagall/Milan 排在同一条（:442-443, :468-469,
-	//      :496-499），修改日志.txt:6684 记的上游也是 `Zen2Settings_Rome` -> CpuFamily.Matisse（Zen2 桌面档）。
+	//      :496-499），修改日志.txt:6684 记的旧版也是 `Zen2Settings_Rome` -> CpuFamily.Matisse（Zen2 桌面档）。
 	//    * Naples（Zen1 EPYC，CPUID 17h/01，pkg_type == 3）：k_addridx = 组1，正等于
 	//      GetPsmuAddrs(Zen1Desktop)（0x3B1051C/0x3B10568/0x3B10590）；RyzenSMU.p 每条 PM 表 case 都把它
 	//      与 SummitRidge/PinnacleRidge/Colfax/Threadripper 排在一起 -> CpuFamily.Zen1Desktop。
@@ -1107,7 +1106,7 @@ public sealed class RyzenSmuService : IDisposable
 	// ⚠️ **仍然故意 Unknown**：只剩 Undefined（非 AMD / CPUID 表外，没有任何依据）。
 	//
 	// ⚠️ 顺带记录（**本轮不动**）：CastlePeak 在 k_addridx 里是组0（桌面组），而本函数把它归到
-	//    Zen1Desktop（组1）—— 这是上游就有的既有映射，属"改前就已知、一直这样跑"的代号，
+	//    Zen1Desktop（组1）—— 这是旧版就有的既有映射，属"改前就已知、一直这样跑"的代号，
 	//    按"不改动已经能用的代号"原则原样保留，仅在此记录这处不一致。
 	// ==========================================================================================
 	public static CpuFamily GetFamily(CpuCodeName cpu)
@@ -1141,7 +1140,7 @@ public sealed class RyzenSmuService : IDisposable
 		case CpuCodeName.Milan:
 		case CpuCodeName.Chagall:
 		// 2026-10-10 fmax-family-guard: Rome（Zen2 EPYC，17h/31）与 Matisse/Vermeer 同为 Zen2 桌面档：
-		// k_addridx 组0，RyzenSMU.p 的三条 PM 表 case 都与本档同列，上游是 `Zen2Settings_Rome`
+		// k_addridx 组0，RyzenSMU.p 的三条 PM 表 case 都与本档同列，旧版是 `Zen2Settings_Rome`
 		// （修改日志.txt:6684）-> 与 Matisse 同档。
 		case CpuCodeName.Rome:
 			return CpuFamily.Matisse;
@@ -1152,7 +1151,7 @@ public sealed class RyzenSmuService : IDisposable
 		case CpuCodeName.Mendocino:
 		case CpuCodeName.HawkPoint:
 		// 2026-10-10 fmax-family: Mero（CPUID 17h/98）与 VanGogh（17h/90-91）在 RyzenSMU.p 同一条
-		// APU case、k_addridx 同为组2，且上游把 Mero 与 VanGogh 放进**同一个 APUSettings1_VanGogh**
+		// APU case、k_addridx 同为组2，且旧版把 Mero 与 VanGogh 放进**同一个 APUSettings1_VanGogh**
 		// （修改日志.txt:6686）-> 与 VanGogh 同档（Mobile），不新造族。
 		case CpuCodeName.Mero:
 			return CpuFamily.Mobile;
@@ -1162,7 +1161,7 @@ public sealed class RyzenSmuService : IDisposable
 		// 2026-10-10 fmax-family: Genoa/StormPeak（Zen4 EPYC/Threadripper，19h/11、19h/18）与
 		// Bergamo/Turin/TurinD（Zen4c/Zen5 服务器，19h/A0、1Ah/02、1Ah/11）都落 k_addridx 组0
 		// （= 本档同一组 PSMU 地址），且在 RyzenSMU.p 的 PM 表 case 与 Raphael/DragonRange/GraniteRidge
-		// 同一条；上游把 Genoa 档归入 Zen4Settings/Zen5Settings（修改日志.txt:6678-6680）。
+		// 同一条；旧版把 Genoa 档归入 Zen4Settings/Zen5Settings（修改日志.txt:6678-6680）。
 		// 它们此前是 Unknown -> 服务不初始化 -> FMax 能力表里的 ReadWrite 永远到不了邮箱。
 		case CpuCodeName.Genoa:
 		case CpuCodeName.StormPeak:
@@ -1458,8 +1457,8 @@ public sealed class RyzenSmuService : IDisposable
 	//
 	// 语义：
 	//   * 命令 = CurveReadCommand(_cpu)（每核一条；没有读命令的代号返回 UnknownCmd）；
-	//   * 通道 = PSMU 邮箱（与上游 ZenStates-Core 的 Rsmu 邮箱相同，= GetPsmuAddrs(Mobile)）；
-	//   * arg0 = 裸核号（与上游 Cpu.GetPsmMarginSingleCore(core) 对 APU 的用法一致；
+	//   * 通道 = PSMU 邮箱（与旧版 ZenStates-Core 的 Rsmu 邮箱相同，= GetPsmuAddrs(Mobile)）；
+	//   * arg0 = 裸核号（与旧版 Cpu.GetPsmMarginSingleCore(core) 对 APU 的用法一致；
 	//     本机实测 0..7 全部 OK）；
 	//   * response[0] = SMU 当前的每核 margin（原始值，未解码；解码见 SmuCoRoundtrip.DecodeCurveMargin）。
 	//
@@ -1480,8 +1479,8 @@ public sealed class RyzenSmuService : IDisposable
 	// 2026-10-05 percore-product: **每核读的 arg0 编码按代号选**（这是台式机实测暴露出来的差异）。
 	//
 	//   * APU 侧（本机 Phoenix / SMU 0x4C6500，2026-10-05 只读实测）：arg0 = **裸核号** 0..7，
-	//     8 核全部 status OK —— 这与上游 Cpu.GetPsmMarginSingleCore 对 APU 的用法一致。
-	//   * 桌面 Vermeer 侧（用户 R7 5700X / SMU 0x00384C00，2026-10-05 实测）：上游声明并按
+	//     8 核全部 status OK —— 这与旧版 Cpu.GetPsmMarginSingleCore 对 APU 的用法一致。
+	//   * 桌面 Vermeer 侧（用户 R7 5700X / SMU 0x00384C00，2026-10-05 实测）：旧版声明并按
 	//     **core << 20** 读取；"全核同值"时两种编码读出来一样（无法区分），但**写后逐核回读**
 	//     给出了区分证据：core0 被写成 -5 之后，用 core<<20 读 core1 仍然是 -15（没有跟着
 	//     core0 变成 -5）-> SMU 确实认了 core<<20 这个字段，而不是只看低位的裸核号。
@@ -1528,7 +1527,7 @@ public sealed class RyzenSmuService : IDisposable
 
 	// 读回原始 response[0] 的"CO 步数"解码。
 	// 为什么不能只写一种：(int) 一把梭：
-	//   * 上游 ZenStates-Core 用 Utils.MakePsmMarginArg 把 margin 编成 **低 16 位**（-5 -> 0xFFFB），
+	//   * 旧版 ZenStates-Core 用 Utils.MakePsmMarginArg 把 margin 编成 **低 16 位**（-5 -> 0xFFFB），
 	//     而 LM 自己的 EncodeCurve 编成 **低 20 位**（-5 -> 0xFFFFB）；
 	//   * 不同代 SMU 到底把哪一段塞进 response[0]（16 位 / 20 位 / 32 位符号扩展）未实测确认
 	//     （本机读到的是 0，三种解都一样）。
@@ -1581,7 +1580,7 @@ public sealed class RyzenSmuService : IDisposable
 	//      一条命令都不发）；None 的平台连读都不做（ResolveFMax 返回 null）。
 	//
 	// ⚠️ 参数语义**未确认**（用户明确要求把这一点记在代码里）：
-	//   参考实现写的是 `frequency & 0xFFFFF`（**当作绝对 MHz**），但它的作者说过真实参数是
+	//   参考实现写的是 `frequency & 0xFFFFF`（**当作绝对 MHz**），但它的旧版说明真实参数是
 	//   -1000..+200 的**偏移**，与代码互相矛盾。本轮**照参考实现原样打包**
 	//   （arg0 = value & 0xFFFFF，arg1..5 = 0，见 EncodeFMaxArg / SetBoostLimitFrequencyAllCores），
 	//   并把**原始 response[0]** 一路带到 UI 与日志里，供用户判定到底是哪种语义。
@@ -1629,7 +1628,7 @@ public sealed class RyzenSmuService : IDisposable
 		case CpuCodeName.StrixPoint:
 		case CpuCodeName.StrixHalo:
 		case CpuCodeName.KrackanPoint:
-		// 用户给的能力表写的是 "Strix*"；KrackanPoint2 属同一族（上游 Hardware\SMU.cs 也把它
+		// 用户给的能力表写的是 "Strix*"；KrackanPoint2 属同一族（旧版 Hardware\SMU.cs 也把它
 		// 映射到 APUSettings1_Strix），因此与同族一致地给读写能力。
 		case CpuCodeName.KrackanPoint2:
 			return new FMaxSpec(0x42u, 0x47u, FMaxApuMailboxCommand, FMaxApuMailboxResponse, FMaxApuMailboxArgument, 0u);
@@ -1661,7 +1660,7 @@ public sealed class RyzenSmuService : IDisposable
 		case CpuCodeName.Vangogh:
 		case CpuCodeName.Mero:
 			return new FMaxSpec(0x42u, 0u, FMaxApuMailboxCommand, FMaxApuMailboxResponse, FMaxApuMailboxArgument, 0u);
-		// ---- APU0：**只读**，且读之前 arg0 必须先置 3（上游在 Raven 上就是这么读的）----
+		// ---- APU0：**只读**，且读之前 arg0 必须先置 3（旧版在 Raven 上就是这么读的）----
 		// 2026-10-10 fmax-raven2: RavenRidge2 与 RavenRidge **同硅片**（同一代 APU0），本文件
 		// GetFamily 里两者同为 CpuFamily.Raven，RyzenSMU.p 里两者同一条 APU case 且 k_addridx 同为
 		// 组2（:202-245），即 "0x12 + arg0=3 + APU 邮箱组" 这条配方对两者是同一份。用户已批准按
@@ -1737,7 +1736,7 @@ public sealed class RyzenSmuService : IDisposable
 	//
 	// ⚠️⚠️ 参数语义**未确认**（代码注释按用户要求必须留下这一条）：
 	//   参考实现把 arg0 当**绝对 MHz**（这也是本机实测读回 4950 的样子 —— 4950 不可能是
-	//   -1000..+200 的偏移），但它的作者说过真实参数是**偏移**，与代码矛盾。
+	//   -1000..+200 的偏移），但它的旧版说明真实参数是**偏移**，与代码矛盾。
 	//   本轮**不改**打包方式，也不改单位；等语义确认后再统一改（改的话要同时改这里的掩码、
 	//   UI 的范围/单位、以及回读比对的口径）。
 	//

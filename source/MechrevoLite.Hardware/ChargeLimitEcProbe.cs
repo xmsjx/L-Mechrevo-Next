@@ -1,7 +1,7 @@
 namespace MechrevoLite.Hardware;
 
 /// <summary>
-/// 2026-10-10（限充真效果判据 · 按上游 Leo-stro/mechrevo-charge-limit 口径）：
+/// 2026-10-10（限充真效果判据 · 按旧版 Leo-stro/mechrevo-charge-limit 口径）：
 /// 一次**只读**探测的结果载体 —— 把限充相关的 EC 寄存器原始值打成一个包，日志/证据结构/诊断包共用同一份口径。
 ///
 /// ⚠️ 本类型只承载"读到了什么"，**不含任何写入语义**：构造它不会写 EC，字段为 <see cref="Unreadable"/> 表示
@@ -35,22 +35,22 @@ internal readonly struct ChargeLimitEcProbe
 	internal int Upper { get; }
 
 	/// <summary>
-	/// 0x07D0 复充下限（**原始值**）。⚠️ 上游 Leo-stro/mechrevo-charge-limit **不写**这个寄存器
+	/// 0x07D0 复充下限（**原始值**）。⚠️ 旧版 Leo-stro/mechrevo-charge-limit **不写**这个寄存器
 	/// （只写 0x07B9），下限由固件 store_limit() 自己推导；LM 自 2026-10-10 起也**只读不改**，
 	/// 读它是为了验证"固件推出来的下限是否仍 == 上限 − 5"。
 	/// </summary>
 	internal int Lower { get; }
 
-	/// <summary>0x07C3 产品线门控（上游：非 4/5 时固件不执行限充控制循环）。</summary>
+	/// <summary>0x07C3 产品线门控（旧版：非 4/5 时固件不执行限充控制循环）。</summary>
 	internal int Gate { get; }
 
-	/// <summary>0x0742 bit2 = 固件"限充已生效"标志（上游口径的唯一真效果判据）。</summary>
+	/// <summary>0x0742 bit2 = 固件"限充已生效"标志（旧版口径的唯一真效果判据）。</summary>
 	internal int Effect { get; }
 
-	/// <summary>0x087F 固件存储区（跨重启持久）；上游为 H2RAM 盲区，主机通常读不到。</summary>
+	/// <summary>0x087F 固件存储区（跨重启持久）；旧版为 H2RAM 盲区，主机通常读不到。</summary>
 	internal int StoredLimit { get; }
 
-	/// <summary>0x0770 ROMID 首字节（上游用它做 4/5 产品线判断）。</summary>
+	/// <summary>0x0770 ROMID 首字节（旧版用它做 4/5 产品线判断）。</summary>
 	internal int RomId { get; }
 
 	/// <summary>通道（\\.\ACPIDriver）是否打开成功。</summary>

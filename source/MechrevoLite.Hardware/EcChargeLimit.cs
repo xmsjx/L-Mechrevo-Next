@@ -8,7 +8,7 @@ internal static class EcChargeLimit
 {
 	public const int UpperRegister = 1977;
 
-	// 2026-10-10（对齐上游 · 复充下限只读）：上游 Leo-stro/mechrevo-charge-limit **只写 0x07B9**，
+	// 2026-10-10（对齐旧版 · 复充下限只读）：旧版 Leo-stro/mechrevo-charge-limit **只写 0x07B9**，
 	// 0x07D0 由固件 store_limit() 自己推导。我们仍**读**它（诊断/观察），但 ⛔ 不再写、不再参与成败判定。
 	public const int LowerRegister = 2000;
 
@@ -29,12 +29,12 @@ internal static class EcChargeLimit
 
 	public const int GatePersistDelayMs = 2500;
 
-	// 2026-10-10（限充真效果判据 · 按上游 Leo-stro/mechrevo-charge-limit 口径）：
-	// 上游实测（无界 15X，非 50 系）—— 写 0x07B9 + 保持 0x07C3=4 约 2.5s 让固件 store_limit() 把上限抄进
+	// 2026-10-10（限充真效果判据 · 按旧版 Leo-stro/mechrevo-charge-limit 口径）：
+	// 旧版实测（无界 15X，非 50 系）—— 写 0x07B9 + 保持 0x07C3=4 约 2.5s 让固件 store_limit() 把上限抄进
 	// 存储区 0x087F 之后，还必须再等约 7s，读 0x0742 的 bit2（=1）才算**真的生效**；
 	// 只看 0x07B9 回读只能证明"写进去了"，不能证明"生效了"（上层判据见 ChargeLimitEffectEvidence）。
-	// 0x0770 = ROMID 首字节（上游用它做 4/5 产品线门控判断）；
-	// 0x087F = 固件存储区（跨重启持久）；上游明确指出它是 H2RAM 盲区，主机通常**读不到**。
+	// 0x0770 = ROMID 首字节（旧版用它做 4/5 产品线门控判断）；
+	// 0x087F = 固件存储区（跨重启持久）；旧版明确指出它是 H2RAM 盲区，主机通常**读不到**。
 	public const int EffectRegister = 1858;
 
 	public const int EffectBitMask = 4;
@@ -54,7 +54,7 @@ internal static class EcChargeLimit
 	private static readonly object Gate = new object();
 
 	// 2026-10-10（限充真效果判据 · 门控还原时序）：最近一次写入安排的门控还原任务。
-	// 真效果判据必须**等门控还原完成**之后再开始 7s 计时（上游顺序：还原 → 回读确认 → 等 7s → 读 0x0742）。
+	// 真效果判据必须**等门控还原完成**之后再开始 7s 计时（旧版顺序：还原 → 回读确认 → 等 7s → 读 0x0742）。
 	// 没有安排还原时保持 Task.CompletedTask ⇒ 判据立即进入 7s 等待。
 	private static System.Threading.Tasks.Task _gateRestoreCompleted = System.Threading.Tasks.Task.CompletedTask;
 
@@ -87,7 +87,7 @@ internal static class EcChargeLimit
 		return 0;
 	}
 
-	/// <summary>上游口径下的期望复充下限（上限 − 5）。⚠️ 仅用于**只读比对/日志**：⛔ 不再写进 EC（0x07D0 交由固件推导）。</summary>
+	/// <summary>旧版口径下的期望复充下限（上限 − 5）。⚠️ 仅用于**只读比对/日志**：⛔ 不再写进 EC（0x07D0 交由固件推导）。</summary>
 	internal static int LowerValueFor(int percent)
 	{
 		if (percent < 100)
@@ -532,7 +532,7 @@ internal static class EcChargeLimit
 				//      ⇒ 拿它当「写入前的准入条件」是**循环论证**：永不写入 ⇒ 0x087F 永为 0xFF ⇒ 永远被拒。
 				// ⭐ 结论：**写之前没有任何可靠证据**能判定「本机不支持」；**写之后**才有真证据 ——
 				//    0x07B9 写后回读确认（掩 bit7，见下面）＋ ChargeLimitEffectEvidence（门控还原后等 >=7s 读 0x0742 bit2）。
-				//    ⇒ 改为「按上游口径先尝试写入，再用写后证据如实告知」：既不再放任「写进去也不生效」的静默无效
+				//    ⇒ 改为「按旧版口径先尝试写入，再用写后证据如实告知」：既不再放任「写进去也不生效」的静默无效
 				//    （那由写后证据与可见文案承担），也不再拿未经证实的判据把可用机型挡在门外（无极限充滑块 ⇒ 恢复可用）。
 				// ⚠️ 仍然保留的两道**真闸**：IsLegacyGenerationBlocked()（10/16/20/30 系，可能损坏硬件，见上面）
 				//    与 ec_charge_limit=0（用户显式关闭，见 IsAvailableOnThisMachine）。ec_charge_limit=1 依旧放行。
@@ -597,8 +597,8 @@ internal static class EcChargeLimit
 								+ "（best-effort，不影响上限成败）");
 						}
 					}
-					// 2026-10-10（对齐上游 Leo-stro/mechrevo-charge-limit · 停写复充下限 0x7D0）：
-					// 上游**只写 0x07B9**，复充下限 0x07D0 由固件 store_limit() 在门控保持窗口内自己推导。
+					// 2026-10-10（对齐旧版 Leo-stro/mechrevo-charge-limit · 停写复充下限 0x7D0）：
+					// 旧版**只写 0x07B9**，复充下限 0x07D0 由固件 store_limit() 在门控保持窗口内自己推导。
 					// 我们以前把 0x07D0 的写入成败与 0x07B9 绑成"全或无"（0x7D0 写失败或回读不符就回滚
 					// 0x7D0 + 0x7B9 并整次返回 false）—— 多出一个本不该存在的失败模式，且 0x7D0 的语义
 					// 在不同机型上未必一致。现在：**0x7D0 只读、不写、不回滚**，上限成败只由 0x07B9
@@ -638,9 +638,9 @@ internal static class EcChargeLimit
 								}
 								try
 								{
-									// 2026-10-10（门控还原确认 + 失败重试一次 · 按上游口径）：
-									// 上游写完必回读确认，不一致就重试一次；我们以前只 Write 不看结果，
-									// 写丢了也不知道 —— 而门控留在 4 会让电池**完全不充电**（上游明确警告过）。
+									// 2026-10-10（门控还原确认 + 失败重试一次 · 按旧版口径）：
+									// 旧版写完必回读确认，不一致就重试一次；我们以前只 Write 不看结果，
+									// 写丢了也不知道 —— 而门控留在 4 会让电池**完全不充电**（旧版明确警告过）。
 									bool restored = Write(handle, GateRegister, (byte)original);
 									int readback = Read(handle, GateRegister);
 									if (readback != original)
@@ -669,7 +669,7 @@ internal static class EcChargeLimit
 						});
 						System.Threading.Volatile.Write(ref _gateRestoreCompleted, restore);
 					}
-					// 2026-10-10（对齐上游 · 只读观察复充下限）：仅在 0x07B9 确实写成功（回读确认过）时才观察 ——
+					// 2026-10-10（对齐旧版 · 只读观察复充下限）：仅在 0x07B9 确实写成功（回读确认过）时才观察 ——
 					// 不论门控是否被我们临时打开，都在存储窗口（2.5s，与门控保持窗口同时长）之后**只读**看一眼 0x07D0，
 					// 验证固件是否自己推成"上限 − 5"。⛔ 纯只读：不写 0x07D0、不回滚、不影响本方法的返回值。
 					if (upperWritten)
@@ -686,7 +686,7 @@ internal static class EcChargeLimit
 	}
 
 	// 2026-10-10（只读观察 · 复充下限）：写完上限、等固件的存储窗口（2.5s）过去之后，**只读**一次 0x07D0。
-	// 目的：验证"上游只写 0x07B9、下限由固件 store_limit() 自己推"这条口径在本机是否成立 ——
+	// 目的：验证"旧版只写 0x07B9、下限由固件 store_limit() 自己推"这条口径在本机是否成立 ——
 	//   · 读到 == 上限 − 5（= LowerValueFor）⇒ 固件自主推导成立 ⇒ 我们以前那笔显式写入本来就是冗余的；
 	//   · 读到别的值 ⇒ ⚠️ 本机固件可能不推导下限，0x07D0 停留在上一次的旧值（只影响回充时机，
 	//     **不影响充电上限**：上限只由 0x07B9 决定）。⛔ 不写、不回滚、不改变 TrySet 结果。
@@ -770,9 +770,9 @@ internal static class EcChargeLimit
 	// 2026-10-10（限充真效果判据 · 门控还原时序）：真效果判据要等这次写入的**门控还原完成后**再计时。
 	internal static System.Threading.Tasks.Task GateRestoreCompleted => System.Threading.Volatile.Read(ref _gateRestoreCompleted);
 
-	// 2026-10-10（只读探测 · 按上游口径存原始值）：一次性把限充相关寄存器读成包 ——
-	// 0x07B9（上限）/ 0x07D0（复充下限：上游不写、我们**自 2026-10-10 起也停写**，只读用于验证固件是否自己推成 上限−5）/ 0x07C3（门控）/ 0x0742（生效位）/
-	// 0x0770（ROMID 首字节）/ 0x087F（固件存储区，上游指明是盲区，通常读不到）。
+	// 2026-10-10（只读探测 · 按旧版口径存原始值）：一次性把限充相关寄存器读成包 ——
+	// 0x07B9（上限）/ 0x07D0（复充下限：旧版不写、我们**自 2026-10-10 起也停写**，只读用于验证固件是否自己推成 上限−5）/ 0x07C3（门控）/ 0x0742（生效位）/
+	// 0x0770（ROMID 首字节）/ 0x087F（固件存储区，旧版指明是盲区，通常读不到）。
 	// ⚠️ 全程只读、复用本类既有的 \\.\ACPIDriver IOCTL 封装（⛔ 不新造 IOCTL、⛔ 不改任何寄存器）。
 	// ⛔ 任何调用方都不得据此改变写入行为（只存档，供以后按机型判断）。
 	internal static ChargeLimitEcProbe ProbeRegisters()
