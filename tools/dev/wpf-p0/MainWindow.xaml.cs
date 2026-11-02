@@ -75,6 +75,7 @@ public partial class MainWindow : Window
     private L_Mechrevo.WpfP0.Pages.SwitchesPageView? _switchesView;
     private ScrollViewer? SwitchesPage;
     private StackPanel? MoreSwitchGrid;
+    private readonly Dictionary<string, ToggleButton> _moreSwitchTiles = new();
     private Rect _wideRestoreBounds;
     private CheckBox? _chargeLimitSwitch;
     private TextBox? _chargeLow;
@@ -1027,6 +1028,7 @@ public partial class MainWindow : Window
     {
         if (MoreSwitchGrid == null || _owner == null) return;
         MoreSwitchGrid.Children.Clear();
+        _moreSwitchTiles.Clear();
         foreach ((string group, (string Key, string Label, bool On)[] items) in _owner.WideMoreSwitches())
         {
             MoreSwitchGrid.Children.Add(new TextBlock
@@ -1051,6 +1053,7 @@ public partial class MainWindow : Window
                     Margin = new Thickness(0, 0, 8, 8),
                     MinWidth = 110
                 };
+                _moreSwitchTiles[switchKey] = tile;
                 tile.Click += async (_, _) =>
                 {
                     bool target = tile.IsChecked == true;
@@ -1180,6 +1183,29 @@ public partial class MainWindow : Window
         QuickTilesGrid.Children.Add(customTile);
         QuickTilesGrid.Columns = Math.Max(1, QuickTilesGrid.Children.Count);
         RefreshQuickTiles();
+    }
+
+    private void RefreshMoreSwitchTiles()
+    {
+        if (_owner == null || _moreSwitchTiles.Count == 0)
+        {
+            return;
+        }
+        Dictionary<string, bool> states = new(StringComparer.OrdinalIgnoreCase);
+        foreach ((string _, (string Key, string _, bool On)[] items) in _owner.WideMoreSwitches())
+        {
+            foreach ((string key, string _, bool on) in items)
+            {
+                states[key] = on;
+            }
+        }
+        foreach (KeyValuePair<string, ToggleButton> tile in _moreSwitchTiles)
+        {
+            if (states.TryGetValue(tile.Key, out bool on))
+            {
+                tile.Value.IsChecked = on;
+            }
+        }
     }
 
     private void RefreshQuickTiles()
@@ -2158,6 +2184,7 @@ public partial class MainWindow : Window
             HomeGpu集显.IsChecked = gpu.Contains(WpfStrings.GpuModeIntegrated) || gpu.Contains(WpfStrings.GpuIntegrated);
         }
         RefreshQuickTiles();
+        RefreshMoreSwitchTiles();
         (string batteryInfo, int batteryMode, string batteryCharge) = _owner.WideBattery();
         if (_batteryInfoText != null) _batteryInfoText.Text = batteryInfo;
         for (int i = 0; i < _batteryModeButtons.Count; i++)
