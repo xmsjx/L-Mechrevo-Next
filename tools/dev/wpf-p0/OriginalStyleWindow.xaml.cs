@@ -122,6 +122,7 @@ public partial class OriginalStyleWindow : Window
     // 避免连按时多条 OSD 叠着弹。
     private int _perfKeyWatchSeq;
     private int _lastObservedGcuMode = -2;
+    private int _lastObservedGcuRawMode = -2;
     private long _lastPerfKeyOsdTick;
     private long _lastSwitchModeOsdTick;
     private int _lastKeyboardBrightnessOsd = -2;
@@ -3727,6 +3728,38 @@ public partial class OriginalStyleWindow : Window
         return hw != null && (hw.IsIntelNucMachine || hw.IsUmiMachine);
     }
 
+    /// <summary>外部性能键切到内置档时，清掉仍残留的自定义显示态。</summary>
+    private static void ClearStaleCustomDisplay(BackendProbe probe, string reason)
+    {
+        try
+        {
+            string? displayed = MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId;
+            if (displayed == null || !displayed.StartsWith("custom", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+            int raw = probe.CurrentMode;
+            string id = raw switch
+            {
+                0 => "balanced",
+                1 => "turbo",
+                2 => "silent",
+                _ => ""
+            };
+            if (id.Length == 0)
+            {
+                return;
+            }
+            MechrevoLite.Mode.PerfModeStore.ActiveModeId = id;
+            MechrevoLite.Mode.PerfModeService.Instance?.NotifyExternalSwitch(id);
+            Logger.WriteError("[perfkey] 外部切换退出自定义 ⇒ " + id + "（" + reason + "）");
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[perfkey] 清理自定义显示态失败：" + ex.Message);
+        }
+    }
+
     private void PollGcuModeOsd()
     {
         try
@@ -3750,6 +3783,12 @@ public partial class OriginalStyleWindow : Window
             {
                 return;
             }
+            int rawMode = probe.CurrentMode;
+            if (_lastObservedGcuRawMode != -2 && rawMode >= 0 && rawMode != _lastObservedGcuRawMode)
+            {
+                ClearStaleCustomDisplay(probe, "GCU 档位 " + _lastObservedGcuRawMode + "->" + rawMode);
+            }
+            _lastObservedGcuRawMode = rawMode;
             int mode = ResolveDisplayMode(probe);
             if (_lastObservedGcuMode == -2)
             {
@@ -4307,6 +4346,13 @@ public partial class OriginalStyleWindow : Window
         }
         if (customDisplayed)
         {
+            // 自定义档在 GCU 上通常回读为 1；若已经回读成 0/2，说明外部已切到内置档，
+            // 不能继续把界面钉在自定义档。
+            int rawCustom = probe.CurrentMode;
+            if (rawCustom == 0 || rawCustom == 2)
+            {
+                return rawCustom;
+            }
             return 3;
         }
         // 宝龙达 / 无界没有原生自定义固件档：ActiveModeId 才是权威。
@@ -4475,6 +4521,8 @@ public partial class OriginalStyleWindow : Window
             // GCU 游戏本：按键由固件/GCU 自己处理，LM 只观察。
             // 不再在这里开 5s 取样循环——ModeChanged 和 300ms 轮询会负责 OSD，
             // 避免按键后长时间占用后台任务、也避免连按时多个循环抢 ResolveDisplayMode。
+            ClearStaleCustomDisplay(probe, "按下性能键");
+            _lastObservedGcuRawMode = probe.CurrentMode;
             _lastObservedGcuMode = ResolveDisplayMode(probe);
             Logger.WriteError("[perfkey] GCU 按键交给 GCU/ModeChanged+轮询观察（当前=" + _lastObservedGcuMode + "）");
 
