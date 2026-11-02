@@ -1,0 +1,122 @@
+name: Build Windows package
+
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: "更新包内的更新说明（留空则生成 CI 构建说明）"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Read display version
+        id: version
+        shell: pwsh
+        run: |
+          $text = Get-Content "tools/dev/wpf-p0/WpfP0.csproj" -Raw
+          $m = [regex]::Match($text, '<InformationalVersion>([^<]+)</InformationalVersion>')
+          if (-not $m.Success) { throw "InformationalVersion not found" }
+          $version = $m.Groups[1].Value.Trim()
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Building $version"
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Publish WPF app
+        shell: pwsh
+        run: |
+          dotnet publish "tools/dev/wpf-p0/WpfP0.csproj" `
+            -c Release `
+            -o "ci-publish" `
+            -p:NoWarn=WFO1000%3BCA1416
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build update zip
+        shell: pwsh
+        env:
+          BUILD_NOTES: ${{ inputs.notes }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $stage = "ci-out/update"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          $files = @(
+            "L-Mechrevo.exe",
+            "L-Mechrevo.dll",
+            "L-Mechrevo.deps.json",
+            "L-Mechrevo.runtimeconfig.json",
+            "MechrevoLite.Core.dll",
+            "zh-CN/L-Mechrevo.resources.dll"
+          )
+          $manifestFiles = @()
+          foreach ($rel in $files) {
+            $src = Join-Path "ci-publish" $rel
+            if (-not (Test-Path $src)) { throw "publish output missing: $rel" }
+            $dst = Join-Path $stage $rel
+            New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
+            Copy-Item $src $dst -Force
+            $hash = (Get-FileHash $src -Algorithm SHA256).Hash.ToLowerInvariant()
+            $size = (Get-Item $src).Length
+            $manifestFiles += [ordered]@{ path = $rel.Replace('\','/'); sha256 = $hash; size = $size }
+          }
+
+          $notes = $env:BUILD_NOTES
+          if ([string]::IsNullOrWhiteSpace($notes)) {
+            $notes = "CI build $version — 仅编译产物，未做实机验证。"
+          }
+          Set-Content -Path (Join-Path $stage "更新说明.txt") -Value $notes -Encoding utf8
+
+          $manifest = [ordered]@{
+            version = $version
+            files = $manifestFiles
+          }
+          $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path (Join-Path $stage "manifest.json") -Encoding utf8
+
+          $zip = "ci-out/LM-$version-update.zip"
+          Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zip -CompressionLevel Optimal -Force
+          Get-FileHash $zip -Algorithm SHA256 | Format-List
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build setup
+        shell: pwsh
+        run: |
+          Copy-Item "ci-publish/*" "installer-src/files" -Recurse -Force
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { throw "ISCC.exe not found" }
+          & $iscc "installer-src/install_script.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: LM-${{ steps.version.outputs.version }}-ci
+          path: |
+            ci-out/*.zip
+            installer-src/Output/*.exe
+          if-no-files-found: error
+          retention-days: 14
