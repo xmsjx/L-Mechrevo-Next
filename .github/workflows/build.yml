@@ -109,6 +109,15 @@ jobs:
         shell: pwsh
         run: |
           Copy-Item "ci-publish/*" "installer-src/files" -Recurse -Force
+
+          $coreRes = Get-ChildItem "source/bin" -Recurse -Filter "MechrevoLite.Core.resources.dll" |
+            Where-Object { $_.FullName -match "\\Release\\" } |
+            Select-Object -First 1
+          if (-not $coreRes) { throw "MechrevoLite.Core.resources.dll not found" }
+          $zhDir = "installer-src/files/zh-CN"
+          New-Item -ItemType Directory -Force -Path $zhDir | Out-Null
+          Copy-Item $coreRes.FullName (Join-Path $zhDir "MechrevoLite.Core.resources.dll") -Force
+
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { throw "ISCC.exe not found" }
           & $iscc "installer-src/install_script.iss"

@@ -55,7 +55,8 @@ installer-src/files/L-Mechrevo.exe
 installer-src/files/L-Mechrevo.pdb
 installer-src/files/L-Mechrevo.deps.json
 installer-src/files/L-Mechrevo.runtimeconfig.json
-installer-src/files/zh-CN/
+installer-src/files/zh-CN/*
+!installer-src/files/zh-CN/Microsoft.Win32.TaskScheduler.resources.dll
 installer-src/files/更新日志.txt.bak*
 installer-src/files/**/*.bak
 installer-src/*.bak*
