@@ -2630,6 +2630,16 @@ public class MechrevoService
 			{
 				Logger.WriteLine($"RefreshGpuModeStatus did not receive a new packet; using existing mode={CurrentGpuMode} for this request.");
 			}
+			// GCU 不回显卡直连状态时上面那条恒为 Unavailable，用显示路由兜底。
+			if (gpuModeStatusReadback == GpuModeStatusReadback.Unavailable)
+			{
+				int beforeRoute = CurrentGpuMode;
+				if (_hw.TrySyncGpuModeViaRoute())
+				{
+					gpuModeStatusReadback = GpuModeStatusReadback.Fresh;
+					Logger.WriteLine($"RefreshGpuModeStatus（路由兜底）：{beforeRoute} → {CurrentGpuMode}");
+				}
+			}
 			Logger.WriteLine($"RefreshGpuModeStatus result={gpuModeStatusReadback} mode={CurrentGpuMode}");
 			return gpuModeStatusReadback;
 		}

@@ -3,9 +3,9 @@ r"""
 ① 清理 installer-src\files 里确认无用的冗余（移到 backup，不直接删）
 ② 把 rebuild\lm_fix_build 的新构建合并进 installer-src\files
 ================================================================================
-合并策略：**只覆盖 files\ 里已存在的同名文件**（避免引入未被 .iss 引用的新文件，
-否则又变成冗余）；卫星程序集 zh-CN\L-Mechrevo.resources.dll 单独处理。
-用法：py -3 merge_and_clean.py [--apply]
+合并策略：只处理 WANT / SATELLITES 里由 .iss 明确引用的构建产物——files\ 里没有就补齐，
+有就按内容比对后覆盖；其它文件一律不动。卫星程序集 zh-CN\ 单独处理。
+用法：python merge_and_clean.py [--apply]
 """
 import io
 import os
@@ -15,11 +15,13 @@ import datetime
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-ROOT = r'D:\openLM\installer-src'
+# 路径按本脚本位置推导（tools\ 的上一级＝仓库根），换目录或换机器都不必改。
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROOT = os.path.join(REPO, 'installer-src')
 FILES = os.path.join(ROOT, 'files')
-BUILD = r'D:\openLM\rebuild\lm_fix_build'
+BUILD = os.path.join(REPO, 'rebuild', 'lm_fix_build')
 STAMP = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-BACKUP = r'D:\openLM\backup\files_clean_' + STAMP
+BACKUP = os.path.join(REPO, 'backup', 'files_clean_' + STAMP)
 
 # ① 冗余清理清单（相对 files\）
 JUNK = [
@@ -42,8 +44,11 @@ JUNK = [
 
 # ② 需要合并的构建产物（相对 publish 输出）
 WANT = ['L-Mechrevo.dll', 'L-Mechrevo.exe', 'L-Mechrevo.deps.json',
-        'L-Mechrevo.runtimeconfig.json', 'L-Mechrevo.dll.config']
-SATELLITES = [r'zh-CN\L-Mechrevo.resources.dll']
+        'L-Mechrevo.runtimeconfig.json', 'MechrevoLite.Core.dll']
+SATELLITES = [r'zh-CN\L-Mechrevo.resources.dll',
+              r'zh-CN\MechrevoLite.Core.resources.dll']
+# files\ 里已存在、但 publish 不产出的文件（只保留原样，不参与合并）
+KEEP = ['L-Mechrevo.dll.config', 'MechrevoLite.Core.deps.json']
 
 
 def find_ci(root, rel):
@@ -92,7 +97,7 @@ def main():
         print("   已移到 " + BACKUP)
 
     print("\n### ② 合并新构建 ###")
-    merged, same, missing = [], [], []
+    merged, same, missing, added = [], [], [], []
     for rel in WANT + SATELLITES:
         src = os.path.join(BUILD, rel)
         if not os.path.isfile(src):
@@ -100,7 +105,14 @@ def main():
             continue
         dst = find_ci(FILES, rel)
         if dst is None:
-            missing.append(('files 里没有（不自动新增）', rel))
+            # WANT/SATELLITES 全部由 .iss 的 [Files] 引用，缺了打包就会失败 ⇒ 直接补齐
+            dst = os.path.join(FILES, rel)
+            a = os.path.getsize(src)
+            print("   + 新增        %-42s %9.1f KB" % (rel, a / 1024.0))
+            added.append(rel)
+            if apply_:
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(src, dst)
             continue
         a, b = os.path.getsize(src), os.path.getsize(dst)
         same_content = False
@@ -115,6 +127,8 @@ def main():
         if apply_:
             shutil.copy2(src, dst)
 
+    if KEEP:
+        print("   仅保留（publish 不产出）：" + "、".join(KEEP))
     if missing:
         print("   跳过：")
         for why, rel in missing:
@@ -122,7 +136,7 @@ def main():
     if not apply_:
         print("\n（dry-run，未改动。加 --apply 执行）")
     else:
-        print("\n合并完成：更新 %d 个，未变 %d 个" % (len(merged), len(same)))
+        print("\n合并完成：更新 %d 个，新增 %d 个，未变 %d 个" % (len(merged), len(added), len(same)))
     return 0
 
 

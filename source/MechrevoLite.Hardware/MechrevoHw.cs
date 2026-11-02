@@ -7188,6 +7188,39 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	}
 
 	/// <summary>
+	/// 用显示路由回读（内屏挂在哪个适配器上）补出当前显卡模式；读不出来时返回 false 且不改 <see cref="GpuMode" />。
+	/// </summary>
+	internal bool TrySyncGpuModeViaRoute()
+	{
+		if (_disposed)
+		{
+			return false;
+		}
+		try
+		{
+			MechrevoLite.Gpu.GpuRouteReadback readback = MechrevoLite.Gpu.GpuRouteMonitor.Snapshot();
+			int mapped = MechrevoLite.Gpu.GpuRouteInference.ToGpuMode(readback.Route);
+			if (mapped < 0)
+			{
+				Logger.WriteLine($"显卡模式：路由回读不足以判定（{readback}），本次不同步");
+				return false;
+			}
+			if (GpuMode != mapped)
+			{
+				GpuMode = mapped;
+				Logger.WriteLine($"显卡模式：路由回读 {readback} ⇒ {mapped}（0=核显 1=混合 2=独显直连）");
+				RaiseIsolated(GpuModeChanged, "GpuModeChanged");
+			}
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("显卡模式：路由回读异常：" + ex.Message);
+			return false;
+		}
+	}
+
+	/// <summary>
 	/// ⭐⭐ **意向方法**：⭐ 切显卡模式（✅ 含**写后回读确认**，⭐ 最多 5 次 · ⭐ 150 ms，⭐ 与档位/LOGO 同款 ✅）
 	/// <para>⭐ <paramref name="mode" />：⭐ 0 = 混合 · ⭐ 1 = 独显直连 ✅；⭐ 其它值**直接拒绝** ✅。</para>
 	/// <para>⚠️ 非宝龙达 ⇒ ⭐ **返回 false** ⇒ ⭐ 调用方**照原路走 GCU**（⭐ 那条路一字不改 ✅）。</para>
@@ -9980,6 +10013,11 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		if (num5 < 0 && TryReadUefiGpuMode(out int uefiMode))
 		{
 			num5 = uefiMode;
+		}
+		// 两条老路都读不到时用显示路由兜底，否则下面的比较会把有效值刷回 -1。
+		if (num5 < 0 && TrySyncGpuModeViaRoute())
+		{
+			num5 = GpuMode;
 		}
 		string text28 = FirstField(o, "IGpuCannotBeSwitchNowVisibility")?.ToString();
 		if (!string.IsNullOrWhiteSpace(text28))

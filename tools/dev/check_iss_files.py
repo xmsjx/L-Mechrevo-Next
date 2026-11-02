@@ -16,7 +16,8 @@ import sys
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-ROOT = r'D:\openLM\installer-src'
+REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT = os.path.join(REPO, 'installer-src')
 FILES = os.path.join(ROOT, 'files')
 ISS_LIST = ('install_script.iss', 'install_script_nogcu.iss')
 

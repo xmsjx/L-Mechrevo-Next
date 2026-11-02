@@ -1,4 +1,4 @@
-D:\openLM\source\L-Mechrevo.csproj
--c Release
--o D:\openLM\rebuild\lm_fix_build
--p:NoWarn=WFO1000;CA1416
+tools\dev\wpf-p0\WpfP0.csproj
+-c:Release
+-o:rebuild\lm_fix_build
+-p:NoWarn=WFO1000%3BCA1416

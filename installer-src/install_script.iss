@@ -4,27 +4,27 @@
 
 [Setup]
 AppName=L-Mechrevo
-AppVerName=L-Mechrevo beta23.7.2
+AppVerName=L-Mechrevo beta23.7.3
 AppId={{8F4E2C71-9B3A-4D6E-A1C2-7E5B9D0F3A64}
-AppVersion=beta23.7.2
+AppVersion=beta23.7.3
 AppPublisher=L-Mechrevo contributors
 AppCopyright=Copyright (C) 2026 L-Mechrevo contributors. GPL-3.0-only.
 DefaultDirName={autopf}\L-Mechrevo
 DefaultGroupName=L-Mechrevo
 #ifdef NOGCU
-OutputBaseFilename=LM-beta23.7.2-baolongda-setup
+OutputBaseFilename=LM-beta23.7.3-baolongda-setup
 #else
 #ifdef NOGCU_PAYLOAD
-OutputBaseFilename=LM-beta23.7.2-nogcupayload-setup
+OutputBaseFilename=LM-beta23.7.3-nogcupayload-setup
 #else
-OutputBaseFilename=LM-beta23.7.2-setup
+OutputBaseFilename=LM-beta23.7.3-setup
 #endif
 #endif
 UninstallDisplayIcon={app}\L-Mechrevo.exe
 SetupIconFile=files\favicon.ico
-VersionInfoVersion=0.293.7.2
-VersionInfoProductVersion=0.293.7.2
-UninstallDisplayName=L-Mechrevo beta23.7.2
+VersionInfoVersion=0.293.7.3
+VersionInfoProductVersion=0.293.7.3
+UninstallDisplayName=L-Mechrevo beta23.7.3
 Compression=lzma2
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -96,7 +96,8 @@ Source: "files\Resources\qrcode4.png"; DestDir: "{app}\Assets\Resources"; Flags:
 ;      ⇒ ⭐ 点「熄屏」只回一句「组件缺失」❌（⭐ 与 UWACPIDriver 那次「文件在、但没被安装」同一类坑 ⚠️）
 ;   ✅ 修法：⭐ 用通配符整目录铺到 `{app}\usbmmidd_v2`（⭐ 与 `GetDriverDir()` 的路径逐字一致 ✅）
 ;   ⚠️ 许可：⭐ 该驱动按自带 `usbmmidd_v2\License.txt`（Amyuni）分发，⛔ 不另给许可文本（原样带上 ✅）
-Source: "files\usbmmidd_v2\*"; DestDir: "{app}\usbmmidd_v2"; Flags: ignoreversion 
+;   通配符默认不递归，驱动二进制在 Win32\ 与 x64\ 子目录里，必须带 recursesubdirs 才能装进去。
+Source: "files\usbmmidd_v2\*"; DestDir: "{app}\usbmmidd_v2"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "files\zh-CN\L-Mechrevo.resources.dll"; DestDir: "{app}\zh-CN"; Flags: ignoreversion 
 Source: "files\zh-CN\MechrevoLite.Core.resources.dll"; DestDir: "{app}\zh-CN"; Flags: ignoreversion 
 Source: "files\zh-CN\Microsoft.Win32.TaskScheduler.resources.dll"; DestDir: "{app}\zh-CN"; Flags: ignoreversion 

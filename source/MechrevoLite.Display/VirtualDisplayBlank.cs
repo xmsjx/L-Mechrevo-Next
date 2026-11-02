@@ -39,6 +39,9 @@ internal static class VirtualDisplayBlank
 
 	internal const int TopologySwitchDelayMs = 300;
 
+	/// <summary>等待虚拟显示屏出现的上限：驱动激活到适配器枚举出来有延迟，不能一次没看到就判失败。</summary>
+	internal const int VirtualDisplayWaitMs = 2500;
+
 	internal const int PostRestoreDelayMs = 500;
 
 	private const uint ES_CONTINUOUS = 2147483648u;
@@ -293,6 +296,23 @@ internal static class VirtualDisplayBlank
 				TeardownVirtualDisplay("race-after-enable", restoreTopology: false);
 				return;
 			}
+			// 虚拟屏没创建出来时不能当作已息屏，直接收尾。
+			if (!WaitForVirtualDisplay())
+			{
+				Logger.WriteError("[blank] 虚拟显示屏未创建（enableidd 1 后等待 " + VirtualDisplayWaitMs + "ms 仍为 0）⇒ 息屏中止；请检查驱动是否安装成功（usbmmidd_v2\\" + (Environment.Is64BitOperatingSystem ? "x64" : "Win32") + "\\usbmmIdd.dll 是否存在）");
+				lock (Gate)
+				{
+					_topologySwitched = false;
+				}
+				TeardownVirtualDisplay("virtual-display-missing", restoreTopology: false);
+				return;
+			}
+			if (!IsActive)
+			{
+				// 等待期间被恢复 ⇒ 不再切拓扑，直接拆掉（幂等）。
+				TeardownVirtualDisplay("race-after-wait", restoreTopology: false);
+				return;
+			}
 			lock (Gate)
 			{
 				_topologySwitched = true;
@@ -420,6 +440,26 @@ internal static class VirtualDisplayBlank
 	}
 
 	/// <summary>
+	/// 轮询等待虚拟显示屏出现（适配器枚举比 enableidd 返回晚）。返回 true 表示至少枚举到 1 个。
+	/// </summary>
+	private static bool WaitForVirtualDisplay()
+	{
+		DateTime deadline = DateTime.UtcNow.AddMilliseconds(VirtualDisplayWaitMs);
+		while (true)
+		{
+			if (CountVirtualDisplays() > 0)
+			{
+				return true;
+			}
+			if (DateTime.UtcNow >= deadline)
+			{
+				return false;
+			}
+			Thread.Sleep(PollIntervalMs);
+		}
+	}
+
+	/// <summary>
 	/// 只读枚举当前系统里的 usbmmidd 虚拟显示屏数量（EnumDisplayDevices，⛔ 不依赖 pnputil 的本地化输出，
 	/// ⛔ 不创建/不删除任何显示设备）。返回 -1 = 枚举失败（不确定；调用方按"可能有残留"处理）。
 	/// 匹配判据同时看 DeviceID（实测 usbmmidd 适配器 = <c>usbmmidd</c>）与 DeviceString 兜底；
@@ -521,16 +561,43 @@ internal static class VirtualDisplayBlank
 				missing += (missing.Length > 0 ? "; " : "") + fileName;
 			}
 		}
+		// inf 的 [SourceDisksNames.amd64] 指向 x64\，缺这个 dll 时注入会静默失败。
+		string dll = Path.Combine(driverDir, Environment.Is64BitOperatingSystem ? "x64" : "Win32", "usbmmIdd.dll");
+		if (!File.Exists(dll))
+		{
+			missing += (missing.Length > 0 ? "; " : "") + Path.Combine(Environment.Is64BitOperatingSystem ? "x64" : "Win32", "usbmmIdd.dll");
+		}
 		return missing.Length == 0;
 	}
 
 	/// <summary>检查系统中是否已存在 usbmmidd 设备节点（pnputil）。</summary>
 	private static bool IsDriverInstalled()
 	{
+		return IsDriverInstalled(out _);
+	}
+
+	/// <summary>
+	/// <paramref name="nodePresent" /> 为 true 表示设备节点在、但驱动文件没落地（安装失败留下的残留节点），注入前需先摘掉。
+	/// </summary>
+	private static bool IsDriverInstalled(out bool nodePresent)
+	{
+		nodePresent = false;
 		try
 		{
 			string output = RunHiddenCapture("pnputil", "/enum-devices /deviceid usbmmidd", null);
-			return output.IndexOf("usb mobile monitor", StringComparison.OrdinalIgnoreCase) >= 0;
+			if (output.IndexOf("usb mobile monitor", StringComparison.OrdinalIgnoreCase) < 0)
+			{
+				return false;
+			}
+			nodePresent = true;
+			// 复制驱动失败时设备节点照样会建出来，只有驱动文件落地才算装好。
+			string driverFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "drivers", "UMDF", "usbmmIdd.dll");
+			if (!File.Exists(driverFile))
+			{
+				Logger.WriteLine("VirtualDisplayBlank: usbmmidd 设备节点存在但驱动文件缺失（" + driverFile + "）⇒ 视为未安装，重新注入。");
+				return false;
+			}
+			return true;
 		}
 		catch (Exception ex)
 		{
@@ -542,12 +609,30 @@ internal static class VirtualDisplayBlank
 	/// <summary>首次运行向系统注入虚拟显示驱动（毫秒级；已安装则跳过）。</summary>
 	private static void EnsureDriverInstalled(string driverDir)
 	{
-		if (IsDriverInstalled())
+		if (IsDriverInstalled(out bool nodePresent))
 		{
 			return;
 		}
+		string tool = Path.Combine(driverDir, "deviceinstaller64.exe");
+		// 残留节点会让 install 装不进去，先摘掉自己那一个。
+		if (nodePresent)
+		{
+			int removeExit = RunHidden(tool, "remove usbmmidd", driverDir);
+			Logger.WriteLine("VirtualDisplayBlank: 摘除残留 usbmmidd 设备节点 exit=" + removeExit + "（随后重新注入）。");
+		}
 		Logger.WriteLine("VirtualDisplayBlank: injecting usbmmidd virtual-display driver (first run).");
-		RunHidden(Path.Combine(driverDir, "deviceinstaller64.exe"), "install usbmmidd.inf usbmmidd", driverDir);
+		int exitCode = RunHidden(tool, "install usbmmidd.inf usbmmidd", driverDir);
+		// 装失败多半是旧节点挡着：摘掉再来一次，仍失败就记退出码供排查。
+		if (exitCode != 0)
+		{
+			Logger.WriteLine("VirtualDisplayBlank: driver injection exit=" + exitCode + " ⇒ 摘除节点后重试一次。");
+			RunHidden(tool, "remove usbmmidd", driverDir);
+			exitCode = RunHidden(tool, "install usbmmidd.inf usbmmidd", driverDir);
+		}
+		if (exitCode != 0)
+		{
+			Logger.WriteLine("VirtualDisplayBlank: driver injection exit=" + exitCode + " (continuing; virtual display may not appear).");
+		}
 	}
 
 	/// <summary>激活虚拟显示屏（enableidd 1）。</summary>

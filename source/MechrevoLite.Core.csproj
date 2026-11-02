@@ -35,6 +35,8 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <!-- 与旧工程一致的告警豁免；Nullable 与旧工程一样是关闭的（业务文件里有大量 ? 注解，属既有告警） -->
     <NoWarn>$(NoWarn);WFO1000;CA1416;CS8632</NoWarn>
+    <!-- 关闭 NuGet 漏洞审计：本工程不联网还原，NU1900 会随网络状态浮动，干扰"警告数不增加"的编译基线 -->
+    <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
 
   <!-- ===== 业务目录（第一阶段：全部纳入，测量真实阻塞） ===== -->

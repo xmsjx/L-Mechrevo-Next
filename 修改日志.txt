@@ -1,3 +1,14 @@
+r90（2026-11-02 · 0.293.7.3 beta23.7.3 · 真机两处失效修复）
+
+- 息屏无效（真机 Huan 16 Pro）：安装包 [Files] 的 usbmmidd_v2 缺 recursesubdirs，x64\usbmmIdd.dll 未随包安装，驱动安装失败。
+- 息屏：驱动注入失败时不再静默；enableidd 1 后复查虚拟屏计数，未创建则如实中止并写日志。
+- 息屏：IsDriverInstalled 改以驱动文件落地为准，旧版残留节点可自愈（先 remove 再 install）。
+- 息屏：VerifyDriverFiles 增加 x64\usbmmIdd.dll 校验，缺组件时点击即报，不再静默失效。
+- 显卡模式不显示（真机 Huan 16 Pro）：GCU 不回 DiscreteGpuDirectConnectionSwitch_Status，GpuMode 恒 -1。
+- 显卡模式：新增 TrySyncGpuModeViaRoute，用显示路由回读补出模式；RefreshGpuModeStatus 与 Setting/Status 两条路径都接入。
+- 编译：两个工程关闭 NuGetAudit，NU1900 随网络浮动的噪声不再计入警告基线（回到 164 条）。
+- 版本 0.293.7.3 beta23.7.3。
+
 r89（2026-10-31 · 0.293.6.7 beta23.6.7 · 水冷/功耗/GPU OC 更新）
 
 - 部分 Intel GCU 机型：PL1 恢复硬件范围，GCU 不再被 Intel MSR 截走 PL1/PL2。
@@ -102,6 +113,41 @@ r84（2026-10-31 · 0.293.6.3 beta23.6.3 · NVIDIA 遥测子进程化 + NUC Fn/�
   Fn+F8 手动亮度 OSD 保留。修复点：`PollKeyboardBrightnessOsd` 增加电源变化/启动静默抑制，
   `KeyboardLightSwitch_Click` 与宽屏灯光卡开关清空亮度基线。
 - 构建 0 errors；真机待验证项：nvidia-smi 字段支持度、功耗上限写入、水冷 BLE 曲线/绑定、外接 HDMI 黑屏回归。
+
+r83（2026-10-27 · 0.293.6 beta23.6 · WPF 主界面打包）
+
+一、打包/安装器
+- 安装包从旧 WinForms 产物迁到当前 WPF 产物：更新 L-Mechrevo.dll/exe/deps/runtimeconfig，新增 MechrevoLite.Core.dll，并同步 [Files] 清单。
+- 覆盖升级前备份 %APPDATA%\MechrevoLite、%ProgramData%\MechrevoLite、程序目录 config/cfg/风扇曲线/灯效/校色；升级后回灌。
+- 卸载交互式询问是否删除用户数据，默认保留；静默卸载不删除。
+- 版本仍为 0.293.6 beta23.6。
+
+二、WPF 界面/模式
+- 迷你窗、宽屏、悬浮窗、自定义页、风扇曲线窗口接入；浅色主题、托盘、宽屏/迷你切换。
+- 修复首次安装后端能力晚到：自定义按钮不刷新（启动后 5/15/30/60 秒重新评估）。
+- 修复打开自定义模式空引用：PL1/PL2/fPPT 联动在 XAML 初始化时访问未赋值滑杆（加空值保护）。
+- 30 系配置下拉与模式按钮显隐同步：同一行三列；只有两档的机型第三列隐藏；宝龙达 30 系不启用该界面。
+- 自定义模式页功耗墙采样改到后台线程（Task.Run），避免 LHM/ACPI 采样阻塞 UI 线程导致窗口未响应。
+- FanCurveWindow 订阅 PerfModeService.ActiveChanged：切自定义档后立刻 SetModeId+LoadFromHardware；宽屏内嵌风扇曲线同样生效。
+- 深色主题 MutedBrush #9BA6B5→#CBD5E1、新增 HeaderStatBrush #E2E9F2 供标题行状态文字，标题图标随 Muted 提亮；浅色不变。
+- 赞助页：安装器补 files\Assets\Resources\qrcode{1..4}，DestDir={app}\Assets\Resources（WPF XAML 的 Assets/Resources 路径）；设置页鸣谢按钮移到最底部，关于文案去掉“正代更新”。
+- FanCurveWindow 增加 Applied 订阅与 450ms 延迟强制重载：解决 ActiveChanged 与硬件回读/保存之间的竞态，宽屏内嵌曲线同步。
+- 静音狂暴在迷你/宽屏/托盘可见；自定义模式高亮/绑定/自动下发修复。
+- GPU 超频仅实际 50 GCU 显示/执行；DB 只在静音/平衡/狂暴处理，不碰自定义。
+- PL1/PL2/fPPT 强制 fPPT>=PL2>=PL1；自定义切换自动按保存配置下发一次。
+- 30 系界面显示模式×配置行和配置编辑，隐藏自定义按钮。
+- Ctrl+Alt+4 循环自定义档，OSD 显示配置名；操作提示 5 秒复位 0.293.6。
+- 悬浮窗 CPU/GPU 逐列对齐；关于页/鸣谢/版本号修正。
+
+三、无界/星耀/风扇
+- 无界风扇新增 fanctl table 后端（写 8 字节表 + 0x0727 bit6 锁存 + 0x07C5 bit7 隔离，10s 心跳，45/48℃ 交还回差，5s 软着陆宽限）；direct 保留，wujie_fan_backend=direct 可强制回退。
+- 无界 CPU 频率 LHM 单位判断修复：仅 <20 的值按 GHz 换算，600/800MHz 不再变 600/800GHz。
+- 星耀 AMD 新增窄判据 XingyaoAmdSmuApu/SmuCustomApu，仅 SMU 自定义链路（PL1/PL2/Tcc/STAPM）使用；风扇 EC/限充/键盘仍只认无界。
+- 关于页鸣谢补 https://github.com/Qxingyue/-14XA-Uniwill-EC-。
+
+四、性能
+- 页面/宽屏窗口/迷你渲染 TTL 释放；静音狂暴、核显省电、宽屏静音狂暴按能力动态创建。
+- 悬浮窗/窗口布局修复。
 
 r82（2026-10-23 · 0.293.5.1 beta23.5.1 稳定性补丁 · 旧UI）
 

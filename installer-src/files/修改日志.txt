@@ -1,3 +1,14 @@
+r90（2026-11-02 · 0.293.7.3 beta23.7.3 · 真机两处失效修复）
+
+- 息屏无效（真机 Huan 16 Pro）：安装包 [Files] 的 usbmmidd_v2 缺 recursesubdirs，x64\usbmmIdd.dll 未随包安装，驱动安装失败。
+- 息屏：驱动注入失败时不再静默；enableidd 1 后复查虚拟屏计数，未创建则如实中止并写日志。
+- 息屏：IsDriverInstalled 改以驱动文件落地为准，旧版残留节点可自愈（先 remove 再 install）。
+- 息屏：VerifyDriverFiles 增加 x64\usbmmIdd.dll 校验，缺组件时点击即报，不再静默失效。
+- 显卡模式不显示（真机 Huan 16 Pro）：GCU 不回 DiscreteGpuDirectConnectionSwitch_Status，GpuMode 恒 -1。
+- 显卡模式：新增 TrySyncGpuModeViaRoute，用显示路由回读补出模式；RefreshGpuModeStatus 与 Setting/Status 两条路径都接入。
+- 编译：两个工程关闭 NuGetAudit，NU1900 随网络浮动的噪声不再计入警告基线（回到 164 条）。
+- 版本 0.293.7.3 beta23.7.3。
+
 r89（2026-10-31 · 0.293.6.7 beta23.6.7 · 水冷/功耗/GPU OC 更新）
 
 - 部分 Intel GCU 机型：PL1 恢复硬件范围，GCU 不再被 Intel MSR 截走 PL1/PL2。

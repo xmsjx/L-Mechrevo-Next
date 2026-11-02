@@ -5,7 +5,7 @@ L-Mechrevo 打包须知（约定）
 【一、NoGCU 版：默认不打包】
 - **除非用户明确要求，否则不要打包 `install_script_nogcu.iss`。**
   用户原话：「NOGPU(应为 NoGCU)我不提就不要打包这个版本」。
-- 若误产出，请把它从 `installer-src\Output\` 挪到 `D:\openLM\backup\`，
+- 若误产出，请把它从 `installer-src\Output\` 挪到仓库根的 `backup\`，
   保持 Output 目录只留主包。
 - ⚠️ **nogcu 包暂不随主包升版：目前只更新 GCU 版本的包**（主 / GCU 包 = 0.291.8-beta22.8）。
   `install_script_nogcu.iss` **保持不动**，现停在 **0.291.5 / beta22.5**；
@@ -14,7 +14,7 @@ L-Mechrevo 打包须知（约定）
   2026-10-09 已把 `install_script_nogcu.iss` 同步为 **0.291.5 / beta22.5**（本轮**未打**该包）。
 - ⚠️⚠️ **`install_script_30gcu.iss` 已废弃归档，不要再打包它、也不要再同步它的版本号。**
   2026-10-09 按用户指示「30GCU专用那个实验归档废弃」移到
-  `D:\openLM\archive\refs\30gcu_iss_20261009\install_script_30gcu.iss`（归档前 127,221 B，
+  `archive\refs\30gcu_iss_20261009\install_script_30gcu.iss`（旧工作区归档，本工作区无此目录；归档前 127,221 B，
   备份 `backup\snapshots\2026-10\20261009_144812_pre_caplight\installer-src\`）。
   原因：正式包自己就带 `payload\30` 并由 `Select-GcuPayload.ps1` 在目标机按 dGPU 分流到 30 变体，
   「40 与 30 的关系」已简化为「base + 覆盖层」，不再需要独立的 30 专用 setup；同批实验的 40B 变体当时已删除
@@ -24,22 +24,23 @@ L-Mechrevo 打包须知（约定）
   详细复活条件见归档文件顶部横幅。
   ⚠️ `install_script_LMEXP_gen30on40b.iss` 是另一次实验的产物，**不要跟着改**（版本号与文案保持原样）。
 - 打包命令（仅在被要求时执行）：
-    & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' 'D:\openLM\installer-src\install_script_nogcu.iss'
+    & 'D:\0TOOL\Inno Setup 7\ISCC.exe' 'installer-src\install_script_nogcu.iss'
 
-【二、主包打包流程（今天验证可用）】
+【二、主包打包流程（在仓库根执行，今天验证可用）】
 1. 编译源码（必须 0 错误）：
-     & 'D:\openLM\dotnet-sdk\dotnet.exe' build 'D:\openLM\source\L-Mechrevo.csproj' -c Release
+     dotnet build 'tools\dev\wpf-p0\WpfP0.csproj' -c Release
 2. publish 到既有目录：
-     & 'D:\openLM\dotnet-sdk\dotnet.exe' publish 'D:\openLM\source\L-Mechrevo.csproj' -c Release `
-         -o 'D:\openLM\rebuild\lm_fix_build' '-p:NoWarn=WFO1000%3BCA1416'
-   ⚠️ 不要用 `dotnet publish @tools\publish_lm.rsp`：本 SDK(10.0.401) 下 rsp 里的
-      `-c Release`（空格）与 `;` 分隔的 NoWarn 都会报 MSB1001/MSB1006，
-      必须用 `-c:Release` 与 `%3B` 转义（见 2026-10-05 18:00 日志的教训）。
+     dotnet publish '@tools\publish_lm.rsp'
+   等价于 `dotnet publish 'tools\dev\wpf-p0\WpfP0.csproj' -c:Release -o:rebuild\lm_fix_build '-p:NoWarn=WFO1000%3BCA1416'`。
+   ⚠️ 直接写命令行时必须是 `-c:Release` / `-o:目录` 的冒号形式，且 NoWarn 用 `%3B` 转义；
+      写成 `-c Release`（空格）或未转义的 `;` 会报 MSB1001 / MSB1006。
 3. 把 publish 产物合并进 installer-src\files：
-     py -3 D:\openLM\tools\merge_and_clean.py --apply
+     python tools\merge_and_clean.py --apply
 4. ISCC 打包主包（必须 0 Warning / 0 Error）：
-     & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' 'D:\openLM\installer-src\install_script.iss'
+     & 'D:\0TOOL\Inno Setup 7\ISCC.exe' 'installer-src\install_script.iss'
      -> 产物：installer-src\Output\LM-<版本>-setup.exe
+   ⚠️ 本机装的是 Inno Setup 7.1.1，路径 `D:\0TOOL\Inno Setup 7\ISCC.exe`；
+      旧文档里的 `C:\Program Files (x86)\Inno Setup 6\ISCC.exe` 在本机不存在。
 
 【三、绝不能动的东西】
 - `installer-src\files\GCU\Select-GcuPayload.ps1` —— 我们自己的 GCU 分流脚本
@@ -165,4 +166,4 @@ L-Mechrevo 打包须知（约定）
   已构建的 `installer-src\files\L-Mechrevo-Launcher.exe` 也已从 `files\` 移出
   （备份在 `backup\iss\r25_20261013_pre_netdl_launcher_removal\`）。
 - ⛔ 打包流程里**删掉**下面这一步（留着也无害：不会再被任何 iss 引用）：
-    & 'D:\openLM\dotnet-sdk\dotnet.exe' build 'D:\openLM\tools\LmLauncherStub\LmLauncherStub.csproj' -c Release
+    dotnet build 'tools\LmLauncherStub\LmLauncherStub.csproj' -c Release
