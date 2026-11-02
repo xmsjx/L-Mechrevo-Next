@@ -994,8 +994,7 @@ internal sealed class BackendProbe : IDisposable
         {
             return WindowsUpdateGuard.IsDisabled() == true;
         }
-        if (string.Equals(key, "touchpad", StringComparison.OrdinalIgnoreCase)
-            && (_hw?.IsIntelNucMachine == true || _hw?.IsUmiMachine == true))
+        if (string.Equals(key, "touchpad", StringComparison.OrdinalIgnoreCase))
         {
             object? ptp = Microsoft.Win32.Registry.GetValue(
                 @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\PrecisionTouchPad\Status",
@@ -1005,8 +1004,7 @@ internal sealed class BackendProbe : IDisposable
                 return Convert.ToInt32(ptp) != 0;
             }
         }
-        if (string.Equals(key, "touchpad", StringComparison.OrdinalIgnoreCase)
-            && (_hw?.IsIntelNucMachine == true || _hw?.IsUmiMachine == true))
+        if (string.Equals(key, "touchpad", StringComparison.OrdinalIgnoreCase))
         {
             object? ptp = Microsoft.Win32.Registry.GetValue(
                 @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\PrecisionTouchPad\Status",
@@ -1015,6 +1013,11 @@ internal sealed class BackendProbe : IDisposable
             {
                 return Convert.ToInt32(ptp) != 0;
             }
+        }
+        if (string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase)
+            && CameraPnpControl.TryGetEnabled(out bool cameraEnabled, out _))
+        {
+            return cameraEnabled;
         }
         if (string.Equals(key, "wifi", StringComparison.OrdinalIgnoreCase)
             && MechrevoLite.Helpers.RadioSwitch.Available(MechrevoLite.Helpers.RadioSwitchKind.Wifi)
