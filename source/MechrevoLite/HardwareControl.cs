@@ -523,6 +523,12 @@ public static class HardwareControl
 
 	private static CpuPowerSampler? cpuPowerSampler;
 
+	// CPU 功耗：LHM 的 Package 传感器在部分机型上会固定不刷新；用 Energy Meter 交叉校验。
+	private static float? _cpuPowerLastLhm;
+	private static int _cpuPowerLhmSameCount;
+	private static bool _cpuPowerUseEnergyMeter;
+	private static int _cpuPowerEnergyMissing;
+
 	private static CpuFrequencySampler? cpuFreqSampler;
 
 	/// <summary>⭐ 2026-10-18（机主：CPU 占用率显示不对）：⭐ CPU 占用率本地采样器（⭐ 性能计数器优先、GetSystemTimes 兜底 ✅）。</summary>
@@ -2500,11 +2506,13 @@ public static class HardwareControl
 		}
 		// CPU 功耗也放在 LHM/NVML 闸门之前：Energy Meter 与 LHM/NVML 无关，
 		// JIGUANG/极光这类 NVML 初始化失败的机型也能继续显示 CPU 功耗。
+		float? earlyCpuPower = null;
 		if (_localMonitoringEnabled)
 		{
 			TryStep(delegate
 			{
 				float? sampled = cpuPowerSampler?.Sample();
+				earlyCpuPower = sampled;
 				if (IsUsablePower(sampled))
 				{
 					cpuPower = ResolveCpuPower(sampled, cpuPower);
@@ -2622,15 +2630,16 @@ public static class HardwareControl
 			}, "nvml-sample");
 		}
 		// (a) 性能计数器回退也单独兜底：它同样会抛（计数器缺失/被删/权限不足），不能让它穿出去。
-		float? fallbackCpuPower = null;
-		if (!IsUsablePower(num))
+		// 早段已经采过 Energy Meter 时直接复用，避免同一轮重复 NextValue 把差分打成 0。
+		float? fallbackCpuPower = earlyCpuPower;
+		if (!IsUsablePower(num) && !IsUsablePower(fallbackCpuPower))
 		{
 			TryStep(delegate
 			{
 				fallbackCpuPower = cpuPowerSampler?.Sample();
 			}, "cpu-perfcounter-sample");
 		}
-		cpuPower = ResolveCpuPower(num, fallbackCpuPower);
+		cpuPower = PreferLiveCpuPower(num, fallbackCpuPower, ResolveCpuPower(num, fallbackCpuPower));
 		gpuPower = ResolveGpuPower(num2, IsUsablePower(num2) ? ((float?)null) : gpuPowerViaNvml);
 		// Intel iGPU（尤其星耀 PTL）：LHM 多数只给 D3D 负载；频率/功耗/温度缺失时
 		// 尝试 Level Zero Sysman（只读），读到才覆盖，读不到保持「—」。
@@ -2887,6 +2896,49 @@ public static class HardwareControl
 		{
 			powerWall.Observe(num.Value, num2, DateTime.Now);
 		}
+	}
+
+	/// <summary>
+	/// 部分机型 LHM 的 CPU Package 功耗传感器会长期固定，Energy Meter 仍在变化。
+	/// 连续两轮 LHM 值完全相同而 Energy Meter 有值时，改用 Energy Meter。
+	/// </summary>
+	private static float? PreferLiveCpuPower(float? lhmPower, float? energyMeterPower, float? resolved)
+	{
+		bool lhmValid = IsUsablePower(lhmPower);
+		bool energyValid = IsUsablePower(energyMeterPower);
+		if (lhmValid && energyValid)
+		{
+			if (_cpuPowerLastLhm == lhmPower)
+			{
+				_cpuPowerLhmSameCount++;
+			}
+			else
+			{
+				_cpuPowerLastLhm = lhmPower;
+				_cpuPowerLhmSameCount = 0;
+			}
+			if (_cpuPowerLhmSameCount >= 2 || _cpuPowerUseEnergyMeter)
+			{
+				if (!_cpuPowerUseEnergyMeter)
+				{
+					Logger.WriteError("[cpu-power] LHM CPU 功耗固定 " + lhmPower + "W ⇒ 改用 Energy Meter " + energyMeterPower + "W");
+					_cpuPowerUseEnergyMeter = true;
+				}
+				_cpuPowerEnergyMissing = 0;
+				return energyMeterPower;
+			}
+		}
+		else if (_cpuPowerUseEnergyMeter && !energyValid)
+		{
+			_cpuPowerEnergyMissing++;
+			if (_cpuPowerEnergyMissing >= 2)
+			{
+				_cpuPowerUseEnergyMeter = false;
+				_cpuPowerLastLhm = null;
+				_cpuPowerLhmSameCount = 0;
+			}
+		}
+		return resolved;
 	}
 
 	internal static float? ResolveCpuPower(float? localPower, float? fallbackPower)
