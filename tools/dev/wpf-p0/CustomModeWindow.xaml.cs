@@ -449,12 +449,10 @@ public partial class CustomModeWindow : Window
             return true;
         }
         Logger.WriteError("[custom-dirty] 切换配置提示未应用：_dirty=" + _dirty + " fanDirty=" + fanDirty);
-        MessageBoxResult result = MessageBox.Show(
-            this,
+        MessageBoxResult result = ShowDialogMessage(
             WpfStrings.L(
                 "当前配置有未应用的修改（含风扇曲线），切换配置会丢弃这些修改。继续？",
                 "The current configuration has unsaved changes (including fan curves). Switching will discard them. Continue?"),
-            "L-Mechrevo",
             MessageBoxButton.YesNo,
             MessageBoxImage.Warning);
         if (result != MessageBoxResult.Yes)
@@ -1394,7 +1392,7 @@ public partial class CustomModeWindow : Window
         {
             return;
         }
-        if (MessageBox.Show(this, WpfStrings.CustomModeWindow_xaml_MessageBoxShowthis, "L-Mechrevo", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        if (ShowDialogMessage(WpfStrings.CustomModeWindow_xaml_MessageBoxShowthis, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         {
             return;
         }
@@ -1456,13 +1454,46 @@ public partial class CustomModeWindow : Window
         }
     }
 
+    /// <summary>宽屏内嵌时 this 从未 Show；不能把它直接当 Owner。</summary>
+    private Window? DialogOwner()
+    {
+        if (IsVisible)
+        {
+            return this;
+        }
+        if (Application.Current != null)
+        {
+            foreach (Window window in Application.Current.Windows)
+            {
+                if (!ReferenceEquals(window, this) && window.IsVisible)
+                {
+                    return window;
+                }
+            }
+        }
+        return null;
+    }
+
+    private MessageBoxResult ShowDialogMessage(string text, MessageBoxButton buttons, MessageBoxImage image)
+    {
+        Window? owner = DialogOwner();
+        return owner == null
+            ? MessageBox.Show(text, "L-Mechrevo", buttons, image)
+            : MessageBox.Show(owner, text, "L-Mechrevo", buttons, image);
+    }
+
     private void Rename_Click(object sender, RoutedEventArgs e)
     {
         if (_current == null)
         {
             return;
         }
-        TextPromptWindow prompt = new(WpfStrings.CustomRenameTitle, WpfStrings.CustomRenamePrompt, ModeName(_current)) { Owner = this };
+        TextPromptWindow prompt = new(WpfStrings.CustomRenameTitle, WpfStrings.CustomRenamePrompt, ModeName(_current));
+        Window? promptOwner = DialogOwner();
+        if (promptOwner != null)
+        {
+            prompt.Owner = promptOwner;
+        }
         if (prompt.ShowDialog() == true && !string.IsNullOrWhiteSpace(prompt.Value))
         {
             MechrevoLite.Mode.PerfModeStore.SaveName(_current.Id, prompt.Value.Trim());
@@ -1478,7 +1509,7 @@ public partial class CustomModeWindow : Window
             StatusText.Text = WpfStrings.CustomModeWindow_xaml_Text_20;
             return;
         }
-        if (MessageBox.Show(this, WpfStrings.CustomModeWindow_xaml_MessageBoxShowthis_2 + ModeName(_current) + WpfStrings.CustomDeleteConfirmSuffix, "L-Mechrevo", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        if (ShowDialogMessage(WpfStrings.CustomModeWindow_xaml_MessageBoxShowthis_2 + ModeName(_current) + WpfStrings.CustomDeleteConfirmSuffix, MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
         {
             return;
         }
