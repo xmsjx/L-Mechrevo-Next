@@ -3792,7 +3792,7 @@ public partial class OriginalStyleWindow : Window
                 }
                 _lastBrightnessHotkeyTick = now;
                 int hidLevel = NucHidKeyboardBrightnessLevel();
-                int next = (hidLevel + 1) % 3;
+                int next = (hidLevel + 1) % 5;
                 _lastKbdHotkeyLevel = next;
                 ApplyNucHidKeyboardBrightness(next);
                 ShowNucKeyboardOsd(next);
@@ -3995,16 +3995,16 @@ public partial class OriginalStyleWindow : Window
         Logger.WriteError("[kbd-osd] ACPI 亮度 → " + clamped + "/4");
     }
 
-    /// <summary>NUC/UMI 单键 RGB 键盘：Fn+F8 循环三档，OSD 显示关/低/高。</summary>
+    /// <summary>NUC/UMI 单键 RGB 键盘：Fn+F8 循环 0/25/50/75/100% 五档。</summary>
     private void ShowNucKeyboardOsd(int level)
     {
-        int clamped = Math.Clamp(level, 0, 2);
+        int clamped = Math.Clamp(level, 0, 4);
         _lastKeyboardBrightnessOsd = clamped;
         string text = clamped <= 0
             ? WpfStrings.L("关", "Off")
-            : (clamped >= 2 ? WpfStrings.L("高", "High") : WpfStrings.L("低", "Low"));
+            : (clamped * 25) + "%";
         OsdService.Show(LightChannelGlyph("Keyboard/Ctrl"), WpfStrings.OsdLighting, text);
-        Logger.WriteError("[kbd-osd] NUC 键盘亮度 → " + clamped + "/2");
+        Logger.WriteError("[kbd-osd] NUC HID 键盘亮度 → " + clamped + "/4 (" + (clamped * 25) + "%)");
     }
 
     private int NucHidKeyboardBrightnessLevel()
@@ -4012,10 +4012,10 @@ public partial class OriginalStyleWindow : Window
         KeyboardRgb? rgb = WpfBackend.rgb;
         if (rgb == null || !rgb.IsConnected)
         {
-            return Math.Clamp(_lastKbdHotkeyLevel, 0, 2);
+            return Math.Clamp(_lastKbdHotkeyLevel, 0, 4);
         }
-        int brightness = rgb.Brightness;
-        return brightness <= 0 ? 0 : (brightness <= 50 ? 1 : 2);
+        int brightness = Math.Clamp(rgb.Brightness, 0, 100);
+        return Math.Clamp((brightness + 12) / 25, 0, 4);
     }
 
     private void ApplyNucHidKeyboardBrightness(int level)
@@ -4025,20 +4025,15 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        int clamped = Math.Clamp(level, 0, 2);
-        rgb.Brightness = clamped switch
-        {
-            0 => 0,
-            1 => 50,
-            _ => 100
-        };
+        int clamped = Math.Clamp(level, 0, 4);
+        rgb.Brightness = clamped * 25;
         rgb.ApplyBrightnessToDevice();
         if (rgb.ActiveMode >= 0)
         {
             rgb.StartModeForced(rgb.ActiveMode);
         }
         rgb.SaveConfig();
-        Logger.WriteError("[kbd-osd] NUC HID 亮度下发 " + clamped + "/2 (" + rgb.Brightness + "%)");
+        Logger.WriteError("[kbd-osd] NUC HID 亮度下发 " + clamped + "/4 (" + rgb.Brightness + "%)");
     }
 
     // OSD 交互参考：OpenRevo (https://github.com/faintonce/open-revo, GPL-3.0)。
