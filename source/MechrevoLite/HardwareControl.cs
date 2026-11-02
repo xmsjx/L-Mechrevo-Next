@@ -1636,7 +1636,7 @@ public static class HardwareControl
 				if (gcuGpuFanRpm > 0) gpuFanRPM = gcuGpuFanRpm;
 				hw.ApplyGcuEcFanSpeeds(gcuCpuFanRpm, gcuGpuFanRpm);
 				Logger.WriteLineIfChanged("gcu-ec-fan",
-					"[fan] GCU FanInfo 缺失 ⇒ EC 只读兜底：CPU=" + gcuCpuFanRpm + "rpm · GPU=" + gcuGpuFanRpm + "rpm");
+					"[fan] GCU FanInfo 缺失 ⇒ EC 只读兜底：CPU=" + gcuCpuFanRpm + "rpm/" + hw.CpuFanDuty + "% · GPU=" + gcuGpuFanRpm + "rpm/" + hw.GpuFanDuty + "%");
 			}
 			if (hw.WujieSmuApu)
 			{

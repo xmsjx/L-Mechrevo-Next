@@ -6156,7 +6156,29 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		if (gpuOk) gpuRpm = acpiGpu;
 		if (!cpuOk) cpuOk = TryReadEcFanWord(0x0464, out cpuRpm, lowOffset: 1, allowAcpi: false);
 		if (!gpuOk) gpuOk = TryReadEcFanWord(0x046C, out gpuRpm, lowOffset: -1, allowAcpi: false);
-		return acpiOk || cpuOk || gpuOk;
+
+		// GCU 的 FanInfo 也是从 EC 0x75B/0x75C 读占空比后 /2；
+		// FanInfo 缺失时用同一对只读寄存器补百分比，避免只剩 RPM、没有百分比。
+		bool dutyOk = TryReadGcuEcFanDuties();
+		return acpiOk || cpuOk || gpuOk || dutyOk;
+	}
+
+	private bool TryReadGcuEcFanDuties()
+	{
+		try
+		{
+			if (AcpiDriverEc.TryReadByte(1883, out byte cpuDuty)
+				&& AcpiDriverEc.TryReadByte(1884, out byte gpuDuty))
+			{
+				CpuFanDuty = Math.Clamp(cpuDuty / 2, 0, 100);
+				GpuFanDuty = Math.Clamp(gpuDuty / 2, 0, 100);
+				return true;
+			}
+		}
+		catch
+		{
+		}
+		return false;
 	}
 
 	private static bool TryReadEcFanWord(int highAddress, out int rpm, int lowOffset, bool allowAcpi = true)
