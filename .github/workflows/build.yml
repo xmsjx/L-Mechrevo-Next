@@ -101,6 +101,9 @@ jobs:
         run: |
           choco install innosetup --no-progress -y
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $langDir = "${env:ProgramFiles(x86)}\Inno Setup 6\Languages"
+          New-Item -ItemType Directory -Force -Path $langDir | Out-Null
+          Copy-Item "installer-src/ChineseSimplified.isl" (Join-Path $langDir "ChineseSimplified.isl") -Force
 
       - name: Build setup
         shell: pwsh
