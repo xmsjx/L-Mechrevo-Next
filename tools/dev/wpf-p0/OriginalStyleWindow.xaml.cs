@@ -4533,6 +4533,33 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    /// <summary>启动时恢复狂暴档的显卡超频；只在内置狂暴档且上次确实开启时执行。</summary>
+    private async Task RestoreGpuOverclockOnStartupAsync()
+    {
+        try
+        {
+            BackendProbe? probe = _backendProbe;
+            MechrevoHw? hw = probe?.Hw;
+            if (probe == null || hw == null
+                || !hw.IsGcuConnected
+                || hw.UsesBaolongda
+                || hw.IsIntelNucMachine
+                || hw.IsUmiMachine
+                || !probe.GpuOcSupported
+                || (hw.OperatingMode != 1 && probe.CurrentMode != 1)
+                || MechrevoLite.AppConfig.Get("gpu_oc", 0) == 0)
+            {
+                return;
+            }
+            bool ok = await ApplyGpuOverclockSettingAsync(true).ConfigureAwait(true);
+            Logger.WriteError("[gpu-oc] 启动恢复狂暴显卡超频 ⇒ ok=" + ok);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[gpu-oc] 启动恢复失败：" + ex.Message);
+        }
+    }
+
     private async Task RestorePerfModeOnStartupAsync()
     {
         if (_perfRestoreStarted)
@@ -4556,6 +4583,7 @@ public partial class OriginalStyleWindow : Window
                 {
                 }
             }
+            await RestoreGpuOverclockOnStartupAsync().ConfigureAwait(true);
         }
         catch
         {
