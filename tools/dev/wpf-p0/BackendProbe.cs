@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 using MechrevoLite;
 using MechrevoLite.Hardware;
@@ -17,6 +18,7 @@ internal sealed class BackendProbe : IDisposable
     private static readonly Type? ShellType = typeof(MechrevoHw).Assembly.GetType("MechrevoLite.Helpers.ShellPersonalization");
     private static readonly Type? SleepType = typeof(MechrevoHw).Assembly.GetType("MechrevoLite.Helpers.PowerSleepGuard");
     private bool _disposed;
+    private int _cameraSyncBusy;
 
     internal BackendProbe()
     {
@@ -320,6 +322,33 @@ internal sealed class BackendProbe : IDisposable
         {
             NucQuickSwitches.Sync(_hw);
         }
+    }
+
+    /// <summary>摄像头设备状态异步回读；PnP 枚举不能阻塞 UI 线程。</summary>
+    internal void SyncCameraQuickState()
+    {
+        MechrevoHw? hw = _hw;
+        if (hw == null || Interlocked.Exchange(ref _cameraSyncBusy, 1) != 0)
+        {
+            return;
+        }
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                if (CameraPnpControl.TryGetEnabled(out bool enabled, out _))
+                {
+                    hw.QuickSwitches["webcam"] = enabled;
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _cameraSyncBusy, 0);
+            }
+        });
     }
 
     internal void MarkUserModeSwitch()
@@ -996,28 +1025,19 @@ internal sealed class BackendProbe : IDisposable
         }
         if (string.Equals(key, "touchpad", StringComparison.OrdinalIgnoreCase))
         {
-            object? ptp = Microsoft.Win32.Registry.GetValue(
-                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\PrecisionTouchPad\Status",
-                "Enabled", null);
-            if (ptp != null)
+            try
             {
-                return Convert.ToInt32(ptp) != 0;
+                object? ptp = Microsoft.Win32.Registry.GetValue(
+                    @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\PrecisionTouchPad\Status",
+                    "Enabled", null);
+                if (ptp != null)
+                {
+                    return Convert.ToInt32(ptp) != 0;
+                }
             }
-        }
-        if (string.Equals(key, "touchpad", StringComparison.OrdinalIgnoreCase))
-        {
-            object? ptp = Microsoft.Win32.Registry.GetValue(
-                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\PrecisionTouchPad\Status",
-                "Enabled", null);
-            if (ptp != null)
+            catch
             {
-                return Convert.ToInt32(ptp) != 0;
             }
-        }
-        if (string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase)
-            && CameraPnpControl.TryGetEnabled(out bool cameraEnabled, out _))
-        {
-            return cameraEnabled;
         }
         if (string.Equals(key, "wifi", StringComparison.OrdinalIgnoreCase)
             && MechrevoLite.Helpers.RadioSwitch.Available(MechrevoLite.Helpers.RadioSwitchKind.Wifi)

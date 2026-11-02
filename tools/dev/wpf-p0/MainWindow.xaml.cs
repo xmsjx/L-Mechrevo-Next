@@ -1187,24 +1187,30 @@ public partial class MainWindow : Window
 
     private void RefreshMoreSwitchTiles()
     {
-        if (_owner == null || _moreSwitchTiles.Count == 0)
+        try
         {
-            return;
-        }
-        Dictionary<string, bool> states = new(StringComparer.OrdinalIgnoreCase);
-        foreach ((string _, (string Key, string _, bool On)[] items) in _owner.WideMoreSwitches())
-        {
-            foreach ((string key, string _, bool on) in items)
+            if (_owner == null || _moreSwitchTiles.Count == 0)
             {
-                states[key] = on;
+                return;
+            }
+            Dictionary<string, bool> states = new(StringComparer.OrdinalIgnoreCase);
+            foreach ((string _, (string Key, string _, bool On)[] items) in _owner.WideMoreSwitches())
+            {
+                foreach ((string key, string _, bool on) in items)
+                {
+                    states[key] = on;
+                }
+            }
+            foreach (KeyValuePair<string, ToggleButton> tile in _moreSwitchTiles)
+            {
+                if (states.TryGetValue(tile.Key, out bool on))
+                {
+                    tile.Value.IsChecked = on;
+                }
             }
         }
-        foreach (KeyValuePair<string, ToggleButton> tile in _moreSwitchTiles)
+        catch
         {
-            if (states.TryGetValue(tile.Key, out bool on))
-            {
-                tile.Value.IsChecked = on;
-            }
         }
     }
 

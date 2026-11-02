@@ -6134,6 +6134,7 @@ public partial class OriginalStyleWindow : Window
         // 0.293.5.1 限充效果判定：复用界面 2s 心跳，内部 10s 限频；只读/有界重确立。
         try { MechrevoLite.Battery.ChargeLimitMonitor.Tick(DateTime.Now); } catch { }
         probe.SyncNucQuickSwitches();
+        probe.SyncCameraQuickState();
         BackendLine.Text = probe.Snapshot();
         UpdateTraySensorTooltip(probe);
         HookHardwareState(probe.Hw);
