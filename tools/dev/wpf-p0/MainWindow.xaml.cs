@@ -2856,6 +2856,12 @@ public partial class MainWindow : Window
             ("HidLightbar_Sync/Ctrl", WpfStrings.LightingSync, LightingCatalog.SyncEffects)
         };
         bool hasKeyboard = hw?.SupportsKeyboard ?? false;
+        if (hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true)
+        {
+            // NUC/UMI：HID 单键 RGB 优先；没有 HID 时看 EC 单区支持位（OpenRevo 0x766 bit2）。
+            hasKeyboard = WpfBackend.rgb?.IsConnected == true
+                || MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone();
+        }
         bool hasLightbar = hw?.SupportsLightbar ?? false;
         bool hasLogo = hw?.SupportsLogoLight ?? false;
         bool hasHinge = hw?.SupportsHingeLight ?? false;
@@ -3458,6 +3464,11 @@ public partial class MainWindow : Window
             {
                 return false;
             }
+            if (hw.IsIntelNucMachine || hw.IsUmiMachine)
+            {
+                // NUC/UMI：只有 HID 控制器在线才走 HID；否则是 EC 单区/无键盘。
+                return WpfBackend.rgb?.IsConnected == true;
+            }
             KeyboardRgb? rgb = WpfBackend.rgb;
             if (rgb != null
                 && KeyboardLightPathPolicy.ShouldUseGcuKeyboardFallback(
@@ -3487,6 +3498,11 @@ public partial class MainWindow : Window
         try
         {
             if (hw == null || !hw.SupportsKeyboard || WideIsHidKeyboard(hw) || hw.UsesBaolongda)
+            {
+                return false;
+            }
+            // NUC/UMI 单区 RGB 不是白色背光，走 LightEditorWindow 的四档单区效果。
+            if (hw.IsIntelNucMachine || hw.IsUmiMachine)
             {
                 return false;
             }

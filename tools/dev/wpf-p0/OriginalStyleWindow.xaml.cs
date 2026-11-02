@@ -721,6 +721,15 @@ public partial class OriginalStyleWindow : Window
                     .Select(item => ("hid:" + item.Mode, item.Name))
                     .ToArray();
             }
+            if (hw != null && (hw.IsIntelNucMachine || hw.IsUmiMachine)
+                && WpfBackend.rgb?.IsConnected != true
+                && MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone())
+            {
+                // OpenRevo 单区常量：1 常亮 / 2 硬件彩虹 / 3 硬件呼吸 / 4 软件六色轮播。
+                return MechrevoLite.Hardware.KeyboardFirmwareEffects.SingleZone
+                    .Select(item => (item.Id, item.Label))
+                    .ToArray();
+            }
             int type = hw?.Capabilities.KeyboardType ?? 0;
             (string Id, string Label)[] firmware = MechrevoLite.Hardware.KeyboardFirmwareEffects.Visible(type)
                 .Select(item => (item.Id, item.Label))

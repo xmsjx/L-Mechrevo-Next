@@ -32,6 +32,7 @@ public partial class LightEditorWindow : Window
     private bool _logoGrade;
     /// <summary>⭐ 2026-10-26（task-17 · 宽屏白色背光入口）：白色背光键盘只有 电源 + 2 档亮度，没有灯效/颜色/速度 ✅。</summary>
     private readonly bool _whiteBacklightOnly;
+    private readonly bool _nucSingleZone;
 
     /// <summary>NUC/UMI 原厂灯带没有速度寄存器，编辑器隐藏速度行；其它机型不受影响。</summary>
     private readonly bool _hideSpeedForNucLightbar;
@@ -50,6 +51,11 @@ public partial class LightEditorWindow : Window
         _effects = effects;
         _whiteBacklightOnly = whiteBacklightOnly && string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
         _keyboard = string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
+        MechrevoHw? keyboardHw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        _nucSingleZone = _keyboard
+            && (keyboardHw?.IsIntelNucMachine == true || keyboardHw?.IsUmiMachine == true)
+            && L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.IsConnected != true
+            && NucKeyboardLighting.IsSingleZone();
         _hideSpeedForNucLightbar = string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
             && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } lightbarHw
             && (lightbarHw.IsIntelNucMachine || lightbarHw.IsUmiMachine);
@@ -105,6 +111,10 @@ public partial class LightEditorWindow : Window
         }
         _settings = LightingSettingsStore.Load(topic, effects.Length > 0 ? effects[0].Effect : "Single");
         _light = Math.Clamp(_settings.Light, (int)LightSlider.Minimum, (int)LightSlider.Maximum);
+        if (_nucSingleZone && NucKeyboardLighting.TryReadBrightness(out int nucBrightness))
+        {
+            _light = nucBrightness;
+        }
         if (_keyboard && !_wujieWhite && !_whiteBacklightOnly && hw != null)
         {
             // 编辑器以硬件当前亮度为准；否则 Fn 调过亮度后，编辑窗口仍显示旧的保存值。
@@ -434,8 +444,10 @@ public partial class LightEditorWindow : Window
         string effect = SelectedEffect;
         bool manual = string.Equals(effect, "Manual", StringComparison.Ordinal);
         bool breathing = string.Equals(effect, "Breathing", StringComparison.Ordinal)
-            && L_Mechrevo.WpfP0.Services.WpfBackend.Hw != null
-            && MechrevoLite.Hardware.KeyboardFirmwareEffects.IsSingleZoneRgb(L_Mechrevo.WpfP0.Services.WpfBackend.Hw.Capabilities.KeyboardType);
+            && (_nucSingleZone
+                || (L_Mechrevo.WpfP0.Services.WpfBackend.Hw != null
+                    && MechrevoLite.Hardware.KeyboardFirmwareEffects.IsSingleZoneRgb(
+                        L_Mechrevo.WpfP0.Services.WpfBackend.Hw.Capabilities.KeyboardType)));
         SpeedRow.Visibility = Visibility.Collapsed;
         PerKeyPanel.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
         ManualPalettePanel.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
@@ -715,6 +727,30 @@ public partial class LightEditorWindow : Window
             bool ok = true;
             if (string.Equals(_topic, "Keyboard/Ctrl", StringComparison.Ordinal))
             {
+                if (_nucSingleZone)
+                {
+                    int[] cycleColors = new int[_manualIndexes.Length];
+                    for (int i = 0; i < _manualIndexes.Length; i++)
+                    {
+                        int paletteIndex = Math.Clamp(_manualIndexes[i], 1, LightChannelSettings.ManualPalette.Length);
+                        cycleColors[i] = LightChannelSettings.ManualPalette[paletteIndex - 1];
+                    }
+                    int nucSpeed = manualKeyboard
+                        ? Math.Clamp((_manualInterval - 2) / 2, 0, 4)
+                        : Math.Clamp(_speed, 0, 4);
+                    int nucColor = string.Equals(effect, "Breathing", StringComparison.Ordinal)
+                        ? _breathingIndex switch
+                        {
+                            1 => unchecked((int)0xFFFFFFFF),
+                            2 => unchecked((int)0xFFFF0000),
+                            3 => unchecked((int)0xFF00FF00),
+                            4 => unchecked((int)0xFF0000FF),
+                            _ => _colorArgb
+                        }
+                        : _colorArgb;
+                    NucKeyboardLighting.Apply(effect, power, _light, nucSpeed, nucColor, cycleColors);
+                    return true;
+                }
                 if (power)
                 {
                     await L_Mechrevo.WpfP0.Services.WpfBackend.Service.SetKeyboardPower(true);
