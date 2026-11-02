@@ -2619,6 +2619,37 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 	}
 
+	/// <summary>GCU 状态包缺失时，用实际显示路由/NVRAM 补读一次 GpuMode。</summary>
+	internal bool TrySyncGpuModeFromLocalReadback()
+	{
+		try
+		{
+			GpuRoute route = GpuRouteMonitor.Refresh().Route;
+			int mode = GpuRouteInference.ToGpuMode(route);
+			if (mode < 0 && TryReadUefiGpuMode(out int uefiMode))
+			{
+				mode = uefiMode;
+			}
+			if (mode < 0)
+			{
+				return false;
+			}
+			if (mode == GpuMode && GpuModeStatusVersion > 0)
+			{
+				return true;
+			}
+			GpuMode = mode;
+			Interlocked.Increment(ref _gpuModeStatusVersion);
+			Logger.WriteError("[gpu-mode] GCU 状态缺失 ⇒ 本地路由/NVRAM 补读 mode=" + mode);
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[gpu-mode] 本地补读失败：" + ex.Message);
+			return false;
+		}
+	}
+
 	internal static int ResolveGpuModeStatus(int currentMode, string? directStatus)
 	{
 		string text = directStatus?.ToUpperInvariant() ?? "";

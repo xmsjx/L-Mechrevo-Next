@@ -2609,6 +2609,10 @@ public class MechrevoService
 			}
 			if (!_hw.IsGcuConnected)
 			{
+				if (_hw.TrySyncGpuModeFromLocalReadback())
+				{
+					return GpuModeStatusReadback.Fresh;
+				}
 				return GpuModeStatusReadback.Unavailable;
 			}
 			long versionBeforeRequest = _hw.GpuModeStatusVersion;
@@ -2625,6 +2629,11 @@ public class MechrevoService
 				num = 0;
 			}
 			bool flag2 = (byte)num != 0;
+			if (!flag && !flag2 && _hw.TrySyncGpuModeFromLocalReadback())
+			{
+				Logger.WriteLine("RefreshGpuModeStatus：GCU 未回显示路由 ⇒ 本地路由/NVRAM 补读成功");
+				return GpuModeStatusReadback.Fresh;
+			}
 			GpuModeStatusReadback gpuModeStatusReadback = (flag ? GpuModeStatusReadback.Fresh : (flag2 ? GpuModeStatusReadback.Cached : GpuModeStatusReadback.Unavailable));
 			if (!flag & flag2)
 			{
