@@ -190,7 +190,7 @@ public partial class OriginalStyleWindow : Window
         ("touchpad", QuickSwitchService.Label("touchpad", "触摸板"), "\uE7C9"), ("touchpadtoggle", QuickSwitchService.Label("touchpadtoggle", "触摸板切换键"), "\uE7C9"),
         ("wifi", "WiFi", "\uE701"), ("bt", QuickSwitchService.Label("bt", "蓝牙"), "\uE702"),
         ("webcam", QuickSwitchService.Label("webcam", "摄像头"), "\uE722"), ("micmute", QuickSwitchService.Label("micmute", "麦克风"), "\uE720"),
-        ("numpad", QuickSwitchService.Label("numpad", "小键盘锁"), "\uE765"), ("winkey", QuickSwitchService.Label("winkey", "Win键锁"), "\uE765"),
+        ("numpad", QuickSwitchService.Label("numpad", "小键盘锁"), "\uE765"), ("winkey", QuickSwitchService.Label("winkey", "禁用Win键"), "\uE765"),
         ("fnkey", QuickSwitchService.Label("fnkey", "Fn键锁"), "\uE765"), ("capslock", QuickSwitchService.Label("capslock", "大小写锁定"), "\uE8AB"),
         ("osd", QuickSwitchService.Label("osd", "OSD提示"), "\uE7F4"), ("gcuosd", "GCU-OSD", "\uE7F4"), ("copilot", QuickSwitchService.Label("copilot", "Copilot键锁"), "\uE8B7"),
         ("usb", QuickSwitchService.Label("usb", "关机USB供电"), "\uE88E"), ("acrecovery", QuickSwitchService.Label("acrecovery", "来电自启"), "\uE7E8"),
@@ -1411,7 +1411,7 @@ public partial class OriginalStyleWindow : Window
             }),
             (WpfStrings.QuickGroupKeyboard, new (string, string)[]
             {
-                ("winkey", QuickSwitchService.Label("winkey", "Win键锁")), ("fnkey", QuickSwitchService.Label("fnkey", "Fn键锁")), ("capslock", QuickSwitchService.Label("capslock", "大小写锁定")),
+                ("winkey", QuickSwitchService.Label("winkey", "禁用Win键")), ("fnkey", QuickSwitchService.Label("fnkey", "Fn键锁")), ("capslock", QuickSwitchService.Label("capslock", "大小写锁定")),
                 ("osd", QuickSwitchService.Label("osd", "OSD提示")), ("gcuosd", QuickSwitchService.Label("gcuosd", "GCU-OSD")),
                 ("copilot", QuickSwitchService.Label("copilot", "Copilot键锁"))
             }),
@@ -5477,6 +5477,7 @@ public partial class OriginalStyleWindow : Window
             {
                 Style = (Style)FindResource("Tile"),
                 Tag = choice.Key,
+                ToolTip = QuickSwitchService.Tooltip(choice.Key),
                 IsChecked = _backendProbe?.QuickState(choice.Key) == true
             };
             tile.Click += QuickTile_Click;
@@ -5715,7 +5716,7 @@ public partial class OriginalStyleWindow : Window
             }),
             (WpfStrings.QuickGroupKeyboard, new (string, string)[]
             {
-                ("winkey", QuickSwitchService.Label("winkey", "Win键锁")), ("fnkey", QuickSwitchService.Label("fnkey", "Fn键锁")), ("capslock", QuickSwitchService.Label("capslock", "大小写锁定")),
+                ("winkey", QuickSwitchService.Label("winkey", "禁用Win键")), ("fnkey", QuickSwitchService.Label("fnkey", "Fn键锁")), ("capslock", QuickSwitchService.Label("capslock", "大小写锁定")),
                 ("osd", QuickSwitchService.Label("osd", "OSD提示")), ("gcuosd", QuickSwitchService.Label("gcuosd", "GCU-OSD")),
                 ("copilot", QuickSwitchService.Label("copilot", "Copilot键锁"))
             }),
@@ -5760,6 +5761,7 @@ public partial class OriginalStyleWindow : Window
                     Content = QuickSwitchService.Label(key, label),
                     Style = (Style)FindResource("RowSwitch"),
                     Tag = key,
+                    ToolTip = QuickSwitchService.Tooltip(key),
                     IsChecked = _backendProbe.QuickState(key),
                     Margin = new Thickness(0, 1, 4, 1),
                     FontSize = 11,

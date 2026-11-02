@@ -19,6 +19,7 @@ internal sealed class BackendProbe : IDisposable
     private static readonly Type? SleepType = typeof(MechrevoHw).Assembly.GetType("MechrevoLite.Helpers.PowerSleepGuard");
     private bool _disposed;
     private int _cameraSyncBusy;
+    private int _cameraQuickState = -1;
 
     internal BackendProbe()
     {
@@ -338,6 +339,7 @@ internal sealed class BackendProbe : IDisposable
             {
                 if (CameraPnpControl.TryGetEnabled(out bool enabled, out _))
                 {
+                    Volatile.Write(ref _cameraQuickState, enabled ? 1 : 0);
                     hw.QuickSwitches["webcam"] = enabled;
                 }
             }
@@ -349,6 +351,16 @@ internal sealed class BackendProbe : IDisposable
                 Interlocked.Exchange(ref _cameraSyncBusy, 0);
             }
         });
+    }
+
+    /// <summary>用户刚切换摄像头时立即更新读数，避免后台回读把 UI 拉回旧值。</summary>
+    internal void SetCameraQuickState(bool on)
+    {
+        Volatile.Write(ref _cameraQuickState, on ? 1 : 0);
+        if (_hw != null)
+        {
+            _hw.QuickSwitches["webcam"] = on;
+        }
     }
 
     internal void MarkUserModeSwitch()
@@ -1037,6 +1049,14 @@ internal sealed class BackendProbe : IDisposable
             }
             catch
             {
+            }
+        }
+        if (string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase))
+        {
+            int camera = Volatile.Read(ref _cameraQuickState);
+            if (camera >= 0)
+            {
+                return camera == 1;
             }
         }
         if (string.Equals(key, "wifi", StringComparison.OrdinalIgnoreCase)

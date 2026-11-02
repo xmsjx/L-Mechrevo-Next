@@ -1,4 +1,5 @@
-﻿using System.Drawing;
+using System;
+using System.Drawing;
 using System.Threading.Tasks;
 using MechrevoLite.Hardware;
 
@@ -57,27 +58,49 @@ internal sealed class DashboardCommands : IDashboardCommands
     {
         if (_services != null)
         {
-            return (await _services.QuickSwitches.ToggleAsync(key).ConfigureAwait(false)).Ok;
+            bool cameraBefore = string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase)
+                && _probe != null && _probe.QuickState("webcam");
+            bool ok = (await _services.QuickSwitches.ToggleAsync(key).ConfigureAwait(false)).Ok;
+            if (ok && string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase) && _probe != null)
+            {
+                _probe.SetCameraQuickState(!cameraBefore);
+            }
+            return ok;
         }
         if (_probe == null)
         {
             return false;
         }
         bool current = _probe.QuickState(key);
-        return await _probe.SwitchQuickAsync(key, !current).ConfigureAwait(false);
+        bool switched = await _probe.SwitchQuickAsync(key, !current).ConfigureAwait(false);
+        if (switched && string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase))
+        {
+            _probe.SetCameraQuickState(!current);
+        }
+        return switched;
     }
 
     public async Task<bool> SetQuickAsync(string key, bool on)
     {
         if (_services != null)
         {
-            return (await _services.QuickSwitches.SetAsync(key, on).ConfigureAwait(false)).Ok;
+            bool ok = (await _services.QuickSwitches.SetAsync(key, on).ConfigureAwait(false)).Ok;
+            if (ok && string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase) && _probe != null)
+            {
+                _probe.SetCameraQuickState(on);
+            }
+            return ok;
         }
         if (_probe == null)
         {
             return false;
         }
-        return await _probe.SwitchQuickAsync(key, on).ConfigureAwait(false);
+        bool switched = await _probe.SwitchQuickAsync(key, on).ConfigureAwait(false);
+        if (switched && string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase))
+        {
+            _probe.SetCameraQuickState(on);
+        }
+        return switched;
     }
 
     public Task<ServiceResult> SetPerformanceModeAsync(int visualMode) =>

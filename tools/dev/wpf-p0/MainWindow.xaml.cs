@@ -1051,7 +1051,8 @@ public partial class MainWindow : Window
                     Style = (Style)FindResource("SegmentButton"),
                     IsChecked = on,
                     Margin = new Thickness(0, 0, 8, 8),
-                    MinWidth = 110
+                    MinWidth = 110,
+                    ToolTip = QuickSwitchService.Tooltip(key)
                 };
                 _moreSwitchTiles[switchKey] = tile;
                 tile.Click += async (_, _) =>
@@ -1130,7 +1131,8 @@ public partial class MainWindow : Window
                 Width = 72,
                 Height = 52,
                 Margin = new Thickness(3),
-                Padding = new Thickness(4, 3, 4, 3)
+                Padding = new Thickness(4, 3, 4, 3),
+                ToolTip = QuickSwitchService.Tooltip(key)
             };
             tile.Click += async (_, _) =>
             {

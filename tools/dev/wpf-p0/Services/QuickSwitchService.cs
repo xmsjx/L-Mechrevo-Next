@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -176,10 +177,10 @@ internal sealed class QuickSwitchService : IQuickSwitchService
         return string.IsNullOrWhiteSpace(fallback) ? (key ?? string.Empty) : fallback!;
     }
 
-    /// <summary>
-    /// ⭐ 分组标题本地化（task-33）：后端未就绪时 <c>WideMoreSwitches()</c> 会回退到硬编码中文组名，
-    /// 这里按中文原文翻译；已经是当前语言的标题原样返回（逻辑不变）。
-    /// </summary>
+    internal static string? Tooltip(string key) => string.Equals(key, "winkey", StringComparison.OrdinalIgnoreCase)
+        ? WpfStrings.L("仅内置键盘禁用", "Only the built-in keyboard is disabled")
+        : null;
+
     internal static string GroupTitle(string title) => title switch
     {
         "输入设备" => WpfStrings.QuickGroupInput,

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <resheader name="resmimetype">
     <value>text/microsoft-resx</value>
@@ -562,7 +562,7 @@
     <value>Screen off</value>
   </data>
   <data name="OriginalStyleWindow_Text_17" xml:space="preserve">
-    <value>Win key lock</value>
+    <value>Disable Win key</value>
   </data>
   <data name="OriginalStyleWindow_Text_18" xml:space="preserve">
     <value>Microphone</value>
@@ -1744,7 +1744,7 @@
     <value>Touchpad toggle</value>
   </data>
   <data name="QuickWinKey" xml:space="preserve">
-    <value>Win key lock</value>
+    <value>Disable Win key</value>
   </data>
   <data name="QuickFnKey" xml:space="preserve">
     <value>Fn key lock</value>
