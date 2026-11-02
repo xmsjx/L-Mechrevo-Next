@@ -1066,7 +1066,9 @@ internal sealed class BackendProbe : IDisposable
             {
                 return gcuHighPerf;
             }
-            return MechrevoLite.Mode.PerfModeService.Instance?.WindowsPowerOverlayEnabled == true;
+            // 非 GCU 高性能电源开关就是 LM 自己的持久化开关；
+            // 不能依赖 PerfModeService 临时实例（重连/重建期间 Instance 为空会让磁贴回弹）。
+            return MechrevoLite.AppConfig.Get("bd_power_overlay", 1) != 0;
         }
         if (string.Equals(key, "gcuosd", StringComparison.OrdinalIgnoreCase))
         {
