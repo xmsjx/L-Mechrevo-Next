@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace MechrevoLite.Hardware;
 
@@ -129,8 +129,7 @@ public static class NucPerformanceMode
         bool r1 = TryRead(Pl1WriteAddress, out int rb1);
         bool r2 = TryRead(Pl2WriteAddress, out int rb2);
         bool r3 = TryRead(Pl4WriteAddress, out int rb3);
-        // 原厂自定义模式标志：1798=65
-        TryWrite(1798, 65);
+        // 原厂自定义模式标志：1798=65（必须在 trigger 之后锁存）
         // CPU 温度墙：Intel 30 系 TjMax=100℃，EC 写的是 TCC offset：
         //   启用 = 0x80 | (100 - target)
         //   关闭 = 清除 bit7，保留/回落到安全 offset（95℃）
@@ -174,6 +173,7 @@ public static class NucPerformanceMode
         {
             TryWrite(1895, (trigger & 0x10) | 0x20);
         }
+        TryWrite(1798, 65);
         bool tccRead = TryRead(1926, out int tccBack);
         // 官方只要求写入成功；EC 对 TCC 的回读可能是掩码后的值，不能因此判整个自定义档失败。
         tccOk = tccOk && tccRead;

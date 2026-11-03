@@ -116,11 +116,16 @@ internal static class GcuEcExperimental
             clamp = (byte)(clamp | (currentClamp & 0x40));
             // 按官方顺序：风扇 clamp → 自定义档标记 → 模式字节 → trigger → turbo 标记。
             bool clampWrite = AcpiDriverEc.TryWriteByte(FanBoostClampAddress, clamp);
-            bool customWrite = AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, visualMode == 3 ? 65 : 64);
+            bool customWrite = visualMode == 3
+                || AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 64);
             bool rampWrite = AcpiDriverEc.TryWriteByte(FanRampAddress, visualMode is 1 or 3 ? 0x00 : 0x83);
             bool modeWrite = AcpiDriverEc.TryWriteByte(ModeIndexAddress, mode);
             bool triggerWrite = AcpiDriverEc.TryWriteByte(TriggerAddress, trigger);
             bool turboWrite = AcpiDriverEc.TryWriteByte(TurboTriggerAddress, visualMode == 2 ? 1 : 0);
+            if (visualMode == 3)
+            {
+                customWrite = AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 65);
+            }
             bool modeRead = AcpiDriverEc.TryReadByte(ModeIndexAddress, out byte readMode);
             bool triggerReadBack = AcpiDriverEc.TryReadByte(TriggerAddress, out byte readTrigger);
             bool clampRead = AcpiDriverEc.TryReadByte(FanBoostClampAddress, out byte readClamp);
