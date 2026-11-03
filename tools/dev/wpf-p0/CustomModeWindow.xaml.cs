@@ -97,6 +97,18 @@ public partial class CustomModeWindow : Window
         {
             LoadSettingsToUi(_settings);
         }
+        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+        {
+            DbSwitch.IsEnabled = true;
+            GpuOcSwitch.IsEnabled = true;
+            GpuTgpSlider.IsEnabled = true;
+            if (DbSwitch.IsChecked == true)
+            {
+                DbSlider.IsEnabled = true;
+                DbSlider.IsHitTestVisible = true;
+                DbSlider.Opacity = 1.0;
+            }
+        }
     }
 
     private void ApplyDeviceRanges()

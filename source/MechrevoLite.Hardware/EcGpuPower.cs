@@ -169,10 +169,15 @@ internal static class EcGpuPower
                 return false;
             }
             string[] parts = output.Split(',');
-            return parts.Length >= 2
-                && int.TryParse(parts[0].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out defaultW)
-                && int.TryParse(parts[1].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out maxW)
-                && defaultW > 0 && maxW > 0;
+            if (parts.Length < 2
+                || !double.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double defaultValue)
+                || !double.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out double maxValue))
+            {
+                return false;
+            }
+            defaultW = (int)Math.Round(defaultValue);
+            maxW = (int)Math.Round(maxValue);
+            return defaultW > 0 && maxW > 0;
         }
         catch
         {
