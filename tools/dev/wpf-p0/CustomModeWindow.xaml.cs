@@ -60,7 +60,36 @@ public partial class CustomModeWindow : Window
         _powerWallTimer.Tick += async (_, _) => await UpdatePowerWallStatusAsync();
         Loaded += (_, _) => _powerWallTimer.Start();
         Closed += (_, _) => _powerWallTimer.Stop();
+        ApplyDeviceRanges();
         LoadModes(initialModeId);
+    }
+
+    private void ApplyDeviceRanges()
+    {
+        MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        if (hw == null)
+        {
+            return;
+        }
+        SetRange(Pl1Slider, hw.Pl1Minimum, hw.Pl1Maximum);
+        SetRange(Pl2Slider, hw.Pl2Minimum, hw.Pl2Maximum);
+        SetRange(Pl4Slider, hw.Pl4Minimum, hw.Pl4Maximum);
+        SetRange(TccSlider, hw.TccMinimum, hw.TccMaximum);
+        SetRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
+        SetRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
+        SetRange(CoreOffsetSlider, hw.GpuCoreOffsetUserMinimum, hw.GpuCoreOffsetUserMaximum);
+        SetRange(MemoryOffsetSlider, hw.GpuMemoryOffsetUserMinimum, hw.GpuMemoryOffsetUserMaximum);
+    }
+
+    private static void SetRange(Slider slider, int minimum, int maximum)
+    {
+        if (slider == null || minimum < 0 || maximum <= minimum)
+        {
+            return;
+        }
+        slider.Minimum = minimum;
+        slider.Maximum = maximum;
+        slider.Value = Math.Clamp(slider.Value, minimum, maximum);
     }
 
     internal void PrepareInline()
@@ -1270,6 +1299,14 @@ public partial class CustomModeWindow : Window
                 pl1, pl2, pl4ForEc, tcc, out string detail);
             MechrevoLite.Hardware.GcuEcExperimental.TryApplyMode(3, out string customModeDetail);
             detail += " · " + customModeDetail;
+            bool gpuPowerOk = true;
+            string gpuPowerDetail = "未提供 TGP";
+            if (WpfBackend.Hw is MechrevoHw powerHw && edited.GpuTgp is int tgp && tgp > 0)
+            {
+                gpuPowerOk = MechrevoLite.Hardware.EcGpuPower.TryApply(
+                    powerHw, tgp, edited.GpuDynamicBoost ?? 25,
+                    edited.GpuDynamicBoostOn == true, out gpuPowerDetail);
+            }
             bool gpuOk = true;
             if (WpfBackend.Hw is MechrevoHw hw && hw.EnsureDirectGpuOverclock())
             {
@@ -1287,9 +1324,10 @@ public partial class CustomModeWindow : Window
             _settings = edited;
             _dirty = false;
             ApplyButton.Content = WpfStrings.CpuTuningWindow_xaml_Content;
-            StatusText.Text = (cpuOk && gpuOk ? "EC 自定义功耗墙已应用：" : "EC 自定义功耗墙部分失败：")
+            StatusText.Text = (cpuOk && gpuOk && gpuPowerOk ? "EC 自定义功耗墙已应用：" : "EC 自定义功耗墙部分失败：")
                 + detail + " · GPU超频=" + gpuOk
-                + " · GPU TGP/DB 暂未接 EC" + " · 风扇曲线暂未接 EC";
+                + " · GPU TGP/DB=" + gpuPowerDetail
+                + " · 风扇曲线暂未接 EC";
             Logger.WriteError("[gcu-ec] 自定义应用 cpu=" + cpuOk + " gpu=" + gpuOk + " " + detail);
             await Task.CompletedTask;
         }
