@@ -35,7 +35,7 @@ public partial class MainWindow
     private Border HomeDisplayCard = null!;
     private Grid DisplayInfoRow = null!;
     private TextBlock DisplayInfoText = null!;
-    private StackPanel DisplayRefreshPanel = null!;
+    private WrapPanel DisplayRefreshPanel = null!;
     private StackPanel DisplayDetailsPanel = null!;
     private ContentControl BatteryCardHost = null!;
 

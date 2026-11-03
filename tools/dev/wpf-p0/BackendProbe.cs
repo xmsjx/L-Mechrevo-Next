@@ -647,13 +647,26 @@ internal sealed class BackendProbe : IDisposable
             {
                 if (!hw.EnsureDirectGpuOverclock())
                 {
+                    Logger.WriteError("[gpu-oc] EC直写初始化失败");
                     return false;
                 }
                 if (on && hw.RestoreDirectGpuOverclockProfile(0))
                 {
+                    Logger.WriteError("[gpu-oc] EC直写恢复配置档 1");
                     return true;
                 }
-                return hw.TrySetDirectGpuOverclockField("OverClockingSwitch", on ? 1 : 0);
+                if (on)
+                {
+                    hw.TryGetDirectGpuOverclockReadback(out int core, out int memory);
+                    if (core == 0 && memory == 0)
+                    {
+                        bool offset = hw.TrySetDirectGpuOverclockField("GpuCoreClockOffsetOC", 105);
+                        Logger.WriteError("[gpu-oc] EC直写默认核心偏移 +105 ⇒ " + offset);
+                    }
+                }
+                bool ok = hw.TrySetDirectGpuOverclockField("OverClockingSwitch", on ? 1 : 0);
+                Logger.WriteError("[gpu-oc] EC直写开关=" + on + " ⇒ " + ok);
+                return ok;
             }).ConfigureAwait(false);
         }
         catch
