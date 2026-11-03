@@ -1604,17 +1604,26 @@ public partial class CustomModeWindow : Window
         {
             return;
         }
-        if (MechrevoLite.Mode.PerfModeStore.RemoveCustom(_current.Id))
+        string deletedId = _current.Id;
+        System.Collections.Generic.List<MechrevoLite.Mode.PerfModeDefinition> customs =
+            MechrevoLite.Mode.PerfModeStore.Load().Where(m => m.IsCustom).ToList();
+        int deletedIndex = customs.FindIndex(m => string.Equals(m.Id, deletedId, StringComparison.Ordinal));
+        string? previousId = deletedIndex > 0
+            ? customs[deletedIndex - 1].Id
+            : deletedIndex >= 0 && deletedIndex + 1 < customs.Count ? customs[deletedIndex + 1].Id : null;
+        if (MechrevoLite.Mode.PerfModeStore.RemoveCustom(deletedId))
         {
-            MechrevoLite.Mode.PerfModeDefinition? next = MechrevoLite.Mode.PerfModeStore.Load()
-                .FirstOrDefault(m => m.IsCustom);
-            if (next != null)
+            bool stillExists = previousId != null
+                && MechrevoLite.Mode.PerfModeStore.Load().Any(m => string.Equals(m.Id, previousId, StringComparison.Ordinal));
+            if (stillExists)
             {
-                LoadModes(next.Id);
+                LoadModes(previousId);
             }
             else
             {
-                LoadModes(null);
+                MechrevoLite.Mode.PerfModeDefinition? next = MechrevoLite.Mode.PerfModeStore.Load()
+                    .FirstOrDefault(m => m.IsCustom);
+                LoadModes(next?.Id);
             }
             StatusText.Text = WpfStrings.CustomModeWindow_xaml_Text_21;
         }
