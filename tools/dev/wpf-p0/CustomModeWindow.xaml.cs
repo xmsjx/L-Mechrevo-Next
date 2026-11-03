@@ -1218,10 +1218,99 @@ public partial class CustomModeWindow : Window
     private void CoreOffset_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (CoreOffsetText != null) CoreOffsetText.Text = ((int)e.NewValue).ToString(); }
     private void MemoryOffset_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (MemoryOffsetText != null) MemoryOffsetText.Text = ((int)e.NewValue).ToString(); }
 
+    private async Task ApplyEcExperimentalCustomAsync()
+    {
+        ApplyButton.IsEnabled = false;
+        try
+        {
+            int pl1 = (int)Pl1Slider.Value;
+            int pl2 = (int)Pl2Slider.Value;
+            int pl4 = (int)Pl4Slider.Value;
+            int? tcc = TccSwitch.IsChecked == true ? (int)TccSlider.Value : null;
+            MechrevoLite.Mode.PerfModeSettings edited = _settings with
+            {
+                Pl1 = pl1,
+                Pl2 = pl2,
+                Pl4 = pl4,
+                TccOn = TccSwitch.IsChecked == true,
+                TccTarget = (int)TccSlider.Value,
+                GpuDynamicBoostOn = DbSwitch.IsChecked == true,
+                GpuDynamicBoost = (int)DbSlider.Value,
+                GpuTgp = (int)GpuTgpSlider.Value,
+                GpuOverclockOn = GpuOcSwitch.IsChecked == true,
+                GpuCoreOffset = (int)CoreOffsetSlider.Value,
+                GpuMemoryOffset = (int)MemoryOffsetSlider.Value,
+                StapmTimeSeconds = StapmTimeRow.Visibility == Visibility.Visible ? (int)StapmTimeSlider.Value : (int?)null,
+                SmuSlowLimit = SmuSlowLimitRow.Visibility == Visibility.Visible ? (int)SmuSlowLimitSlider.Value : (int?)null,
+                SmuSlowTimeSeconds = SmuSlowTimeRow.Visibility == Visibility.Visible ? (int)SmuSlowTimeSlider.Value : (int?)null,
+                SmuFastTimeSeconds = SmuFastTimeRow.Visibility == Visibility.Visible ? (int)SmuFastTimeSlider.Value : (int?)null,
+                FanSwitchSpeedOn = FanSensitivitySwitch.IsChecked == true,
+                FanSwitchSpeedMs = (int)FanDelaySlider.Value,
+                WindowsPowerMode = PowerModeCombo.SelectedItem is ComboBoxItem pm && pm.Tag is string pmText && int.TryParse(pmText, out int pmValue) ? pmValue : (int?)null,
+                PowerPlanGuid = PowerPlanCombo.SelectedItem is ComboBoxItem plan && plan.Tag is string planTag && !string.IsNullOrWhiteSpace(planTag) ? planTag : null,
+                CpuBoost = CpuBoostCombo.SelectedItem is ComboBoxItem cb && cb.Tag is string cbText && int.TryParse(cbText, out int cbValue) ? cbValue : (int?)null,
+                FanBoost = FanBoostCombo.SelectedItem is ComboBoxItem fb && fb.Tag is string fbText && int.TryParse(fbText, out int fbValue) ? fbValue == 1 : (bool?)null,
+                RefreshHz = RefreshCombo.SelectedItem is ComboBoxItem rr && rr.Tag is string rrText && int.TryParse(rrText, out int rrValue) ? rrValue : (int?)null
+            };
+            if (_current?.Id != null)
+            {
+                MechrevoLite.Mode.PerfModeStore.SaveSettings(_current.Id, edited);
+            }
+            int pl4ForEc = pl4;
+            if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool pl4Double, out _) && pl4Double)
+            {
+                pl4ForEc = Math.Max(0, pl4 / 2);
+            }
+            bool cpuOk = MechrevoLite.Hardware.NucPerformanceMode.TryApplyCustom(
+                pl1, pl2, pl4ForEc, tcc, out string detail);
+            // 自定义档视觉标记：模式字节 0x10，保留强冷位。
+            if (MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1963, out byte mode))
+            {
+                MechrevoLite.Hardware.AcpiDriverEc.TryWriteByte(1963, (byte)((mode & 0xE0) | 0x10 | (mode & 0x01)));
+            }
+            bool gpuOk = true;
+            if (WpfBackend.Hw is MechrevoHw hw && hw.EnsureDirectGpuOverclock())
+            {
+                if (edited.GpuOverclockOn == true)
+                {
+                    hw.TrySetDirectGpuOverclockField("GpuCoreClockOffsetOC", edited.GpuCoreOffset ?? 0);
+                    hw.TrySetDirectGpuOverclockField("GpuMemoryClockOffsetOC", edited.GpuMemoryOffset ?? 0);
+                    gpuOk = hw.TrySetDirectGpuOverclockField("OverClockingSwitch", 1);
+                }
+                else
+                {
+                    gpuOk = hw.TrySetDirectGpuOverclockField("OverClockingSwitch", 0);
+                }
+            }
+            _settings = edited;
+            _dirty = false;
+            ApplyButton.Content = WpfStrings.CpuTuningWindow_xaml_Content;
+            StatusText.Text = (cpuOk && gpuOk ? "EC 自定义功耗墙已应用：" : "EC 自定义功耗墙部分失败：")
+                + detail + " · GPU超频=" + gpuOk
+                + " · GPU TGP/DB 暂未接 EC" + " · 风扇曲线暂未接 EC";
+            Logger.WriteError("[gcu-ec] 自定义应用 cpu=" + cpuOk + " gpu=" + gpuOk + " " + detail);
+            await Task.CompletedTask;
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = "EC 自定义应用失败：" + ex.GetType().Name + " " + ex.Message;
+        }
+        finally
+        {
+            ApplyButton.IsEnabled = true;
+        }
+    }
+
     private async void Apply_Click(object sender, RoutedEventArgs e)
     {
         if (_current == null)
         {
+            return;
+        }
+        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+            && WpfBackend.Hw?.IsGcuConnected != true)
+        {
+            await ApplyEcExperimentalCustomAsync();
             return;
         }
         MechrevoLite.Mode.PerfModeService? perf = MechrevoLite.Mode.PerfModeService.Instance;
