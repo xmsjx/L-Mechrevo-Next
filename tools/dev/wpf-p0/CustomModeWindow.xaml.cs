@@ -1456,17 +1456,26 @@ public partial class CustomModeWindow : Window
                     edited.GpuDynamicBoostOn == true, out gpuPowerDetail);
             }
             bool gpuOk = true;
-            if (CurrentHw is MechrevoHw hw && hw.EnsureDirectGpuOverclock())
+            if (CurrentHw is not MechrevoHw ocHw)
+            {
+                gpuOk = false;
+            }
+            else if (!ocHw.EnsureDirectGpuOverclock())
+            {
+                gpuOk = false;
+                detail += " · GPU超频直写初始化失败";
+            }
+            else
             {
                 if (edited.GpuOverclockOn == true)
                 {
-                    hw.TrySetDirectGpuOverclockField("GpuCoreClockOffsetOC", edited.GpuCoreOffset ?? 0);
-                    hw.TrySetDirectGpuOverclockField("GpuMemoryClockOffsetOC", edited.GpuMemoryOffset ?? 0);
-                    gpuOk = hw.TrySetDirectGpuOverclockField("OverClockingSwitch", 1);
+                    ocHw.TrySetDirectGpuOverclockField("GpuCoreClockOffsetOC", edited.GpuCoreOffset ?? 0);
+                    ocHw.TrySetDirectGpuOverclockField("GpuMemoryClockOffsetOC", edited.GpuMemoryOffset ?? 0);
+                    gpuOk = ocHw.TrySetDirectGpuOverclockField("OverClockingSwitch", 1);
                 }
                 else
                 {
-                    gpuOk = hw.TrySetDirectGpuOverclockField("OverClockingSwitch", 0);
+                    gpuOk = ocHw.TrySetDirectGpuOverclockField("OverClockingSwitch", 0);
                 }
             }
             _settings = edited;

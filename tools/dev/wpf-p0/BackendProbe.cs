@@ -670,13 +670,10 @@ internal sealed class BackendProbe : IDisposable
                     Logger.WriteError("[gpu-oc] EC直写初始化失败");
                     return false;
                 }
-                if (on && hw.RestoreDirectGpuOverclockProfile(0))
-                {
-                    Logger.WriteError("[gpu-oc] EC直写恢复配置档 1");
-                    return true;
-                }
                 if (on)
                 {
+                    bool restored = hw.RestoreDirectGpuOverclockProfile(0);
+                    Logger.WriteError("[gpu-oc] EC直写恢复配置档=" + restored);
                     hw.TryGetDirectGpuOverclockReadback(out int core, out int memory);
                     if (core == 0)
                     {
