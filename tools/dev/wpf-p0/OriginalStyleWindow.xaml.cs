@@ -3616,7 +3616,7 @@ public partial class OriginalStyleWindow : Window
             else
             {
                 if (GcuEcExperimental.Enabled
-                    && _backendProbe?.Hw?.IsGcuConnected == true
+                    && _backendProbe?.Hw != null
                     && _backendProbe.Hw.UsesBaolongda == false
                     && _backendProbe.Hw.IsIntelNucMachine == false
                     && _backendProbe.Hw.IsUmiMachine == false
@@ -5070,7 +5070,13 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         int mode = int.Parse(text);
-        if (!(_services?.Gpu.CanSwitch(mode) ?? _backendProbe.CanSwitchGpuMode(mode)))
+        bool gcuEcGpuExperiment = GcuEcExperimental.Enabled
+            && _backendProbe.Hw != null
+            && _backendProbe.Hw.UsesBaolongda == false
+            && _backendProbe.Hw.IsIntelNucMachine == false
+            && _backendProbe.Hw.IsUmiMachine == false;
+        if (!gcuEcGpuExperiment
+            && !(_services?.Gpu.CanSwitch(mode) ?? _backendProbe.CanSwitchGpuMode(mode)))
         {
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_37;
             RefreshFromBackend();
@@ -5086,11 +5092,6 @@ public partial class OriginalStyleWindow : Window
             RefreshFromBackend();
             return;
         }
-        bool gcuEcGpuExperiment = GcuEcExperimental.Enabled
-            && _backendProbe.Hw?.IsGcuConnected == true
-            && _backendProbe.Hw.UsesBaolongda == false
-            && _backendProbe.Hw.IsIntelNucMachine == false
-            && _backendProbe.Hw.IsUmiMachine == false;
         if (_backendProbe.Hw?.IsUmiMachine == true || gcuEcGpuExperiment)
         {
             await SwitchUmiGpuColdAsync(mode, button);
