@@ -1268,6 +1268,8 @@ public partial class CustomModeWindow : Window
             }
             bool cpuOk = MechrevoLite.Hardware.NucPerformanceMode.TryApplyCustom(
                 pl1, pl2, pl4ForEc, tcc, out string detail);
+            MechrevoLite.Hardware.GcuEcExperimental.TryApplyMode(3, out string customModeDetail);
+            detail += " · " + customModeDetail;
             bool gpuOk = true;
             if (WpfBackend.Hw is MechrevoHw hw && hw.EnsureDirectGpuOverclock())
             {
