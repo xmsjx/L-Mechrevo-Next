@@ -1,4 +1,7 @@
 using System;
+using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 
 namespace MechrevoLite.Hardware;
 
@@ -29,7 +32,19 @@ internal static class EcGpuPower
         int minW = 0;
         int maxW = 0;
         bool hasNvml = global::NvmlHelper.TryGetPowerLimitBounds(out minW, out maxW, out _) && maxW > 0;
-        if (!hasNvml && hw != null)
+        int defW = 0;
+        if (hasNvml)
+        {
+            global::NvmlHelper.TryGetDefaultPowerLimitWatts(out defW);
+        }
+        if ((!hasNvml || maxW <= 0) && TryQuerySmiLimits(out int smiDefault, out int smiMax))
+        {
+            hasNvml = true;
+            maxW = smiMax;
+            defW = smiDefault;
+            minW = smiDefault;
+        }
+        if ((!hasNvml || maxW <= 0) && hw != null)
         {
             maxW = hw.GpuTgpMaximum;
             minW = hw.GpuTgpMinimum;
@@ -40,11 +55,10 @@ internal static class EcGpuPower
             return false;
         }
         int hardwareDbCapFallback = maxW <= 115 ? 15 : 25;
-        int defW = hasNvml
-            && global::NvmlHelper.TryGetDefaultPowerLimitWatts(out int nvmlDefault)
-            && nvmlDefault > 0
-            ? nvmlDefault
-            : Math.Max(5, minW > 0 ? minW : maxW - hardwareDbCapFallback);
+        if (defW <= 0)
+        {
+            defW = Math.Max(5, minW > 0 ? minW : maxW - hardwareDbCapFallback);
+        }
         int delta = maxW - defW;
         int hardwareDbCap = hardwareDbCapFallback;
         if (delta > 0 && delta <= 25)
@@ -81,7 +95,7 @@ internal static class EcGpuPower
                 FullPower = true
             };
         }
-        detail = "NVML default=" + defW + " max=" + maxW
+        detail = "default=" + defW + " max=" + maxW
             + " floor=" + caps.FloorWatts + " baseMax=" + caps.BaseMaxWatts
             + " dbMax=" + caps.DbMaxWatts + " full=" + caps.FullPower;
         return true;
@@ -127,5 +141,42 @@ internal static class EcGpuPower
             + " ⇒ " + (ok ? "OK" : "FAIL");
         Logger.WriteError("[gpu-power-ec] " + detail);
         return ok;
+    }
+
+    private static bool TryQuerySmiLimits(out int defaultW, out int maxW)
+    {
+        defaultW = 0;
+        maxW = 0;
+        try
+        {
+            string exe = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "nvidia-smi.exe");
+            if (!File.Exists(exe))
+            {
+                exe = "nvidia-smi.exe";
+            }
+            ProcessStartInfo psi = new(exe, "--query-gpu=power.default_limit,power.max_limit --format=csv,noheader,nounits")
+            {
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using Process process = Process.Start(psi) ?? throw new InvalidOperationException("start failed");
+            string output = process.StandardOutput.ReadToEnd();
+            if (!process.WaitForExit(2500) || process.ExitCode != 0)
+            {
+                try { process.Kill(); } catch { }
+                return false;
+            }
+            string[] parts = output.Split(',');
+            return parts.Length >= 2
+                && int.TryParse(parts[0].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out defaultW)
+                && int.TryParse(parts[1].Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out maxW)
+                && defaultW > 0 && maxW > 0;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
