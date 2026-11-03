@@ -10,6 +10,23 @@ internal static class EcGpuPower
     private const int AddrDbFlag = 1861;
     private const int AddrDbWatts = 1862;
 
+    internal static bool TryResolveDbMaxWatts(out int watts)
+    {
+        watts = 0;
+        if (!AcpiDriverEc.TryReadByte(AddrDbWatts, out byte raw))
+        {
+            return false;
+        }
+        watts = raw switch
+        {
+            0x05 => 5,
+            0x0F => 15,
+            0x19 => 25,
+            _ => 0
+        };
+        return watts > 0;
+    }
+
     internal static bool TryApply(MechrevoHw hw, int baseTgp, int dbWatts, bool dbOn, out string detail)
     {
         detail = "";
@@ -20,7 +37,9 @@ internal static class EcGpuPower
         }
         int floor = hw.GpuTgpMinimum > 0 ? hw.GpuTgpMinimum : 0;
         int maxBase = hw.GpuTgpMaximum > 0 ? hw.GpuTgpMaximum : baseTgp;
-        int maxDb = hw.GpuDbMaximum > 0 ? hw.GpuDbMaximum : 25;
+        int maxDb = TryResolveDbMaxWatts(out int ecDbMax)
+            ? ecDbMax
+            : hw.GpuDbMaximum > 0 ? hw.GpuDbMaximum : 25;
         if (maxBase <= 0)
         {
             detail = "GPU TGP 范围不可用";

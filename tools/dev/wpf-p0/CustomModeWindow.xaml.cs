@@ -718,7 +718,13 @@ public partial class CustomModeWindow : Window
         bool pl4Supported = hwForRows != null && hwForRows.Pl4Minimum >= 0 && hwForRows.Pl4Maximum > hwForRows.Pl4Minimum;
         bool gcuTongfangMachine = IsGcuTongfangMachine(hwForRows);
         bool gcuTongfangIntel = IsGcuTongfangIntel(hwForRows);
-        Pl4Row.Visibility = !intelXingyaoMsr && !apuOrNoDgpu && (pl4Supported || gcuTongfangMachine)
+        bool forceEcPl4 = MechrevoLite.Hardware.GcuEcExperimental.Enabled
+            && hwForRows != null
+            && !hwForRows.UsesBaolongda
+            && !hwForRows.IsIntelNucMachine
+            && !hwForRows.IsUmiMachine
+            && !apuOrNoDgpu;
+        Pl4Row.Visibility = !intelXingyaoMsr && !apuOrNoDgpu && (pl4Supported || gcuTongfangMachine || forceEcPl4)
             ? Visibility.Visible : Visibility.Collapsed;
         DbRow.Visibility = (apuOrNoDgpu || intelXingyaoMsr) ? Visibility.Collapsed : Visibility.Visible;
         // 没有独显（无界办公本等）不显示 GPU 超频/动态加速卡片。
@@ -976,6 +982,13 @@ public partial class CustomModeWindow : Window
         SetSliderRange(TccSlider, hw.TccMinimum, hw.TccMaximum);
         SetSliderRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
         SetSliderRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
+        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+            && MechrevoLite.Hardware.EcGpuPower.TryResolveDbMaxWatts(out int ecDbMax)
+            && ecDbMax > 0)
+        {
+            SetSliderRange(DbSlider, 0, ecDbMax);
+            DbSlider.Value = Math.Clamp(DbSlider.Value, 0, ecDbMax);
+        }
         SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, hw.FanSwitchSpeedMaximum);
         bool nucDirectUi = hw.IsIntelNucMachine || hw.IsUmiMachine;
         bool intelXingyaoMsr = MechrevoLite.Hardware.CpuVendor.IsIntel
@@ -1281,6 +1294,19 @@ public partial class CustomModeWindow : Window
                 FanBoost = FanBoostCombo.SelectedItem is ComboBoxItem fb && fb.Tag is string fbText && int.TryParse(fbText, out int fbValue) ? fbValue == 1 : (bool?)null,
                 RefreshHz = RefreshCombo.SelectedItem is ComboBoxItem rr && rr.Tag is string rrText && int.TryParse(rrText, out int rrValue) ? rrValue : (int?)null
             };
+            if (edited.GpuOverclockOn == true)
+            {
+                if ((edited.GpuCoreOffset ?? 0) == 0)
+                {
+                    edited = edited with { GpuCoreOffset = 105 };
+                    CoreOffsetSlider.Value = 105;
+                }
+                if ((edited.GpuMemoryOffset ?? 0) == 0)
+                {
+                    edited = edited with { GpuMemoryOffset = 500 };
+                    MemoryOffsetSlider.Value = 500;
+                }
+            }
             if (_current?.Id != null)
             {
                 MechrevoLite.Mode.PerfModeStore.SaveSettings(_current.Id, edited);
