@@ -126,6 +126,11 @@ internal static class GcuEcExperimental
             {
                 customWrite = AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 65);
             }
+            else
+            {
+                // 退出自定义必须放在 trigger 之后，否则固件会把自定义门控重新锁存。
+                customWrite = AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 64);
+            }
             bool modeRead = AcpiDriverEc.TryReadByte(ModeIndexAddress, out byte readMode);
             bool triggerReadBack = AcpiDriverEc.TryReadByte(TriggerAddress, out byte readTrigger);
             bool clampRead = AcpiDriverEc.TryReadByte(FanBoostClampAddress, out byte readClamp);

@@ -1261,13 +1261,13 @@ public partial class CustomModeWindow : Window
             {
                 pl4ForEc = Math.Max(0, pl4 / 2);
             }
-            bool cpuOk = MechrevoLite.Hardware.NucPerformanceMode.TryApplyCustom(
-                pl1, pl2, pl4ForEc, tcc, out string detail);
-            // 自定义档视觉标记：模式字节 0x10，保留强冷位。
+            // 先落模式字节，再写自定义门控和 trigger，避免门控被后续模式写入清掉。
             if (MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1963, out byte mode))
             {
                 MechrevoLite.Hardware.AcpiDriverEc.TryWriteByte(1963, (byte)((mode & 0xE0) | 0x10 | (mode & 0x01)));
             }
+            bool cpuOk = MechrevoLite.Hardware.NucPerformanceMode.TryApplyCustom(
+                pl1, pl2, pl4ForEc, tcc, out string detail);
             bool gpuOk = true;
             if (WpfBackend.Hw is MechrevoHw hw && hw.EnsureDirectGpuOverclock())
             {
