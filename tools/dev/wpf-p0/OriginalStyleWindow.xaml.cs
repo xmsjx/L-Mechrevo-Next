@@ -8185,6 +8185,7 @@ public partial class OriginalStyleWindow : Window
                 _customModeWindow.Show();
             }
             _customModeWindow.Activate();
+            _customModeWindow.RefreshDeviceLimits();
             _customWindowModeId = customId;
             if (switchMode)
             {

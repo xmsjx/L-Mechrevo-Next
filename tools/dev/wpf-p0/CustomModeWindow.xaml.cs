@@ -85,6 +85,20 @@ public partial class CustomModeWindow : Window
         }
     }
 
+    internal void RefreshDeviceLimits()
+    {
+        ApplyDeviceRanges();
+        ApplyCpuPowerLabels();
+        if (CurrentHw is MechrevoHw hw)
+        {
+            ApplyHardwareControlLimits(hw);
+        }
+        if (_current != null)
+        {
+            LoadSettingsToUi(_settings);
+        }
+    }
+
     private void ApplyDeviceRanges()
     {
         MechrevoHw? hw = CurrentHw;
