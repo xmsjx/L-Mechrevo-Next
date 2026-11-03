@@ -658,10 +658,15 @@ internal sealed class BackendProbe : IDisposable
                 if (on)
                 {
                     hw.TryGetDirectGpuOverclockReadback(out int core, out int memory);
-                    if (core == 0 && memory == 0)
+                    if (core == 0)
                     {
-                        bool offset = hw.TrySetDirectGpuOverclockField("GpuCoreClockOffsetOC", 105);
-                        Logger.WriteError("[gpu-oc] EC直写默认核心偏移 +105 ⇒ " + offset);
+                        bool coreOk = hw.TrySetDirectGpuOverclockField("GpuCoreClockOffsetOC", 105);
+                        Logger.WriteError("[gpu-oc] EC直写默认核心偏移 +105 ⇒ " + coreOk);
+                    }
+                    if (memory == 0)
+                    {
+                        bool memOk = hw.TrySetDirectGpuOverclockField("GpuMemoryClockOffsetOC", 500);
+                        Logger.WriteError("[gpu-oc] EC直写默认显存偏移 +500 ⇒ " + memOk);
                     }
                 }
                 bool ok = hw.TrySetDirectGpuOverclockField("OverClockingSwitch", on ? 1 : 0);
