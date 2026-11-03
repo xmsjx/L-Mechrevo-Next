@@ -4573,9 +4573,11 @@ public partial class OriginalStyleWindow : Window
             try
             {
                 MechrevoLite.HardwareControl.EnableLocalMonitoring();
+                Logger.WriteError("[gcu-ec] EC-only 本地传感器采样已启用");
             }
-            catch
+            catch (Exception ex)
             {
+                Logger.WriteError("[gcu-ec] EC-only 本地传感器采样启用失败：" + ex.GetType().Name + " " + ex.Message);
             }
             ApplyCapabilities();
             SetBackendStatus(WpfStrings.L("EC 实验模式", "EC experiment"), "#F59E0B",
@@ -6525,11 +6527,29 @@ public partial class OriginalStyleWindow : Window
     }
 
     /// <summary>CPU / GPU 那行读数：温度 + 风扇转速 + 风扇百分比。</summary>
-    private static string SensorLine(MechrevoHw hw, bool cpu)
+    private string SensorLine(MechrevoHw hw, bool cpu)
     {
-        string line = (cpu ? "CPU " : "GPU ")
-            + (cpu ? hw.CpuTemp : hw.GpuTemp) + "℃   "
-            + (cpu ? hw.CpuFanRpm : hw.GpuFanRpm) + "rpm";
+        L_Mechrevo.WpfP0.Services.SensorSnapshot? snapshot = _services?.Sensors.Read();
+        int temp = cpu ? (snapshot?.CpuTempC ?? 0) : (snapshot?.GpuTempC ?? 0);
+        if (temp <= 0)
+        {
+            temp = cpu ? MechrevoLite.HardwareControl.cpuTemp : MechrevoLite.HardwareControl.gpuTemp;
+        }
+        if (temp <= 0)
+        {
+            temp = cpu ? hw.CpuTemp : hw.GpuTemp;
+        }
+        int rpm = cpu ? (snapshot?.CpuFanRpm ?? 0) : (snapshot?.GpuFanRpm ?? 0);
+        if (rpm <= 0)
+        {
+            rpm = cpu ? hw.CpuFanRpm : hw.GpuFanRpm;
+        }
+        if (rpm <= 0 && _backendRoute == BackendRoute.Ec
+            && hw.TryReadGcuEcFanSpeeds(out int ecCpu, out int ecGpu))
+        {
+            rpm = cpu ? ecCpu : ecGpu;
+        }
+        string line = (cpu ? "CPU " : "GPU ") + temp + "℃   " + rpm + "rpm";
         string duty = FanDutyText(hw, cpu);
         return duty.Length == 0 ? line : line + " " + duty;
     }
