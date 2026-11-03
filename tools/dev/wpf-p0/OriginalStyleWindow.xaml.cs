@@ -8130,6 +8130,17 @@ public partial class OriginalStyleWindow : Window
 
     private string ResolveCustomModeId()
     {
+        if (GcuEcExperimental.Enabled && _backendRoute == BackendRoute.Ec)
+        {
+            string? ecActive = MechrevoLite.Mode.PerfModeStore.ActiveModeId;
+            if (ecActive?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return ecActive;
+            }
+            MechrevoLite.Mode.PerfModeDefinition? custom = MechrevoLite.Mode.PerfModeStore.Load()
+                .FirstOrDefault(m => m.IsCustom);
+            return custom?.Id ?? "custom1";
+        }
         MechrevoLite.Mode.PerfModeService? perf = MechrevoLite.Mode.PerfModeService.Instance;
         if (perf != null)
         {
