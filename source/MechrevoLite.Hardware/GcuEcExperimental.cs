@@ -29,11 +29,47 @@ internal static class GcuEcExperimental
             && AcpiDriverEc.TryReadByte(TriggerAddress, out byte trigger)
             && AcpiDriverEc.TryReadByte(TurboTriggerAddress, out byte turbo))
         {
-            Logger.WriteError($"[gcu-ec] 探针（{reason}）：1963=0x{mode:X2} 1895=0x{trigger:X2} 1115=0x{turbo:X2}");
+            TryReadVisualMode(out int visual);
+            Logger.WriteError($"[gcu-ec] 探针（{reason}）：1963=0x{mode:X2} 1895=0x{trigger:X2} 1115=0x{turbo:X2} 直读模式={visual}");
         }
         else
         {
             Logger.WriteError("[gcu-ec] 探针失败：ACPIDriver EC 读取不可用");
+        }
+    }
+
+    /// <summary>GCU 未接管时直接从 EC 读当前模式：狂暴=1963 bit4；静音=1895 bit3；其余平衡。</summary>
+    internal static bool TryReadVisualMode(out int visualMode)
+    {
+        visualMode = -1;
+        if (!Enabled)
+        {
+            return false;
+        }
+        try
+        {
+            if (!AcpiDriverEc.TryReadByte(ModeIndexAddress, out byte mode)
+                || !AcpiDriverEc.TryReadByte(TriggerAddress, out byte trigger))
+            {
+                return false;
+            }
+            if ((mode & 0x10) != 0)
+            {
+                visualMode = 1;
+            }
+            else if ((trigger & 0x08) != 0)
+            {
+                visualMode = 2;
+            }
+            else
+            {
+                visualMode = 0;
+            }
+            return true;
+        }
+        catch
+        {
+            return false;
         }
     }
 

@@ -4341,6 +4341,13 @@ public partial class OriginalStyleWindow : Window
 
     private static int ResolveDisplayMode(BackendProbe probe)
     {
+        // 实验通道且 GCU 已让出控制权时，直接读 EC，不依赖 GCU 状态包。
+        if (GcuEcExperimental.Enabled
+            && probe.Hw?.IsGcuConnected != true
+            && GcuEcExperimental.TryReadVisualMode(out int experimentalEcMode))
+        {
+            return experimentalEcMode;
+        }
         // 自定义档在大多数 GCU 上不会回读成一个独立视觉档；以 PerfModeService
         // 的当前显示档为准，避免切到自定义后主界面又回落到内置档高亮。
         string displayedId = MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId
