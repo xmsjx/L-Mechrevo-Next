@@ -100,14 +100,15 @@ public partial class FanCurveWindow : Window
         }
         CpuSection.Visibility = showCpu ? Visibility.Visible : Visibility.Collapsed;
         GpuSection.Visibility = showGpu ? Visibility.Visible : Visibility.Collapsed;
-        _hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        _hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw ?? MechrevoLite.Program.hw;
         if (_hw?.UsesBaolongda == true)
         {
             BaolongdaLoopCheck.Visibility = Visibility.Visible;
             BaolongdaSyncCheck.Visibility = Visibility.Visible;
         }
         bool supported = _hw != null && (_hw.IsGcuConnected || _hw.UsesBaolongda || _hw.WujieSmuApu
-            || _hw.IsIntelNucMachine || _hw.IsUmiMachine);
+            || _hw.IsIntelNucMachine || _hw.IsUmiMachine
+            || MechrevoLite.Hardware.GcuEcExperimental.Enabled);
         if (!supported)
         {
             HintText.Text = WpfStrings.FanCurveWindow_xaml_Text;
@@ -384,6 +385,49 @@ public partial class FanCurveWindow : Window
             }
             return;
         }
+        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+        {
+            try
+            {
+                int[] cpu = CpuCurve.Duties;
+                int[] gpu = GpuCurve.Duties;
+                bool push = PushFanCurveCheck?.IsChecked != false;
+                if (!push)
+                {
+                    MechrevoLite.Mode.PerfModeStore.SaveSettings(_modeId, MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId) with
+                    {
+                        CpuFanDuty = cpu,
+                        GpuFanDuty = gpu,
+                        FanCurveOn = false
+                    });
+                    _dirty = false;
+                    StatusText.Text = WpfStrings.FanCurveWindow_xaml_Text_4;
+                    return;
+                }
+                bool ok = MechrevoLite.Hardware.NucFanTable.TryApply(
+                    CpuCurve.Temperatures, cpu, GpuCurve.Temperatures, gpu, out string detail);
+                bool isolated = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(true, out string isoDetail);
+                bool ramp = MechrevoLite.Hardware.NucFanTable.TrySetFanRamp(true, 300, out string rampDetail);
+                MechrevoLite.Mode.PerfModeStore.SaveSettings(_modeId, MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId) with
+                {
+                    CpuFanDuty = cpu,
+                    GpuFanDuty = gpu,
+                    FanCurveOn = true
+                });
+                _dirty = false;
+                ok = ok && isolated && ramp;
+                detail += " " + isoDetail + " " + rampDetail;
+                StatusText.Text = ok
+                    ? WpfStrings.L("风扇曲线已写入 EC：", "Fan curve written to EC: ") + detail
+                    : WpfStrings.L("风扇曲线写入失败：", "Failed to write fan curve: ") + detail;
+                Logger.WriteError("[gcu-ec] 自定义风扇应用 ok=" + ok + " " + detail);
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = WpfStrings.CpuTuningWindow_xaml_Text_6 + ex.Message;
+            }
+            return;
+        }
         if (!_hw.IsGcuConnected)
         {
             StatusText.Text = WpfStrings.FanCurveWindow_xaml_Text_3;
@@ -503,6 +547,19 @@ public partial class FanCurveWindow : Window
                 _dirty = false;
                 StatusText.Text = restored
                     ? WpfStrings.L("已恢复默认：NUC/UMI 风扇表已还原", "Restored: NUC/UMI fan table restored")
+                    : WpfStrings.L("恢复默认失败：", "Restore default failed: ") + nucDetail;
+            }
+            else if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            {
+                bool restored = MechrevoLite.Hardware.NucFanTable.TryRestoreDefault(out string nucDetail);
+                bool isolatedRestore = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(false, out string isolatedDetail);
+                restored &= isolatedRestore;
+                nucDetail += " " + isolatedDetail;
+                ClearSavedFanCurve();
+                LoadFromHardware();
+                _dirty = false;
+                StatusText.Text = restored
+                    ? WpfStrings.L("已恢复默认：同方 EC 风扇表已还原", "Restored: Tongfang EC fan table restored")
                     : WpfStrings.L("恢复默认失败：", "Restore default failed: ") + nucDetail;
             }
             else if (_hw.IsGcuConnected)
