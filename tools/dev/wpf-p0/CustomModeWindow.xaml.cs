@@ -1070,13 +1070,27 @@ public partial class CustomModeWindow : Window
         }
         if (nucDirectUi)
         {
-            SetSliderRange(Pl1Slider, 5, 200);
-            SetSliderRange(Pl2Slider, 5, 250);
-            SetSliderRange(Pl4Slider, 5, 250);
-            SetSliderRange(TccSlider, 75, 100);
-            SetSliderRange(GpuTgpSlider, 60, 175);
-            SetSliderRange(DbSlider, 0, 30);
-            SetSliderRange(FanDelaySlider, 100, 10000);
+            // NUC/UMI 也优先用设备/显卡物理范围，能力位缺失时才回退固定范围。
+            SetSliderRange(Pl1Slider, hw.Pl1Minimum, hw.Pl1Maximum);
+            SetSliderRange(Pl2Slider, hw.Pl2Minimum, hw.Pl2Maximum);
+            SetSliderRange(Pl4Slider, hw.Pl4Minimum, hw.Pl4Maximum);
+            SetSliderRange(TccSlider, hw.TccMinimum, hw.TccMaximum);
+            SetSliderRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
+            SetSliderRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
+            SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, hw.FanSwitchSpeedMaximum);
+            if (MechrevoLite.Hardware.EcGpuPower.TryGetCapabilities(hw,
+                out MechrevoLite.Hardware.EcGpuPower.Capabilities nucGpuCaps, out _))
+            {
+                SetSliderRange(GpuTgpSlider, nucGpuCaps.FloorWatts, nucGpuCaps.BaseMaxWatts);
+                SetSliderRange(DbSlider, 0, nucGpuCaps.DbMaxWatts);
+            }
+            if (Pl1Slider.Maximum <= Pl1Slider.Minimum) SetSliderRange(Pl1Slider, 5, 200);
+            if (Pl2Slider.Maximum <= Pl2Slider.Minimum) SetSliderRange(Pl2Slider, 5, 250);
+            if (Pl4Slider.Maximum <= Pl4Slider.Minimum) SetSliderRange(Pl4Slider, 5, 250);
+            if (TccSlider.Maximum <= TccSlider.Minimum) SetSliderRange(TccSlider, 75, 100);
+            if (GpuTgpSlider.Maximum <= GpuTgpSlider.Minimum) SetSliderRange(GpuTgpSlider, 60, 175);
+            if (DbSlider.Maximum <= DbSlider.Minimum) SetSliderRange(DbSlider, 0, 30);
+            if (FanDelaySlider.Maximum <= FanDelaySlider.Minimum) SetSliderRange(FanDelaySlider, 100, 10000);
         }
         // 30 系固件配置编辑器是完整参数页；能力位滞后时不能把整页做成只读。
         bool vendorProfile = _firmwareMode;
