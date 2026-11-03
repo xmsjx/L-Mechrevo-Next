@@ -91,6 +91,32 @@ internal sealed class SensorService : ISensorService
                 {
                 }
             }
+            int cpuDutyPercent = umiDuty && umiMainDuty >= 0
+                ? umiMainDuty
+                : Prefer(connected ? hw!.CpuFanDuty : -1, HardwareControl.cpuFan ?? 0);
+            int gpuDutyPercent = umiDuty && umiSecondDuty >= 0
+                ? umiSecondDuty
+                : Prefer(connected ? hw!.GpuFanDuty : -1, HardwareControl.gpuFan ?? 0);
+            if (hw != null && !hw.IsIntelNucMachine && !hw.IsUmiMachine && !hw.UsesBaolongda
+                && (!connected || cpuFanRpm <= 0 || gpuFanRpm <= 0))
+            {
+                try
+                {
+                    if (hw.TryReadGcuEcFanSpeeds(out int ecCpu, out int ecGpu))
+                    {
+                        if (ecCpu > 0) cpuFanRpm = ecCpu;
+                        if (ecGpu > 0) gpuFanRpm = ecGpu;
+                    }
+                    if (hw.TryReadGcuEcFanDuties())
+                    {
+                        cpuDutyPercent = hw.CpuFanDuty;
+                        gpuDutyPercent = hw.GpuFanDuty;
+                    }
+                }
+                catch
+                {
+                }
+            }
             return new SensorSnapshot(
                 HardwareAvailable: true,
                 CpuTempC: cpuTemp,
@@ -99,8 +125,8 @@ internal sealed class SensorService : ISensorService
                 GpuFanRpm: gpuFanRpm,
                 CpuUsagePercent: Prefer(connected ? hw!.CpuUsage : -1, HardwareControl.cpuUsage ?? 0),
                 GpuUsagePercent: Prefer(connected ? hw!.GpuUsage : -1, HardwareControl.gpuUsage ?? 0),
-                CpuFanDutyPercent: umiDuty && umiMainDuty >= 0 ? umiMainDuty : Prefer(connected ? hw!.CpuFanDuty : -1, HardwareControl.cpuFan ?? 0),
-                GpuFanDutyPercent: umiDuty && umiSecondDuty >= 0 ? umiSecondDuty : Prefer(connected ? hw!.GpuFanDuty : -1, HardwareControl.gpuFan ?? 0),
+                CpuFanDutyPercent: cpuDutyPercent,
+                GpuFanDutyPercent: gpuDutyPercent,
                 CpuFrequencyMhz: Prefer(connected ? hw!.CpuFrequency : -1, HardwareControl.cpuFrequency),
                 GpuCoreFrequencyMhz: Prefer(connected ? hw!.GpuCoreFreq : -1, HardwareControl.gpuCoreFreq),
                 FanRpmMaxForPercent: connected ? hw!.FanRpmMaxForPercent : 5000,

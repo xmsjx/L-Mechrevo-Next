@@ -222,6 +222,7 @@ public partial class OriginalStyleWindow : Window
     public OriginalStyleWindow()
     {
         InitializeComponent();
+        _ = Task.Run(MachineProbeReadOnly.LogOnce);
         MainScroll.PreviewMouseWheel += MainScroll_PreviewMouseWheel;
         L_Mechrevo.WpfP0.Services.WindowWorkAreaPolicy.ClampOnLoaded(this);
         RestoreSavedMiniHeight();
@@ -4569,6 +4570,13 @@ public partial class OriginalStyleWindow : Window
             _backendRoute = BackendRoute.Ec;
             _services = new AppServices(probe);
             BackendLine.Text = WpfStrings.L("EC 实验模式：GCU 未连接", "EC experiment: GCU unavailable") + " · " + reason;
+            try
+            {
+                MechrevoLite.HardwareControl.EnableLocalMonitoring();
+            }
+            catch
+            {
+            }
             ApplyCapabilities();
             SetBackendStatus(WpfStrings.L("EC 实验模式", "EC experiment"), "#F59E0B",
                 WpfStrings.L("GCU 已停止，仅性能模式/显卡模式走 EC/NVRAM", "GCU stopped; mode/GPU use EC/NVRAM"));

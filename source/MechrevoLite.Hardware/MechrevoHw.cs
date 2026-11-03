@@ -6163,7 +6163,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		return acpiOk || cpuOk || gpuOk || dutyOk;
 	}
 
-	private bool TryReadGcuEcFanDuties()
+	internal bool TryReadGcuEcFanDuties()
 	{
 		try
 		{
