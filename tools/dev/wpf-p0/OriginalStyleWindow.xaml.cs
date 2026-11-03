@@ -3451,6 +3451,7 @@ public partial class OriginalStyleWindow : Window
             {
                 _pendingMode = 3;
                 _pendingModeTick = Environment.TickCount64;
+                await SwitchModeAsync(3);
                 await OpenCustomModeFormAsync(switchMode: true);
                 return;
             }
@@ -4488,7 +4489,8 @@ public partial class OriginalStyleWindow : Window
         }
         MechrevoHw keyHw = _backendProbe.Hw;
         bool hasPerformanceKey = IsNucLike(keyHw)
-            || (keyHw.IsGcuConnected && !keyHw.UsesBaolongda && !keyHw.IsIntelNucMachine && !keyHw.IsUmiMachine);
+            || (keyHw.IsGcuConnected && !keyHw.UsesBaolongda && !keyHw.IsIntelNucMachine && !keyHw.IsUmiMachine)
+            || (GcuEcExperimental.Enabled && _backendRoute == BackendRoute.Ec);
         if (!hasPerformanceKey)
         {
             return;
@@ -4515,6 +4517,19 @@ public partial class OriginalStyleWindow : Window
             }
             MechrevoHw? hw = probe.Hw;
             bool nuc = IsNucLike(hw);
+
+            if (GcuEcExperimental.Enabled && _backendRoute == BackendRoute.Ec)
+            {
+                int before = GcuEcExperimental.TryReadVisualMode(out int ecMode) ? ecMode : ResolveDisplayMode(probe);
+                bool ac = System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
+                    == System.Windows.Forms.PowerLineStatus.Online;
+                int next = ac
+                    ? before switch { 2 => 0, 0 => 1, 1 => 3, 3 => 2, _ => 1 }
+                    : before switch { 2 => 0, 0 => 2, _ => 2 };
+                Logger.WriteError("[perfkey] EC 性能键循环 " + before + " -> " + next + " (ac=" + ac + ")");
+                await SwitchModeAsync(next);
+                return;
+            }
 
             if (nuc)
             {
