@@ -22,6 +22,11 @@ internal static class GcuEcExperimental
         string.Equals(Environment.GetEnvironmentVariable("LM_GCU_EC_EXPERIMENT"), "1", StringComparison.Ordinal)
         || AppConfig.Get("gcu_ec_experiment", 0) != 0;
 
+    /// <summary>实验启动时直接进入 EC-only，不等待 GCU 连接。</summary>
+    internal static bool DirectMode =>
+        string.Equals(Environment.GetEnvironmentVariable("LM_GCU_EC_DIRECT"), "1", StringComparison.Ordinal)
+        || AppConfig.Get("gcu_ec_direct", 0) != 0;
+
     internal static void LogCurrentState(string reason)
     {
         if (!Enabled || Interlocked.Exchange(ref _probeLogged, 1) != 0)

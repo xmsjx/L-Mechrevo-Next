@@ -6882,6 +6882,13 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         _connectAttempting = true;
+        if (GcuEcExperimental.Enabled
+            && GcuEcExperimental.DirectMode
+            && TryStartExperimentalOfflineBackend("直接 EC 实验模式"))
+        {
+            _connectAttempting = false;
+            return;
+        }
         // UI 探针预览：合成 Hw 已挂在 WpfBackend，不要再连真实后端覆盖能力位。
         if (MechrevoLite.Program.UiAuditMode
             && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is MechrevoHw previewHw)
