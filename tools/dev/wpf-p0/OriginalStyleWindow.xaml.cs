@@ -183,6 +183,9 @@ public partial class OriginalStyleWindow : Window
     private readonly DispatcherTimer _statusResetTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
     private readonly string _statusResetText = L_Mechrevo.WpfP0.Services.WpfBackend.ReleaseVersion.Split('-')[^1];
     private bool _connectAttempting;
+    private enum BackendRoute { None, Gcu, Ec }
+    private BackendRoute _backendRoute = BackendRoute.None;
+    private int _gcuConnectFailures;
     private const string QuickTilesConfigKey = "perf_quick_tiles";
     private const string QuickTilesEmptySentinel = "-";
     private static readonly string[] DefaultQuickTileKeys = { "fanboost", "webcam", "micmute", "winkey", "monitoroff" };
@@ -3615,7 +3618,8 @@ public partial class OriginalStyleWindow : Window
             }
             else
             {
-                if (GcuEcExperimental.Enabled
+                if (_backendRoute == BackendRoute.Ec
+                    && GcuEcExperimental.Enabled
                     && _backendProbe?.Hw != null
                     && _backendProbe.Hw.UsesBaolongda == false
                     && _backendProbe.Hw.IsIntelNucMachine == false
@@ -4562,6 +4566,7 @@ public partial class OriginalStyleWindow : Window
             MechrevoHw offlineHw = new();
             BackendProbe probe = new(offlineHw, null);
             _backendProbe = probe;
+            _backendRoute = BackendRoute.Ec;
             _services = new AppServices(probe);
             BackendLine.Text = WpfStrings.L("EC 实验模式：GCU 未连接", "EC experiment: GCU unavailable") + " · " + reason;
             ApplyCapabilities();
@@ -5070,7 +5075,8 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         int mode = int.Parse(text);
-        bool gcuEcGpuExperiment = GcuEcExperimental.Enabled
+        bool gcuEcGpuExperiment = _backendRoute == BackendRoute.Ec
+            && GcuEcExperimental.Enabled
             && _backendProbe.Hw != null
             && _backendProbe.Hw.UsesBaolongda == false
             && _backendProbe.Hw.IsIntelNucMachine == false
@@ -6907,7 +6913,11 @@ public partial class OriginalStyleWindow : Window
                 SetBackendStatus(WpfStrings.BackendGcuDisconnected, "#EF4444", WpfStrings.BackendGcuDisconnectedTip);
                 BackendLine.Text = reason;
                 _backendProbe = null;
-                if (GcuEcExperimental.Enabled && TryStartExperimentalOfflineBackend(reason))
+                _gcuConnectFailures++;
+                Logger.WriteError("[backend] GCU 连接失败 " + _gcuConnectFailures + "/5：" + reason);
+                if (_gcuConnectFailures >= 5
+                    && GcuEcExperimental.Enabled
+                    && TryStartExperimentalOfflineBackend(reason))
                 {
                     return;
                 }
@@ -6915,6 +6925,8 @@ public partial class OriginalStyleWindow : Window
                 return;
             }
             _backendProbe = probe;
+            _backendRoute = BackendRoute.Gcu;
+            _gcuConnectFailures = 0;
             UpdateBackendStatus();
             BackendLine.Text = probe.Snapshot();
             _services = new AppServices(probe);
