@@ -51,7 +51,11 @@ internal static class GpuDbControl
 	internal static bool Supported()
 	{
 		MechrevoHw hw = Program.hw;
-		if (hw == null || !hw.IsGcuConnected || hw.DgpuGeneration != Gpu.DgpuGenerationKind.Gen40)
+		if (hw == null || hw.DgpuGeneration != Gpu.DgpuGenerationKind.Gen40)
+		{
+			return false;
+		}
+		if (!hw.IsGcuConnected && !GcuEcExperimental.Enabled)
 		{
 			return false;
 		}

@@ -3527,7 +3527,8 @@ public partial class OriginalStyleWindow : Window
         try
         {
             // 原版只在视觉档 0/1/2（平衡/狂暴/静音）联动 DB；自定义档 3/4 不碰。
-            if (mode < 0 || mode > 2 || _backendProbe?.Hw == null || !_backendProbe.Hw.IsGcuConnected)
+            if (mode < 0 || mode > 2 || _backendProbe?.Hw == null
+                || (!_backendProbe.Hw.IsGcuConnected && _backendRoute != BackendRoute.Ec))
             {
                 return;
             }
