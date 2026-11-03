@@ -4554,6 +4554,32 @@ public partial class OriginalStyleWindow : Window
     }
 
     /// <summary>启动时恢复狂暴档的显卡超频；只在内置狂暴档且上次确实开启时执行。</summary>
+    /// <summary>实验：GCU 停止时用无 GCU 的 MechrevoHw 撑起 EC-only 首页，模式/显卡按钮仍可用。</summary>
+    private bool TryStartExperimentalOfflineBackend(string reason)
+    {
+        try
+        {
+            MechrevoHw offlineHw = new();
+            BackendProbe probe = new(offlineHw, null);
+            _backendProbe = probe;
+            _services = new AppServices(probe);
+            BackendLine.Text = WpfStrings.L("EC 实验模式：GCU 未连接", "EC experiment: GCU unavailable") + " · " + reason;
+            ApplyCapabilities();
+            SetBackendStatus(WpfStrings.L("EC 实验模式", "EC experiment"), "#F59E0B",
+                WpfStrings.L("GCU 已停止，仅性能模式/显卡模式走 EC/NVRAM", "GCU stopped; mode/GPU use EC/NVRAM"));
+            BackendReady?.Invoke();
+            _backendRetryTimer.Stop();
+            _backendTimer.Start();
+            Logger.WriteError("[gcu-ec] GCU 不可用 ⇒ 启动 EC-only 实验首页");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteError("[gcu-ec] EC-only 首页启动失败：" + ex.GetType().Name + " " + ex.Message);
+            return false;
+        }
+    }
+
     private async Task RestoreGpuOverclockOnStartupAsync()
     {
         try
@@ -6344,12 +6370,6 @@ public partial class OriginalStyleWindow : Window
         int pendingGpu = probe.PendingGpuTarget;
         bool pending = probe.HasPendingGpuRestart && pendingGpu >= 0;
         int displayGpu = pending ? pendingGpu : currentGpu;
-        if (currentGpu >= 0 && currentGpu == pendingGpu)
-        {
-            probe.ClearGpuRestartPending();
-            pending = false;
-            displayGpu = currentGpu;
-        }
         if (!_gpuPromptOpen)
         {
             UpdateGpuButtons(displayGpu, pending);
@@ -6886,6 +6906,10 @@ public partial class OriginalStyleWindow : Window
                 SetBackendStatus(WpfStrings.BackendGcuDisconnected, "#EF4444", WpfStrings.BackendGcuDisconnectedTip);
                 BackendLine.Text = reason;
                 _backendProbe = null;
+                if (GcuEcExperimental.Enabled && TryStartExperimentalOfflineBackend(reason))
+                {
+                    return;
+                }
                 _backendRetryTimer.Start();
                 return;
             }

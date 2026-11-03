@@ -832,28 +832,20 @@ internal sealed class BackendProbe : IDisposable
         }
     }
 
-    internal bool HasPendingGpuRestart => AppConfig.Is("gpu_restart_pending");
+    internal bool HasPendingGpuRestart => MechrevoLite.Gpu.GpuRestartVerifier.HasPendingThisBoot();
 
-    internal int PendingGpuTarget
-    {
-        get
-        {
-            string? text = AppConfig.GetString("gpu_restart_target");
-            return int.TryParse(text, out int value) && value >= 0 && value <= 2 ? value : -1;
-        }
-    }
+    internal int PendingGpuTarget => MechrevoLite.Gpu.GpuRestartVerifier.PendingTarget;
 
     internal void MarkGpuRestartPending(int targetMode)
     {
-        AppConfig.Set("gpu_restart_pending", 1);
-        AppConfig.Set("gpu_restart_tick", Environment.TickCount64.ToString());
-        AppConfig.Set("gpu_restart_target", targetMode);
+        MechrevoLite.Gpu.GpuRestartVerifier.MarkPending(targetMode);
+        AppConfig.Flush();
     }
 
     internal void ClearGpuRestartPending()
     {
-        AppConfig.Set("gpu_restart_pending", 0);
-        AppConfig.Remove("gpu_restart_tick");
+        MechrevoLite.Gpu.GpuRestartVerifier.Clear();
+        AppConfig.Flush();
     }
 
     internal int CurrentGpuMode => _service?.CurrentGpuMode ?? -1;
