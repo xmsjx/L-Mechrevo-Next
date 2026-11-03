@@ -1478,14 +1478,29 @@ public partial class CustomModeWindow : Window
                     gpuOk = ocHw.TrySetDirectGpuOverclockField("OverClockingSwitch", 0);
                 }
             }
+            bool fanOk = true;
+            string fanDetail = "未启用";
+            if (edited.FanCurveOn != false
+                && edited.CpuFanDuty is { Length: 16 } cpuFan
+                && edited.GpuFanDuty is { Length: 16 } gpuFan)
+            {
+                fanOk = MechrevoLite.Hardware.NucFanTable.TryApply(
+                    FanCurveDefaults.CpuTemperatures, cpuFan,
+                    FanCurveDefaults.GpuTemperatures, gpuFan, out fanDetail);
+                bool isolated = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(true, out string isoDetail);
+                bool ramp = MechrevoLite.Hardware.NucFanTable.TrySetFanRamp(
+                    edited.FanSwitchSpeedOn == true, edited.FanSwitchSpeedMs ?? 300, out string rampDetail);
+                fanOk = fanOk && isolated && ramp;
+                fanDetail += " · " + isoDetail + " · " + rampDetail;
+            }
             _settings = edited;
             _dirty = false;
             ApplyButton.Content = WpfStrings.CpuTuningWindow_xaml_Content;
-            StatusText.Text = (cpuOk && gpuOk && gpuPowerOk ? "EC 自定义功耗墙已应用：" : "EC 自定义功耗墙部分失败：")
+            StatusText.Text = (cpuOk && gpuOk && gpuPowerOk && fanOk ? "EC 自定义功耗墙已应用：" : "EC 自定义功耗墙部分失败：")
                 + detail + " · GPU超频=" + gpuOk
                 + " · GPU TGP/DB=" + gpuPowerDetail
-                + " · 风扇曲线暂未接 EC";
-            Logger.WriteError("[gcu-ec] 自定义应用 cpu=" + cpuOk + " gpu=" + gpuOk + " " + detail);
+                + " · 风扇曲线=" + fanDetail;
+            Logger.WriteError("[gcu-ec] 自定义应用 cpu=" + cpuOk + " gpu=" + gpuOk + " fan=" + fanOk + " " + detail + " · " + fanDetail);
             await Task.CompletedTask;
         }
         catch (Exception ex)
