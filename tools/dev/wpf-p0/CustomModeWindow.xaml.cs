@@ -741,8 +741,8 @@ public partial class CustomModeWindow : Window
             && _current?.IsCustom != true
             && !nucDirectRows
             && !intelMsrRows;
-        CpuPowerCard.IsEnabled = !locked;
-        TempGpuCard.IsEnabled = !locked;
+        CpuPowerCard.IsEnabled = MechrevoLite.Hardware.GcuEcExperimental.Enabled || !locked;
+        TempGpuCard.IsEnabled = MechrevoLite.Hardware.GcuEcExperimental.Enabled || !locked;
         FanCard.IsEnabled = !locked;
         CpuPowerCard.Opacity = locked ? 0.45 : 1.0;
         TempGpuCard.Opacity = locked ? 0.45 : 1.0;

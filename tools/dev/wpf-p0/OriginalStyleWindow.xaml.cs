@@ -5722,6 +5722,24 @@ public partial class OriginalStyleWindow : Window
             canvas.Children.Add(path);
             return new Viewbox { Width = 16, Height = 16, Child = canvas, HorizontalAlignment = HorizontalAlignment.Center };
         }
+        if (string.Equals(key, "touchpad", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(key, "touchpadtoggle", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                return new System.Windows.Controls.Image
+                {
+                    Width = 16,
+                    Height = 16,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Source = new System.Windows.Media.Imaging.BitmapImage(
+                        new Uri("pack://application:,,,/Assets/Icons/icons8_touchpad_96.png", UriKind.Absolute))
+                };
+            }
+            catch
+            {
+            }
+        }
         TextBlock text = new TextBlock
         {
             Text = glyph,
@@ -10569,15 +10587,20 @@ public partial class OriginalStyleWindow : Window
             DiagnosticPackInputs inputs = DiagnosticPackCapture.Capture();
             DiagnosticPackResult result = await DiagnosticPackRunner.ExportAsync(dialog.FileName, inputs);
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_88 + System.IO.Path.GetFileName(result.ZipPath);
-            try
+            if (MessageBox.Show(this,
+                    WpfStrings.L("诊断包已导出，是否打开所在文件夹？", "Diagnostic package exported. Open containing folder?"),
+                    "L-Mechrevo", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
             {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", "/select,\"" + result.ZipPath + "\"")
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", "/select,\"" + result.ZipPath + "\"")
                 {
                     UseShellExecute = true
                 });
-            }
-            catch
-            {
+                }
+                catch
+                {
+                }
             }
         }
         catch (Exception ex)

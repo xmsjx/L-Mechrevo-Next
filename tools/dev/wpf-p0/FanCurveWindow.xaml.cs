@@ -407,7 +407,10 @@ public partial class FanCurveWindow : Window
                 bool ok = MechrevoLite.Hardware.NucFanTable.TryApply(
                     CpuCurve.Temperatures, cpu, GpuCurve.Temperatures, gpu, out string detail);
                 bool isolated = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(true, out string isoDetail);
-                bool ramp = MechrevoLite.Hardware.NucFanTable.TrySetFanRamp(true, 300, out string rampDetail);
+                MechrevoLite.Mode.PerfModeSettings savedSettings = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId);
+                bool ramp = MechrevoLite.Hardware.NucFanTable.TrySetFanRamp(
+                    savedSettings.FanSwitchSpeedOn == true,
+                    savedSettings.FanSwitchSpeedMs ?? 300, out string rampDetail);
                 MechrevoLite.Mode.PerfModeStore.SaveSettings(_modeId, MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId) with
                 {
                     CpuFanDuty = cpu,
