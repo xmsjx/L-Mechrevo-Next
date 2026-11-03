@@ -1500,7 +1500,7 @@ public partial class CustomModeWindow : Window
                 + detail + " · GPU超频=" + gpuOk
                 + " · GPU TGP/DB=" + gpuPowerDetail
                 + " · 风扇曲线=" + fanDetail;
-            Logger.WriteError("[gcu-ec] 自定义应用 cpu=" + cpuOk + " gpu=" + gpuOk + " fan=" + fanOk + " " + detail + " · " + fanDetail);
+            Logger.WriteError("[gcu-ec] 自定义应用 cpu=" + cpuOk + " gpu=" + gpuOk + " fan=" + fanOk + " gpuPower=" + gpuPowerOk + " " + detail + " · " + gpuPowerDetail + " · " + fanDetail);
             await Task.CompletedTask;
         }
         catch (Exception ex)

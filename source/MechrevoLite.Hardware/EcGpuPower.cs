@@ -98,6 +98,8 @@ internal static class EcGpuPower
         if (!TryGetCapabilities(hw, out Capabilities caps, out string capDetail))
         {
             detail = capDetail;
+            Logger.WriteError("[gpu-power-ec] 跳过：base=" + baseTgp + " db=" + dbWatts
+                + " on=" + dbOn + " · " + capDetail);
             return false;
         }
         int targetBase = Math.Clamp(baseTgp, caps.FloorWatts, caps.BaseMaxWatts);
