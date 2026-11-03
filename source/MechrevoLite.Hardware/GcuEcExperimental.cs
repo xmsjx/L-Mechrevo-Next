@@ -13,6 +13,9 @@ internal static class GcuEcExperimental
     private const int ModeIndexAddress = 1963;
     private const int TriggerAddress = 1895;
     private const int TurboTriggerAddress = 1115;
+    private const int FanBoostClampAddress = 1873;
+    private const int CustomModeFlagAddress = 1798;
+    private const int FanRampAddress = 1927;
     private static int _probeLogged;
 
     internal static bool Enabled =>
@@ -97,18 +100,26 @@ internal static class GcuEcExperimental
             byte target = visualMode == 1 ? (byte)0x10 : (byte)0x00;
             byte mode = (byte)((currentMode & 0xE0) | (target & 0x1E) | (currentMode & 0x01));
             byte trigger = (byte)((currentTrigger & 0x10) | (visualMode == 2 ? 0x28 : 0x20));
+            byte clamp = visualMode == 2 ? (byte)0xA0 : visualMode == 1 ? (byte)0x10 : (byte)0x00;
+            // 按官方顺序：风扇 clamp → 内置档标记 → 模式字节 → trigger → turbo 标记。
+            bool clampWrite = AcpiDriverEc.TryWriteByte(FanBoostClampAddress, clamp);
+            bool customClear = AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 64);
+            bool rampWrite = AcpiDriverEc.TryWriteByte(FanRampAddress, visualMode == 1 ? 0x00 : 0x83);
             bool modeWrite = AcpiDriverEc.TryWriteByte(ModeIndexAddress, mode);
             bool triggerWrite = AcpiDriverEc.TryWriteByte(TriggerAddress, trigger);
             bool turboWrite = AcpiDriverEc.TryWriteByte(TurboTriggerAddress, visualMode == 2 ? 1 : 0);
             bool modeRead = AcpiDriverEc.TryReadByte(ModeIndexAddress, out byte readMode);
             bool triggerReadBack = AcpiDriverEc.TryReadByte(TriggerAddress, out byte readTrigger);
+            bool clampRead = AcpiDriverEc.TryReadByte(FanBoostClampAddress, out byte readClamp);
             bool modeOk = modeRead && (readMode & 0x1E) == (mode & 0x1E);
             bool triggerOk = triggerReadBack && readTrigger == trigger;
+            bool clampOk = clampRead && readClamp == clamp;
             detail = $"mode 0x{currentMode:X2}->0x{mode:X2}/0x{readMode:X2} "
                 + $"trigger 0x{currentTrigger:X2}->0x{trigger:X2}/0x{readTrigger:X2} "
-                + $"turbo={visualMode == 2} write={modeWrite}/{triggerWrite}/{turboWrite}";
-            Logger.WriteError("[gcu-ec] 实验模式切换 " + detail + " ⇒ " + (modeOk && triggerOk ? "OK" : "FAIL"));
-            return modeWrite && triggerWrite && turboWrite && modeOk && triggerOk;
+                + $"clamp->0x{clamp:X2}/0x{readClamp:X2} turbo={visualMode == 2} "
+                + $"write={modeWrite}/{triggerWrite}/{turboWrite}/{clampWrite}/{customClear}/{rampWrite}";
+            Logger.WriteError("[gcu-ec] 实验模式切换 " + detail + " ⇒ " + (modeOk && triggerOk && clampOk ? "OK" : "FAIL"));
+            return modeWrite && triggerWrite && turboWrite && clampWrite && customClear && modeOk && triggerOk && clampOk;
         }
         catch (Exception ex)
         {
