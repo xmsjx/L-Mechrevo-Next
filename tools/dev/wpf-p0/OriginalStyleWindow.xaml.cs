@@ -3630,12 +3630,16 @@ public partial class OriginalStyleWindow : Window
                     && GcuEcExperimental.TryApplyMode(mode, out string ecDetail))
                 {
                     // 先恢复内置档 PL/风扇表，再把 1963/clamp/1798 写回目标档。
-                    // 只写模式字节时，自定义档留下的 PL/风扇策略会继续生效，表现为“切不走”。
-                    if (mode is 0 or 1 or 2
-                        && MechrevoLite.Hardware.NucPerformanceMode.TryApply(mode, out string defaultDetail))
+                    // NUC 默认表会写 1963 低 4 位风扇模式，GCU 这里必须恢复原模式字节后再写。
+                    if (mode is 0 or 1 or 2)
                     {
-                        GcuEcExperimental.TryApplyMode(mode, out string finalDetail);
-                        ecDetail += " · 内置默认=" + defaultDetail + " · 最终=" + finalDetail;
+                        MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1963, out byte modeBeforeDefault);
+                        if (MechrevoLite.Hardware.NucPerformanceMode.TryApply(mode, out string defaultDetail))
+                        {
+                            MechrevoLite.Hardware.AcpiDriverEc.TryWriteByte(1963, modeBeforeDefault);
+                            GcuEcExperimental.TryApplyMode(mode, out string finalDetail);
+                            ecDetail += " · 内置默认=" + defaultDetail + " · 最终=" + finalDetail;
+                        }
                     }
                     Logger.WriteError("[gcu-ec] 实验通道接管模式 " + mode + "：" + ecDetail);
                     result = MechrevoService.ModeSwitchResult.Ok;
