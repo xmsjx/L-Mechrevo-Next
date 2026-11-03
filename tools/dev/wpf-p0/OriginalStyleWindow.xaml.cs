@@ -6287,6 +6287,10 @@ public partial class OriginalStyleWindow : Window
         {
             MechrevoLite.Hardware.NucQuickSwitches.Sync(probe.Hw);
         }
+        else if (_backendRoute == BackendRoute.Ec)
+        {
+            probe.SyncEcExperimentalQuickSwitches();
+        }
         EnsurePerformanceKeyService();
         try
         {
@@ -6377,8 +6381,9 @@ public partial class OriginalStyleWindow : Window
         BatteryInfo.ToolTip = health;
         SyncNucExternalMode(probe);
         int mode = ResolveDisplayMode(probe);
-        GpuOverclockSwitch.Visibility = (mode == 1 && probe.GpuOcSupported
-    && probe.Hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu)
+        bool ecExperimentRoute = _backendRoute == BackendRoute.Ec;
+        GpuOverclockSwitch.Visibility = (mode == 1 && (probe.GpuOcSupported || ecExperimentRoute)
+    && (probe.Hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu || ecExperimentRoute))
     ? Visibility.Visible : Visibility.Collapsed;
         GpuOverclockSwitch.IsChecked = MechrevoService.GpuOverclockEnabled || AppConfig.Is("gpu_oc");
         int currentGpu = probe.CurrentGpuMode;

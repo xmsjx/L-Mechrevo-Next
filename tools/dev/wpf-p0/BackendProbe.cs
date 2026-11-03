@@ -325,6 +325,14 @@ internal sealed class BackendProbe : IDisposable
         }
     }
 
+    internal void SyncEcExperimentalQuickSwitches()
+    {
+        if (_hw != null && !_hw.UsesBaolongda && !_hw.IsIntelNucMachine && !_hw.IsUmiMachine)
+        {
+            NucQuickSwitches.Sync(_hw);
+        }
+    }
+
     /// <summary>摄像头设备状态异步回读；PnP 枚举不能阻塞 UI 线程。</summary>
     internal void SyncCameraQuickState()
     {
@@ -662,7 +670,17 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            return _service != null && await _service.SetKeyboardPower(on).ConfigureAwait(false);
+            if (_service != null)
+            {
+                return await _service.SetKeyboardPower(on).ConfigureAwait(false);
+            }
+            if (NucKeyboardLighting.IsSingleZone())
+            {
+                int level = NucKeyboardLighting.TryReadBrightness(out int current) && current > 0 ? current : 3;
+                NucKeyboardLighting.Apply("Single", on, on ? level : 0, 1, unchecked((int)0xFFFFFFFF), Array.Empty<int>());
+                return true;
+            }
+            return false;
         }
         catch
         {
@@ -674,6 +692,10 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
+            if (string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal))
+            {
+                return await SetKeyboardPowerAsync(on).ConfigureAwait(false);
+            }
             if (_hw?.IsIntelNucMachine == true && string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal))
             {
                 bool local = UmiLightbar.SetPower(on);
@@ -700,7 +722,17 @@ internal sealed class BackendProbe : IDisposable
         try
         {
             (int light, int speed, Color? color) = ReadLightArgs("Keyboard/Ctrl", effect, keyboard: true);
-            return _service != null && await _service.SetKeyboardEffect(effect, light, speed, "None", color, true).ConfigureAwait(false);
+            if (_service != null)
+            {
+                return await _service.SetKeyboardEffect(effect, light, speed, "None", color, true).ConfigureAwait(false);
+            }
+            if (NucKeyboardLighting.IsSingleZone())
+            {
+                int argb = color?.ToArgb() ?? unchecked((int)0xFFFFFFFF);
+                NucKeyboardLighting.Apply(effect, true, light, speed, argb, Array.Empty<int>());
+                return true;
+            }
+            return false;
         }
         catch
         {
@@ -848,7 +880,37 @@ internal sealed class BackendProbe : IDisposable
         AppConfig.Flush();
     }
 
-    internal int CurrentGpuMode => _service?.CurrentGpuMode ?? -1;
+    internal int CurrentGpuMode
+    {
+        get
+        {
+            int serviceMode = _service?.CurrentGpuMode ?? -1;
+            if (serviceMode >= 0)
+            {
+                return serviceMode;
+            }
+            try
+            {
+                if (UefiGpuMux.TryRead(out int raw, out _, out _))
+                {
+                    MechrevoLite.Gpu.GpuRoute? route = MechrevoLite.Gpu.GpuRouteInference.DecodeOemDisplayMode(
+                        (byte)raw, _hw?.IsAmdPlatformForLimits == true);
+                    if (route.HasValue)
+                    {
+                        int mode = MechrevoLite.Gpu.GpuRouteInference.ToGpuMode(route.Value);
+                        if (mode >= 0)
+                        {
+                            return mode;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+            return -1;
+        }
+    }
 
     internal bool CanSwitchGpuMode(int mode)
     {
