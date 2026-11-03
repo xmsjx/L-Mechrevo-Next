@@ -1262,6 +1262,10 @@ internal sealed class BackendProbe : IDisposable
                 // NUC/UMI 强冷状态来自 EC 0x751，由 NucQuickSwitches.Sync 回填。
                 return _hw.QuickSwitches.TryGetValue("fanboost", out bool quickOn) && quickOn;
             }
+            if (!_hw.IsGcuConnected && AcpiDriverEc.TryReadByte(1873, out byte clamp))
+            {
+                return (clamp & 0x40) != 0;
+            }
             return _hw.FanBoost;
         }
         if (string.Equals(key, "highperf", StringComparison.OrdinalIgnoreCase))
