@@ -795,6 +795,9 @@ public partial class CustomModeWindow : Window
         {
             Pl4Row.Visibility = Visibility.Visible;
         }
+        DbSlider.IsEnabled = DbSwitch.IsChecked == true;
+        DbSlider.IsHitTestVisible = DbSlider.IsEnabled;
+        DbSlider.Opacity = DbSlider.IsEnabled ? 1.0 : 0.45;
         _cleanUiSignature = BuildUiSignature();
     
         }
@@ -1331,7 +1334,15 @@ public partial class CustomModeWindow : Window
     private void SmuSlowLimit_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (SmuSlowLimitText != null) SmuSlowLimitText.Text = ((int)e.NewValue).ToString(); }
     private void SmuSlowTime_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (SmuSlowTimeText != null) SmuSlowTimeText.Text = ((int)e.NewValue).ToString(); }
     private void SmuFastTime_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (SmuFastTimeText != null) SmuFastTimeText.Text = ((int)e.NewValue).ToString(); }
-    private void DbSwitch_Changed(object sender, RoutedEventArgs e) { if (DbSlider != null && DbSwitch != null) DbSlider.IsEnabled = DbSwitch.IsChecked == true; }
+    private void DbSwitch_Changed(object sender, RoutedEventArgs e)
+    {
+        if (DbSlider != null && DbSwitch != null)
+        {
+            DbSlider.IsEnabled = DbSwitch.IsChecked == true;
+            DbSlider.IsHitTestVisible = DbSlider.IsEnabled;
+            DbSlider.Opacity = DbSlider.IsEnabled ? 1.0 : 0.45;
+        }
+    }
     private void TccSwitch_Changed(object sender, RoutedEventArgs e) { if (TccSlider != null && TccSwitch != null) TccSlider.IsEnabled = TccSwitch.IsChecked == true; MarkDirty(); }
     private void GpuOcSwitch_Changed(object sender, RoutedEventArgs e) { bool on = GpuOcSwitch?.IsChecked == true; if (CoreOffsetSlider != null) CoreOffsetSlider.IsEnabled = on; if (MemoryOffsetSlider != null) MemoryOffsetSlider.IsEnabled = on; MarkDirty(); }
     private void GpuPowerLimit_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (GpuPowerLimitText != null) GpuPowerLimitText.Text = ((int)e.NewValue).ToString(); }
