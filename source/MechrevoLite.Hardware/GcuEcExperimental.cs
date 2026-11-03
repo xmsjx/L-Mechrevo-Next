@@ -38,7 +38,7 @@ internal static class GcuEcExperimental
         }
     }
 
-    /// <summary>GCU 未接管时直接从 EC 读当前模式：狂暴=1963 bit4；静音=1895 bit3；其余平衡。</summary>
+    /// <summary>GCU 未接管时直接从 EC 读当前模式：狂暴=1963 bit4；静音=1873=0xA0；其余平衡。</summary>
     internal static bool TryReadVisualMode(out int visualMode)
     {
         visualMode = -1;
@@ -49,7 +49,7 @@ internal static class GcuEcExperimental
         try
         {
             if (!AcpiDriverEc.TryReadByte(ModeIndexAddress, out byte mode)
-                || !AcpiDriverEc.TryReadByte(TriggerAddress, out byte trigger))
+                || !AcpiDriverEc.TryReadByte(1873, out byte clamp))
             {
                 return false;
             }
@@ -57,7 +57,7 @@ internal static class GcuEcExperimental
             {
                 visualMode = 1;
             }
-            else if ((trigger & 0x08) != 0)
+            else if ((clamp & 0xF0) == 0xA0)
             {
                 visualMode = 2;
             }
