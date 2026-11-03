@@ -4569,6 +4569,14 @@ public partial class OriginalStyleWindow : Window
             _backendProbe = probe;
             _backendRoute = BackendRoute.Ec;
             _services = new AppServices(probe);
+            MechrevoLite.Program.hw = offlineHw;
+            try
+            {
+                MechrevoLite.HardwareControl.AttachMechrevoHw(offlineHw);
+            }
+            catch
+            {
+            }
             BackendLine.Text = WpfStrings.L("EC 实验模式：GCU 未连接", "EC experiment: GCU unavailable") + " · " + reason;
             try
             {
