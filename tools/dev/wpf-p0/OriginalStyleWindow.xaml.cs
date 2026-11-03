@@ -8190,7 +8190,11 @@ public partial class OriginalStyleWindow : Window
             {
                 if (!await _customModeWindow.SelectModeAsync(customId))
                 {
-                    _customModeWindow.BindMode(MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId ?? MechrevoLite.Mode.PerfModeStore.ActiveModeId);
+                    // EC 路由没有 PerfModeService，SelectModeAsync 会返回 false；
+                    // 不能回退到 ActiveModeId（此时还停在静音/平衡），否则自定义窗口绑到内置档。
+                    _customModeWindow.BindMode(_backendRoute == BackendRoute.Ec
+                        ? customId
+                        : MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId ?? MechrevoLite.Mode.PerfModeStore.ActiveModeId);
                 }
             }
             else
