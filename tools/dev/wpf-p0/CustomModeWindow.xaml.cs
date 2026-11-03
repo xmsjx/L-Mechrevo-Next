@@ -981,8 +981,20 @@ public partial class CustomModeWindow : Window
         }
         if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool pl4DoubleUnit, out _))
         {
-            // PL4 是 8 位寄存器：上限固定 255 × 单位（1W 或 2W/LSB）。
-            SetSliderRange(Pl4Slider, 5, pl4DoubleUnit ? 510 : 255);
+            // 寄存器绝对上限 255×单位；界面默认上限按工厂 Turbo PL4 + 50W，和 OpenRevo 一致。
+            int pl4Unit = pl4DoubleUnit ? 2 : 1;
+            int pl4AbsMax = 255 * pl4Unit;
+            int pl4DefaultMax = pl4AbsMax;
+            if (MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1961, out byte turboPl4Raw))
+            {
+                int turboPl4 = turboPl4Raw * pl4Unit;
+                if (turboPl4 > 0)
+                {
+                    pl4DefaultMax = Math.Min(turboPl4 + 50, pl4AbsMax);
+                }
+            }
+            SetSliderRange(Pl4Slider, 5, pl4DefaultMax);
+            Pl4Slider.Value = Math.Clamp(Pl4Slider.Value, 5, pl4DefaultMax);
         }
         SetSliderRange(TccSlider, hw.TccMinimum, hw.TccMaximum);
         SetSliderRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
