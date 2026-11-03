@@ -155,7 +155,22 @@ internal sealed class BackendProbe : IDisposable
         }
     }
 
-    internal int CurrentMode => _service?.CurrentMode ?? -1;
+    internal int CurrentMode
+    {
+        get
+        {
+            int mode = _service?.CurrentMode ?? -1;
+            if (mode >= 0)
+            {
+                return mode;
+            }
+            if (GcuEcExperimental.Enabled && GcuEcExperimental.TryReadVisualMode(out int ecMode))
+            {
+                return ecMode;
+            }
+            return -1;
+        }
+    }
 
     private int _nucBatteryMode = -1;
 
@@ -330,6 +345,10 @@ internal sealed class BackendProbe : IDisposable
         if (_hw != null && !_hw.UsesBaolongda && !_hw.IsIntelNucMachine && !_hw.IsUmiMachine)
         {
             NucQuickSwitches.Sync(_hw);
+            if (AcpiDriverEc.TryReadByte(1873, out byte clamp))
+            {
+                _hw.QuickSwitches["fanboost"] = (clamp & 0x40) != 0;
+            }
         }
     }
 
@@ -348,7 +367,8 @@ internal sealed class BackendProbe : IDisposable
             switch (key)
             {
                 case "fanboost":
-                    ok = hw.TrySetFanBoostViaBackend(on, out confirmed);
+                    ok = hw.TrySetEcFanBoost(on, out confirmed)
+                        || hw.TrySetFanBoostViaBackend(on, out confirmed);
                     break;
                 case "fnkey":
                     ok = NucQuickSwitches.TrySetFnLock(on, out confirmed);

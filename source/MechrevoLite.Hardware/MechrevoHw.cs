@@ -5735,6 +5735,36 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		return true;
 	}
 
+	internal bool TrySetEcFanBoost(bool on, out bool confirmed)
+	{
+		confirmed = false;
+		try
+		{
+			if (!AcpiDriverEc.TryReadByte(1873, out byte value))
+			{
+				return false;
+			}
+			byte target = on ? (byte)(value | 0x40) : (byte)(value & ~0x40);
+			if (!AcpiDriverEc.TryWriteByte(1873, target))
+			{
+				return false;
+			}
+			confirmed = AcpiDriverEc.TryReadByte(1873, out byte read)
+				&& ((read & 0x40) != 0) == on;
+			if (confirmed)
+			{
+				QuickSwitches["fanboost"] = on;
+			}
+			Logger.WriteError("[fan] EC强冷=" + on + " clamp=0x" + target.ToString("X2") + " confirmed=" + confirmed);
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteError("[fan] EC强冷失败：" + ex.GetType().Name + " " + ex.Message);
+			return false;
+		}
+	}
+
 	internal bool TrySetFanBoostViaBackend(bool on, out bool confirmed)
 	{
 		confirmed = false;

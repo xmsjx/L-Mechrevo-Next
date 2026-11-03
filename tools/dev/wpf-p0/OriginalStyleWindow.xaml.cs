@@ -3699,6 +3699,11 @@ public partial class OriginalStyleWindow : Window
                 {
                     SyncGpuDbForMode(mode, "WPF 切档");
                 }
+                if (ok && mode == 1 && GcuEcExperimental.Enabled
+                    && MechrevoLite.AppConfig.Is("gpu_oc"))
+                {
+                    await ApplyGpuOverclockSettingAsync(true);
+                }
                 SyncCustomWindowMode(mode);
                 RefreshWideCustomEditor();
             }
@@ -4592,6 +4597,7 @@ public partial class OriginalStyleWindow : Window
             SetBackendStatus(WpfStrings.L("EC 实验模式", "EC experiment"), "#F59E0B",
                 WpfStrings.L("GCU 已停止，仅性能模式/显卡模式走 EC/NVRAM", "GCU stopped; mode/GPU use EC/NVRAM"));
             BackendReady?.Invoke();
+            _ = RestoreGpuOverclockOnStartupAsync();
             _backendRetryTimer.Stop();
             _backendTimer.Start();
             Logger.WriteError("[gcu-ec] GCU 不可用 ⇒ 启动 EC-only 实验首页");
@@ -4611,7 +4617,7 @@ public partial class OriginalStyleWindow : Window
             BackendProbe? probe = _backendProbe;
             MechrevoHw? hw = probe?.Hw;
             if (probe == null || hw == null
-                || !hw.IsGcuConnected
+                || (!hw.IsGcuConnected && !GcuEcExperimental.Enabled)
                 || hw.UsesBaolongda
                 || hw.IsIntelNucMachine
                 || hw.IsUmiMachine

@@ -97,15 +97,18 @@ internal static class GcuEcExperimental
         try
         {
             if (!AcpiDriverEc.TryReadByte(ModeIndexAddress, out byte currentMode)
-                || !AcpiDriverEc.TryReadByte(TriggerAddress, out byte currentTrigger))
+                || !AcpiDriverEc.TryReadByte(TriggerAddress, out byte currentTrigger)
+                || !AcpiDriverEc.TryReadByte(FanBoostClampAddress, out byte currentClamp))
             {
-                detail = "读取 1963/1895 失败";
+                detail = "读取 1963/1895/1873 失败";
                 return false;
             }
             byte target = visualMode == 1 ? (byte)0x10 : (byte)0x00;
             byte mode = (byte)((currentMode & 0xE0) | (target & 0x1E) | (currentMode & 0x01));
             byte trigger = (byte)((currentTrigger & 0x10) | (visualMode == 2 ? 0x28 : 0x20));
             byte clamp = visualMode == 2 ? (byte)0xA0 : visualMode == 1 ? (byte)0x10 : (byte)0x00;
+            // 保留强冷位（bit6），模式切换不能把强冷关掉。
+            clamp = (byte)(clamp | (currentClamp & 0x40));
             // 按官方顺序：风扇 clamp → 内置档标记 → 模式字节 → trigger → turbo 标记。
             bool clampWrite = AcpiDriverEc.TryWriteByte(FanBoostClampAddress, clamp);
             bool customClear = AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 64);
