@@ -789,10 +789,7 @@ public partial class CustomModeWindow : Window
         SmuSlowLimitRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuSlowTimeRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuFastTimeRow.Visibility = Visibility.Collapsed;
-        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
-            && hwForRows != null && !apuOrNoDgpu
-            && !hwForRows.UsesBaolongda
-            && !hwForRows.IsIntelNucMachine && !hwForRows.IsUmiMachine)
+        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled && !apuOrNoDgpu)
         {
             Pl4Row.Visibility = Visibility.Visible;
         }
@@ -1026,7 +1023,7 @@ public partial class CustomModeWindow : Window
         SetSliderRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
         SetSliderRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
         if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
-            && MechrevoLite.Hardware.EcGpuPower.TryGetCapabilities(
+            && MechrevoLite.Hardware.EcGpuPower.TryGetCapabilities(hw,
                 out MechrevoLite.Hardware.EcGpuPower.Capabilities gpuCaps, out _))
         {
             SetSliderRange(GpuTgpSlider, gpuCaps.FloorWatts, gpuCaps.BaseMaxWatts);

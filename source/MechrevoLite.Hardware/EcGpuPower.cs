@@ -20,19 +20,31 @@ internal static class EcGpuPower
 
     /// <summary>按显卡物理功耗上限计算基频/DB 上限，不使用 EC 运行时 DB setpoint 冒充最大值。</summary>
     internal static bool TryGetCapabilities(out Capabilities caps, out string detail)
+        => TryGetCapabilities(null, out caps, out detail);
+
+    internal static bool TryGetCapabilities(MechrevoHw? hw, out Capabilities caps, out string detail)
     {
         caps = default;
         detail = "";
-        if (!global::NvmlHelper.TryGetPowerLimitBounds(out int minW, out int maxW, out _)
-            || maxW <= 0)
+        int minW = 0;
+        int maxW = 0;
+        bool hasNvml = global::NvmlHelper.TryGetPowerLimitBounds(out minW, out maxW, out _) && maxW > 0;
+        if (!hasNvml && hw != null)
         {
-            detail = "NVML 物理功耗范围不可用";
+            maxW = hw.GpuTgpMaximum;
+            minW = hw.GpuTgpMinimum;
+        }
+        if (maxW <= 0)
+        {
+            detail = "GPU 物理功耗上限不可用";
             return false;
         }
         int hardwareDbCapFallback = maxW <= 115 ? 15 : 25;
-        int defW = global::NvmlHelper.TryGetDefaultPowerLimitWatts(out int nvmlDefault) && nvmlDefault > 0
+        int defW = hasNvml
+            && global::NvmlHelper.TryGetDefaultPowerLimitWatts(out int nvmlDefault)
+            && nvmlDefault > 0
             ? nvmlDefault
-            : Math.Max(5, maxW - hardwareDbCapFallback);
+            : Math.Max(5, minW > 0 ? minW : maxW - hardwareDbCapFallback);
         int delta = maxW - defW;
         int hardwareDbCap = hardwareDbCapFallback;
         if (delta > 0 && delta <= 25)
@@ -83,7 +95,7 @@ internal static class EcGpuPower
             detail = "hw 为空";
             return false;
         }
-        if (!TryGetCapabilities(out Capabilities caps, out string capDetail))
+        if (!TryGetCapabilities(hw, out Capabilities caps, out string capDetail))
         {
             detail = capDetail;
             return false;
