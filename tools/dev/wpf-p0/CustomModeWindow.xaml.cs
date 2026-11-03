@@ -789,6 +789,13 @@ public partial class CustomModeWindow : Window
         SmuSlowLimitRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuSlowTimeRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuFastTimeRow.Visibility = Visibility.Collapsed;
+        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+            && hwForRows != null && !apuOrNoDgpu
+            && !hwForRows.UsesBaolongda
+            && !hwForRows.IsIntelNucMachine && !hwForRows.IsUmiMachine)
+        {
+            Pl4Row.Visibility = Visibility.Visible;
+        }
         _cleanUiSignature = BuildUiSignature();
     
         }
@@ -1599,7 +1606,7 @@ public partial class CustomModeWindow : Window
     {
         try
         {
-            string? seedFrom = (L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.UsesBaolongda == true) ? null : _current?.Id;
+            string? seedFrom = null;
             MechrevoLite.Mode.PerfModeService? perf = MechrevoLite.Mode.PerfModeService.Instance;
             MechrevoLite.Mode.PerfModeDefinition? mode = perf?.AddCustom(seedFrom)
                 ?? MechrevoLite.Mode.PerfModeStore.AddCustom(seedFrom);
@@ -1610,7 +1617,6 @@ public partial class CustomModeWindow : Window
             }
             MechrevoHw? newModeHw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
             bool gcuMachine = newModeHw != null
-                && newModeHw.IsGcuConnected
                 && !newModeHw.UsesBaolongda
                 && !newModeHw.SmuCustomApu;
             if (gcuMachine)

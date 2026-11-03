@@ -24,15 +24,17 @@ internal static class EcGpuPower
         caps = default;
         detail = "";
         if (!global::NvmlHelper.TryGetPowerLimitBounds(out int minW, out int maxW, out _)
-            || !global::NvmlHelper.TryGetDefaultPowerLimitWatts(out int defW)
-            || maxW <= 0
-            || defW <= 0)
+            || maxW <= 0)
         {
             detail = "NVML 物理功耗范围不可用";
             return false;
         }
+        int hardwareDbCapFallback = maxW <= 115 ? 15 : 25;
+        int defW = global::NvmlHelper.TryGetDefaultPowerLimitWatts(out int nvmlDefault) && nvmlDefault > 0
+            ? nvmlDefault
+            : Math.Max(5, maxW - hardwareDbCapFallback);
         int delta = maxW - defW;
-        int hardwareDbCap = maxW <= 115 ? 15 : 25;
+        int hardwareDbCap = hardwareDbCapFallback;
         if (delta > 0 && delta <= 25)
         {
             caps = new Capabilities
