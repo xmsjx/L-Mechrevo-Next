@@ -102,6 +102,10 @@ public sealed class MechrevoDeviceCapabilities
 		{
 			if (!TurboSubMode)
 			{
+				if (TurboSubModeWmi.IsSupported())
+				{
+					return FeatureAvailability.Supported;
+				}
 				if (!ProfileAvailable)
 				{
 					return FeatureAvailability.Unknown;

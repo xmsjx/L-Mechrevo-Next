@@ -252,6 +252,10 @@ public class MechrevoService
 	{
 		try
 		{
+			if (TurboSubModeWmi.IsSupported() && TurboSubModeWmi.TryReadSilent(out bool ecSilent))
+			{
+				return ecSilent;
+			}
 			using RegistryKey registryKey = Registry.LocalMachine.OpenSubKey("SOFTWARE\\OEM\\GamingCenter2\\ItemSupport");
 			string text = registryKey?.GetValue("SilentPerformanceModeSwitch")?.ToString();
 			bool? result;
@@ -5939,6 +5943,19 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 			MechrevoHw hw = _hw;
+			if (TurboSubModeWmi.IsSupported())
+			{
+				bool applied = await Task.Run(() => TurboSubModeWmi.TryApply(silent), cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
+				if (applied)
+				{
+					if (ShouldApplyTurboGpuOverclockDefaultsOnSubMode(silent))
+					{
+						await ApplyTurboGpuOverclockDefaults().ConfigureAwait(continueOnCapturedContext: false);
+					}
+					Logger.WriteLine($"SwitchTurboSubMode(silent={silent}) confirmed via EC/WMI");
+					return true;
+				}
+			}
 			// 2026-10-15（C-1 第 2 步分类 ①）：Silent/Turbo 那套是 GCU 上报的能力，下发也走 GCU ⇒ 真正需要 GCU。
 		if (hw == null || !hw.IsGcuConnected || _hw.Capabilities.SilentTurboAvailability != FeatureAvailability.Supported)
 			{
