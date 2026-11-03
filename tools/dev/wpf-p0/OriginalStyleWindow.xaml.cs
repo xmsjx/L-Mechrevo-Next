@@ -6433,6 +6433,11 @@ public partial class OriginalStyleWindow : Window
         BatteryInfo.ToolTip = health;
         SyncNucExternalMode(probe);
         int mode = ResolveDisplayMode(probe);
+        if (_backendRoute == BackendRoute.Ec
+            && GcuEcExperimental.TryReadVisualMode(out int ecCurrentMode))
+        {
+            mode = ecCurrentMode;
+        }
         bool ecExperimentRoute = _backendRoute == BackendRoute.Ec;
         GpuOverclockSwitch.Visibility = (mode == 1 && (probe.GpuOcSupported || ecExperimentRoute)
     && (probe.Hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu || ecExperimentRoute))
