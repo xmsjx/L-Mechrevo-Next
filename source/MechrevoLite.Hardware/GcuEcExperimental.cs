@@ -57,11 +57,16 @@ internal static class GcuEcExperimental
         try
         {
             if (!AcpiDriverEc.TryReadByte(ModeIndexAddress, out byte mode)
-                || !AcpiDriverEc.TryReadByte(1873, out byte clamp))
+                || !AcpiDriverEc.TryReadByte(1873, out byte clamp)
+                || !AcpiDriverEc.TryReadByte(CustomModeFlagAddress, out byte custom))
             {
                 return false;
             }
-            if ((mode & 0x10) != 0)
+            if (custom == 65)
+            {
+                visualMode = 3;
+            }
+            else if ((mode & 0x10) != 0)
             {
                 visualMode = 1;
             }
@@ -89,9 +94,9 @@ internal static class GcuEcExperimental
             detail = "实验通道未启用";
             return false;
         }
-        if (visualMode is not (0 or 1 or 2))
+        if (visualMode is not (0 or 1 or 2 or 3))
         {
-            detail = "实验通道只处理静音/平衡/狂暴";
+            detail = "实验通道只处理静音/平衡/狂暴/自定义";
             return false;
         }
         try
@@ -103,16 +108,16 @@ internal static class GcuEcExperimental
                 detail = "读取 1963/1895/1873 失败";
                 return false;
             }
-            byte target = visualMode == 1 ? (byte)0x10 : (byte)0x00;
+            byte target = visualMode is 1 or 3 ? (byte)0x10 : (byte)0x00;
             byte mode = (byte)((currentMode & 0xE0) | (target & 0x1E) | (currentMode & 0x01));
             byte trigger = (byte)((currentTrigger & 0x10) | (visualMode == 2 ? 0x28 : 0x20));
-            byte clamp = visualMode == 2 ? (byte)0xA0 : visualMode == 1 ? (byte)0x10 : (byte)0x00;
+            byte clamp = visualMode == 2 ? (byte)0xA0 : visualMode is 1 or 3 ? (byte)0x10 : (byte)0x00;
             // 保留强冷位（bit6），模式切换不能把强冷关掉。
             clamp = (byte)(clamp | (currentClamp & 0x40));
-            // 按官方顺序：风扇 clamp → 内置档标记 → 模式字节 → trigger → turbo 标记。
+            // 按官方顺序：风扇 clamp → 自定义档标记 → 模式字节 → trigger → turbo 标记。
             bool clampWrite = AcpiDriverEc.TryWriteByte(FanBoostClampAddress, clamp);
-            bool customClear = AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 64);
-            bool rampWrite = AcpiDriverEc.TryWriteByte(FanRampAddress, visualMode == 1 ? 0x00 : 0x83);
+            bool customWrite = AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, visualMode == 3 ? 65 : 64);
+            bool rampWrite = AcpiDriverEc.TryWriteByte(FanRampAddress, visualMode is 1 or 3 ? 0x00 : 0x83);
             bool modeWrite = AcpiDriverEc.TryWriteByte(ModeIndexAddress, mode);
             bool triggerWrite = AcpiDriverEc.TryWriteByte(TriggerAddress, trigger);
             bool turboWrite = AcpiDriverEc.TryWriteByte(TurboTriggerAddress, visualMode == 2 ? 1 : 0);
@@ -124,10 +129,10 @@ internal static class GcuEcExperimental
             bool clampOk = clampRead && readClamp == clamp;
             detail = $"mode 0x{currentMode:X2}->0x{mode:X2}/0x{readMode:X2} "
                 + $"trigger 0x{currentTrigger:X2}->0x{trigger:X2}/0x{readTrigger:X2} "
-                + $"clamp->0x{clamp:X2}/0x{readClamp:X2} turbo={visualMode == 2} "
-                + $"write={modeWrite}/{triggerWrite}/{turboWrite}/{clampWrite}/{customClear}/{rampWrite}";
+                + $"clamp->0x{clamp:X2}/0x{readClamp:X2} turbo={visualMode == 2} custom={visualMode == 3} "
+                + $"write={modeWrite}/{triggerWrite}/{turboWrite}/{clampWrite}/{customWrite}/{rampWrite}";
             Logger.WriteError("[gcu-ec] 实验模式切换 " + detail + " ⇒ " + (modeOk && triggerOk && clampOk ? "OK" : "FAIL"));
-            return modeWrite && triggerWrite && turboWrite && clampWrite && customClear && modeOk && triggerOk && clampOk;
+            return modeWrite && triggerWrite && turboWrite && clampWrite && customWrite && modeOk && triggerOk && clampOk;
         }
         catch (Exception ex)
         {
