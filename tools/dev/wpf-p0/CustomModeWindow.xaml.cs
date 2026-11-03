@@ -61,7 +61,26 @@ public partial class CustomModeWindow : Window
         Loaded += (_, _) => _powerWallTimer.Start();
         Closed += (_, _) => _powerWallTimer.Stop();
         ApplyDeviceRanges();
+        ApplyCpuPowerLabels();
         LoadModes(initialModeId);
+    }
+
+    private void ApplyCpuPowerLabels()
+    {
+        MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        bool amd = MechrevoLite.Hardware.CpuVendor.IsAmd || hw?.UsesAmdPowerFields == true;
+        if (amd)
+        {
+            Pl1Label.Text = "SPL";
+            Pl2Label.Text = "sPPT";
+            Pl4Label.Text = "fPPT";
+        }
+        else
+        {
+            Pl1Label.Text = WpfStrings.Pl1Label_Text;
+            Pl2Label.Text = WpfStrings.Pl2Label_Text;
+            Pl4Label.Text = WpfStrings.CustomModeWindow_Text_14;
+        }
     }
 
     private void ApplyDeviceRanges()
