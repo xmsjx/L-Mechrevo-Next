@@ -3699,10 +3699,20 @@ public partial class OriginalStyleWindow : Window
                 {
                     SyncGpuDbForMode(mode, "WPF 切档");
                 }
-                if (ok && mode == 1 && GcuEcExperimental.Enabled
+                if (ok && GcuEcExperimental.Enabled
                     && MechrevoLite.AppConfig.Is("gpu_oc"))
                 {
-                    await ApplyGpuOverclockSettingAsync(true);
+                    if (mode == 1)
+                    {
+                        await ApplyGpuOverclockSettingAsync(true);
+                    }
+                    else
+                    {
+                        // 非狂暴档只关闭当前硬件超频，保留 gpu_oc 记忆供下次狂暴恢复。
+                        MechrevoService.GpuOverclockEnabled = false;
+                        bool off = await _backendProbe!.ApplyGpuOverclockAsync(false);
+                        Logger.WriteError("[gpu-oc] 非狂暴档关闭显卡超频 ⇒ " + off);
+                    }
                 }
                 SyncCustomWindowMode(mode);
                 RefreshWideCustomEditor();
@@ -4622,9 +4632,14 @@ public partial class OriginalStyleWindow : Window
                 || hw.IsIntelNucMachine
                 || hw.IsUmiMachine
                 || !probe.GpuOcSupported
-                || (hw.OperatingMode != 1 && probe.CurrentMode != 1)
                 || MechrevoLite.AppConfig.Get("gpu_oc", 0) == 0)
             {
+                return;
+            }
+            bool turbo = probe.CurrentMode == 1 || (hw.IsGcuConnected && hw.OperatingMode == 1);
+            if (!turbo)
+            {
+                Logger.WriteError("[gpu-oc] 启动恢复跳过：当前不是狂暴档");
                 return;
             }
             bool ok = await ApplyGpuOverclockSettingAsync(true).ConfigureAwait(true);
