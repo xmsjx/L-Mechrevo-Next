@@ -3615,7 +3615,20 @@ public partial class OriginalStyleWindow : Window
             }
             else
             {
-                result = await DashboardCommands.SetPerformanceModeResultAsync(mode);
+                if (GcuEcExperimental.Enabled
+                    && _backendProbe?.Hw?.IsGcuConnected == true
+                    && _backendProbe.Hw.UsesBaolongda == false
+                    && _backendProbe.Hw.IsIntelNucMachine == false
+                    && _backendProbe.Hw.IsUmiMachine == false
+                    && GcuEcExperimental.TryApplyMode(mode, out string ecDetail))
+                {
+                    Logger.WriteError("[gcu-ec] 实验通道接管模式 " + mode + "：" + ecDetail);
+                    result = MechrevoService.ModeSwitchResult.Ok;
+                }
+                else
+                {
+                    result = await DashboardCommands.SetPerformanceModeResultAsync(mode);
+                }
             }
             if (request != _modeRequestId)
             {
@@ -4584,6 +4597,7 @@ public partial class OriginalStyleWindow : Window
                 }
             }
             await RestoreGpuOverclockOnStartupAsync().ConfigureAwait(true);
+            GcuEcExperimental.LogCurrentState("启动");
         }
         catch
         {
@@ -5039,7 +5053,12 @@ public partial class OriginalStyleWindow : Window
             RefreshFromBackend();
             return;
         }
-        if (_backendProbe.Hw?.IsUmiMachine == true)
+        bool gcuEcGpuExperiment = GcuEcExperimental.Enabled
+            && _backendProbe.Hw?.IsGcuConnected == true
+            && _backendProbe.Hw.UsesBaolongda == false
+            && _backendProbe.Hw.IsIntelNucMachine == false
+            && _backendProbe.Hw.IsUmiMachine == false;
+        if (_backendProbe.Hw?.IsUmiMachine == true || gcuEcGpuExperiment)
         {
             await SwitchUmiGpuColdAsync(mode, button);
             return;

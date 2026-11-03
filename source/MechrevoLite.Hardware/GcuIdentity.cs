@@ -39,6 +39,13 @@ internal static class GcuIdentity
 		{
 			string text = RegistryVariant;
 			string text2 = DetectedVariant;
+			// 40 系安装器会临时铺 50.7z 载荷（40.7z 暂不随包），但登记仍是 40；
+			// 这种组合是设计内状态，不能按载荷版本改成 50，否则 40 系分支会被整体带偏。
+			if (GcuVariantFamily.Is40(text) && string.Equals(text2, "50", StringComparison.OrdinalIgnoreCase))
+			{
+				Logger.WriteError("[gcu] 40 系临时 50 载荷 ⇒ 保留 GcuVariant=" + text + "（不按载荷版本改写）");
+				return text;
+			}
 			// 2026-10-22（机主：装的是 50 GCU，注册表却写 40）：安装器登记的变体与**实际载荷特征**冲突时，
 			// 以实际载荷为准（否则所有「仅 50 系」判据都被注册表挡住：显卡超频/单分区键盘等）。
 			// 只在识别结果明确为 50、登记不是 50 时覆盖；其余情况仍以登记为准（零回归）。
