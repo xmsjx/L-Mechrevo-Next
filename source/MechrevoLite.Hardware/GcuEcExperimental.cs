@@ -130,6 +130,11 @@ internal static class GcuEcExperimental
             {
                 // 退出自定义必须放在 trigger 之后，否则固件会把自定义门控重新锁存。
                 customWrite = AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 64);
+                // 内置档交还固件风扇表：清自定义风扇隔离位（1989 bit7）。
+                if (AcpiDriverEc.TryReadByte(1989, out byte isolated))
+                {
+                    AcpiDriverEc.TryWriteByte(1989, (byte)(isolated & ~0x80));
+                }
             }
             bool modeRead = AcpiDriverEc.TryReadByte(ModeIndexAddress, out byte readMode);
             bool triggerReadBack = AcpiDriverEc.TryReadByte(TriggerAddress, out byte readTrigger);
