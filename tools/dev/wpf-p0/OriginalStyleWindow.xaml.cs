@@ -4827,11 +4827,16 @@ public partial class OriginalStyleWindow : Window
         if (mode >= 0 && mode < buttons.Length)
         {
             HighlightSegment(buttons[mode], pending ? Color.FromRgb(250, 204, 21) : null);
+            if (pending)
+            {
+                buttons[mode].Background = new SolidColorBrush(Color.FromRgb(0x3A, 0x2C, 0x00));
+            }
         }
         else if (buttons[0].Parent is Panel panel)
         {
             ClearSegmentBorders(panel);
         }
+        GpuPendingText.Visibility = pending ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private bool _igpuSavingBusy;

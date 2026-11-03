@@ -1,4 +1,4 @@
-﻿<Window xmlns:loc="clr-namespace:L_Mechrevo.WpfP0.Resources" x:Class="L_Mechrevo.WpfP0.OriginalStyleWindow"
+<Window xmlns:loc="clr-namespace:L_Mechrevo.WpfP0.Resources" x:Class="L_Mechrevo.WpfP0.OriginalStyleWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
@@ -595,6 +595,7 @@
                             <ToggleButton x:Name="GpuHybridButton" Grid.Column="1" Content="{x:Static loc:WpfStrings.GpuHybridButton_Content}" Tag="1" Style="{StaticResource GpuSegment}" Click="GpuMode_Click" />
                             <ToggleButton x:Name="GpuDirectButton" Grid.Column="2" Content="{x:Static loc:WpfStrings.GpuDirectButton_Content}" Tag="2" Style="{StaticResource GpuSegment}" IsChecked="True" Click="GpuMode_Click" Margin="0" />
                         </Grid>
+                        <TextBlock x:Name="GpuPendingText" Text="待重启生效" Foreground="#FACC15" FontSize="12" Margin="0,4,0,0" Visibility="Collapsed" />
                         <Grid x:Name="IgpuSavingHost" Margin="0,4,0,0" />
                     </StackPanel>
 
