@@ -333,6 +333,55 @@ internal sealed class BackendProbe : IDisposable
         }
     }
 
+    private bool TrySetEcQuickSwitch(string key, bool on, out string detail)
+    {
+        detail = "";
+        MechrevoHw? hw = _hw;
+        if (hw == null || hw.UsesBaolongda || hw.IsIntelNucMachine || hw.IsUmiMachine)
+        {
+            return false;
+        }
+        try
+        {
+            bool ok;
+            bool confirmed = false;
+            switch (key)
+            {
+                case "fanboost":
+                    ok = hw.TrySetFanBoostViaBackend(on, out confirmed);
+                    break;
+                case "fnkey":
+                    ok = NucQuickSwitches.TrySetFnLock(on, out confirmed);
+                    break;
+                case "camera":
+                    ok = NucQuickSwitches.TrySetCamera(on, out confirmed);
+                    break;
+                case "winkey":
+                    ok = NucQuickSwitches.TrySetWinKeyLock(on, out confirmed);
+                    break;
+                case "touchpad":
+                    ok = NucQuickSwitches.TrySetTouchpad(on, out confirmed);
+                    break;
+                case "acrecovery":
+                    ok = NucQuickSwitches.TrySetAcRecovery(on, out confirmed);
+                    break;
+                default:
+                    return false;
+            }
+            if (ok)
+            {
+                hw.QuickSwitches[key] = on;
+            }
+            detail = "ok=" + ok + " confirmed=" + confirmed;
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            detail = ex.GetType().Name + " " + ex.Message;
+            return false;
+        }
+    }
+
     /// <summary>摄像头设备状态异步回读；PnP 枚举不能阻塞 UI 线程。</summary>
     internal void SyncCameraQuickState()
     {
@@ -526,6 +575,11 @@ internal sealed class BackendProbe : IDisposable
                 Logger.WriteLine("[xingyao-quick] " + xingyaoDetail);
                 return true;
             }
+            if (TrySetEcQuickSwitch(key, on, out string ecDetail))
+            {
+                Logger.WriteError("[gcu-ec] 快捷开关 " + key + "=" + on + "：" + ecDetail);
+                return true;
+            }
             if (_service == null)
             {
                 return false;
@@ -570,8 +624,9 @@ internal sealed class BackendProbe : IDisposable
         {
             MechrevoHw? hw = _hw;
             // 0.293.5.1 基线：只要 GCU 能力位承认超频就显示，不按载荷变体号硬屏蔽。
-            return hw != null && hw.IsGcuConnected
-                && (hw.SupportsGpuOverclock || hw.Capabilities?.OverclockSettings == true || hw.GcuGpuOverclockAvailable);
+            return hw != null && (hw.IsGcuConnected || _service == null)
+                && (hw.SupportsGpuOverclock || hw.Capabilities?.OverclockSettings == true || hw.GcuGpuOverclockAvailable
+                    || _service == null);
         }
     }
 
@@ -579,7 +634,27 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            return _service != null && await _service.ApplyGpuOverclock(on).ConfigureAwait(false);
+            if (_service != null)
+            {
+                return await _service.ApplyGpuOverclock(on).ConfigureAwait(false);
+            }
+            MechrevoHw? hw = _hw;
+            if (hw == null)
+            {
+                return false;
+            }
+            return await Task.Run(() =>
+            {
+                if (!hw.EnsureDirectGpuOverclock())
+                {
+                    return false;
+                }
+                if (on && hw.RestoreDirectGpuOverclockProfile(0))
+                {
+                    return true;
+                }
+                return hw.TrySetDirectGpuOverclockField("OverClockingSwitch", on ? 1 : 0);
+            }).ConfigureAwait(false);
         }
         catch
         {
