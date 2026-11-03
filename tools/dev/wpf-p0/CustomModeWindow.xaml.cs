@@ -979,6 +979,11 @@ public partial class CustomModeWindow : Window
         {
             SetSliderRange(Pl4Slider, 5, 300);
         }
+        if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool pl4DoubleUnit, out _))
+        {
+            // PL4 是 8 位寄存器：上限固定 255 × 单位（1W 或 2W/LSB）。
+            SetSliderRange(Pl4Slider, 5, pl4DoubleUnit ? 510 : 255);
+        }
         SetSliderRange(TccSlider, hw.TccMinimum, hw.TccMaximum);
         SetSliderRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
         SetSliderRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
