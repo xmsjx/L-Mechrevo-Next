@@ -26,6 +26,7 @@ public partial class CustomModeWindow : Window
     private bool _dirty;
     private bool _syncingPowerWalls;
     private bool _syncingPl4Unit;
+    private int _pl4Unit = 1;
     private readonly DispatcherTimer _powerWallTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private bool _powerWallBusy;
     private static string UnsetMark => WpfStrings.CustomUnsetMark;
@@ -757,6 +758,7 @@ public partial class CustomModeWindow : Window
             {
                 if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool pl4Double, out byte pl4Raw))
                 {
+                    _pl4Unit = pl4Double ? 2 : 1;
                     Pl4UnitSwitch.IsChecked = pl4Double;
                     // EC 门控为权威：同步到门面层，后续 GCU 回报不覆盖。
                     L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.SetPl4UnitDouble(pl4Double);
@@ -1022,6 +1024,7 @@ public partial class CustomModeWindow : Window
         }
         if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool pl4DoubleUnit, out _))
         {
+            _pl4Unit = pl4DoubleUnit ? 2 : 1;
             // 寄存器绝对上限 255×单位；界面默认上限按工厂 Turbo PL4 + 50W，和 OpenRevo 一致。
             int pl4Unit = pl4DoubleUnit ? 2 : 1;
             int pl4AbsMax = 255 * pl4Unit;
@@ -1257,6 +1260,23 @@ public partial class CustomModeWindow : Window
             return;
         }
         Pl4UnitStatus.Text = detail;
+        int newUnit = target ? 2 : 1;
+        if (newUnit != _pl4Unit)
+        {
+            int maxNew = 255 * newUnit;
+            if (MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1961, out byte turboRaw))
+            {
+                int turboPl4 = turboRaw * newUnit;
+                if (turboPl4 > 0)
+                {
+                    maxNew = Math.Min(turboPl4 + 50, 255 * newUnit);
+                }
+            }
+            double ratio = (double)newUnit / _pl4Unit;
+            Pl4Slider.Maximum = maxNew;
+            Pl4Slider.Value = Math.Clamp(Pl4Slider.Value * ratio, 5, maxNew);
+            _pl4Unit = newUnit;
+        }
         L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.SetPl4UnitDouble(target);
         RefreshPl4Readback(detail + " · ");
         MechrevoLite.AppConfig.Set("pl4_unit_double", target ? 1 : 0);
