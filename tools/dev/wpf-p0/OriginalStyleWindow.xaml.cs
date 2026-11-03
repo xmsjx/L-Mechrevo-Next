@@ -6966,6 +6966,12 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
+        if (_backendRoute == BackendRoute.Ec)
+        {
+            SetBackendStatus(WpfStrings.L("EC 实验模式", "EC experiment"), "#4ADE80",
+                WpfStrings.L("GCU 未连接，性能模式/显卡模式走 EC/NVRAM", "GCU unavailable; mode/GPU use EC/NVRAM"));
+            return;
+        }
         // NUC/UMI 的多数功能走本地 ACPI/EC，不依赖 GCU；GCU 未连接也按“已就绪”显示。
         if (!probe.IsGcuConnected
             && (probe.Hw?.IsIntelNucMachine == true || probe.Hw?.IsUmiMachine == true))
