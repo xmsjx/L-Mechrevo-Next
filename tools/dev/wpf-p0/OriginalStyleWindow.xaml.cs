@@ -6452,6 +6452,11 @@ public partial class OriginalStyleWindow : Window
             UpdateGpuButtons(displayGpu, pending);
         }
         bool skipModeUi = _modeSwitchInFlight;
+        if (_backendRoute == BackendRoute.Ec && mode != 3)
+        {
+            // EC 已回到内置档时，清掉残留的自定义待切换态，避免界面钉在自定义 15 秒。
+            _pendingMode = -1;
+        }
         bool silentTurboSupported = WideSilentTurboVisible;
         bool silentTurboActive = mode == 1 && silentTurboSupported && MechrevoService.IsSilentTurboActive;
         CurrentModeText.Text = WpfStrings.CurrentPrefix + (mode switch
