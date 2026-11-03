@@ -977,9 +977,13 @@ internal sealed class BackendProbe : IDisposable
         }
     }
 
-    internal bool HasPendingGpuRestart => MechrevoLite.Gpu.GpuRestartVerifier.HasPendingThisBoot();
+    internal bool HasPendingGpuRestart => GcuEcExperimental.Enabled
+        ? MechrevoLite.Gpu.GpuRestartVerifier.HasPendingSinceMark()
+        : MechrevoLite.Gpu.GpuRestartVerifier.HasPendingThisBoot();
 
-    internal int PendingGpuTarget => MechrevoLite.Gpu.GpuRestartVerifier.PendingTarget;
+    internal int PendingGpuTarget => GcuEcExperimental.Enabled
+        ? MechrevoLite.Gpu.GpuRestartVerifier.PendingTargetSinceMark
+        : MechrevoLite.Gpu.GpuRestartVerifier.PendingTarget;
 
     internal void MarkGpuRestartPending(int targetMode)
     {

@@ -109,6 +109,33 @@ internal static class GpuRestartVerifier
 		return true;
 	}
 
+	/// <summary>只按 Mark 时间判断本次开机是否仍有待重启，不再比较 NVRAM 路由。</summary>
+	internal static bool HasPendingSinceMark()
+	{
+		if (!AppConfig.Is("gpu_restart_pending"))
+		{
+			return false;
+		}
+		if (long.TryParse(AppConfig.GetString("gpu_restart_tick"), out var result))
+		{
+			return !RebootHappened(result, Environment.TickCount64);
+		}
+		return true;
+	}
+
+	internal static int PendingTargetSinceMark
+	{
+		get
+		{
+			if (!HasPendingSinceMark())
+			{
+				return -1;
+			}
+			int target = AppConfig.Get("gpu_restart_target");
+			return target >= 0 && target <= 2 ? target : -1;
+		}
+	}
+
 	internal static GpuRestartVerdict Evaluate(int targetMode, GpuRoute actual)
 	{
 		if ((targetMode < 0 || targetMode > 2) ? true : false)
