@@ -995,6 +995,24 @@ public partial class CustomModeWindow : Window
         {
             SetSliderRange(Pl1Slider, hw.Pl1Minimum, hw.Pl1Maximum);
             SetSliderRange(Pl2Slider, hw.Pl2Minimum, hw.Pl2Maximum);
+            if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+                && MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1959, out byte turboPl1Raw)
+                && MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1960, out byte turboPl2Raw))
+            {
+                // OpenRevo：默认上限 = 工厂 Turbo PL + 25W。
+                int turboPl1 = turboPl1Raw;
+                int turboPl2 = turboPl2Raw;
+                if (turboPl1 > 0)
+                {
+                    SetSliderRange(Pl1Slider, 15, turboPl1 + 25);
+                    Pl1Slider.Value = Math.Clamp(Pl1Slider.Value, 15, turboPl1 + 25);
+                }
+                if (turboPl2 > 0)
+                {
+                    SetSliderRange(Pl2Slider, 15, turboPl2 + 25);
+                    Pl2Slider.Value = Math.Clamp(Pl2Slider.Value, 15, turboPl2 + 25);
+                }
+            }
         }
         SetSliderRange(Pl4Slider, hw.Pl4Minimum, hw.Pl4Maximum);
         // GCU Intel 的 PL4/fPPT 可能只回当前值、不回范围；给可调范围，避免 fPPT 被整行隐藏。
