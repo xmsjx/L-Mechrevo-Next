@@ -983,11 +983,13 @@ public partial class CustomModeWindow : Window
         SetSliderRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
         SetSliderRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
         if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
-            && MechrevoLite.Hardware.EcGpuPower.TryResolveDbMaxWatts(out int ecDbMax)
-            && ecDbMax > 0)
+            && MechrevoLite.Hardware.EcGpuPower.TryGetCapabilities(
+                out MechrevoLite.Hardware.EcGpuPower.Capabilities gpuCaps, out _))
         {
-            SetSliderRange(DbSlider, 0, ecDbMax);
-            DbSlider.Value = Math.Clamp(DbSlider.Value, 0, ecDbMax);
+            SetSliderRange(GpuTgpSlider, gpuCaps.FloorWatts, gpuCaps.BaseMaxWatts);
+            GpuTgpSlider.Value = Math.Clamp(GpuTgpSlider.Value, gpuCaps.FloorWatts, gpuCaps.BaseMaxWatts);
+            SetSliderRange(DbSlider, 0, gpuCaps.DbMaxWatts);
+            DbSlider.Value = Math.Clamp(DbSlider.Value, 0, gpuCaps.DbMaxWatts);
         }
         SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, hw.FanSwitchSpeedMaximum);
         bool nucDirectUi = hw.IsIntelNucMachine || hw.IsUmiMachine;

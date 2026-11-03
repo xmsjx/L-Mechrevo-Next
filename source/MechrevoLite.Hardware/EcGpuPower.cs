@@ -10,21 +10,67 @@ internal static class EcGpuPower
     private const int AddrDbFlag = 1861;
     private const int AddrDbWatts = 1862;
 
-    internal static bool TryResolveDbMaxWatts(out int watts)
+    internal readonly struct Capabilities
     {
-        watts = 0;
-        if (!AcpiDriverEc.TryReadByte(AddrDbWatts, out byte raw))
+        internal int FloorWatts { get; init; }
+        internal int BaseMaxWatts { get; init; }
+        internal int DbMaxWatts { get; init; }
+        internal bool FullPower { get; init; }
+    }
+
+    /// <summary>按显卡物理功耗上限计算基频/DB 上限，不使用 EC 运行时 DB setpoint 冒充最大值。</summary>
+    internal static bool TryGetCapabilities(out Capabilities caps, out string detail)
+    {
+        caps = default;
+        detail = "";
+        if (!global::NvmlHelper.TryGetPowerLimitBounds(out int minW, out int maxW, out _)
+            || !global::NvmlHelper.TryGetDefaultPowerLimitWatts(out int defW)
+            || maxW <= 0
+            || defW <= 0)
         {
+            detail = "NVML 物理功耗范围不可用";
             return false;
         }
-        watts = raw switch
+        int delta = maxW - defW;
+        int hardwareDbCap = maxW <= 115 ? 15 : 25;
+        if (delta > 0 && delta <= 25)
         {
-            0x05 => 5,
-            0x0F => 15,
-            0x19 => 25,
-            _ => 0
-        };
-        return watts > 0;
+            caps = new Capabilities
+            {
+                FloorWatts = defW,
+                BaseMaxWatts = defW,
+                DbMaxWatts = Math.Min(hardwareDbCap, delta),
+                FullPower = true
+            };
+        }
+        else if (delta > 25)
+        {
+            int dbMax = Math.Min(hardwareDbCap, delta);
+            int baseMax = Math.Max(defW, maxW - dbMax);
+            caps = new Capabilities
+            {
+                FloorWatts = defW,
+                BaseMaxWatts = baseMax,
+                DbMaxWatts = dbMax,
+                FullPower = false
+            };
+        }
+        else
+        {
+            int dbMax = hardwareDbCap;
+            int baseMax = Math.Max(5, maxW - dbMax);
+            caps = new Capabilities
+            {
+                FloorWatts = baseMax,
+                BaseMaxWatts = baseMax,
+                DbMaxWatts = dbMax,
+                FullPower = true
+            };
+        }
+        detail = "NVML default=" + defW + " max=" + maxW
+            + " floor=" + caps.FloorWatts + " baseMax=" + caps.BaseMaxWatts
+            + " dbMax=" + caps.DbMaxWatts + " full=" + caps.FullPower;
+        return true;
     }
 
     internal static bool TryApply(MechrevoHw hw, int baseTgp, int dbWatts, bool dbOn, out string detail)
@@ -35,21 +81,14 @@ internal static class EcGpuPower
             detail = "hw 为空";
             return false;
         }
-        int floor = hw.GpuTgpMinimum > 0 ? hw.GpuTgpMinimum : 0;
-        int maxBase = hw.GpuTgpMaximum > 0 ? hw.GpuTgpMaximum : baseTgp;
-        int maxDb = TryResolveDbMaxWatts(out int ecDbMax)
-            ? ecDbMax
-            : hw.GpuDbMaximum > 0 ? hw.GpuDbMaximum : 25;
-        if (maxBase <= 0)
+        if (!TryGetCapabilities(out Capabilities caps, out string capDetail))
         {
-            detail = "GPU TGP 范围不可用";
+            detail = capDetail;
             return false;
         }
-
-        bool fullPower = maxBase - floor <= 25;
-        int targetBase = Math.Clamp(baseTgp, Math.Max(5, floor), maxBase);
-        int offset = fullPower ? 0 : Math.Clamp(targetBase - floor, 0, 100);
-        int targetDb = dbOn ? Math.Clamp(dbWatts, 5, Math.Max(5, maxDb)) : 0;
+        int targetBase = Math.Clamp(baseTgp, caps.FloorWatts, caps.BaseMaxWatts);
+        int offset = caps.FullPower ? 0 : Math.Clamp(targetBase - caps.FloorWatts, 0, 100);
+        int targetDb = dbOn ? Math.Clamp(dbWatts, 5, caps.DbMaxWatts) : 0;
         byte ctrl = dbOn && targetDb > 0 ? (byte)0x07 : (byte)0x05;
 
         if (!AcpiDriverEc.TryWriteByte(AddrDbFlag, 0xFF))
@@ -64,9 +103,9 @@ internal static class EcGpuPower
         bool oRead = AcpiDriverEc.TryReadByte(AddrTgpOffset, out byte offsetBack);
         bool wRead = AcpiDriverEc.TryReadByte(AddrDbWatts, out byte wattsBack);
         bool ok = c && o && w && cRead && oRead && wRead && ctrlBack == ctrl && offsetBack == offset && wattsBack == targetDb;
-        detail = "GPU " + (fullPower ? "固定基频" : "可调基频")
-            + " 基础=" + targetBase + "W（floor=" + floor + " offset=" + offset + "）"
-            + " DB=" + targetDb + "W（on=" + dbOn + "）"
+        detail = "GPU " + (caps.FullPower ? "固定基频" : "可调基频")
+            + " 基础=" + targetBase + "W（floor=" + caps.FloorWatts + " offset=" + offset + "）"
+            + " DB=" + targetDb + "W（max=" + caps.DbMaxWatts + " on=" + dbOn + "）"
             + " ctrl=0x" + ctrl.ToString("X2") + "/0x" + ctrlBack.ToString("X2")
             + " read=" + offsetBack + "/" + wattsBack
             + " ⇒ " + (ok ? "OK" : "FAIL");
