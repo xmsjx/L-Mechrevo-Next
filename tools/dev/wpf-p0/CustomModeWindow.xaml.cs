@@ -1056,7 +1056,8 @@ public partial class CustomModeWindow : Window
             DbSlider.Value = Math.Clamp(DbSlider.Value, 0, gpuCaps.DbMaxWatts);
         }
         SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, hw.FanSwitchSpeedMaximum);
-        bool nucDirectUi = hw.IsIntelNucMachine || hw.IsUmiMachine;
+        bool nucDirectUi = (hw.IsIntelNucMachine || hw.IsUmiMachine)
+            && !MechrevoLite.Hardware.GcuEcExperimental.Enabled;
         bool intelXingyaoMsr = MechrevoLite.Hardware.CpuVendor.IsIntel
             && MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
             && !hw.IsIntelNucMachine && !hw.IsUmiMachine
@@ -1079,12 +1080,13 @@ public partial class CustomModeWindow : Window
         }
         // 30 系固件配置编辑器是完整参数页；能力位滞后时不能把整页做成只读。
         bool vendorProfile = _firmwareMode;
-        TccSwitch.IsEnabled = nucDirectUi || hw.TccAdjustable || vendorProfile;
-        DbSwitch.IsEnabled = nucDirectUi || hw.GpuDynamicBoostAdjustable || vendorProfile;
-        GpuTgpSlider.IsEnabled = nucDirectUi || hw.GpuTgpAdjustable || vendorProfile;
+        bool ecPowerUi = MechrevoLite.Hardware.GcuEcExperimental.Enabled;
+        TccSwitch.IsEnabled = nucDirectUi || hw.TccAdjustable || vendorProfile || ecPowerUi;
+        DbSwitch.IsEnabled = nucDirectUi || hw.GpuDynamicBoostAdjustable || vendorProfile || ecPowerUi;
+        GpuTgpSlider.IsEnabled = nucDirectUi || hw.GpuTgpAdjustable || vendorProfile || ecPowerUi;
         FanSensitivitySwitch.IsEnabled = nucDirectUi || hw.SupportsFanSwitchSpeed || vendorProfile;
-        GpuOcSwitch.IsEnabled = nucDirectUi || hw.SupportsGpuOverclock || vendorProfile;
-        if (!hw.GpuTgpAdjustable && !nucDirectUi)
+        GpuOcSwitch.IsEnabled = nucDirectUi || hw.SupportsGpuOverclock || vendorProfile || ecPowerUi;
+        if (!hw.GpuTgpAdjustable && !nucDirectUi && !ecPowerUi)
         {
             GpuTgpSlider.Opacity = 0.45;
         }
