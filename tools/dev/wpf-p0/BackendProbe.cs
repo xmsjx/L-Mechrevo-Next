@@ -790,6 +790,10 @@ internal sealed class BackendProbe : IDisposable
                 NucKeyboardLighting.Apply("Single", on, on ? level : 0, 1, unchecked((int)0xFFFFFFFF), Array.Empty<int>());
                 return true;
             }
+            if (EcKeyboardLight.IsChannelAvailable())
+            {
+                return EcKeyboardLight.TrySetPower(on);
+            }
             return false;
         }
         catch
@@ -841,6 +845,13 @@ internal sealed class BackendProbe : IDisposable
                 int argb = color?.ToArgb() ?? unchecked((int)0xFFFFFFFF);
                 NucKeyboardLighting.Apply(effect, true, light, speed, argb, Array.Empty<int>());
                 return true;
+            }
+            if (EcKeyboardLight.IsChannelAvailable())
+            {
+                bool on = !string.Equals(effect, "Off", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(effect, "None", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(effect, "关闭", StringComparison.Ordinal);
+                return EcKeyboardLight.TrySetPower(on);
             }
             return false;
         }
