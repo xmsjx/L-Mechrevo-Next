@@ -41,6 +41,7 @@ public partial class CustomModeWindow : Window
     public CustomModeWindow(string? initialModeId = null)
     {
         InitializeComponent();
+        WireNumericBoxes();
         L_Mechrevo.WpfP0.Services.WindowWorkAreaPolicy.ClampOnLoaded(this);
         AddHandler(Slider.ValueChangedEvent,
             new RoutedPropertyChangedEventHandler<double>((_, _) => MarkDirty()), true);
@@ -65,6 +66,47 @@ public partial class CustomModeWindow : Window
         ApplyDeviceRanges();
         ApplyCpuPowerLabels();
         LoadModes(initialModeId);
+    }
+
+    private void WireNumericBoxes()
+    {
+        Wire(Pl1Text, Pl1Slider);
+        Wire(Pl2Text, Pl2Slider);
+        Wire(Pl4Text, Pl4Slider);
+        Wire(TccText, TccSlider);
+        Wire(StapmTimeText, StapmTimeSlider);
+        Wire(SmuSlowLimitText, SmuSlowLimitSlider);
+        Wire(SmuSlowTimeText, SmuSlowTimeSlider);
+        Wire(SmuFastTimeText, SmuFastTimeSlider);
+        Wire(DbText, DbSlider);
+        Wire(GpuTgpText, GpuTgpSlider);
+        Wire(GpuPowerLimitText, GpuPowerLimitSlider);
+        Wire(CoreOffsetText, CoreOffsetSlider);
+        Wire(MemoryOffsetText, MemoryOffsetSlider);
+        Wire(FanDelayText, FanDelaySlider);
+    }
+
+    private static void Wire(TextBox box, Slider slider)
+    {
+        box.LostFocus += (_, _) => CommitNumeric(box, slider);
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+            {
+                CommitNumeric(box, slider);
+                e.Handled = true;
+            }
+        };
+    }
+
+    private static void CommitNumeric(TextBox box, Slider slider)
+    {
+        if (int.TryParse(box.Text, out int value))
+        {
+            value = Math.Clamp(value, (int)slider.Minimum, (int)slider.Maximum);
+            slider.Value = value;
+        }
+        box.Text = ((int)slider.Value).ToString();
     }
 
     private void ApplyCpuPowerLabels()
@@ -1131,11 +1173,18 @@ public partial class CustomModeWindow : Window
         {
             GpuTgpSlider.Opacity = 0.45;
         }
-        if (!hw.GpuDynamicBoostAdjustable && !nucDirectUi)
+        if (!hw.GpuDynamicBoostAdjustable && !nucDirectUi && !ecPowerUi)
         {
             DbSwitch.Opacity = 0.45;
             DbSlider.Opacity = 0.45;
         }
+        else
+        {
+            DbSwitch.Opacity = 1.0;
+            if (DbSwitch.IsChecked == true) DbSlider.Opacity = 1.0;
+        }
+        FanDelaySlider.Maximum = Math.Min(FanDelaySlider.Maximum, 1000);
+        FanDelaySlider.Value = Math.Clamp(FanDelaySlider.Value, FanDelaySlider.Minimum, FanDelaySlider.Maximum);
     }
 
     private void RefreshOptions(int? current)
@@ -1165,7 +1214,7 @@ public partial class CustomModeWindow : Window
         RefreshCombo.SelectedIndex = selected;
     }
 
-    private static void SetSlider(Slider slider, TextBlock text, int value)
+    private static void SetSlider(Slider slider, TextBox text, int value)
     {
         value = (int)Math.Clamp(value, slider.Minimum, slider.Maximum);
         slider.Value = value;

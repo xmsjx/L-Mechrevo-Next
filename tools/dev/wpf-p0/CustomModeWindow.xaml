@@ -149,25 +149,25 @@
                             <TextBlock x:Name="TccLabel" Text="{x:Static loc:WpfStrings.TccLabel_Text}" VerticalAlignment="Center" />
                             <CheckBox x:Name="TccSwitch" Grid.Column="1" Style="{DynamicResource HeaderSwitch}" VerticalAlignment="Center" Margin="0,0,10,0" Checked="TccSwitch_Changed" Unchecked="TccSwitch_Changed" />
                             <Slider x:Name="TccSlider" Grid.Column="2" Style="{StaticResource RoundSlider}" Minimum="75" Maximum="100" Value="95" ValueChanged="Tcc_Changed" />
-                            <TextBlock x:Name="TccText" Grid.Column="3" Text="95" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="TccText" Grid.Column="3" Text="95" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock x:Name="Pl1Label" Text="{x:Static loc:WpfStrings.Pl1Label_Text}" VerticalAlignment="Center" />
                             <Slider x:Name="Pl1Slider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="200" Value="65" ValueChanged="Pl1_Changed" />
-                            <TextBlock x:Name="Pl1Text" Grid.Column="2" Text="65" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="Pl1Text" Grid.Column="2" Text="65" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock x:Name="Pl2Label" Text="{x:Static loc:WpfStrings.Pl2Label_Text}" VerticalAlignment="Center" />
                             <Slider x:Name="Pl2Slider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="200" Value="65" ValueChanged="Pl2_Changed" />
-                            <TextBlock x:Name="Pl2Text" Grid.Column="2" Text="65" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="Pl2Text" Grid.Column="2" Text="65" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid x:Name="Pl4Row" Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock x:Name="Pl4Label" Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_14}" VerticalAlignment="Center" />
                             <Slider x:Name="Pl4Slider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="250" Value="100" ValueChanged="Pl4_Changed" />
-                            <TextBlock x:Name="Pl4Text" Grid.Column="2" Text="100" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="Pl4Text" Grid.Column="2" Text="100" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid x:Name="Pl4UnitRow" Margin="0,8,0,0" Visibility="Collapsed">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
@@ -186,25 +186,25 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_13}" VerticalAlignment="Center" />
                             <Slider x:Name="StapmTimeSlider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="0" Maximum="300" Value="28" ValueChanged="StapmTime_Changed" />
-                            <TextBlock x:Name="StapmTimeText" Grid.Column="2" Text="28" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="StapmTimeText" Grid.Column="2" Text="28" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid x:Name="SmuSlowLimitRow" Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_12}" VerticalAlignment="Center" />
                             <Slider x:Name="SmuSlowLimitSlider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="250" Value="65" ValueChanged="SmuSlowLimit_Changed" />
-                            <TextBlock x:Name="SmuSlowLimitText" Grid.Column="2" Text="65" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="SmuSlowLimitText" Grid.Column="2" Text="65" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid x:Name="SmuSlowTimeRow" Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_11}" VerticalAlignment="Center" />
                             <Slider x:Name="SmuSlowTimeSlider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="0" Maximum="300" Value="28" ValueChanged="SmuSlowTime_Changed" />
-                            <TextBlock x:Name="SmuSlowTimeText" Grid.Column="2" Text="28" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="SmuSlowTimeText" Grid.Column="2" Text="28" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid x:Name="SmuFastTimeRow" Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_10}" VerticalAlignment="Center" />
                             <Slider x:Name="SmuFastTimeSlider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="0" Maximum="300" Value="5" ValueChanged="SmuFastTime_Changed" />
-                            <TextBlock x:Name="SmuFastTimeText" Grid.Column="2" Text="5" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="SmuFastTimeText" Grid.Column="2" Text="5" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                     </StackPanel>
                 </Border>
@@ -217,19 +217,19 @@
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_8}" VerticalAlignment="Center" />
                             <CheckBox x:Name="DbSwitch" Grid.Column="1" Style="{DynamicResource HeaderSwitch}" VerticalAlignment="Center" Margin="0,0,10,0" Checked="DbSwitch_Changed" Unchecked="DbSwitch_Changed" />
                             <Slider x:Name="DbSlider" Grid.Column="2" Style="{StaticResource RoundSlider}" Minimum="0" Maximum="30" Value="25" ValueChanged="Db_Changed" />
-                            <TextBlock x:Name="DbText" Grid.Column="3" Text="25" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="DbText" Grid.Column="3" Text="25" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid x:Name="GpuTgpRow" Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_7}" VerticalAlignment="Center" />
                             <Slider x:Name="GpuTgpSlider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="250" Value="100" ValueChanged="GpuTgp_Changed" />
-                            <TextBlock x:Name="GpuTgpText" Grid.Column="2" Text="100" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="GpuTgpText" Grid.Column="2" Text="100" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid x:Name="GpuPowerLimitRow" Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_6}" VerticalAlignment="Center" />
                             <Slider x:Name="GpuPowerLimitSlider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="0" Maximum="300" Value="0" ValueChanged="GpuPowerLimit_Changed" />
-                            <TextBlock x:Name="GpuPowerLimitText" Grid.Column="2" Text="0" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="GpuPowerLimitText" Grid.Column="2" Text="0" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid Margin="0,6,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
@@ -241,13 +241,13 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_2}" VerticalAlignment="Center" />
                             <Slider x:Name="CoreOffsetSlider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="-500" Maximum="500" Value="0" ValueChanged="CoreOffset_Changed" />
-                            <TextBlock x:Name="CoreOffsetText" Grid.Column="2" Text="0" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="CoreOffsetText" Grid.Column="2" Text="0" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text}" VerticalAlignment="Center" />
                             <Slider x:Name="MemoryOffsetSlider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="-1000" Maximum="2000" Value="0" ValueChanged="MemoryOffset_Changed" />
-                            <TextBlock x:Name="MemoryOffsetText" Grid.Column="2" Text="0" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="MemoryOffsetText" Grid.Column="2" Text="0" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                     </StackPanel>
                 </Border>
@@ -269,7 +269,7 @@
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_4}" VerticalAlignment="Center" />
                             <CheckBox x:Name="FanSensitivitySwitch" Grid.Column="1" Style="{DynamicResource HeaderSwitch}" VerticalAlignment="Center" Margin="0,0,10,0" Checked="FanSensitivitySwitch_Changed" Unchecked="FanSensitivitySwitch_Changed" />
                             <Slider x:Name="FanDelaySlider" Grid.Column="2" Style="{StaticResource RoundSlider}" Minimum="0" Maximum="1000" Value="300" ValueChanged="FanDelay_Changed" />
-                            <TextBlock x:Name="FanDelayText" Grid.Column="3" Text="300" TextAlignment="Right" VerticalAlignment="Center" />
+                            <TextBox x:Name="FanDelayText" Grid.Column="3" Text="300" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                     </StackPanel>
                 </Border>
