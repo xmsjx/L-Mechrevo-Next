@@ -11821,6 +11821,25 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		CustomModeChanged?.Invoke();
 	}
 
+	/// <summary>休眠/显卡驱动重启前丢弃 NVAPI 控制对象，唤醒后重新创建，避免调用失效函数指针。</summary>
+	public void ResetDirectGpuOverclockForSleep()
+	{
+		lock (_gpuOverclockLock)
+		{
+			try
+			{
+				_gpuOverclock?.Dispose();
+			}
+			catch
+			{
+			}
+			_gpuOverclock = null;
+			_directGpuOverclockEnabled = null;
+			_elevatedGpuCoreReadback = null;
+			_elevatedGpuMemoryReadback = null;
+		}
+	}
+
 	private void SaveDirectGpuOverclockValue(string key, int value)
 	{
 		if (!_persistDirectGpuOverclock)

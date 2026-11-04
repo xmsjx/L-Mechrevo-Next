@@ -2353,7 +2353,9 @@ public partial class OriginalStyleWindow : Window
         if (e.Mode == Microsoft.Win32.PowerModes.Suspend)
         {
             _sleepKeyboardLightWasOn = KeyboardLightSwitch.IsChecked == true;
-            Logger.WriteLine("[power] Suspend：记录键盘灯=" + (_sleepKeyboardLightWasOn ? WpfStrings.IgpuSavingOnPreview_Content : WpfStrings.OriginalStyleWindow_Content_5));
+            try { _backendProbe?.Hw?.ResetDirectGpuOverclockForSleep(); } catch { }
+            try { MechrevoLite.HardwareControl.SuspendLocalSamplingForDisplayOff(); } catch { }
+            Logger.WriteLine("[power] Suspend：记录键盘灯=" + (_sleepKeyboardLightWasOn ? WpfStrings.IgpuSavingOnPreview_Content : WpfStrings.OriginalStyleWindow_Content_5) + " · 已释放NVAPI/暂停采样");
             return;
         }
         if (e.Mode == Microsoft.Win32.PowerModes.Resume)
@@ -2366,6 +2368,27 @@ public partial class OriginalStyleWindow : Window
                 {
                     await RestoreLightingOnStartupAsync();
                     await RestoreKeyboardLightAfterWakeAsync();
+                }));
+            });
+            _ = Task.Run(async () =>
+            {
+                // 显卡驱动在唤醒后会重新初始化，等稳定后再恢复采样/超频。
+                await Task.Delay(8000).ConfigureAwait(false);
+                Dispatcher.BeginInvoke(new Action(async () =>
+                {
+                    try { MechrevoLite.HardwareControl.ResumeLocalSamplingAfterDisplayOn(); } catch { }
+                    try
+                    {
+                        if (_backendProbe != null && AppConfig.Is("gpu_oc")
+                            && ResolveDisplayMode(_backendProbe) == 1)
+                        {
+                            bool ok = await ApplyGpuOverclockSettingAsync(true);
+                            Logger.WriteError("[gpu-oc] 唤醒后恢复超频 ⇒ " + ok);
+                        }
+                    }
+                    catch
+                    {
+                    }
                 }));
             });
         }
