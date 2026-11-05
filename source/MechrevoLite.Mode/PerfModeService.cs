@@ -1213,13 +1213,14 @@ internal sealed class PerfModeService
 			return;
 		}
 		// 同方 GCU（30/40 系）按 LM 本地保存的自定义档恢复（更新/重装 GCU 后不丢配置）
-		bool gen40Gcu = hw.IsGcuConnected && (hw.DgpuGeneration == DgpuGenerationKind.Gen40
-			|| hw.DgpuGeneration == DgpuGenerationKind.Gen30);
+		// 所有 GCU 机型（30/40/50 系）都按本地存档恢复自定义档；
+		// 不限代际，避免 50 系或新机型重启后掉回内置档。
+		bool gcuCustomRestore = hw.IsGcuConnected;
 		// EC 实验模式 GCU 离线，但自定义档仍由本地存档恢复；否则重启后 1798 已回 64，
 		// 界面会掉回内置档，用户看到的就不是重启前的自定义档。
 		bool ecExperimental = !hw.IsGcuConnected
 			&& MechrevoLite.Hardware.GcuEcExperimental.Enabled;
-		if (!hw.SmuCustomApu && !hw.UsesBaolongda && !gen40Gcu && !ecExperimental)
+		if (!hw.SmuCustomApu && !hw.UsesBaolongda && !gcuCustomRestore && !ecExperimental)
 		{
 			return;
 		}
