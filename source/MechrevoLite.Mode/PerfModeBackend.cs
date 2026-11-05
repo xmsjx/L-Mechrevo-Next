@@ -377,6 +377,27 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			await _hw.ApplyGpuOverclockAsync(clearFields, ct).ConfigureAwait(continueOnCapturedContext: false);
 			_gcuNvapiNegativeActive = false;
 		}
+		if (on && !_hw.UsesBaolongda)
+		{
+			// GCU 厂商字段范围（如 0..250）比 UI 允许值窄：超范围的值会被固件夹回/拒绝，
+			// 先按设备字段范围钳制，避免“写了但回读不变”。
+			int reqCore = core;
+			int reqMem = memory;
+			if (_hw.GpuCoreOffsetMaximum > _hw.GpuCoreOffsetMinimum)
+			{
+				core = Math.Clamp(core, _hw.GpuCoreOffsetMinimum, _hw.GpuCoreOffsetMaximum);
+			}
+			if (_hw.GpuMemoryOffsetMaximum > _hw.GpuMemoryOffsetMinimum)
+			{
+				memory = Math.Clamp(memory, _hw.GpuMemoryOffsetMinimum, _hw.GpuMemoryOffsetMaximum);
+			}
+			if (core != reqCore || memory != reqMem)
+			{
+				Logger.WriteError("[gpu-oc] GCU 字段超范围 ⇒ 钳制 core " + reqCore + "→" + core
+					+ " mem " + reqMem + "→" + memory + "（范围 core=" + _hw.GpuCoreOffsetMinimum + ".." + _hw.GpuCoreOffsetMaximum
+					+ " mem=" + _hw.GpuMemoryOffsetMinimum + ".." + _hw.GpuMemoryOffsetMaximum + "）");
+			}
+		}
 		return await _service.ApplyGcuGpuOverclock(on, core, memory).ConfigureAwait(continueOnCapturedContext: false);
 	}
 

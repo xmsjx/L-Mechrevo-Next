@@ -676,8 +676,13 @@ public class MechrevoService
 		{
 			return false;
 		}
-		if (!_hw.SupportsGpuOverclock && !_hw.Capabilities.OverclockSettings)
+		// 能力位可能滞后/未上报；只要 GCU 在线且厂商偏移字段范围存在，就允许尝试写入，
+		// 最终以 SET_OPERATING_MODE_DETAIL 的回读为准（不盲目把入口判死）。
+		bool hasOffsetFields = _hw.GpuCoreOffsetMaximum > _hw.GpuCoreOffsetMinimum
+			|| _hw.GpuMemoryOffsetMaximum > _hw.GpuMemoryOffsetMinimum;
+		if (!_hw.SupportsGpuOverclock && !_hw.Capabilities.OverclockSettings && !hasOffsetFields)
 		{
+			Logger.WriteError("[gpu-oc] GCU 超频字段不可用（能力位=false 且无可写字段范围）⇒ 跳过");
 			return false;
 		}
 		if (!enabled)
@@ -1517,8 +1522,13 @@ public class MechrevoService
 		{
 			return false;
 		}
-		if (!_hw.SupportsGpuOverclock && !_hw.Capabilities.OverclockSettings)
+		// 能力位可能滞后/未上报；只要 GCU 在线且厂商偏移字段范围存在，就允许尝试写入，
+		// 最终以 SET_OPERATING_MODE_DETAIL 的回读为准（不盲目把入口判死）。
+		bool hasOffsetFields = _hw.GpuCoreOffsetMaximum > _hw.GpuCoreOffsetMinimum
+			|| _hw.GpuMemoryOffsetMaximum > _hw.GpuMemoryOffsetMinimum;
+		if (!_hw.SupportsGpuOverclock && !_hw.Capabilities.OverclockSettings && !hasOffsetFields)
 		{
+			Logger.WriteError("[gpu-oc] GCU 超频字段不可用（能力位=false 且无可写字段范围）⇒ 跳过");
 			return false;
 		}
 		try
