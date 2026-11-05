@@ -4830,6 +4830,11 @@ public partial class OriginalStyleWindow : Window
                 {
                 }
             }
+            string gpuRecoveryDetail;
+            if (MechrevoLite.Hardware.AcpiGpuHotSwitch.TryRecoverForcedSilenceOnStartup(out gpuRecoveryDetail))
+            {
+                Logger.WriteError("[acpi-igpu] " + gpuRecoveryDetail);
+            }
             await RestoreGpuOverclockOnStartupAsync().ConfigureAwait(true);
             GcuEcExperimental.LogCurrentState("启动");
         }
@@ -5202,6 +5207,7 @@ public partial class OriginalStyleWindow : Window
         }
         _igpuSavingBusy = true;
         VisualiseIgpuSaving();
+        bool forcedSilence = false;
         try
         {
             if (on && MechrevoLite.Gpu.NVidia.NvidiaGpuControl.TryGetActiveDgpuApplications(out var applications))
@@ -5218,6 +5224,7 @@ public partial class OriginalStyleWindow : Window
                         return;
                     }
                     MechrevoLite.Hardware.AcpiGpuHotSwitch.KillClosableOccupants(out _);
+                    forcedSilence = true;
                     await Task.Delay(500);
                 }
             }
@@ -5227,6 +5234,8 @@ public partial class OriginalStyleWindow : Window
             if (ok)
             {
                 _backendProbe?.Hw?.SetAcpiIgpuOnlyState(on);
+                if (on && forcedSilence) MechrevoLite.Hardware.AcpiGpuHotSwitch.MarkForcedSilence();
+                if (!on) MechrevoLite.Hardware.AcpiGpuHotSwitch.ClearForcedSilence();
                 StatusText.Text = on ? "核显省电已开启（ACPI 热切）" : "独显已恢复（ACPI 热切）";
             }
             else

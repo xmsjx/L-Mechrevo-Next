@@ -1,6 +1,5 @@
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Management;
 using System.Threading;
 
@@ -107,14 +106,6 @@ internal static class AcpiGpuHotSwitch
         }
         if (confirmed)
         {
-            if (on)
-            {
-                WriteRecoveryHelper();
-            }
-            else
-            {
-                DeleteRecoveryHelper();
-            }
             detail += on ? " · 核显省电已开启" : " · 独显已恢复";
             return true;
         }
@@ -161,39 +152,70 @@ internal static class AcpiGpuHotSwitch
     }
 
 
-    private static string RecoveryScriptPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-        "L-Mechrevo", "恢复独显.cmd");
+    private const string ForcedMarkerKey = "acpi_igpu_forced_silence";
 
-    /// <summary>强制静默成功后留一个一键恢复入口，避免崩溃/异常时机器停在独显关闭。</summary>
-    private static void WriteRecoveryHelper()
+    /// <summary>强制静默成功后记录标记；异常退出后下次启动据此兜底恢复独显。</summary>
+    internal static void MarkForcedSilence()
     {
         try
         {
-            string dir = Path.GetDirectoryName(RecoveryScriptPath)!;
-            Directory.CreateDirectory(dir);
-            string script = @"@echo off
-powershell -NoProfile -ExecutionPolicy Bypass -Command ""$w=Get-WmiObject -Namespace root\WMI -Class AcpiTest_MULong; $w.GetSetULong(0x30000000000) | Out-Null; foreach($s in 'NVDisplay.ContainerLocalSystem','NVContainerLocalSystem'){ Start-Service $s -ErrorAction SilentlyContinue }; Write-Host 'DGPU restored'""
-pause
-";
-            File.WriteAllText(RecoveryScriptPath, script, System.Text.Encoding.Default);
+            MechrevoLite.AppConfig.Set(ForcedMarkerKey, 1);
+            MechrevoLite.AppConfig.Flush();
         }
         catch
         {
         }
     }
 
-    private static void DeleteRecoveryHelper()
+    internal static void ClearForcedSilence()
     {
         try
         {
-            if (File.Exists(RecoveryScriptPath))
-            {
-                File.Delete(RecoveryScriptPath);
-            }
+            MechrevoLite.AppConfig.Remove(ForcedMarkerKey);
+            MechrevoLite.AppConfig.Flush();
         }
         catch
         {
+        }
+    }
+
+    /// <summary>
+    /// 应用启动兜底：上次是“强制静默”且状态仍为 iGPU-only 时，恢复独显。
+    /// 正常用户主动开启的核显省电不在此自动撤销。
+    /// </summary>
+    internal static bool TryRecoverForcedSilenceOnStartup(out string detail)
+    {
+        detail = "";
+        try
+        {
+            if (MechrevoLite.AppConfig.Get(ForcedMarkerKey, 0) == 0)
+            {
+                return false;
+            }
+            if (!TryGetState(out bool active, out string stateDetail))
+            {
+                ClearForcedSilence();
+                detail = "无法读取 ACPI 状态，已清除强制静默标记：" + stateDetail;
+                return false;
+            }
+            if (!active)
+            {
+                ClearForcedSilence();
+                detail = "独显已是启用状态，清除标记";
+                return false;
+            }
+            bool ok = TrySetIgpuOnly(false, stopDisplayContainer: false, out string restoreDetail);
+            if (ok)
+            {
+                ClearForcedSilence();
+            }
+            detail = "启动兜底恢复独显 ⇒ " + ok + " · " + restoreDetail;
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            detail = ex.GetType().Name + " " + ex.Message;
+            return false;
         }
     }
 
