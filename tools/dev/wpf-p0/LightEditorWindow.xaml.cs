@@ -353,11 +353,14 @@ public partial class LightEditorWindow : Window
             bool keyboardManual = string.Equals(effect, "Manual", StringComparison.Ordinal);
             bool keyboardBreathing = string.Equals(effect, "Breathing", StringComparison.Ordinal);
             bool keyboardRainbow = string.Equals(effect, "Rainbow", StringComparison.Ordinal);
-            bool singleZone = L_Mechrevo.WpfP0.Services.WpfBackend.Hw != null
+            bool firmwareSingleZone = L_Mechrevo.WpfP0.Services.WpfBackend.Hw != null
                 && KeyboardFirmwareEffects.IsSingleZoneRgb(L_Mechrevo.WpfP0.Services.WpfBackend.Hw.Capabilities.KeyboardType);
-            bool colorVisible = !wujie && !keyboardManual && !keyboardRainbow
-                && (!keyboardBreathing || !singleZone)
-                && KeyboardFirmwareEffects.IsSingleColorEffect(effect);
+            // EC 单区支持单色/呼吸颜色下发；NUC 固件单区的呼吸是硬件固定色，才隐藏颜色。
+            bool colorVisible = _nucSingleZone
+                ? (!keyboardManual && !keyboardRainbow && KeyboardFirmwareEffects.IsSingleColorEffect(effect))
+                : (!wujie && !keyboardManual && !keyboardRainbow
+                    && (!keyboardBreathing || !firmwareSingleZone)
+                    && KeyboardFirmwareEffects.IsSingleColorEffect(effect));
             ColorRow.Visibility = colorVisible ? Visibility.Visible : Visibility.Collapsed;
             UpdateColorButton();
             RefreshKeyboardUi();
@@ -462,8 +465,9 @@ public partial class LightEditorWindow : Window
                 || (L_Mechrevo.WpfP0.Services.WpfBackend.Hw != null
                     && MechrevoLite.Hardware.KeyboardFirmwareEffects.IsSingleZoneRgb(
                         L_Mechrevo.WpfP0.Services.WpfBackend.Hw.Capabilities.KeyboardType)));
-        SpeedRow.Visibility = Visibility.Collapsed;
-        PerKeyPanel.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
+        // EC 单区有速度概念（Manual 轮播间隔 / 部分固件效果），不再固定隐藏。
+        SpeedRow.Visibility = _nucSingleZone ? Visibility.Visible : Visibility.Collapsed;
+        PerKeyPanel.Visibility = manual && !_nucSingleZone ? Visibility.Visible : Visibility.Collapsed;
         ManualPalettePanel.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
         BreathPanel.Visibility = breathing ? Visibility.Visible : Visibility.Collapsed;
         if (manual && PerKeySlider.Value != _manualInterval)
@@ -759,9 +763,11 @@ public partial class LightEditorWindow : Window
                         int paletteIndex = Math.Clamp(_manualIndexes[i], 1, LightChannelSettings.ManualPalette.Length);
                         cycleColors[i] = LightChannelSettings.ManualPalette[paletteIndex - 1];
                     }
-                    int nucSpeed = manualKeyboard
-                        ? Math.Clamp((_manualInterval - 2) / 2, 0, 4)
-                        : Math.Clamp(_speed, 0, 4);
+                    int nucSpeed = _nucSingleZone
+                        ? Math.Clamp(_speed, 0, 4)
+                        : (manualKeyboard
+                            ? Math.Clamp((_manualInterval - 2) / 2, 0, 4)
+                            : Math.Clamp(_speed, 0, 4));
                     int nucColor = string.Equals(effect, "Breathing", StringComparison.Ordinal)
                         ? _breathingIndex switch
                         {
