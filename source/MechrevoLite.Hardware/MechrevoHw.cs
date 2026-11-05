@@ -871,6 +871,11 @@ public class MechrevoHw : IDisposable
 			//      会把能力位明确说不支持的机器又放行 —— 极光Pro 那类"该隐藏却仍显示"）
 			//   L4 auto 且读不到硬件结论（null）：D-1「试过就记住」
 			//   L5 仍无结论：ask 代理规则（支持切换 && 支持独显直连）—— 与改动前逐字一致
+			if (CpuVendor.LacksIgpuSilicon)
+			{
+				Logger.WriteLineIfChanged("igpu-no-silicon", "IgpuOnly disabled: CPU has no physical iGPU silicon; pure iGPU mode would black-screen");
+				return false;
+			}
 			if (DgpuGeneration == DgpuGenerationKind.Gen30)
 			{
 				return false;

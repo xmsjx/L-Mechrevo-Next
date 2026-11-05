@@ -5486,6 +5486,12 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
+        if (mode == 0 && _backendProbe.Hw?.CanOfferIgpuOnly != true)
+        {
+            StatusText.Text = "本机不支持纯核显模式";
+            RefreshFromBackend();
+            return;
+        }
         string modeName = button.Content?.ToString() ?? (WpfStrings.ModeNamePrefix + mode);
         _gpuPromptOpen = true;
         foreach (ToggleButton item in new[] { GpuEcoButton, GpuHybridButton, GpuDirectButton })

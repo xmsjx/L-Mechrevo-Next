@@ -140,11 +140,6 @@ internal static class UefiGpuMux
             return false;
         }
         detail = $"NVRAM {variable} offset98 {current} -> {target} (visual {visualMode})";
-        // 同步 ACPI 运行期选择子，避免 POST 时 NVRAM 与固件状态不一致。
-        if (AcpiGpuHotSwitch.IsSupported)
-        {
-            AcpiGpuHotSwitch.TrySetIgpuOnly(visualMode == 0, stopDisplayContainer: false, out _);
-        }
         return true;
     }
 
