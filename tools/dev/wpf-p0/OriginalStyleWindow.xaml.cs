@@ -198,7 +198,7 @@ public partial class OriginalStyleWindow : Window
         ("fnkey", QuickSwitchService.Label("fnkey", "Fn键锁"), "\uE765"), ("capslock", QuickSwitchService.Label("capslock", "大小写锁定"), "\uE8AB"),
         ("osd", QuickSwitchService.Label("osd", "OSD提示"), "\uE7F4"), ("gcuosd", "GCU-OSD", "\uE7F4"), ("copilot", QuickSwitchService.Label("copilot", "Copilot键锁"), "\uE8B7"),
         ("usb", QuickSwitchService.Label("usb", "关机USB供电"), "\uE88E"), ("acrecovery", QuickSwitchService.Label("acrecovery", "来电自启"), "\uE7E8"),
-        ("highperf", QuickSwitchService.Label("highperf", "高性能电源"), "\uE945"), ("apuboost", QuickSwitchService.Label("apuboost", "APU 防缩缸"), "\uE9D9"),
+        ("highperf", QuickSwitchService.Label("highperf", "高性能电源"), "\uE945"), ("apuboost", QuickSwitchService.Label("apuboost", WpfStrings.QuickApuBoost), "\uE9D9"),
         ("fanboost", QuickSwitchService.Label("fanboost", "强冷"), "\uE9CA"), ("deepsleep", QuickSwitchService.Label("deepsleep", "深度睡眠"), "\uE708"),
         ("gamewhitelist", QuickSwitchService.Label("gamewhitelist", "游戏白名单"), "\uE7FC"), ("cpuadvperf", QuickSwitchService.Label("cpuadvperf", "解锁BIOS菜单"), "\uE7EF"),
         ("transparency", QuickSwitchService.Label("transparency", "系统透明效果"), "\uE790"),
@@ -1441,7 +1441,7 @@ public partial class OriginalStyleWindow : Window
             (WpfStrings.QuickGroupPower, new (string, string)[]
             {
                 ("usb", QuickSwitchService.Label("usb", "关机USB供电")), ("acrecovery", QuickSwitchService.Label("acrecovery", "来电自启")), ("highperf", QuickSwitchService.Label("highperf", "高性能电源")),
-                ("apuboost", QuickSwitchService.Label("apuboost", "APU 防缩缸")), ("fanboost", QuickSwitchService.Label("fanboost", "风扇强冷")), ("deepsleep", QuickSwitchService.Label("deepsleep", "深度睡眠")),
+                ("apuboost", QuickSwitchService.Label("apuboost", WpfStrings.QuickApuBoost)), ("fanboost", QuickSwitchService.Label("fanboost", "风扇强冷")), ("deepsleep", QuickSwitchService.Label("deepsleep", "深度睡眠")),
                 ("gamewhitelist", QuickSwitchService.Label("gamewhitelist", "游戏白名单")), ("cpuadvperf", QuickSwitchService.Label("cpuadvperf", "解锁BIOS菜单")),
                 ("transparency", QuickSwitchService.Label("transparency", "系统透明效果")),
                 ("darktheme", QuickSwitchService.Label("darktheme", "系统深色主题")), ("monitoroff", QuickSwitchService.Label("monitoroff", "息屏（不睡眠）")),
@@ -6130,7 +6130,7 @@ public partial class OriginalStyleWindow : Window
             (WpfStrings.QuickGroupPower, new (string, string)[]
             {
                 ("usb", QuickSwitchService.Label("usb", "关机USB供电")), ("acrecovery", QuickSwitchService.Label("acrecovery", "来电自启")), ("highperf", QuickSwitchService.Label("highperf", "高性能电源")),
-                ("apuboost", QuickSwitchService.Label("apuboost", "APU 防缩缸")), ("fanboost", QuickSwitchService.Label("fanboost", "风扇强冷")), ("deepsleep", QuickSwitchService.Label("deepsleep", "深度睡眠")),
+                ("apuboost", QuickSwitchService.Label("apuboost", WpfStrings.QuickApuBoost)), ("fanboost", QuickSwitchService.Label("fanboost", "风扇强冷")), ("deepsleep", QuickSwitchService.Label("deepsleep", "深度睡眠")),
                 ("gamewhitelist", QuickSwitchService.Label("gamewhitelist", "游戏白名单")), ("cpuadvperf", QuickSwitchService.Label("cpuadvperf", "解锁BIOS菜单")),
                 ("transparency", QuickSwitchService.Label("transparency", "系统透明效果")),
                 ("darktheme", QuickSwitchService.Label("darktheme", "系统深色主题")), ("monitoroff", QuickSwitchService.Label("monitoroff", "息屏（不睡眠）")),
