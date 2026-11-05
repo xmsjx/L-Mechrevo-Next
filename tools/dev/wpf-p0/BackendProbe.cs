@@ -187,7 +187,16 @@ internal sealed class BackendProbe : IDisposable
                 }
                 return _nucBatteryMode;
             }
-            return _hw?.BatteryProtection ?? -1;
+            if (_hw?.BatteryProtection is int protection && protection >= 0)
+            {
+                return protection;
+            }
+            // GCU 离线/EC 实验：直接读 0x7A6 bit4/5 档位。
+            if (MechrevoLite.Hardware.EcChargeLimitOverride.TryReadMode(out int ecMode, out _, out _))
+            {
+                return ecMode;
+            }
+            return -1;
         }
     }
 

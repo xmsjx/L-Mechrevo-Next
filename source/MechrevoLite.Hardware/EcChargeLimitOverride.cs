@@ -18,6 +18,26 @@ internal static class EcChargeLimitOverride
     /// 长效：清空 0x7B9/0x7D0；平衡/工作站：写上限+下限，门控 2.5s 后恢复并清空 0x7B9。
     /// 0x7A6 只改 bit4/5，bit0 智能充电提示位保持 0。
     /// </summary>
+
+    /// <summary>读 0x7A6 bit4/5 档位：0 长效 / 1 平衡 / 2 工作站；同时回读 0x7B9。</summary>
+    internal static bool TryReadMode(out int mode, out int upperPercent, out byte raw)
+    {
+        mode = -1;
+        upperPercent = -1;
+        raw = 0;
+        if (!AcpiDriverEc.TryReadByte(ProtectionModeRegister, out raw))
+        {
+            return false;
+        }
+        int code = (raw >> 4) & 0x03;
+        mode = code switch { 0 => 0, 1 => 1, 2 => 2, _ => -1 };
+        if (AcpiDriverEc.TryReadByte(UpperRegister, out byte upper))
+        {
+            upperPercent = upper & 0x7F;
+        }
+        return mode >= 0;
+    }
+
     internal static bool TrySetNoSmartHint(int percent, out string detail)
     {
         detail = "";
