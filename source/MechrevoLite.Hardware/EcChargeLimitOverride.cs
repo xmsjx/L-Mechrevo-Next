@@ -12,6 +12,68 @@ internal static class EcChargeLimitOverride
     private const int ProtectionModeRegister = 1958; // 0x7A6
     private const int TouchpadBit = 0x08;
 
+
+    /// <summary>
+    /// 三档限充（不显示 Windows“智能充电”提示）。
+    /// 长效：清空 0x7B9/0x7D0；平衡/工作站：写上限+下限，门控 2.5s 后恢复并清空 0x7B9。
+    /// 0x7A6 只改 bit4/5，bit0 智能充电提示位保持 0。
+    /// </summary>
+    internal static bool TrySetNoSmartHint(int percent, out string detail)
+    {
+        detail = "";
+        if (percent < 40 || percent > 100)
+        {
+            detail = "充电上限越界";
+            return false;
+        }
+        try
+        {
+            int mode = percent >= 95 ? 0x00 : percent <= 65 ? 0x20 : 0x10;
+            int upper = percent >= 95 ? 0 : percent;
+            int lower = percent >= 95 ? 0 : Math.Max(0, percent - 5);
+            bool platformRead = AcpiDriverEc.TryReadByte(PlatformIdRegister, out byte platformOriginal);
+            bool ov = AcpiDriverEc.TryWriteByte(OverrideRegister, 0xFF);
+            bool up = AcpiDriverEc.TryWriteByte(UpperRegister, (byte)upper);
+            bool down = AcpiDriverEc.TryWriteByte(LowerRegister, (byte)lower);
+            bool modeOk = false;
+            if (AcpiDriverEc.TryReadByte(ProtectionModeRegister, out byte protection))
+            {
+                modeOk = AcpiDriverEc.TryWriteByte(ProtectionModeRegister,
+                    (byte)((protection & ~0x31) | mode));
+            }
+
+            bool gated = false;
+            if (percent < 95)
+            {
+                gated = AcpiDriverEc.TryWriteByte(PlatformIdRegister, 0x04);
+                if (gated)
+                {
+                    System.Threading.Thread.Sleep(2500);
+                    // 门控把上限抄进固件存储区后，恢复原平台 ID，再清 0x7B9，避免 Windows 显示智能充电。
+                    if (platformRead)
+                    {
+                        AcpiDriverEc.TryWriteByte(PlatformIdRegister, platformOriginal);
+                    }
+                    else
+                    {
+                        AcpiDriverEc.TryWriteByte(PlatformIdRegister, 0x07);
+                    }
+                    AcpiDriverEc.TryWriteByte(UpperRegister, 0);
+                }
+            }
+            bool modeRead = AcpiDriverEc.TryReadByte(ProtectionModeRegister, out byte modeAfter);
+            detail = $"上限={percent}% 档位=0x{mode:X2} 平台ID={gated} 覆盖复位={ov}"
+                + $" 上限={up} 下限={down} 模式={modeOk} 回读=0x{modeAfter:X2}"
+                + $"（bit0={((modeAfter & 0x01) != 0 ? "智能充电" : "无提示")}）";
+            return ov && up && down && modeOk && modeRead && (modeAfter & 0x31) == mode;
+        }
+        catch (Exception ex)
+        {
+            detail = ex.GetType().Name + " " + ex.Message;
+            return false;
+        }
+    }
+
     internal static bool TrySet(int percent, out string detail)
     {
         detail = "";

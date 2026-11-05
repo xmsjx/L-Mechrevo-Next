@@ -1651,6 +1651,43 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    /// <summary>狂暴档记忆上次子模式：true=静音狂暴，false=高能狂暴。</summary>
+    private static bool ReadRememberedTurboSubMode()
+    {
+        try
+        {
+            return MechrevoLite.AppConfig.Get("turbo_submode_silent", 0) == 1;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>无极滑块只有正好 60/80/100 才联动三档；其它值不亮任何档位。</summary>
+    private void ApplyBatterySliderHighlight(int value)
+    {
+        int? mode = value switch
+        {
+            100 => 0,
+            80 => 1,
+            60 => 2,
+            _ => null
+        };
+        if (mode.HasValue)
+        {
+            ApplyBatteryModeHighlight(mode.Value);
+            return;
+        }
+        BatteryLongButton.IsChecked = false;
+        BatteryBalancedButton.IsChecked = false;
+        BatteryWorkButton.IsChecked = false;
+        if (BatteryLongButton.Parent is Panel panel)
+        {
+            ClearSegmentBorders(panel);
+        }
+    }
+
     private void ApplyBatteryModeHighlight(int mode)
     {
         BatteryLongButton.IsChecked = mode == 0;
@@ -3255,6 +3292,7 @@ public partial class OriginalStyleWindow : Window
         }
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_27;
         await WriteBackFullChargeAfterSliderOffAsync();
+        ApplyBatteryModeHighlight(0);
         _syncingBatteryLimit = true;
         BatteryLimitSlider.Value = BatteryControl.ResolveDisplayLimitPercent();
         _syncingBatteryLimit = false;
@@ -3271,6 +3309,7 @@ public partial class OriginalStyleWindow : Window
             if (BatteryLimitSliderText != null) BatteryLimitSliderText.Visibility = Visibility.Collapsed;
             ApplyBatterySliderStage();
             await WriteBackFullChargeAfterSliderOffAsync();
+            ApplyBatteryModeHighlight(0);
         }
         if (on)
         {
@@ -3309,7 +3348,7 @@ public partial class OriginalStyleWindow : Window
                 return;
             }
             BatteryControl.SetSelectedModePercent(value);
-            ApplyBatteryModeHighlight(ModeForPercent(value));
+            ApplyBatterySliderHighlight(value);
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_29 + value + "%";
             Logger.WriteLine("[nuc-battery] 滑块 EC 0x07B9 = " + value + "%");
             return;
@@ -3323,7 +3362,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         BatteryControl.SetSelectedModePercent(value);
-        ApplyBatteryModeHighlight(ModeForPercent(value));
+        ApplyBatterySliderHighlight(value);
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_29 + value + "%";
     }
 
@@ -3486,7 +3525,7 @@ public partial class OriginalStyleWindow : Window
                 : selected == CustomModeButton ? 3
                 : -1;
             bool? silentTurbo = SilentTurboModeButton != null && ReferenceEquals(selected, SilentTurboModeButton) ? true
-                : ReferenceEquals(selected, TurboModeButton) ? false
+                : ReferenceEquals(selected, TurboModeButton) ? ReadRememberedTurboSubMode()
                 : null;
             if (ReferenceEquals(selected, CustomModeButton))
             {
@@ -3698,6 +3737,11 @@ public partial class OriginalStyleWindow : Window
             {
                 ok = _backendProbe?.Service != null
                     && await _backendProbe.Service.SwitchTurboSubMode(silentTurbo.Value);
+                if (ok)
+                {
+                    AppConfig.Set("turbo_submode_silent", silentTurbo.Value ? 1 : 0);
+                    AppConfig.Flush();
+                }
             }
             BackendStatus.Text = ok ? WpfStrings.OriginalStyleWindow_xaml_Text_8 : WpfStrings.PerfModeFailed;
             if (!ok)
@@ -5517,6 +5561,32 @@ public partial class OriginalStyleWindow : Window
         }
         // GCU 路固定走 GCU 的 BatteryProtection（旧 LM 默认三档行为），
         // 不因 _services 存在就改走 DashboardCommands/EC 侧。
+        if (modeGcu && !MechrevoLite.Hardware.EcChargeLimit.IsLegacyGenerationBlocked())
+        {
+            (bool gcuOk, string gcuDetail) = await Task.Run(() =>
+            {
+                bool applied = MechrevoLite.Hardware.EcChargeLimitOverride.TrySetNoSmartHint(percentForMode, out string detail);
+                return (applied, detail);
+            });
+            if (gcuOk)
+            {
+                MechrevoLite.Battery.BatteryControl.SetSelectedModePercent(percentForMode);
+                ApplyBatteryModeHighlight(mode);
+                StatusText.Text = mode switch
+                {
+                    1 => "平衡模式：充电 75~80%",
+                    2 => "工作站模式：充电 55~60%",
+                    _ => "长效模式：不限制充电"
+                };
+            }
+            else
+            {
+                StatusText.Text = WpfStrings.BatteryModeFailed + " " + gcuDetail;
+                RefreshFromBackend();
+            }
+            Logger.WriteError("[battery-gcu] mode=" + mode + " " + gcuDetail);
+            return;
+        }
         bool ok = modeGcu
             ? await _backendProbe.SetBatteryModeAsync(mode)
             : _services != null
@@ -5780,20 +5850,30 @@ public partial class OriginalStyleWindow : Window
         if (string.Equals(key, "touchpad", StringComparison.OrdinalIgnoreCase)
             || string.Equals(key, "touchpadtoggle", StringComparison.OrdinalIgnoreCase))
         {
-            try
+            // 触摸板磁贴用矢量线条，跟随主题 Foreground，浅色模式也能保持深色。
+            System.Windows.Shapes.Path outline = new()
             {
-                return new System.Windows.Controls.Image
+                Data = Geometry.Parse("M2,3 L14,3 L14,13 L2,13 Z"),
+                StrokeThickness = 1.3,
+                Fill = System.Windows.Media.Brushes.Transparent
+            };
+            System.Windows.Shapes.Path line = new()
+            {
+                Data = Geometry.Parse("M5,10 L11,10"),
+                StrokeThickness = 1.3
+            };
+            foreach (System.Windows.Shapes.Path path in new[] { outline, line })
+            {
+                path.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, new System.Windows.Data.Binding("Foreground")
                 {
-                    Width = 16,
-                    Height = 16,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    Source = new System.Windows.Media.Imaging.BitmapImage(
-                        new Uri("pack://application:,,,/Assets/Icons/icons8_touchpad_96.png", UriKind.Absolute))
-                };
+                    RelativeSource = new System.Windows.Data.RelativeSource(
+                        System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(ToggleButton), 1)
+                });
             }
-            catch
-            {
-            }
+            Canvas canvas = new() { Width = 16, Height = 16 };
+            canvas.Children.Add(outline);
+            canvas.Children.Add(line);
+            return new Viewbox { Width = 16, Height = 16, Child = canvas, HorizontalAlignment = HorizontalAlignment.Center };
         }
         TextBlock text = new TextBlock
         {
