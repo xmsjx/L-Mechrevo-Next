@@ -3583,7 +3583,8 @@ public partial class OriginalStyleWindow : Window
         FontFamily bold = (FontFamily)Application.Current.Resources["AppFontBoldFamily"];
         Color color = overrideColor ?? ((SolidColorBrush)Application.Current.Resources["AccentBrush"]).Color;
         selected.BorderBrush = new SolidColorBrush(color);
-        selected.BorderThickness = new Thickness(2);
+        // 高亮仍用 1px 边框，避免 2px 改变布局宽度导致后面的按钮换行。
+        selected.BorderThickness = new Thickness(1);
         selected.Background = normal;
         selected.FontFamily = bold;
         selected.FontWeight = FontWeights.Bold;
@@ -5694,7 +5695,8 @@ public partial class OriginalStyleWindow : Window
             on = !on;
         }
         bool ok = await DashboardCommands.SetQuickAsync(key, on);
-        StatusText.Text = ok ? WpfStrings.QuickSentPrefix + key : WpfStrings.QuickFailedPrefix + key;
+        string quickLabel = QuickSwitchService.DisplayLabel(key);
+        StatusText.Text = ok ? WpfStrings.QuickSentPrefix + quickLabel : WpfStrings.QuickFailedPrefix + quickLabel;
     }
 
     private void OnRadioStateChanged(MechrevoLite.Helpers.RadioSwitchKind kind, bool on)
@@ -6251,7 +6253,8 @@ public partial class OriginalStyleWindow : Window
             {
                 box.IsChecked = !(box.IsChecked == true);
             }
-            StatusText.Text = ok ? WpfStrings.SwitchedPrefix + key : WpfStrings.SwitchFailedPrefix + key;
+            string quickLabel = QuickSwitchService.DisplayLabel(key);
+            StatusText.Text = ok ? WpfStrings.SwitchedPrefix + quickLabel : WpfStrings.SwitchFailedPrefix + quickLabel;
             UpdateMoreSwitchCount();
         }
     }

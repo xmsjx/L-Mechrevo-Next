@@ -1405,6 +1405,11 @@ internal sealed class BackendProbe : IDisposable
             }
             return _hw.FanBoost;
         }
+        if (string.Equals(key, "winkey", StringComparison.OrdinalIgnoreCase)
+            && MechrevoLite.Hardware.NucQuickSwitches.TryReadWinKeyLock(out bool winLocked))
+        {
+            return winLocked;
+        }
         if (string.Equals(key, "copilot", StringComparison.OrdinalIgnoreCase))
         {
             return AcpiDriverEc.TryReadByte(1832, out byte copilotState) && (copilotState & 0x04) != 0;

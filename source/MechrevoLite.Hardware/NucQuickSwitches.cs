@@ -69,6 +69,17 @@ internal static class NucQuickSwitches
         return confirmed;
     }
 
+    internal static bool TryReadWinKeyLock(out bool on)
+    {
+        on = false;
+        if (!TryRead(WinKeyStatusAddress, out int status))
+        {
+            return false;
+        }
+        on = (status & WinKeyBit) != 0;
+        return true;
+    }
+
     internal static bool TrySetWinKeyLock(bool on, out bool confirmed)
     {
         confirmed = false;
@@ -85,16 +96,9 @@ internal static class NucQuickSwitches
         {
             return false;
         }
-        for (int i = 0; i < 12; i++)
-        {
-            Thread.Sleep(50);
-            if (TryRead(WinKeyStatusAddress, out int now) && ((now & WinKeyBit) != 0) == on)
-            {
-                confirmed = true;
-                return true;
-            }
-        }
-        return false;
+        // 触发位写入成功即视为已下发；状态位可能滞后，不再阻塞 600ms 等待。
+        confirmed = TryRead(WinKeyStatusAddress, out int now) && ((now & WinKeyBit) != 0) == on;
+        return true;
     }
 
     internal static bool TrySetTouchpad(bool on, out bool confirmed)
