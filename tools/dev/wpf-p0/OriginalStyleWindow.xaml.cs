@@ -2592,6 +2592,18 @@ public partial class OriginalStyleWindow : Window
         {
             Logger.WriteLine("[power] 自动刷新率失败（已吞掉）：" + ex.Message);
         }
+        try
+        {
+            if (MechrevoLite.AppConfig.Get("acpi_igpu_auto", 0) != 0
+                && _backendProbe?.CurrentGpuMode == 1)
+            {
+                await SwitchAcpiIgpuSavingAsync("AUTO");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[power] 自动核显省电失败（已吞掉）：" + ex.Message);
+        }
     }
 
     private void MarkCleanExitForShutdown(string reason)
@@ -5098,7 +5110,8 @@ public partial class OriginalStyleWindow : Window
             _igpuSavingLabel.Text = MechrevoLite.Hardware.AcpiGpuHotSwitch.IsSupported
                 ? "核显省电（热切）" : "静默独显";
         }
-        int mode = hardware.IgpuOnlySaveMode;
+        int mode = MechrevoLite.AppConfig.Get("acpi_igpu_auto", 0) != 0
+            ? 3 : hardware.IgpuOnlySaveMode;
         if (IgpuSavingOffPreview != null) IgpuSavingOffPreview.IsChecked = mode == 1;
         if (IgpuSavingOnPreview != null) IgpuSavingOnPreview.IsChecked = mode == 0;
         if (IgpuSavingAutoPreview != null) IgpuSavingAutoPreview.IsChecked = mode == 3;
@@ -5209,12 +5222,21 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
+        bool autoMode = string.Equals(mode, "AUTO", StringComparison.OrdinalIgnoreCase);
         bool on;
         if (string.Equals(mode, "ON", StringComparison.OrdinalIgnoreCase)) on = true;
         else if (string.Equals(mode, "OFF", StringComparison.OrdinalIgnoreCase)) on = false;
+        else if (autoMode)
+        {
+            // 与原厂自动一致：电池供电且没有外接显示器时切核显；插电或接显示器时恢复独显。
+            bool acOnline = System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
+                == System.Windows.Forms.PowerLineStatus.Online;
+            bool externalMonitor = System.Windows.Forms.Screen.AllScreens.Length > 1;
+            on = !acOnline && !externalMonitor;
+        }
         else
         {
-            StatusText.Text = "EC 模式 ACPI 热切只支持开/关";
+            StatusText.Text = "EC 模式只支持开/关/自动";
             return;
         }
         _igpuSavingBusy = true;
@@ -5246,9 +5268,11 @@ public partial class OriginalStyleWindow : Window
             if (ok)
             {
                 _backendProbe?.Hw?.SetAcpiIgpuOnlyState(on);
+                MechrevoLite.AppConfig.Set("acpi_igpu_auto", autoMode ? 1 : 0);
+                MechrevoLite.AppConfig.Flush();
                 if (on && forcedSilence) MechrevoLite.Hardware.AcpiGpuHotSwitch.MarkForcedSilence();
                 if (!on) MechrevoLite.Hardware.AcpiGpuHotSwitch.ClearForcedSilence();
-                StatusText.Text = on ? "核显省电已开启" : "独显已恢复";
+                StatusText.Text = autoMode ? "核显省电自动模式已启用" : (on ? "核显省电已开启" : "独显已恢复");
             }
             else
             {
