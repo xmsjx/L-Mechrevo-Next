@@ -3666,6 +3666,24 @@ public partial class OriginalStyleWindow : Window
         {
             MechrevoLite.Hardware.WujieFanEcController.StopActive("切换到非自定义档");
         }
+        // 宝龙达软件闭环退出：先停当前档曲线并交回固件，否则 tick 仍会按最后曲线写转速。
+        if (mode != 3 && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { UsesBaolongda: true } bld)
+        {
+            try
+            {
+                MechrevoLite.Hardware.BaolongdaFanCurveSettings? curve = bld.LoadBaolongdaFanCurve();
+                if (curve != null)
+                {
+                    bld.SaveBaolongdaFanCurve(MechrevoHw.CurrentFanCurveModeId, curve.WithEnabled(false));
+                }
+                bld.RestoreBaolongdaFanFirmwareControl();
+                Logger.WriteError("[fan] 宝龙达退出自定义档 ⇒ 曲线已停用并交回固件");
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteError("[fan] 宝龙达退出自定义档失败（已吞掉）：" + ex.Message);
+            }
+        }
         OsdService.Show(string.Empty, WpfStrings.OsdPerformance, osdMode);
         _lastSwitchModeOsdTick = Environment.TickCount64;
         _backendProbe?.MarkUserModeSwitch();
