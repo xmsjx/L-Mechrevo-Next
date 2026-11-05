@@ -84,43 +84,40 @@ internal static class AcpiGpuHotSwitch
             if (on)
             {
                 StopNvContainers(out _);
-                bool disabled = RunPnp("/disable-device", pnpInstance, force: true, out string disableDetail);
-                for (int i = 0; i < 20; i++)
+                // PnP 禁用设备：Disable-PnpDevice 比 pnputil 更可靠；两项都做并回读确认。
+                bool ps = RunPnpPowerShell("Disable-PnpDevice", pnpInstance, out string psDetail);
+                if (!ps)
+                {
+                    RunPnp("/disable-device", pnpInstance, force: true, out _);
+                }
+                for (int i = 0; i < 24; i++)
                 {
                     Thread.Sleep(500);
                     if (FindNvidiaInstance(out _, out bool stillEnabled) && !stillEnabled)
                     {
-                        detail = "PnP 静默独显成功 · " + disableDetail;
+                        Logger.WriteError("[pnp-gpu] 静默成功 · " + psDetail);
+                        detail = "PnP 静默独显成功 · " + psDetail;
                         return true;
                     }
                 }
-                // pnputil 有时 0 退出但设备仍在；再用 PnP cmdlet 强制一次。
-                string psDetail;
-                RunPnpPowerShell("Disable-PnpDevice", pnpInstance, out psDetail);
-                for (int i = 0; i < 20; i++)
-                {
-                    Thread.Sleep(500);
-                    if (FindNvidiaInstance(out _, out bool stillEnabled) && !stillEnabled)
-                    {
-                        detail = "PnP 静默独显成功（Disable-PnpDevice）· " + psDetail;
-                        return true;
-                    }
-                }
-                detail = "PnP 禁用未确认 · " + disableDetail + " · " + psDetail;
+                detail = "PnP 禁用未确认 · " + psDetail;
+                Logger.WriteError("[pnp-gpu] 静默失败 · " + detail);
                 return false;
             }
-            bool enabledOk = RunPnp("/enable-device", pnpInstance, force: false, out string enableDetail);
+            RunPnpPowerShell("Enable-PnpDevice", pnpInstance, out string enableDetail);
             RestoreContainers(new[] { "NVDisplay.ContainerLocalSystem", "NVContainerLocalSystem" });
-            for (int i = 0; i < 20; i++)
+            for (int i = 0; i < 24; i++)
             {
                 Thread.Sleep(500);
                 if (FindNvidiaInstance(out _, out bool nowEnabled) && nowEnabled)
                 {
+                    Logger.WriteError("[pnp-gpu] 恢复成功 · " + enableDetail);
                     detail = "PnP 独显已恢复 · " + enableDetail;
                     return true;
                 }
             }
             detail = "PnP 恢复未确认 · " + enableDetail;
+            Logger.WriteError("[pnp-gpu] 恢复失败 · " + detail);
             return false;
         }
         string[] services = Array.Empty<string>();
