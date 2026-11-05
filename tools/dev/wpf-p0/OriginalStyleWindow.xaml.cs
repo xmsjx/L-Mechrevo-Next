@@ -5515,9 +5515,13 @@ public partial class OriginalStyleWindow : Window
             Logger.WriteLine($"[charge-route] 无极限充=ON ⇒ mode={mode} 走 EC 路 ok={sliderOk}");
             return;
         }
-        bool ok = _services != null
-            ? (await DashboardCommands.SetBatteryModeAsync(mode)).Ok
-            : await _backendProbe.SetBatteryModeAsync(mode);
+        // GCU 路固定走 GCU 的 BatteryProtection（旧 LM 默认三档行为），
+        // 不因 _services 存在就改走 DashboardCommands/EC 侧。
+        bool ok = modeGcu
+            ? await _backendProbe.SetBatteryModeAsync(mode)
+            : _services != null
+                ? (await DashboardCommands.SetBatteryModeAsync(mode)).Ok
+                : await _backendProbe.SetBatteryModeAsync(mode);
         if (ok && modeGcu)
         {
             MechrevoLite.Battery.BatteryControl.SetSelectedModePercent(percentForMode);
