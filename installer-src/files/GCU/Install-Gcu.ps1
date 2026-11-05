@@ -1919,6 +1919,11 @@ function Grant-AcpiDriverAccess {
 function Set-InstallMarker {
     param([pscustomobject]$Selection, [string]$ServiceExe, [string]$PayloadSha256, [string]$InstallerVersion)
     try {
+        # 先确认实际载荷已经落地；没装成 GCU 时不写变体注册表，避免“空写版本”。
+        if ([string]::IsNullOrWhiteSpace($ServiceExe) -or -not (Test-Path -LiteralPath $ServiceExe)) {
+            Write-Log ('  GCU service exe not landed, skip registry marker: ' + $ServiceExe)
+            return
+        }
         $key = 'HKLM:\SOFTWARE\L-Mechrevo'
         if (-not (Test-Path -LiteralPath $key)) { New-Item -Path $key -Force | Out-Null }
         $markerVariant = $Selection.Variant

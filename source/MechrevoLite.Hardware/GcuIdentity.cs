@@ -76,6 +76,12 @@ internal static class GcuIdentity
 		}
 		try
 		{
+			// 没有实际 GCU（服务未安装/载荷未落地）时不盲写变体注册表。
+			if (!MechrevoHw.IsGcuServiceInstalled)
+			{
+				Logger.WriteLine("[gcu] 未安装 GCU 服务 ⇒ 不写 GcuVariant 注册表");
+				return;
+			}
 			using RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\L-Mechrevo", writable: true);
 			if (key == null)
 			{
