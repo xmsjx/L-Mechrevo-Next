@@ -44,10 +44,10 @@ internal static class NucKeyboardLighting
         }
         level = (value >> 4) switch
         {
-            0x03 => 1,
-            0x05 => 2,
-            0x07 => 3,
-            0x09 => 4,
+            0x02 or 0x03 => 1,
+            0x04 or 0x05 => 2,
+            0x06 or 0x07 => 3,
+            0x08 or 0x09 => 4,
             _ => 0
         };
         return true;
