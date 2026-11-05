@@ -371,13 +371,20 @@ internal static class AcpiGpuHotSwitch
         try
         {
             using ManagementObjectSearcher searcher = new("root\\CIMV2",
-                "SELECT DeviceID,Status,PNPDeviceID FROM Win32_PnPEntity");
+                "SELECT DeviceID,Status,PNPDeviceID,PNPClass,Service,Name FROM Win32_PnPEntity");
             foreach (ManagementObject item in searcher.Get())
             {
                 string? id = item["DeviceID"]?.ToString();
                 string? pnp = item["PNPDeviceID"]?.ToString();
+                string? devClass = item["PNPClass"]?.ToString();
+                string? service = item["Service"]?.ToString();
                 if (string.IsNullOrWhiteSpace(id) || pnp == null
                     || !pnp.Contains("VEN_10DE", StringComparison.OrdinalIgnoreCase)) continue;
+                bool isDisplay = string.Equals(devClass, "Display", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(service, "nvlddmkm", StringComparison.OrdinalIgnoreCase)
+                    || id.Contains("&CC_0300", StringComparison.OrdinalIgnoreCase)
+                    || id.Contains("&CC_0302", StringComparison.OrdinalIgnoreCase);
+                if (!isDisplay) continue;
                 instanceId = id;
                 enabled = string.Equals(item["Status"]?.ToString(), "OK", StringComparison.OrdinalIgnoreCase);
                 return true;
@@ -445,11 +452,15 @@ internal static class AcpiGpuHotSwitch
         try
         {
             using ManagementObjectSearcher searcher = new("root\\CIMV2",
-                "SELECT PNPDeviceID FROM Win32_PnPEntity");
+                "SELECT PNPDeviceID,PNPClass,Service FROM Win32_PnPEntity");
             foreach (ManagementObject item in searcher.Get())
             {
                 string? pnp = item["PNPDeviceID"]?.ToString();
-                if (pnp != null && pnp.Contains("VEN_10DE", StringComparison.OrdinalIgnoreCase))
+                string? devClass = item["PNPClass"]?.ToString();
+                string? service = item["Service"]?.ToString();
+                if (pnp != null && pnp.Contains("VEN_10DE", StringComparison.OrdinalIgnoreCase)
+                    && (string.Equals(devClass, "Display", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(service, "nvlddmkm", StringComparison.OrdinalIgnoreCase)))
                 {
                     return true;
                 }
