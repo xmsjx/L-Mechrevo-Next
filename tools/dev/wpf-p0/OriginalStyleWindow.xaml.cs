@@ -5186,6 +5186,61 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    private async Task SwitchAcpiIgpuSavingAsync(string mode)
+    {
+        if (_igpuSavingBusy)
+        {
+            return;
+        }
+        bool on;
+        if (string.Equals(mode, "ON", StringComparison.OrdinalIgnoreCase)) on = true;
+        else if (string.Equals(mode, "OFF", StringComparison.OrdinalIgnoreCase)) on = false;
+        else
+        {
+            StatusText.Text = "EC 模式 ACPI 热切只支持开/关";
+            return;
+        }
+        _igpuSavingBusy = true;
+        VisualiseIgpuSaving();
+        try
+        {
+            if (on && MechrevoLite.Gpu.NVidia.NvidiaGpuControl.TryGetActiveDgpuApplications(out var applications))
+            {
+                var closable = MechrevoLite.Gpu.DgpuApplicationSafety.FilterClosable(
+                    applications, Environment.ProcessId, System.Diagnostics.Process.GetCurrentProcess().SessionId);
+                if (closable.Count > 0)
+                {
+                    string names = string.Join("\n", closable.Select(static app => app.ProcessName));
+                    if (MessageBox.Show("独显存在占用：\n\n" + names + "\n\n是否强制开启核显省电？",
+                            "L-Mechrevo", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                    {
+                        StatusText.Text = "已取消：未强制开启核显省电";
+                        return;
+                    }
+                    MechrevoLite.Hardware.AcpiGpuHotSwitch.KillClosableOccupants(out _);
+                    await Task.Delay(500);
+                }
+            }
+            string detail = "";
+            bool ok = await Task.Run(() =>
+                MechrevoLite.Hardware.AcpiGpuHotSwitch.TrySetIgpuOnly(on, stopDisplayContainer: true, out detail));
+            if (ok)
+            {
+                _backendProbe?.Hw?.SetAcpiIgpuOnlyState(on);
+                StatusText.Text = on ? "核显省电已开启（ACPI 热切）" : "独显已恢复（ACPI 热切）";
+            }
+            else
+            {
+                StatusText.Text = (on ? "核显省电开启失败：" : "独显恢复失败：") + detail;
+            }
+            VisualiseIgpuSaving();
+        }
+        finally
+        {
+            _igpuSavingBusy = false;
+        }
+    }
+
     private async Task SwitchIgpuSavingAsync(string mode)
     {
         if (_igpuSavingBusy)
@@ -5194,6 +5249,13 @@ public partial class OriginalStyleWindow : Window
         }
         MechrevoService? service = _backendProbe?.Service;
         MechrevoHw? hardware = _backendProbe?.Hw;
+        if (hardware != null
+            && (service == null || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && !hardware.IsGcuConnected))
+            && MechrevoLite.Hardware.AcpiGpuHotSwitch.IsSupported)
+        {
+            await SwitchAcpiIgpuSavingAsync(mode);
+            return;
+        }
         if (service == null || hardware == null || !hardware.IsConnected || !hardware.SupportsGpuHotSwap)
         {
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_31;

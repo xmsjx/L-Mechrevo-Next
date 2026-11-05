@@ -719,7 +719,23 @@ public class MechrevoHw : IDisposable
 
 	public bool? IgpuSwitchBlocked { get; private set; }
 
-	public int IgpuOnlySaveMode { get; private set; } = 1;
+	internal void SetAcpiIgpuOnlyState(bool on) => _igpuOnlySaveMode = on ? 0 : 1;
+
+	private int _igpuOnlySaveMode = 1;
+	public int IgpuOnlySaveMode
+	{
+		get
+		{
+			// EC 模式没有 GCU 状态包：直接读 ACPI 热切状态位。
+			if (!IsGcuConnected && AcpiGpuHotSwitch.IsSupported
+				&& AcpiGpuHotSwitch.TryGetState(out bool acpiActive, out _))
+			{
+				return acpiActive ? 0 : 1;
+			}
+			return _igpuOnlySaveMode;
+		}
+		private set => _igpuOnlySaveMode = value;
+	}
 
 	public bool? LchwocSupportReported { get; private set; }
 
@@ -810,7 +826,9 @@ public class MechrevoHw : IDisposable
 	///      这两代一律不因实时位放行（2026-10-03「40 系三模不再显示核显省电」的决定保持不动）。
 	/// 本机（Gen40，实时位=false）与 30 系（实时位=null）行为逐位不变。
 	/// </summary>
-	public bool SupportsGpuHotSwap => Capabilities.GpuHotSwap || (DgpuGeneration == DgpuGenerationKind.Gen50 && IgpuOnlyStatusSupport == true);
+	public bool SupportsGpuHotSwap => Capabilities.GpuHotSwap
+		|| (DgpuGeneration == DgpuGenerationKind.Gen50 && IgpuOnlyStatusSupport == true)
+		|| (DgpuGeneration == DgpuGenerationKind.Gen50 && AcpiGpuHotSwitch.IsSupported);
 
 	private bool ThreeModeCapability => SupportsIgpuOnly;
 
