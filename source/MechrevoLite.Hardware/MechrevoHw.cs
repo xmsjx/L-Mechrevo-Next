@@ -891,9 +891,9 @@ public class MechrevoHw : IDisposable
 				// 避免在无独显机型上凭一个回答造出显卡面板/托盘项。
 				return DgpuGeneration != DgpuGenerationKind.NoDgpu;
 			}
-			if (CpuVendor.LacksIgpuSilicon)
+			if (CpuVendor.LacksIgpuSilicon || CpuVendor.AmdDefaultsTwoGpuModes)
 			{
-				Logger.WriteLineIfChanged("igpu-no-silicon", "IgpuOnly disabled: CPU has no physical iGPU silicon; pure iGPU mode would black-screen");
+				Logger.WriteLineIfChanged("igpu-two-mode-default", "IgpuOnly hidden by default: CPU family defaults to hybrid + dGPU only; user can force-show via igpu_only_ui=show");
 				return false;
 			}
 			// L2b 2026-10-15（igpu-gen50-amd + 用户拍板「留后路」）：**50 系 + AMD CPU ⇒ 默认隐藏**
@@ -962,11 +962,6 @@ public class MechrevoHw : IDisposable
 	{
 		get
 		{
-			if (CpuVendor.LacksIgpuSilicon)
-			{
-				Logger.WriteLineIfChanged("gpu-switch-no-silicon", "GPU mode switch hidden: CPU has no physical iGPU silicon (7435H/7235H/Core-F)");
-				return false;
-			}
 			bool flag = CanOfferGpuModeSwitchCore(DgpuDirectStatusSupport, SupportsDgpuDirect, SupportsIgpuOnly, DgpuGeneration, ThreeModeCapability);
 			if (!flag && DgpuDirectStatusSupport == false)
 			{

@@ -1,4 +1,5 @@
 using System;
+using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
 namespace MechrevoLite.Hardware;
@@ -34,6 +35,34 @@ internal static class CpuVendor
 
 	/// <summary>是不是 **确认的** Intel（读不到 ⇒ false）。</summary>
 	internal static bool IsIntel => Kind == CpuVendorKind.Intel;
+
+	/// <summary>
+	/// AMD 6000 / 7x3xH / 7x4xH（7940H 除外）默认只有混合 + 独显直连两档。
+	/// 这些平台即使能力位报支持，也不默认给纯核显；用户仍可在设置里强制显示。
+	/// </summary>
+	internal static bool AmdDefaultsTwoGpuModes
+	{
+		get
+		{
+			if (!IsAmd)
+			{
+				return false;
+			}
+			try
+			{
+				string name = PawnIO.CpuInfo.Name.ToUpperInvariant();
+				if (name.Contains("7940H"))
+				{
+					return false;
+				}
+				return Regex.IsMatch(name, @"\b(6\d{3}|7\d[34]\d)(HX|HS|H|U)?\b");
+			}
+			catch
+			{
+				return false;
+			}
+		}
+	}
 
 	/// <summary>物理未集成核显的 CPU：写纯核显会黑屏，必须硬拦截。</summary>
 	internal static bool LacksIgpuSilicon
