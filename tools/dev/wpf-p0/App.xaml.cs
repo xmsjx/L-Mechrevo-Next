@@ -210,6 +210,29 @@ public partial class App : Application
         catch
         {
         }
+        // 自定义风扇接管退出：无界停止写 EC；宝龙达停曲线并交回固件。
+        try
+        {
+            MechrevoLite.Hardware.WujieFanEcController.StopActive("程序退出");
+        }
+        catch
+        {
+        }
+        try
+        {
+            if (MechrevoLite.Program.hw is { UsesBaolongda: true } bldHw)
+            {
+                MechrevoLite.Hardware.BaolongdaFanCurveSettings? curve = bldHw.LoadBaolongdaFanCurve();
+                if (curve != null)
+                {
+                    bldHw.SaveBaolongdaFanCurve(MechrevoLite.Hardware.MechrevoHw.CurrentFanCurveModeId, curve.WithEnabled(false));
+                }
+                bldHw.RestoreBaolongdaFanFirmwareControl();
+            }
+        }
+        catch
+        {
+        }
         _showMainWait?.Unregister(null);
         _showMainEvent?.Dispose();
         if (_ownsInstanceMutex)
