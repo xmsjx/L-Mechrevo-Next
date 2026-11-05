@@ -116,6 +116,11 @@ internal static class GpuRestartVerifier
 		{
 			return false;
 		}
+		// 切过去又切回原模式：NVRAM 待生效路由已等于当前实际路由 ⇒ 不应再显示待重启。
+		if (PendingAlreadySatisfied())
+		{
+			return false;
+		}
 		if (long.TryParse(AppConfig.GetString("gpu_restart_tick"), out var result))
 		{
 			return !RebootHappened(result, Environment.TickCount64);
