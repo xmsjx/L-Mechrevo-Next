@@ -6875,8 +6875,7 @@ public partial class OriginalStyleWindow : Window
         if (ChargeLimitStatus != null && batteryMode >= 0)
         {
             string modeName = batteryMode switch { 0 => "长效模式", 1 => "平衡模式", 2 => "工作站模式", _ => "未知" };
-            ChargeLimitStatus.Text = "电池档位：" + modeName
-                + (probe.BatteryMode >= 0 ? "（EC 0x7A6 回读）" : "");
+            ChargeLimitStatus.Text = "电池档位：" + modeName;
         }
         UpdateQuickTileStates();
         if (MoreGroupsPanel != null)
