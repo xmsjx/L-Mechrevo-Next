@@ -7621,10 +7621,18 @@ public partial class OriginalStyleWindow : Window
             bool directSupported = hw?.SupportsDgpuDirect ?? caps.DgpuDirect;
             bool gpuSwitchSupported = hw?.CanOfferGpuModeSwitch ?? (caps.DgpuDirect || caps.IgpuOnly || caps.GpuHotSwap);
             GpuDirectButton.Visibility = directSupported ? Visibility.Visible : Visibility.Collapsed;
+            bool dgpuPresent = hw != null && hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
+            bool noSwitchButHasDgpu = !gpuSwitchSupported && dgpuPresent;
             GpuSection.Visibility = (!nucNoGpuSwitch && !gpuRowHidden
-                && (gpuSwitchSupported || directSupported || caps.GpuHotSwap || umiGpuMode))
+                && (gpuSwitchSupported || directSupported || caps.GpuHotSwap || umiGpuMode || noSwitchButHasDgpu))
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+            GpuModeRow.Visibility = gpuSwitchSupported ? Visibility.Visible : Visibility.Collapsed;
+            GpuPendingText.Visibility = gpuSwitchSupported ? GpuPendingText.Visibility : Visibility.Collapsed;
+            IgpuSavingHost.Visibility = gpuSwitchSupported ? Visibility.Visible : Visibility.Collapsed;
+            GpuSectionHeader.Text = gpuSwitchSupported
+                ? WpfStrings.OriginalStyleWindow_Text_15
+                : WpfStrings.L("显卡", "Graphics");
             ScreenSection.Visibility = (caps.DisplayRefresh || caps.ColorCalibration || caps.LcdOverdrive || caps.LocalDimming) ? Visibility.Visible : Visibility.Collapsed;
             bool hasKeyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
                 ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard

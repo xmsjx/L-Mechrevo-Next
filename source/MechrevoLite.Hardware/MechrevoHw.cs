@@ -871,11 +871,6 @@ public class MechrevoHw : IDisposable
 			//      会把能力位明确说不支持的机器又放行 —— 极光Pro 那类"该隐藏却仍显示"）
 			//   L4 auto 且读不到硬件结论（null）：D-1「试过就记住」
 			//   L5 仍无结论：ask 代理规则（支持切换 && 支持独显直连）—— 与改动前逐字一致
-			if (CpuVendor.LacksIgpuSilicon)
-			{
-				Logger.WriteLineIfChanged("igpu-no-silicon", "IgpuOnly disabled: CPU has no physical iGPU silicon; pure iGPU mode would black-screen");
-				return false;
-			}
 			if (DgpuGeneration == DgpuGenerationKind.Gen30)
 			{
 				return false;
@@ -895,6 +890,11 @@ public class MechrevoHw : IDisposable
 				// 唯一底线：本机确实存在 NVIDIA 独显（NoDgpu = 枚举成功但没有 NV 适配器），
 				// 避免在无独显机型上凭一个回答造出显卡面板/托盘项。
 				return DgpuGeneration != DgpuGenerationKind.NoDgpu;
+			}
+			if (CpuVendor.LacksIgpuSilicon)
+			{
+				Logger.WriteLineIfChanged("igpu-no-silicon", "IgpuOnly disabled: CPU has no physical iGPU silicon; pure iGPU mode would black-screen");
+				return false;
 			}
 			// L2b 2026-10-15（igpu-gen50-amd + 用户拍板「留后路」）：**50 系 + AMD CPU ⇒ 默认隐藏**
 			// （只针对"纯核显模式 / 核显模式"这一个档位）。
@@ -962,6 +962,11 @@ public class MechrevoHw : IDisposable
 	{
 		get
 		{
+			if (CpuVendor.LacksIgpuSilicon)
+			{
+				Logger.WriteLineIfChanged("gpu-switch-no-silicon", "GPU mode switch hidden: CPU has no physical iGPU silicon (7435H/7235H/Core-F)");
+				return false;
+			}
 			bool flag = CanOfferGpuModeSwitchCore(DgpuDirectStatusSupport, SupportsDgpuDirect, SupportsIgpuOnly, DgpuGeneration, ThreeModeCapability);
 			if (!flag && DgpuDirectStatusSupport == false)
 			{

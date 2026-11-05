@@ -582,10 +582,10 @@
                                         <Path Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.5" Fill="Transparent"
                                               Data="M3,5 H21 V17 H3 Z M5,8 H9 M5,11 H9 M13.5,8 A3.5,3.5 0 1 0 13.5,15 A3.5,3.5 0 0 0 13.5,8 M7,17 V20 H17 V17" />
                                     </Canvas>
-                                </Viewbox><TextBlock Text="{x:Static loc:WpfStrings.OriginalStyleWindow_Text_15}" Style="{StaticResource SectionHeader}" Margin="0" /></StackPanel>
+                                </Viewbox><TextBlock x:Name="GpuSectionHeader" Text="{x:Static loc:WpfStrings.OriginalStyleWindow_Text_15}" Style="{StaticResource SectionHeader}" Margin="0" /></StackPanel>
                             <TextBlock x:Name="GpuStat" Grid.Column="1" Text="GPU —" Style="{StaticResource StatText}" />
                         </Grid>
-                        <Grid Margin="0,2,0,0">
+                        <Grid x:Name="GpuModeRow" Margin="0,2,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition x:Name="GpuEcoColumn" Width="*" />
                                 <ColumnDefinition x:Name="GpuHybridColumn" Width="*" />

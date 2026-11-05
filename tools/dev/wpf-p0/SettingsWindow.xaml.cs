@@ -27,6 +27,16 @@ public partial class SettingsWindow : Window
     public SettingsWindow(OriginalStyleWindow owner)
     {
         InitializeComponent();
+        try
+        {
+            if (CpuVendor.LacksIgpuSilicon)
+            {
+                IgpuModeCard.Visibility = Visibility.Collapsed;
+            }
+        }
+        catch
+        {
+        }
         L_Mechrevo.WpfP0.Services.WindowWorkAreaPolicy.ClampOnLoaded(this);
         FontFamily = (System.Windows.Media.FontFamily)Application.Current.Resources["AppFontFamily"];
         _owner = owner;
