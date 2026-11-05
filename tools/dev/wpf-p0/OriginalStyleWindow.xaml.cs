@@ -8240,7 +8240,9 @@ public partial class OriginalStyleWindow : Window
     private void RefreshPerfConfigVisibility(int currentMode)
     {
         MechrevoHw? hw = _backendProbe?.Hw;
-        bool profileConfig = hw?.SupportsModeProfileConfig == true
+        // 只看「GCU 本身是 30 系」：显卡是 30 系但 GCU 不是 30 系时不显示模式×配置。
+        bool gcu30 = hw?.IsGcuConnected == true && MechrevoService.IsGcu30;
+        bool profileConfig = gcu30
                 && !(hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true);
         bool show = profileConfig && currentMode >= 0 && currentMode <= 2;
         // 30 系配置下拉必须和对应性能模式按钮一起显隐；部分 30 系只有静音/平衡两档。
