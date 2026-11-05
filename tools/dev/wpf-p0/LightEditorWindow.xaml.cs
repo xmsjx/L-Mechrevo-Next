@@ -77,8 +77,8 @@ public partial class LightEditorWindow : Window
         _gradeBrightness = _keyboard || _logoGrade;
         LightSlider.Minimum = 0;
         LightSlider.Maximum = _gradeBrightness ? 4 : 100;
-        SpeedSlider.Minimum = 0;
-        SpeedSlider.Maximum = 4;
+        SpeedSlider.Minimum = _keyboard ? 1 : 0;
+        SpeedSlider.Maximum = _keyboard ? 5 : 4;
         if (_keyboard)
         {
             bool bd = hw?.UsesBaolongda == true;
@@ -137,7 +137,7 @@ public partial class LightEditorWindow : Window
                 _light = ecLevel;
             }
         }
-        _speed = Math.Clamp(_settings.Speed, 0, 4);
+        _speed = Math.Clamp(_settings.Speed, _keyboard ? 1 : 0, _keyboard ? 5 : 4);
         _monochromeIndex = Math.Clamp(_settings.MonochromeIndex, 1, 29);
         _usePresetColor = _settings.UsePresetColor;
         _colorArgb = _settings.EffectiveColorArgb();
@@ -304,7 +304,7 @@ public partial class LightEditorWindow : Window
             LightSlider.Value = _light;
             LightText.Text = (_wujieWhite || _whiteBacklightOnly) ? (_light >= 2 ? WpfStrings.LightLevelBright : WpfStrings.LightLevelDim) : (_light + "/" + _lightMax);
             SpeedSlider.Value = _speed;
-            SpeedText.Text = _speed + "/4";
+            SpeedText.Text = _speed + "/5";
             return;
         }
         LightSlider.Value = _gradeBrightness ? _light : _light * 25;
@@ -634,10 +634,10 @@ public partial class LightEditorWindow : Window
     {
         if (_keyboard)
         {
-            _speed = Math.Clamp((int)Math.Round(e.NewValue), 0, 4);
+            _speed = Math.Clamp((int)Math.Round(e.NewValue), 1, 5);
             if (SpeedText != null)
             {
-                SpeedText.Text = _speed + "/4";
+                SpeedText.Text = _speed + "/5";
             }
             ScheduleAutoApply();
             return;
@@ -777,10 +777,10 @@ public partial class LightEditorWindow : Window
                         cycleColors[i] = LightChannelSettings.ManualPalette[paletteIndex - 1];
                     }
                     int nucSpeed = _nucSingleZone
-                        ? Math.Clamp(_speed, 0, 4)
+                        ? Math.Clamp(_speed, 1, 5)
                         : (manualKeyboard
-                            ? Math.Clamp((_manualInterval - 2) / 2, 0, 4)
-                            : Math.Clamp(_speed, 0, 4));
+                            ? Math.Clamp((_manualInterval - 2) / 2, 1, 5)
+                            : Math.Clamp(_speed, 1, 5));
                     int nucColor = string.Equals(effect, "Breathing", StringComparison.Ordinal)
                         ? _breathingIndex switch
                         {

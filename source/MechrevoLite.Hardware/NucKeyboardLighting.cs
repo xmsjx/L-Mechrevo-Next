@@ -66,9 +66,9 @@ internal static class NucKeyboardLighting
             if (!on || level <= 0)
             {
                 AcpiDriverEc.TryWriteByte(AddressBacklightWhite, (current & 0x0D) | 0x12);
-                Latch(0);
+                StopRainbow();
+                ClearBreathing();
                 WriteRgb(0, 0, 0);
-                Trigger(false);
                 return;
             }
 
@@ -81,37 +81,39 @@ internal static class NucKeyboardLighting
             };
             byte next = (byte)((current & 0x0D) | highNibble);
             AcpiDriverEc.TryWriteByte(AddressBacklightWhite, next);
-            Trigger(false);
-            // 先退出上一次的呼吸色码，否则 Rainbow/Manual 会被低 3 位锁在呼吸模式。
-            if (AcpiDriverEc.TryReadByte(AddressRgbControl, out byte previousControl)
-                && (previousControl & 0x07) != 0)
-            {
-                AcpiDriverEc.TryWriteByte(AddressRgbControl, (byte)(previousControl & 0xF8));
-            }
 
-            // effect: Single / Rainbow / Breathing / Manual(轮播)
+            // 顺序按 EC 官方实现：
+            // 单色：StopRainbow → StopBreathing → 写 RGB → 0x767 bit5
+            // 彩虹：StopBreathing → RGB=0 → 0x767 bit7（不碰 bit5）
+            // 呼吸：StopRainbow → 0x7C5 低 3 位色码（不碰 0x767）
+            // 轮播：StopRainbow → 定时写 RGB + 0x767 bit5
             if (string.Equals(effect, "Rainbow", StringComparison.Ordinal))
             {
-                WriteScaledColor(colorArgb);
-                Trigger(true);
+                StopRainbow();
+                ClearBreathing();
+                WriteRgb(0, 0, 0);
+                SetRainbow(true);
             }
             else if (string.Equals(effect, "Breathing", StringComparison.Ordinal))
             {
+                StopRainbow();
                 int code = BreathCode(colorArgb);
                 if (AcpiDriverEc.TryReadByte(AddressRgbControl, out byte ctrl))
                 {
-                    AcpiDriverEc.TryWriteByte(AddressRgbControl, (ctrl & 0xF8) | code);
+                    AcpiDriverEc.TryWriteByte(AddressRgbControl, (byte)((ctrl & 0xF8) | code));
                 }
-                Trigger(false);
             }
             else if (string.Equals(effect, "Manual", StringComparison.Ordinal))
             {
+                StopRainbow();
                 StartCycle(cycleColors, speed);
             }
             else
             {
+                StopRainbow();
+                ClearBreathing();
                 WriteScaledColor(colorArgb);
-                Trigger(false);
+                SetRgbLatch();
             }
             AcpiDriverEc.TryReadByte(AddressBacklightWhite, out byte blRead);
             AcpiDriverEc.TryReadByte(AddressTriggerByte, out byte trRead);
@@ -127,7 +129,7 @@ internal static class NucKeyboardLighting
     private static void StartCycle(int[] colors, int speed)
     {
         int[] palette = colors is { Length: > 0 } ? (int[])colors.Clone() : new[] { unchecked((int)0xFFFF0000) };
-        int interval = 70 * SpeedMap[Math.Clamp(speed, 0, SpeedMap.Length - 1)];
+        int interval = 70 * SpeedMap[Math.Clamp(speed, 1, SpeedMap.Length) - 1];
         CancellationTokenSource cts = new();
         _cycleCts = cts;
         _ = Task.Run(async () =>
@@ -136,7 +138,7 @@ internal static class NucKeyboardLighting
             while (!cts.IsCancellationRequested)
             {
                 WriteScaledColor(palette[index % palette.Length]);
-                Trigger(false);
+                SetRgbLatch();
                 index++;
                 try
                 {
@@ -184,6 +186,38 @@ internal static class NucKeyboardLighting
         if (AcpiDriverEc.TryReadByte(AddressTriggerByte, out byte trigger))
         {
             AcpiDriverEc.TryWriteByte(AddressTriggerByte, trigger | TriggerLatch | extra);
+        }
+    }
+
+    /// <summary>只清/置 0x767 bit7，不写 bit5；彩虹模式按官方实现走这条。</summary>
+    private static void SetRainbow(bool enabled)
+    {
+        if (AcpiDriverEc.TryReadByte(AddressTriggerByte, out byte trigger))
+        {
+            byte next = enabled
+                ? (byte)(trigger | TriggerRainbow)
+                : (byte)(trigger & ~TriggerRainbow);
+            AcpiDriverEc.TryWriteByte(AddressTriggerByte, next);
+        }
+    }
+
+    private static void StopRainbow() => SetRainbow(false);
+
+    /// <summary>单色/轮播刷新：只置 0x767 bit5，保留 bit7 的当前状态。</summary>
+    private static void SetRgbLatch()
+    {
+        if (AcpiDriverEc.TryReadByte(AddressTriggerByte, out byte trigger))
+        {
+            AcpiDriverEc.TryWriteByte(AddressTriggerByte, (byte)(trigger | TriggerLatch));
+        }
+    }
+
+    /// <summary>退出呼吸：只清 0x7C5 低 3 位，不碰 0x767。</summary>
+    private static void ClearBreathing()
+    {
+        if (AcpiDriverEc.TryReadByte(AddressRgbControl, out byte ctrl) && (ctrl & 0x07) != 0)
+        {
+            AcpiDriverEc.TryWriteByte(AddressRgbControl, (byte)(ctrl & 0xF8));
         }
     }
 
