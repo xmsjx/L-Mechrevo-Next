@@ -3314,6 +3314,14 @@ public partial class OriginalStyleWindow : Window
         if (on)
         {
             if (_services != null) { _services.ChargeLimit.SetEcDirectWrite(true); } else { AppConfig.Set("ec_charge_limit", "0"); }
+            // 关闭 EC 直写时必须真实清掉硬件限充，不能只改配置。
+            (bool cleared, string clearDetail) = await Task.Run(() =>
+            {
+                bool ok = MechrevoLite.Hardware.EcChargeLimitOverride.TrySetNoSmartHint(100, out string detail);
+                return (ok, detail);
+            });
+            ApplyBatteryModeHighlight(0);
+            Logger.WriteError("[battery-ec-off] 清除限充=" + cleared + " " + clearDetail);
         }
         else
         {
@@ -5561,7 +5569,14 @@ public partial class OriginalStyleWindow : Window
         }
         // GCU 路固定走 GCU 的 BatteryProtection（旧 LM 默认三档行为），
         // 不因 _services 存在就改走 DashboardCommands/EC 侧。
-        if (modeGcu && !MechrevoLite.Hardware.EcChargeLimit.IsLegacyGenerationBlocked())
+        bool modeEcThree = (modeGcu || (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+                && _backendRoute == BackendRoute.Ec))
+            && !modeBaolongda
+            && modeHw?.IsIntelNucMachine != true
+            && modeHw?.IsUmiMachine != true
+            && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
+            && !MechrevoLite.Hardware.EcChargeLimit.IsLegacyGenerationBlocked();
+        if (modeEcThree)
         {
             (bool gcuOk, string gcuDetail) = await Task.Run(() =>
             {
@@ -7298,11 +7313,36 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    private static bool HasOpenComboBox(DependencyObject root)
+    {
+        int count = VisualTreeHelper.GetChildrenCount(root);
+        for (int i = 0; i < count; i++)
+        {
+            DependencyObject child = VisualTreeHelper.GetChild(root, i);
+            if (child is ComboBox { IsDropDownOpen: true })
+            {
+                return true;
+            }
+            if (HasOpenComboBox(child))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// <summary>宽屏内容区的滚轮统一转发给 MainScroll；Sliders/ComboBox 不再吃掉页面滚动。</summary>
     private void MainScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         if (e.Handled || MainScroll == null)
         {
+            return;
+        }
+        // 下拉列表的 Popup 不在 MainScroll 的视觉树里，必须全局检查已展开的 ComboBox，
+        // 否则鼠标停在列表上滚轮会带着整页滚动，列表看起来错位。
+        if (HasOpenComboBox(MainScroll))
+        {
+            e.Handled = true;
             return;
         }
         DependencyObject? node = e.OriginalSource as DependencyObject;
