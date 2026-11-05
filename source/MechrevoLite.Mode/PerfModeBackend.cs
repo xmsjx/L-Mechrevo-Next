@@ -379,10 +379,27 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		}
 		if (on && !_hw.UsesBaolongda)
 		{
-			// GCU 厂商字段范围（如 0..250）比 UI 允许值窄：超范围的值会被固件夹回/拒绝，
-			// 先按设备字段范围钳制，避免“写了但回读不变”。
 			int reqCore = core;
 			int reqMem = memory;
+			bool coreOut = _hw.GpuCoreOffsetMaximum > _hw.GpuCoreOffsetMinimum
+				&& (core > _hw.GpuCoreOffsetMaximum || core < _hw.GpuCoreOffsetMinimum);
+			bool memOut = _hw.GpuMemoryOffsetMaximum > _hw.GpuMemoryOffsetMinimum
+				&& (memory > _hw.GpuMemoryOffsetMaximum || memory < _hw.GpuMemoryOffsetMinimum);
+			if (coreOut || memOut)
+			{
+				// 超出 GCU 厂商字段范围：固件不会接受，改走 NVAPI P0 偏移（NVML 无置频接口）。
+				bool nvapiOk = NvapiPStates.TrySetP0Offsets(core, memory, out int appliedCore, out int appliedMemory);
+				Logger.WriteError("[gpu-oc] 超出 GCU 字段范围 ⇒ NVAPI P0 core=" + core + " mem=" + memory
+					+ " ⇒ ok=" + nvapiOk + " 回读=" + appliedCore + "/" + appliedMemory);
+				if (nvapiOk)
+				{
+					// 清掉 GCU 字段/开关，避免两套叠加。
+					await _service.ApplyGcuGpuOverclock(false, 0, 0).ConfigureAwait(continueOnCapturedContext: false);
+					AppConfig.Set("gpu_oc_nvapi_active", 1);
+					return true;
+				}
+				Logger.WriteError("[gpu-oc] NVAPI P0 也失败 ⇒ 回退 GCU 字段钳制");
+			}
 			if (_hw.GpuCoreOffsetMaximum > _hw.GpuCoreOffsetMinimum)
 			{
 				core = Math.Clamp(core, _hw.GpuCoreOffsetMinimum, _hw.GpuCoreOffsetMaximum);

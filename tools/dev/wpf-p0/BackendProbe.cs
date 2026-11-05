@@ -733,14 +733,29 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            if (_service != null)
-            {
-                return await _service.ApplyGcuGpuOverclock(on, core, memory).ConfigureAwait(false);
-            }
             MechrevoHw? hw = _hw;
             if (hw == null)
             {
                 return false;
+            }
+            bool coreOut = hw.GpuCoreOffsetMaximum > hw.GpuCoreOffsetMinimum
+                && (core > hw.GpuCoreOffsetMaximum || core < hw.GpuCoreOffsetMinimum);
+            bool memOut = hw.GpuMemoryOffsetMaximum > hw.GpuMemoryOffsetMinimum
+                && (memory > hw.GpuMemoryOffsetMaximum || memory < hw.GpuMemoryOffsetMinimum);
+            if (on && _service != null && (coreOut || memOut))
+            {
+                bool nvOk = MechrevoLite.Gpu.NvapiPStates.TrySetP0Offsets(core, memory, out int ac, out int am);
+                Logger.WriteError("[gpu-oc] 自定义超范围 ⇒ NVAPI P0 core=" + core + " mem=" + memory
+                    + " ok=" + nvOk + " 回读=" + ac + "/" + am);
+                if (nvOk)
+                {
+                    await _service.ApplyGcuGpuOverclock(false, 0, 0).ConfigureAwait(false);
+                    return true;
+                }
+            }
+            if (_service != null)
+            {
+                return await _service.ApplyGcuGpuOverclock(on, core, memory).ConfigureAwait(false);
             }
             return await Task.Run(() =>
             {
