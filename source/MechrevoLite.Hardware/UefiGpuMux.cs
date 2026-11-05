@@ -79,6 +79,56 @@ internal static class UefiGpuMux
         return false;
     }
 
+    /// <summary>
+    /// NVRAM OemDisplayMode 变量是否存在、payload 大小。
+    /// 用于区分现代三模（payload >= 80）与 Legacy Dual-Mode / 未知机型（无变量或 payload < 80）。
+    /// </summary>
+    internal static bool TryGetPayloadInfo(out int size, out string variable)
+    {
+        size = 0;
+        variable = "";
+        if (!EnablePrivilege(out _))
+        {
+            return false;
+        }
+        foreach (string name in new[] { OemMagic, UniWill })
+        {
+            byte[] buffer = new byte[BufferSize];
+            uint read = GetFirmwareEnvironmentVariable(name, Guid, buffer, BufferSize);
+            if (read > 0)
+            {
+                size = (int)read;
+                variable = name;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// true = Legacy Dual-Mode 或无法证明是现代三模（无 NVRAM 变量 / payload < 80）；
+    /// false = 现代三模；null = 读取失败，按保守值 true 处理。
+    /// </summary>
+    private static bool? _legacyOrUnknownMux;
+    private static readonly object _muxGate = new();
+
+    internal static bool IsLegacyOrUnknownMux
+    {
+        get
+        {
+            lock (_muxGate)
+            {
+                if (_legacyOrUnknownMux.HasValue)
+                {
+                    return _legacyOrUnknownMux.Value;
+                }
+                bool legacy = !TryGetPayloadInfo(out int size, out _) || size < 80;
+                _legacyOrUnknownMux = legacy;
+                return legacy;
+            }
+        }
+    }
+
     /// <summary>visualMode: 0=纯核显, 1=混合, 2=独显直连。AMD/Intel 编码不同。</summary>
     internal static bool TryWriteColdMode(int visualMode, out string detail)
     {

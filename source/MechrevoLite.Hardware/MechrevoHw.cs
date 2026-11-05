@@ -896,6 +896,11 @@ public class MechrevoHw : IDisposable
 				// 避免在无独显机型上凭一个回答造出显卡面板/托盘项。
 				return DgpuGeneration != DgpuGenerationKind.NoDgpu;
 			}
+			if (UefiGpuMux.IsLegacyOrUnknownMux)
+			{
+				Logger.WriteLineIfChanged("igpu-mux-legacy", "IgpuOnly hidden by default: no modern OemDisplayMode NVRAM (Legacy Dual-Mode / unknown chassis)");
+				return false;
+			}
 			if (CpuVendor.AmdDefaultsTwoGpuModes)
 			{
 				Logger.WriteLineIfChanged("igpu-two-mode-default", "IgpuOnly hidden by default: AMD 6000/7x3x/7x4x family defaults to hybrid + dGPU only; user can force-show via igpu_only_ui=show");
