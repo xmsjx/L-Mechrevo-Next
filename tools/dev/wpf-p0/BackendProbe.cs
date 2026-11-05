@@ -1515,6 +1515,11 @@ internal sealed class BackendProbe : IDisposable
                     return InvokeBool(ShellType, "SetTransparencyEnabled", on);
                 case "darktheme":
                     return InvokeBool(ShellType, "SetDarkTheme", on);
+                case "webcam":
+                case "camera":
+                    bool cameraOk = MechrevoLite.Hardware.CameraPnpControl.TrySetEnabled(on, out _, out string cameraDetail);
+                    Logger.WriteError("[camera] PnP " + (on ? "启用" : "禁用") + " ⇒ " + cameraOk + " · " + cameraDetail);
+                    return cameraOk;
             }
             if (string.Equals(key, "micmute", StringComparison.OrdinalIgnoreCase))
             {

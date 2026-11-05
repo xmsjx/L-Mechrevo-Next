@@ -94,7 +94,19 @@ internal static class AcpiGpuHotSwitch
                         return true;
                     }
                 }
-                detail = "PnP 禁用未确认 · " + disableDetail;
+                // pnputil 有时 0 退出但设备仍在；再用 PnP cmdlet 强制一次。
+                string psDetail;
+                RunPnpPowerShell("Disable-PnpDevice", pnpInstance, out psDetail);
+                for (int i = 0; i < 20; i++)
+                {
+                    Thread.Sleep(500);
+                    if (FindNvidiaInstance(out _, out bool stillEnabled) && !stillEnabled)
+                    {
+                        detail = "PnP 静默独显成功（Disable-PnpDevice）· " + psDetail;
+                        return true;
+                    }
+                }
+                detail = "PnP 禁用未确认 · " + disableDetail + " · " + psDetail;
                 return false;
             }
             bool enabledOk = RunPnp("/enable-device", pnpInstance, force: false, out string enableDetail);
@@ -378,6 +390,32 @@ internal static class AcpiGpuHotSwitch
         {
         }
         return false;
+    }
+
+    private static bool RunPnpPowerShell(string action, string instanceId, out string detail)
+    {
+        detail = "";
+        try
+        {
+            string command = action + " -InstanceId '" + instanceId.Replace("'", "''") + "' -Confirm:$false";
+            using Process p = Process.Start(new ProcessStartInfo("powershell.exe",
+                "-NoProfile -ExecutionPolicy Bypass -Command \"" + command + "\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            })!;
+            string output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+            p.WaitForExit(15000);
+            detail = "PowerShell " + action + " exit=" + p.ExitCode + " " + output.Trim();
+            return p.ExitCode == 0;
+        }
+        catch (Exception ex)
+        {
+            detail = ex.GetType().Name + " " + ex.Message;
+            return false;
+        }
     }
 
     private static bool RunPnp(string action, string instanceId, bool force, out string detail)
