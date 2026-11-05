@@ -89,18 +89,25 @@ internal static class NucKeyboardLighting
             // 轮播：StopRainbow → 定时写 RGB + 0x767 bit5
             if (string.Equals(effect, "Rainbow", StringComparison.Ordinal))
             {
-                StopRainbow();
                 ClearBreathing();
-                WriteRgb(0, 0, 0);
-                SetRainbow(true);
+                // 彩虹需要非 0 种子色，且必须同时置 bit5(锁存) 与 bit7(彩虹)
+                WriteRgb(50, 40, 40);
+                if (AcpiDriverEc.TryReadByte(AddressTriggerByte, out byte rainbowTrigger))
+                {
+                    AcpiDriverEc.TryWriteByte(AddressTriggerByte, (byte)(rainbowTrigger | TriggerLatch | TriggerRainbow));
+                }
             }
             else if (string.Equals(effect, "Breathing", StringComparison.Ordinal))
             {
-                StopRainbow();
                 int code = BreathCode(colorArgb);
                 if (AcpiDriverEc.TryReadByte(AddressRgbControl, out byte ctrl))
                 {
                     AcpiDriverEc.TryWriteByte(AddressRgbControl, (byte)((ctrl & 0xF8) | code));
+                }
+                // 呼吸同样要走 0x767：清 bit7、置 bit5 锁存，固件才会切到呼吸模式
+                if (AcpiDriverEc.TryReadByte(AddressTriggerByte, out byte breathTrigger))
+                {
+                    AcpiDriverEc.TryWriteByte(AddressTriggerByte, (byte)((breathTrigger & ~TriggerRainbow) | TriggerLatch));
                 }
             }
             else if (string.Equals(effect, "Manual", StringComparison.Ordinal))
