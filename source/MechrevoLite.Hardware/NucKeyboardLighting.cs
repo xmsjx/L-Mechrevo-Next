@@ -79,7 +79,7 @@ internal static class NucKeyboardLighting
                 3 => 0x70,
                 _ => 0x90
             };
-            byte next = (byte)((current & 0x0F) | highNibble);
+            byte next = (byte)((current & 0x0D) | highNibble);
             AcpiDriverEc.TryWriteByte(AddressBacklightWhite, next);
             Trigger(false);
 
