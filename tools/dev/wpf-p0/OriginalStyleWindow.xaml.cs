@@ -4574,8 +4574,8 @@ public partial class OriginalStyleWindow : Window
                 bool ac = System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
                     == System.Windows.Forms.PowerLineStatus.Online;
                 int next = ac
-                    ? before switch { 1 => 0, 0 => 2, 2 => 3, 3 => 1, _ => 0 }
-                    : before switch { 1 => 0, 0 => 1, _ => 0 };
+                    ? before switch { 2 => 0, 0 => 1, 1 => 3, 3 => 2, _ => 0 }
+                    : before switch { 2 => 0, 0 => 2, _ => 0 };
                 Logger.WriteError("[perfkey] EC 性能键循环 " + before + " -> " + next + " (ac=" + ac + ")");
                 await SwitchModeAsync(next);
                 return;
