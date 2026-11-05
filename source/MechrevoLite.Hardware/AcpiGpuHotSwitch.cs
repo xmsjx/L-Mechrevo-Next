@@ -362,11 +362,13 @@ internal static class AcpiGpuHotSwitch
         try
         {
             using ManagementObjectSearcher searcher = new("root\\CIMV2",
-                "SELECT DeviceID,Status FROM Win32_PnPEntity WHERE PNPDeviceID LIKE 'PCI\\\\VEN_10DE%'");
+                "SELECT DeviceID,Status,PNPDeviceID FROM Win32_PnPEntity");
             foreach (ManagementObject item in searcher.Get())
             {
                 string? id = item["DeviceID"]?.ToString();
-                if (string.IsNullOrWhiteSpace(id)) continue;
+                string? pnp = item["PNPDeviceID"]?.ToString();
+                if (string.IsNullOrWhiteSpace(id) || pnp == null
+                    || !pnp.Contains("VEN_10DE", StringComparison.OrdinalIgnoreCase)) continue;
                 instanceId = id;
                 enabled = string.Equals(item["Status"]?.ToString(), "OK", StringComparison.OrdinalIgnoreCase);
                 return true;
@@ -408,10 +410,14 @@ internal static class AcpiGpuHotSwitch
         try
         {
             using ManagementObjectSearcher searcher = new("root\\CIMV2",
-                "SELECT PNPDeviceID FROM Win32_PnPEntity WHERE PNPDeviceID LIKE 'PCI\\\\VEN_10DE%'");
+                "SELECT PNPDeviceID FROM Win32_PnPEntity");
             foreach (ManagementObject item in searcher.Get())
             {
-                return true;
+                string? pnp = item["PNPDeviceID"]?.ToString();
+                if (pnp != null && pnp.Contains("VEN_10DE", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
             }
         }
         catch

@@ -1163,7 +1163,7 @@ public partial class OriginalStyleWindow : Window
     internal event Action? WideUiVisibilityChanged;
 
     internal bool WideIgpuSavingSupported => _backendProbe?.Hw?.SupportsGpuHotSwap == true
-        && _backendProbe?.Hw?.GpuMode == 1
+        && (_backendProbe?.CurrentGpuMode ?? -1) == 1
         && _backendProbe?.HasPendingGpuRestart != true;
 
     internal int WideIgpuSavingMode => _backendProbe?.Hw?.IgpuOnlySaveMode ?? -1;
@@ -5080,8 +5080,9 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
+        int effectiveGpuMode = _backendProbe?.CurrentGpuMode ?? hardware.GpuMode;
         bool igpuSavingVisible = (hardware.SupportsGpuHotSwap
-            && hardware.GpuMode == 1
+            && effectiveGpuMode == 1
             && _backendProbe?.HasPendingGpuRestart != true) || UiQaShowAll.Enabled;
         if (igpuSavingVisible && IgpuSavingPreviewRow == null)
         {
@@ -5269,7 +5270,8 @@ public partial class OriginalStyleWindow : Window
         }
         MechrevoService? service = _backendProbe?.Service;
         MechrevoHw? hardware = _backendProbe?.Hw;
-        if (hardware?.GpuMode != 1)
+        int currentGpuModeForSaving = _backendProbe?.CurrentGpuMode ?? hardware?.GpuMode ?? -1;
+        if (currentGpuModeForSaving != 1)
         {
             StatusText.Text = WpfStrings.L("核显省电仅混合模式可用", "iGPU saving is only available in hybrid mode");
             return;
