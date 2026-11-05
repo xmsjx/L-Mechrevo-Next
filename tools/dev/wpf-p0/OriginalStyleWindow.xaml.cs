@@ -6008,10 +6008,15 @@ public partial class OriginalStyleWindow : Window
         {
             keys = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
         }
+        // 迷你窗至少保留“禁用 Win 键”磁贴；旧配置里没有时补到末尾。
+        if (!keys.Any(k => string.Equals(k, "winkey", StringComparison.OrdinalIgnoreCase)))
+        {
+            keys.Add("winkey");
+        }
         List<QuickChoice> selected = new List<QuickChoice>();
         foreach (string key in keys)
         {
-            if (selected.Count >= 5)
+            if (selected.Count >= 6)
             {
                 break;
             }
