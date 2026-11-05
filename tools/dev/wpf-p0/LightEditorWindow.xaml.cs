@@ -357,7 +357,7 @@ public partial class LightEditorWindow : Window
                 && KeyboardFirmwareEffects.IsSingleZoneRgb(L_Mechrevo.WpfP0.Services.WpfBackend.Hw.Capabilities.KeyboardType);
             // EC 单区支持单色/呼吸颜色下发；NUC 固件单区的呼吸是硬件固定色，才隐藏颜色。
             bool colorVisible = _nucSingleZone
-                ? (!keyboardManual && !keyboardRainbow && KeyboardFirmwareEffects.IsSingleColorEffect(effect))
+                ? !keyboardManual
                 : (!wujie && !keyboardManual && !keyboardRainbow
                     && (!keyboardBreathing || !firmwareSingleZone)
                     && KeyboardFirmwareEffects.IsSingleColorEffect(effect));
@@ -465,8 +465,8 @@ public partial class LightEditorWindow : Window
                 || (L_Mechrevo.WpfP0.Services.WpfBackend.Hw != null
                     && MechrevoLite.Hardware.KeyboardFirmwareEffects.IsSingleZoneRgb(
                         L_Mechrevo.WpfP0.Services.WpfBackend.Hw.Capabilities.KeyboardType)));
-        // EC 单区有速度概念（Manual 轮播间隔 / 部分固件效果），不再固定隐藏。
-        SpeedRow.Visibility = _nucSingleZone ? Visibility.Visible : Visibility.Collapsed;
+        // 单区只有轮播（Manual）有速度概念，单色/彩虹固定速度。
+        SpeedRow.Visibility = _nucSingleZone && manual ? Visibility.Visible : Visibility.Collapsed;
         PerKeyPanel.Visibility = manual && !_nucSingleZone ? Visibility.Visible : Visibility.Collapsed;
         ManualPalettePanel.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
         BreathPanel.Visibility = breathing ? Visibility.Visible : Visibility.Collapsed;
@@ -586,6 +586,19 @@ public partial class LightEditorWindow : Window
 
     private void Effect_Changed(object sender, SelectionChangedEventArgs e)
     {
+        if (_ecExperimentKeyboard && _nucSingleZone && SelectedEffect is not ("Off" or "None"))
+        {
+            // 切效果即开灯；否则电源关着时选效果会被当成关灯下发。
+            if (PowerCheck.IsChecked != true)
+            {
+                PowerCheck.IsChecked = true;
+            }
+            if (_light <= 0)
+            {
+                _light = 1;
+                LightSlider.Value = 1;
+            }
+        }
         RefreshColorUi();
         ScheduleAutoApply();
     }
@@ -705,7 +718,7 @@ public partial class LightEditorWindow : Window
             string effect = SelectedEffect;
             bool power = PowerCheck.IsChecked == true;
             bool powerWasOn = _settings.PowerOn;
-            if (power && !powerWasOn && _keyboard && _light <= 0)
+            if (power && _keyboard && _light <= 0)
             {
                 _light = 1;
                 LightSlider.Value = 1;
