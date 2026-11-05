@@ -738,6 +738,7 @@ public partial class CustomModeWindow : Window
         SetSlider(FanDelaySlider, FanDelayText, s.FanSwitchSpeedMs ?? 300);
         SetSlider(CoreOffsetSlider, CoreOffsetText, s.GpuCoreOffset ?? 0);
         SetSlider(MemoryOffsetSlider, MemoryOffsetText, s.GpuMemoryOffset ?? 0);
+        UpdateGpuOcWarnings();
         // 开关状态先应用，再按新状态刷新滑块可用性；否则切换配置时 GPU OC 滑块会停在旧状态。
         DbSlider.IsEnabled = DbSwitch.IsChecked == true;
         TccSlider.IsEnabled = TccSwitch.IsChecked == true;
@@ -1440,8 +1441,44 @@ public partial class CustomModeWindow : Window
     private void GpuPowerLimit_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (GpuPowerLimitText != null) GpuPowerLimitText.Text = ((int)e.NewValue).ToString(); }
     private void FanDelay_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (FanDelayText != null) FanDelayText.Text = ((int)e.NewValue).ToString(); }
     private void FanSensitivitySwitch_Changed(object sender, RoutedEventArgs e) { if (FanDelaySlider != null && FanSensitivitySwitch != null) FanDelaySlider.IsEnabled = FanSensitivitySwitch.IsChecked == true; }
-    private void CoreOffset_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (CoreOffsetText != null) CoreOffsetText.Text = ((int)e.NewValue).ToString(); }
-    private void MemoryOffset_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (MemoryOffsetText != null) MemoryOffsetText.Text = ((int)e.NewValue).ToString(); }
+    private void CoreOffset_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (CoreOffsetText != null) CoreOffsetText.Text = ((int)e.NewValue).ToString();
+        UpdateGpuOcWarnings();
+    }
+
+    private void MemoryOffset_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (MemoryOffsetText != null) MemoryOffsetText.Text = ((int)e.NewValue).ToString();
+        UpdateGpuOcWarnings();
+    }
+
+    private void UpdateGpuOcWarnings()
+    {
+        if (CoreOffsetText == null || MemoryOffsetText == null)
+        {
+            return;
+        }
+        bool gen50 = CurrentHw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
+        int core = (int)Math.Round(CoreOffsetSlider.Value);
+        int mem = (int)Math.Round(MemoryOffsetSlider.Value);
+        int coreWarn = gen50 ? 300 : 150;
+        int memWarn = gen50 ? 2000 : 1000;
+        bool coreHigh = core >= coreWarn;
+        bool memHigh = mem >= memWarn;
+        CoreOffsetText.Foreground = coreHigh ? System.Windows.Media.Brushes.Red : null;
+        if (!coreHigh)
+        {
+            CoreOffsetText.SetResourceReference(TextBox.ForegroundProperty, "TextBrush");
+        }
+        MemoryOffsetText.Foreground = memHigh ? System.Windows.Media.Brushes.Red : null;
+        if (!memHigh)
+        {
+            MemoryOffsetText.SetResourceReference(TextBox.ForegroundProperty, "TextBrush");
+        }
+        CoreOffsetText.ToolTip = coreHigh ? $"核心偏移 {core} MHz 已超过安全提示线 {coreWarn} MHz，可能损坏硬件" : null;
+        MemoryOffsetText.ToolTip = memHigh ? $"显存偏移 {mem} MHz 已超过安全提示线 {memWarn} MHz，可能损坏硬件" : null;
+    }
 
     private async Task ApplyEcExperimentalCustomAsync()
     {

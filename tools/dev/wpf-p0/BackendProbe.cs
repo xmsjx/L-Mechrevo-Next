@@ -728,6 +728,44 @@ internal sealed class BackendProbe : IDisposable
         }
     }
 
+    /// <summary>按指定 core/mem 应用显卡超频（自定义档启动恢复用；EC 路走 NVAPI P0）。</summary>
+    internal async Task<bool> ApplyGpuOverclockValuesAsync(bool on, int core, int memory)
+    {
+        try
+        {
+            if (_service != null)
+            {
+                return await _service.ApplyGcuGpuOverclock(on, core, memory).ConfigureAwait(false);
+            }
+            MechrevoHw? hw = _hw;
+            if (hw == null)
+            {
+                return false;
+            }
+            return await Task.Run(() =>
+            {
+                if (!hw.EnsureDirectGpuOverclock())
+                {
+                    Logger.WriteError("[gpu-oc] EC直写初始化失败");
+                    return false;
+                }
+                if (on)
+                {
+                    bool coreOk = hw.TrySetDirectGpuOverclockField("GpuCoreClockOffsetOC", core);
+                    bool memOk = hw.TrySetDirectGpuOverclockField("GpuMemoryClockOffsetOC", memory);
+                    Logger.WriteError("[gpu-oc] EC直写自定义 core=" + core + " mem=" + memory + " ⇒ " + coreOk + "/" + memOk);
+                }
+                bool ok = hw.TrySetDirectGpuOverclockField("OverClockingSwitch", on ? 1 : 0);
+                Logger.WriteError("[gpu-oc] EC直写开关=" + on + " ⇒ " + ok);
+                return ok;
+            }).ConfigureAwait(false);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     /// <summary>色彩增强开关 + 档位下发：GCU 侧切换是异步的，先等一拍再下发档位，最后再补一次，避免首次开启被状态包盖掉。</summary>
     /// <summary>色彩增强开关 + 档位下发：GCU 档位表可能在启动后异步到达，失败时请求状态并重试。</summary>
     internal async Task<bool> ApplyDisplayEffectAsync(bool on, string? mode)

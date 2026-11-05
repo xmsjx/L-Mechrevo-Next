@@ -4750,9 +4750,26 @@ public partial class OriginalStyleWindow : Window
                 || (!hw.IsGcuConnected && !GcuEcExperimental.Enabled)
                 || hw.UsesBaolongda
                 || hw.IsIntelNucMachine
-                || hw.IsUmiMachine
-                || !probe.GpuOcSupported
-                || MechrevoLite.AppConfig.Get("gpu_oc", 0) == 0)
+                || hw.IsUmiMachine)
+            {
+                return;
+            }
+            // 自定义档的 OC 不写固件，必须在每次启动/重启后按保存的档位重新应用。
+            string activeId = MechrevoLite.Mode.PerfModeStore.ActiveModeId ?? "";
+            if (activeId.StartsWith("custom", StringComparison.OrdinalIgnoreCase))
+            {
+                MechrevoLite.Mode.PerfModeSettings custom = MechrevoLite.Mode.PerfModeStore.LoadSettings(activeId);
+                if (custom.GpuOverclockOn == true
+                    && (custom.GpuCoreOffset.HasValue || custom.GpuMemoryOffset.HasValue))
+                {
+                    int core = custom.GpuCoreOffset ?? 105;
+                    int mem = custom.GpuMemoryOffset ?? 500;
+                    bool customOk = await probe.ApplyGpuOverclockValuesAsync(true, core, mem).ConfigureAwait(true);
+                    Logger.WriteError("[gpu-oc] 启动恢复自定义档超频 core=" + core + " mem=" + mem + " ⇒ " + customOk);
+                    return;
+                }
+            }
+            if (!probe.GpuOcSupported || MechrevoLite.AppConfig.Get("gpu_oc", 0) == 0)
             {
                 return;
             }
