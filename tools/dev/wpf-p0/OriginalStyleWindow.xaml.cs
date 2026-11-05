@@ -5248,7 +5248,7 @@ public partial class OriginalStyleWindow : Window
                 _backendProbe?.Hw?.SetAcpiIgpuOnlyState(on);
                 if (on && forcedSilence) MechrevoLite.Hardware.AcpiGpuHotSwitch.MarkForcedSilence();
                 if (!on) MechrevoLite.Hardware.AcpiGpuHotSwitch.ClearForcedSilence();
-                StatusText.Text = on ? "核显省电已开启（ACPI 热切）" : "独显已恢复（ACPI 热切）";
+                StatusText.Text = on ? "核显省电已开启" : "独显已恢复";
             }
             else
             {
