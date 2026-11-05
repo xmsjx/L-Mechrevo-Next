@@ -79,13 +79,13 @@ internal static class UefiGpuMux
         return false;
     }
 
-    /// <summary>visualMode: 1=混合, 2=独显直连。</summary>
+    /// <summary>visualMode: 0=纯核显, 1=混合, 2=独显直连。AMD/Intel 编码不同。</summary>
     internal static bool TryWriteColdMode(int visualMode, out string detail)
     {
         detail = "";
-        if (visualMode != 1 && visualMode != 2)
+        if (visualMode < 0 || visualMode > 2)
         {
-            detail = "只支持混合/独显直连";
+            detail = "只支持核显/混合/独显直连";
             return false;
         }
         if (!TryRead(out int current, out string variable, out string error))
@@ -93,9 +93,11 @@ internal static class UefiGpuMux
             detail = error;
             return false;
         }
+        // AMD: 0=MSHybrid, 1=dGPU only, 2=iGPU only
+        // Intel: 1=iGPU only, 2=dGPU only, 4=dynamic(hybrid)
         int target = CpuVendor.IsAmd
-            ? (visualMode == 2 ? 1 : 0)
-            : (visualMode == 2 ? 2 : 4);
+            ? (visualMode == 0 ? 2 : (visualMode == 2 ? 1 : 0))
+            : (visualMode == 0 ? 1 : (visualMode == 2 ? 2 : 4));
         if (current == target)
         {
             detail = "NVRAM 已是目标模式";
@@ -138,6 +140,11 @@ internal static class UefiGpuMux
             return false;
         }
         detail = $"NVRAM {variable} offset98 {current} -> {target} (visual {visualMode})";
+        // 同步 ACPI 运行期选择子，避免 POST 时 NVRAM 与固件状态不一致。
+        if (AcpiGpuHotSwitch.IsSupported)
+        {
+            AcpiGpuHotSwitch.TrySetIgpuOnly(visualMode == 0, stopDisplayContainer: false, out _);
+        }
         return true;
     }
 

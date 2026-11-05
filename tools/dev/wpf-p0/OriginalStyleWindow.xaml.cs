@@ -5482,7 +5482,7 @@ public partial class OriginalStyleWindow : Window
 
     private async Task SwitchUmiGpuColdAsync(int mode, ToggleButton button)
     {
-        if (_backendProbe == null || (mode != 1 && mode != 2))
+        if (_backendProbe == null || mode < 0 || mode > 2)
         {
             return;
         }
@@ -5508,7 +5508,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         bool ok = MechrevoLite.Hardware.UefiGpuMux.TryWriteColdMode(mode, out string detail);
-        Logger.WriteLine("[gpu-mux] UMI cold switch " + (ok ? "OK" : "FAIL") + "：" + detail);
+        Logger.WriteLine("[gpu-mux] 冷切换模式=" + mode + " " + (ok ? "OK" : "FAIL") + "：" + detail);
         if (!ok)
         {
             StatusText.Text = WpfStrings.L("UEFI 显卡模式写入失败：", "Failed to write UEFI GPU mode: ") + detail;
