@@ -1,5 +1,6 @@
 using System;
 using System.Windows;
+using System.Linq;
 using System.Windows.Controls;
 using MechrevoLite;
 using MechrevoLite.Hardware;
@@ -19,7 +20,9 @@ public partial class HidKeyboardWindow : Window
     {
         InitializeComponent();
         _rgb = rgb;
-        _effects = LightingCatalog.VisibleHidEffects(L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.Capabilities.KeyboardType ?? 0);
+        _effects = LightingCatalog.VisibleHidEffects(L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.Capabilities.KeyboardType ?? 0)
+            .Concat(HidStreamerEffects.Extra)
+            .ToArray();
         PowerCheck.IsChecked = _rgb.KbPowerOn;
         BrightnessSlider.Value = Math.Clamp(_rgb.Brightness, 0, 100);
         BrightnessText.Text = ((int)BrightnessSlider.Value) + "%";
@@ -56,11 +59,11 @@ public partial class HidKeyboardWindow : Window
 
     private void RefreshParams()
     {
-        int mode = SelectedMode;
-        ColorRow.Visibility = HasColor(mode) ? Visibility.Visible : Visibility.Collapsed;
-        SpeedRow.Visibility = HasSpeed(mode) ? Visibility.Visible : Visibility.Collapsed;
+        int mode = HidStreamerEffects.ToLocalMode(SelectedMode);
+        ColorRow.Visibility = HidStreamerEffects.HasColor(mode) ? Visibility.Visible : Visibility.Collapsed;
+        SpeedRow.Visibility = HidStreamerEffects.HasSpeed(mode) ? Visibility.Visible : Visibility.Collapsed;
         AngleRow.Visibility = mode == 1 ? Visibility.Visible : Visibility.Collapsed;
-        if (HasColor(mode))
+        if (HidStreamerEffects.HasColor(mode))
         {
             _color = mode switch
             {
@@ -458,15 +461,16 @@ public partial class HidKeyboardWindow : Window
                 StatusText.Text = WpfStrings.HidKeyboardWindow_xaml_Text_9 + _rgb.LastError;
                 return;
             }
-            ApplyEffectParams(SelectedMode);
+            int localMode = HidStreamerEffects.ToLocalMode(SelectedMode);
+            ApplyEffectParams(localMode);
             if (FpsCombo.SelectedItem is ComboBoxItem fpsItem
                 && fpsItem.Tag is string fpsText
                 && int.TryParse(fpsText, out int fps))
             {
                 _rgb.TargetFps = Math.Clamp(fps, 15, 60);
             }
-            _rgb.KbHidMode = SelectedMode;
-            _rgb.StartMode(SelectedMode);
+            _rgb.KbHidMode = localMode;
+            _rgb.StartMode(localMode);
             _rgb.ApplyBrightnessToDevice();
             _rgb.SaveConfig();
             StatusText.Text = WpfStrings.HidKeyboardWindow_xaml_Text_10;
