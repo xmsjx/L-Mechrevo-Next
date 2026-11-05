@@ -3629,7 +3629,7 @@ public partial class MainWindow : Window
                 : hw?.SupportsKeyboard ?? false,
             "HidLightbar/Ctrl" => probe?.SupportsLightbar ?? false,
             "HidLightbar_Logo/Ctrl" => hw?.SupportsLogoLight == true
-                || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar),
+                || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo),
             "HidLightbar_Hinge/Ctrl" => probe?.SupportsHingeLight ?? false,
             "HidLightbar_Sync/Ctrl" => probe?.SupportsSyncLight ?? false,
             _ => false

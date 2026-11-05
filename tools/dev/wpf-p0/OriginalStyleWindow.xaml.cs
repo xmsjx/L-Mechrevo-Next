@@ -950,7 +950,7 @@ public partial class OriginalStyleWindow : Window
             {
                 "HidLightbar/Ctrl" => probe.SupportsLightbar,
                 "HidLightbar_Logo/Ctrl" => hw?.SupportsLogoLight == true
-                    || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar),
+                    || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo),
                 "HidLightbar_Hinge/Ctrl" => probe.SupportsHingeLight,
                 "HidLightbar_Sync/Ctrl" => probe.SupportsSyncLight,
                 _ => false
@@ -7361,7 +7361,7 @@ public partial class OriginalStyleWindow : Window
                 || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar)
                 || hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
             bool hasLogo = caps.LogoLight || (hw?.SupportsLogoLight ?? false)
-                || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
+                || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo);
             bool xingyaoLightIdle = MechrevoLite.Hardware.XingyaoQuickSwitch.IsApplicable(hw);
             LightingSection.Visibility = (hasKeyboard || hasLightbar || hasLogo || xingyaoLightIdle) ? Visibility.Visible : Visibility.Collapsed;
             KeyboardLightRow.Visibility = hasKeyboard ? Visibility.Visible : Visibility.Collapsed;
@@ -7469,7 +7469,7 @@ public partial class OriginalStyleWindow : Window
         bool hasStrip = (caps?.Lightbar ?? false) || (hw?.SupportsLightbar ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
         bool hasLogo = (caps?.LogoLight ?? false) || (hw?.SupportsLogoLight ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
+            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo);
         bool hasHinge = _backendProbe?.SupportsHingeLight == true;
         bool hasSync = _backendProbe?.SupportsSyncLight == true;
         KeyboardLightRow.Visibility = keyboard ? Visibility.Visible : Visibility.Collapsed;

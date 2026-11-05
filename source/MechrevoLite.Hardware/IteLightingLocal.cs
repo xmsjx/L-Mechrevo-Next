@@ -30,8 +30,28 @@ internal static class IteLightingLocal
     private static bool? _hasLightbar;
     private static bool? _hasHinge;
 
-    internal static bool HasLightbar => _hasLightbar ??= FindDevice(LightbarPid, LightbarUsage) != null;
-    internal static bool HasHinge => _hasHinge ??= FindDevice(HingePid, 0) != null;
+    internal static bool HasUsbLightbar => HasUsbDevice(LightbarPid, LightbarUsage);
+    internal static bool HasUsbLogo => HasUsbLightbar || HasUsbDevice(HingePid, 0);
+    internal static bool HasLightbar => _hasLightbar ??= HasUsbLightbar || EcDirectLightbarSupported;
+    internal static bool HasHinge => _hasHinge ??= HasUsbDevice(HingePid, 0);
+
+    /// <summary>无 USB 灯带时，按 OpenRevo 回退到主板 EC 灯带（支持位 1893 bit6 / 1934 bit4）。</summary>
+    internal static bool EcDirectLightbarSupported
+    {
+        get
+        {
+            try
+            {
+                bool byte1 = AcpiDriverEc.TryReadByte(1893, out byte support1) && (support1 & 0x40) != 0;
+                bool byte3 = AcpiDriverEc.TryReadByte(1934, out byte support3) && (support3 & 0x10) != 0;
+                return byte1 || byte3;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
 
     internal static void Invalidate()
     {
@@ -44,7 +64,19 @@ internal static class IteLightingLocal
 
     /// <summary>灯带：topic = HidLightbar/Ctrl。</summary>
     internal static bool TryApplyLightbar(string effect, bool on, int brightness, int speed, int colorArgb, out string detail)
-        => TryApply(LightbarPid, LightbarUsage, ControlLightbar, BlankLightbar, effect, on, brightness, speed, colorArgb, out detail);
+    {
+        if (HasUsbDevice(LightbarPid, LightbarUsage))
+        {
+            return TryApply(LightbarPid, LightbarUsage, ControlLightbar, BlankLightbar, effect, on, brightness, speed, colorArgb, out detail);
+        }
+        if (EcDirectLightbarSupported)
+        {
+            detail = "EC direct lightbar effect=" + effect + " light=" + brightness;
+            return UmiLightbar.SetEffect(effect, Color.FromArgb(colorArgb), brightness);
+        }
+        detail = "无 USB 7001/EC 灯带";
+        return false;
+    }
 
     /// <summary>铰链：topic = HidLightbar_Hinge/Ctrl。</summary>
     internal static bool TryApplyHinge(string effect, bool on, int brightness, int speed, int colorArgb, out string detail)
@@ -117,6 +149,12 @@ internal static class IteLightingLocal
             detail = ex.GetType().Name + " " + ex.Message;
             return false;
         }
+    }
+
+    private static bool HasUsbDevice(ushort pid, ushort usage)
+    {
+        using HidDeviceWin? device = FindDevice(pid, usage);
+        return device != null;
     }
 
     private static HidDeviceWin? FindDevice(ushort pid, ushort usage)
