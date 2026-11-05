@@ -33,6 +33,8 @@ public partial class LightEditorWindow : Window
     /// <summary>⭐ 2026-10-26（task-17 · 宽屏白色背光入口）：白色背光键盘只有 电源 + 2 档亮度，没有灯效/颜色/速度 ✅。</summary>
     private readonly bool _whiteBacklightOnly;
     private readonly bool _nucSingleZone;
+    /// <summary>EC 实验模式（GCU 离线）下的键盘编辑器：不走 GCU 服务，直接写 EC。</summary>
+    private readonly bool _ecExperimentKeyboard;
 
     /// <summary>NUC/UMI 原厂灯带没有速度寄存器，编辑器隐藏速度行；其它机型不受影响。</summary>
     private readonly bool _hideSpeedForNucLightbar;
@@ -52,10 +54,13 @@ public partial class LightEditorWindow : Window
         _whiteBacklightOnly = whiteBacklightOnly && string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
         _keyboard = string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
         MechrevoHw? keyboardHw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        _ecExperimentKeyboard = _keyboard && GcuEcKeyboard.Active;
         _nucSingleZone = _keyboard
-            && (keyboardHw?.IsIntelNucMachine == true || keyboardHw?.IsUmiMachine == true)
-            && L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.IsConnected != true
-            && NucKeyboardLighting.IsSingleZone();
+            && (((keyboardHw?.IsIntelNucMachine == true || keyboardHw?.IsUmiMachine == true)
+                    && L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.IsConnected != true
+                    && NucKeyboardLighting.IsSingleZone())
+                // EC 实验模式的同方单区键盘与 NUC/UMI 单区同一套 EC 写法。
+                || GcuEcKeyboard.IsEcSingleZone);
         _hideSpeedForNucLightbar = string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
             && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } lightbarHw
             && (lightbarHw.IsIntelNucMachine || lightbarHw.IsUmiMachine);
@@ -115,7 +120,7 @@ public partial class LightEditorWindow : Window
         {
             _light = nucBrightness;
         }
-        if (_keyboard && !_wujieWhite && !_whiteBacklightOnly && hw != null)
+        if (_keyboard && !_wujieWhite && !_whiteBacklightOnly && !_ecExperimentKeyboard && hw != null)
         {
             // 编辑器以硬件当前亮度为准；否则 Fn 调过亮度后，编辑窗口仍显示旧的保存值。
             int actual = hw.KeyboardBrightness;
@@ -148,6 +153,15 @@ public partial class LightEditorWindow : Window
             _mixColors = (int[])mix.Clone();
         }
         PowerCheck.IsChecked = _settings.PowerOn;
+        if (_ecExperimentKeyboard && GcuEcKeyboard.TryReadPower(out bool ecPowerOn))
+        {
+            // EC 实验模式没有 GCU 状态包，电源/白光亮度以 EC 回读为准。
+            PowerCheck.IsChecked = ecPowerOn;
+            if (_whiteBacklightOnly && EcKeyboardLight.TryGet(out _, out int whiteLevel) && whiteLevel >= 1 && whiteLevel <= 2)
+            {
+                _light = whiteLevel;
+            }
+        }
         if (_keyboard && _wujieWhite)
         {
             // 无界白键盘的实际电源状态以 EC 为准；GCU 的 power=False 可能只是状态没回读。
@@ -716,7 +730,7 @@ public partial class LightEditorWindow : Window
                 LightingSettingsStore.SavePower(_topic, power, "用户编辑灯光电源");
             }
             _settings = next;
-            if (L_Mechrevo.WpfP0.Services.WpfBackend.Service == null)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.Service == null && !_ecExperimentKeyboard)
             {
                 if (!fromAuto)
                 {
@@ -727,6 +741,16 @@ public partial class LightEditorWindow : Window
             bool ok = true;
             if (string.Equals(_topic, "Keyboard/Ctrl", StringComparison.Ordinal))
             {
+                if (_ecExperimentKeyboard && GcuEcKeyboard.IsEcWhite)
+                {
+                    // EC 实验模式白光：只有电源 + 2 档亮度。
+                    return GcuEcKeyboard.ApplyWhite(power, _light >= 2 ? 2 : 1);
+                }
+                if (_ecExperimentKeyboard && (GcuEcKeyboard.IsHid || !GcuEcKeyboard.HasControllableKeyboard))
+                {
+                    // HID 单键/四分区由 HidKeyboardWindow 处理；这里不要再落 EC 白光。
+                    return false;
+                }
                 if (_nucSingleZone)
                 {
                     int[] cycleColors = new int[_manualIndexes.Length];

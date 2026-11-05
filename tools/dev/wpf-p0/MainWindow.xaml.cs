@@ -2897,6 +2897,10 @@ public partial class MainWindow : Window
             hasKeyboard = WpfBackend.rgb?.IsConnected == true
                 || MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone();
         }
+        if (GcuEcKeyboard.Active)
+        {
+            hasKeyboard = GcuEcKeyboard.HasControllableKeyboard;
+        }
         bool hasLightbar = hw?.SupportsLightbar ?? false;
         bool hasLogo = hw?.SupportsLogoLight ?? false;
         bool hasHinge = hw?.SupportsHingeLight ?? false;
@@ -3492,6 +3496,11 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (GcuEcKeyboard.Active)
+            {
+                // EC 实验模式：以实际探测为准（与迷你窗 IsHidKeyboard 同口径）。
+                return GcuEcKeyboard.IsHid;
+            }
             if (hw == null
                 || hw.UsesBaolongda
                 || hw.WujieSmuApu
@@ -3532,6 +3541,10 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (GcuEcKeyboard.Active)
+            {
+                return GcuEcKeyboard.IsEcWhite;
+            }
             if (hw == null || !hw.SupportsKeyboard || WideIsHidKeyboard(hw) || hw.UsesBaolongda)
             {
                 return false;
@@ -3608,7 +3621,9 @@ public partial class MainWindow : Window
         BackendProbe? probe = _probe;
         return topic switch
         {
-            "Keyboard/Ctrl" => hw?.SupportsKeyboard ?? false,
+            "Keyboard/Ctrl" => GcuEcKeyboard.Active
+                ? GcuEcKeyboard.HasControllableKeyboard
+                : hw?.SupportsKeyboard ?? false,
             "HidLightbar/Ctrl" => probe?.SupportsLightbar ?? false,
             "HidLightbar_Logo/Ctrl" => hw?.SupportsLogoLight == true,
             "HidLightbar_Hinge/Ctrl" => probe?.SupportsHingeLight ?? false,
@@ -3676,7 +3691,8 @@ public partial class MainWindow : Window
     private void OpenWideHidKeyboardEditor(string title)
     {
         // task-26：无设备/后端未连接 ⇒ 只提示不打开（⛔ 不伪造能力；HidKeyboardWindow 需要真实 KeyboardRgb）
-        if (!IsWideBackendConnected || (_probe?.Hw ?? WpfBackend.Hw) is null)
+        // EC 实验模式下 GCU 离线，但 HID 键盘不依赖 GCU，照常打开。
+        if ((!IsWideBackendConnected && !GcuEcKeyboard.IsHid) || (_probe?.Hw ?? WpfBackend.Hw) is null)
         {
             Logger.WriteLineIfChanged("wide-light-hid-no-device",
                 $"[wide-light] HID 编辑入口：无设备或后端未连接（connected={IsWideBackendConnected} hw={((_probe?.Hw ?? WpfBackend.Hw) == null ? "null" : "ok")}）⇒ 只提示，不打开 ✅");

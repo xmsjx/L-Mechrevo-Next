@@ -784,6 +784,11 @@ internal sealed class BackendProbe : IDisposable
             {
                 return await _service.SetKeyboardPower(on).ConfigureAwait(false);
             }
+            if (GcuEcKeyboard.Active)
+            {
+                // EC 实验模式：按探测到的键盘类型分流；HID 由 KeyboardRgb 路径处理，这里不碰 EC。
+                return GcuEcKeyboard.ApplyFromSettings(null, on);
+            }
             if (NucKeyboardLighting.IsSingleZone())
             {
                 int level = NucKeyboardLighting.TryReadBrightness(out int current) && current > 0 ? current : 3;
@@ -839,6 +844,10 @@ internal sealed class BackendProbe : IDisposable
             if (_service != null)
             {
                 return await _service.SetKeyboardEffect(effect, light, speed, "None", color, true).ConfigureAwait(false);
+            }
+            if (GcuEcKeyboard.Active)
+            {
+                return GcuEcKeyboard.ApplyFromSettings(effect, true, light);
             }
             if (NucKeyboardLighting.IsSingleZone())
             {
