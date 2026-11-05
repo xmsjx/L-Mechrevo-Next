@@ -2901,9 +2901,12 @@ public partial class MainWindow : Window
         {
             hasKeyboard = GcuEcKeyboard.HasControllableKeyboard;
         }
-        bool hasLightbar = hw?.SupportsLightbar ?? false;
-        bool hasLogo = hw?.SupportsLogoLight ?? false;
-        bool hasHinge = hw?.SupportsHingeLight ?? false;
+        bool hasLightbar = (hw?.SupportsLightbar ?? false)
+            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
+        bool hasLogo = (hw?.SupportsLogoLight ?? false)
+            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
+        bool hasHinge = (hw?.SupportsHingeLight ?? false)
+            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasHinge);
         bool hasSync = hw?.SupportsSyncLight ?? false;
         foreach ((string topic, string title, (string Effect, string Name)[] effects) in channels)
         {
@@ -3625,7 +3628,8 @@ public partial class MainWindow : Window
                 ? GcuEcKeyboard.HasControllableKeyboard
                 : hw?.SupportsKeyboard ?? false,
             "HidLightbar/Ctrl" => probe?.SupportsLightbar ?? false,
-            "HidLightbar_Logo/Ctrl" => hw?.SupportsLogoLight == true,
+            "HidLightbar_Logo/Ctrl" => hw?.SupportsLogoLight == true
+                || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar),
             "HidLightbar_Hinge/Ctrl" => probe?.SupportsHingeLight ?? false,
             "HidLightbar_Sync/Ctrl" => probe?.SupportsSyncLight ?? false,
             _ => false
