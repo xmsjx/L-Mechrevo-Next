@@ -82,6 +82,12 @@ internal static class NucKeyboardLighting
             byte next = (byte)((current & 0x0D) | highNibble);
             AcpiDriverEc.TryWriteByte(AddressBacklightWhite, next);
             Trigger(false);
+            // 先退出上一次的呼吸色码，否则 Rainbow/Manual 会被低 3 位锁在呼吸模式。
+            if (AcpiDriverEc.TryReadByte(AddressRgbControl, out byte previousControl)
+                && (previousControl & 0x07) != 0)
+            {
+                AcpiDriverEc.TryWriteByte(AddressRgbControl, (byte)(previousControl & 0xF8));
+            }
 
             // effect: Single / Rainbow / Breathing / Manual(轮播)
             if (string.Equals(effect, "Rainbow", StringComparison.Ordinal))
@@ -107,6 +113,14 @@ internal static class NucKeyboardLighting
                 WriteScaledColor(colorArgb);
                 Trigger(false);
             }
+            AcpiDriverEc.TryReadByte(AddressBacklightWhite, out byte blRead);
+            AcpiDriverEc.TryReadByte(AddressTriggerByte, out byte trRead);
+            AcpiDriverEc.TryReadByte(AddressRgbControl, out byte ctrlRead);
+            Logger.WriteError("[gcu-ec-kbd] EC单区 apply effect=" + effect + " on=" + on
+                + " level=" + level + " speed=" + speed
+                + " · 0x78C=0x" + blRead.ToString("X2")
+                + " 0x767=0x" + trRead.ToString("X2")
+                + " 0x7C5=0x" + ctrlRead.ToString("X2"));
         }
     }
 
