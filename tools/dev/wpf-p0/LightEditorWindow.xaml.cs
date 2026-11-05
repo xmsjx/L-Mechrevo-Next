@@ -357,7 +357,7 @@ public partial class LightEditorWindow : Window
                 && KeyboardFirmwareEffects.IsSingleZoneRgb(L_Mechrevo.WpfP0.Services.WpfBackend.Hw.Capabilities.KeyboardType);
             // EC 单区支持单色/呼吸颜色下发；NUC 固件单区的呼吸是硬件固定色，才隐藏颜色。
             bool colorVisible = _nucSingleZone
-                ? !keyboardManual
+                ? string.Equals(effect, "Single", StringComparison.Ordinal)
                 : (!wujie && !keyboardManual && !keyboardRainbow
                     && (!keyboardBreathing || !firmwareSingleZone)
                     && KeyboardFirmwareEffects.IsSingleColorEffect(effect));
