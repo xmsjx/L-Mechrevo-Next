@@ -94,6 +94,7 @@ internal static class IteLightingLocal
             {
                 byte[] colorPacket = { 0, 20, blank, 1, (byte)r, (byte)g, (byte)b, 0, 0 };
                 dev.SetFeature(colorPacket);
+                System.Threading.Thread.Sleep(15);
             }
             byte[] packet =
             {
@@ -101,6 +102,11 @@ internal static class IteLightingLocal
                 circular ? (byte)8 : (byte)1, (byte)(mappedEffect == 3 ? 1 : 0), 0
             };
             bool ok = dev.SetFeature(packet);
+            if (mappedEffect == 1)
+            {
+                System.Threading.Thread.Sleep(100);
+                dev.SetFeature(packet);
+            }
             detail = "effect=" + effect + "/" + mappedEffect + " light=" + lightValue
                 + " speed=" + speedValue + " circular=" + circular + " ⇒ " + (ok ? "OK" : "FAIL");
             Logger.WriteError("[ite-light] " + detail);
