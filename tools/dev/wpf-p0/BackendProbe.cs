@@ -153,7 +153,6 @@ internal sealed class BackendProbe : IDisposable
                 case "winkey":
                 case "fnkey":
                 case "touchpad":
-                case "touchpadtoggle":
                     return GcuEcExperimental.Enabled || _hw.Capabilities.Keyboard || _hw.SupportsQuickSwitch(key);
                 default:
                     return false;
