@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -19,7 +20,8 @@ public partial class CalibrationSettingsWindow : Window
         InitializeComponent();
         SourceInitialized += (_, _) => ApplyDarkTitleBar();
         LoadState();
-        CloudButton.Visibility = (L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.IsIntelNucMachine == true)
+        CloudButton.Visibility = (L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.IsIntelNucMachine == true
+            || L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.IsGcuConnected != true)
             ? Visibility.Visible
             : Visibility.Collapsed;
     }
@@ -42,14 +44,24 @@ public partial class CalibrationSettingsWindow : Window
         }
     }
 
+    private List<string> _localIccProfiles = new();
+
     private void RefreshIccList()
     {
         IccCombo.Items.Clear();
-        foreach (string name in IccHelper.ListCustomIccFiles())
+        _localIccProfiles = IccHelper.ListCustomIccFiles();
+        string saved = AppConfig.GetString("calib_custom_icc") ?? "";
+        if (_localIccProfiles.Count <= 1)
+        {
+            IccCombo.Items.Add("默认校色");
+            IccCombo.Items.Add("自定义校色");
+            IccCombo.SelectedIndex = AppConfig.Is("calib_custom_on") && _localIccProfiles.Count == 1 ? 1 : 0;
+            return;
+        }
+        foreach (string name in _localIccProfiles)
         {
             IccCombo.Items.Add(name);
         }
-        string saved = AppConfig.GetString("calib_custom_icc") ?? "";
         if (!string.IsNullOrEmpty(saved))
         {
             int index = IccCombo.Items.IndexOf(saved);
@@ -98,7 +110,25 @@ public partial class CalibrationSettingsWindow : Window
         {
             return;
         }
+        if (string.Equals(name, "默认校色", StringComparison.Ordinal))
+        {
+            AppConfig.Set("calib_custom_on", 0);
+            AppConfig.Flush();
+            System.Threading.Tasks.Task.Run(IccHelper.ClearAllIcc);
+            return;
+        }
+        if (string.Equals(name, "自定义校色", StringComparison.Ordinal))
+        {
+            if (_localIccProfiles.Count == 1)
+            {
+                AppConfig.Set("calib_custom_icc", _localIccProfiles[0]);
+            }
+            AppConfig.Set("calib_custom_on", 1);
+            AppConfig.Flush();
+            return;
+        }
         AppConfig.Set("calib_custom_icc", name);
+        AppConfig.Set("calib_custom_on", 1);
         AppConfig.Flush();
     }
 

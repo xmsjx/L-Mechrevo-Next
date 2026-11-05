@@ -7667,7 +7667,8 @@ public partial class OriginalStyleWindow : Window
             GpuSectionHeader.Text = gpuSwitchSupported
                 ? WpfStrings.OriginalStyleWindow_Text_15
                 : WpfStrings.L("显卡", "Graphics");
-            ScreenSection.Visibility = (caps.DisplayRefresh || caps.ColorCalibration || caps.LcdOverdrive || caps.LocalDimming) ? Visibility.Visible : Visibility.Collapsed;
+            bool localIccAvailable = IccHelper.ListCustomIccFiles().Count > 0;
+            ScreenSection.Visibility = (caps.DisplayRefresh || caps.ColorCalibration || caps.LcdOverdrive || caps.LocalDimming || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
             bool hasKeyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
                 ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
                 : caps.Keyboard || (hw?.SupportsKeyboard ?? false)
@@ -8715,18 +8716,40 @@ public partial class OriginalStyleWindow : Window
             {
                 CalibrationCombo.Items.Add(new ComboBoxItem { Content = "AdobeRGB", Tag = 4 });
             }
-            bool customAvailable = AppConfig.Is("calib_custom_on") || IccHelper.ListCustomIccFiles().Count > 0;
+            List<string> localIcc = IccHelper.ListCustomIccFiles();
+            bool customAvailable = AppConfig.Is("calib_custom_on") || localIcc.Count > 0;
             if (customAvailable)
             {
-                CalibrationCombo.Items.Add(new ComboBoxItem { Content = WpfStrings.OriginalStyleWindow_xaml_Content_5, Tag = 999 });
+                if (localIcc.Count <= 1)
+                {
+                    CalibrationCombo.Items.Add(new ComboBoxItem { Content = WpfStrings.OriginalStyleWindow_xaml_Content_5, Tag = 999 });
+                }
+                else
+                {
+                    foreach (string profile in localIcc)
+                    {
+                        CalibrationCombo.Items.Add(new ComboBoxItem { Content = profile, Tag = 999 });
+                    }
+                }
             }
             int index = 0;
+            string savedIcc = AppConfig.GetString("calib_custom_icc") ?? "";
             for (int i = 0; i < CalibrationCombo.Items.Count; i++)
             {
                 if (CalibrationCombo.Items[i] is ComboBoxItem item && (int)item.Tag == selected)
                 {
-                    index = i;
-                    break;
+                    if (selected != 999)
+                    {
+                        index = i;
+                        break;
+                    }
+                    if (localIcc.Count <= 1
+                        ? i == CalibrationCombo.Items.Count - 1
+                        : string.Equals(item.Content?.ToString(), savedIcc, StringComparison.OrdinalIgnoreCase))
+                    {
+                        index = i;
+                        break;
+                    }
                 }
             }
             CalibrationCombo.SelectedIndex = index;
@@ -8734,7 +8757,8 @@ public partial class OriginalStyleWindow : Window
             CalibrationSwitch.IsChecked = calibrationOn;
             CalibrationCombo.IsEnabled = calibrationOn;
             CalibrationSettingsButton.IsEnabled = calibrationOn;
-            CalibrationSwitch.IsEnabled = probe.IsGcuConnected || !probe.IsNonGcuBackend;
+            CalibrationSwitch.IsEnabled = probe.IsGcuConnected || !probe.IsNonGcuBackend
+                || IccHelper.ListCustomIccFiles().Count > 0;
         }
         finally
         {
@@ -8845,6 +8869,17 @@ public partial class OriginalStyleWindow : Window
         bool ok;
         if (mode == 999)
         {
+            List<string> localIcc = IccHelper.ListCustomIccFiles();
+            string? selectedText = (CalibrationCombo.SelectedItem as ComboBoxItem)?.Content?.ToString();
+            if (localIcc.Count == 1)
+            {
+                AppConfig.Set("calib_custom_icc", localIcc[0]);
+            }
+            else if (!string.IsNullOrWhiteSpace(selectedText) && localIcc.Contains(selectedText, StringComparer.OrdinalIgnoreCase))
+            {
+                AppConfig.Set("calib_custom_icc", selectedText);
+            }
+            AppConfig.Flush();
             string iccName = AppConfig.GetString("calib_custom_icc") ?? "";
             string iccPath = string.IsNullOrWhiteSpace(iccName) ? "" : System.IO.Path.Combine(IccHelper.CustomIccDir, iccName);
             ok = !string.IsNullOrWhiteSpace(iccPath) && File.Exists(iccPath)

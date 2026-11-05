@@ -27,10 +27,12 @@ public static class IccHelper
 
 	/// <summary>自定义 ICC 目录（放在用户数据目录，随设置备份/升级保留）。</summary>
 	public static string CustomIccDir => Path.Combine(
-		Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MechrevoLite", "customICC");
+		Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MechrevoLite", "ICC");
 
 	/// <summary>旧版本放在程序根目录的 customICC（只用于一次性迁移）。</summary>
 	private static string LegacyCustomIccDir => Path.Combine(AppContext.BaseDirectory, "customICC");
+	private static string LegacyUserIccDir => Path.Combine(
+		Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MechrevoLite", "customICC");
 
 	public static void EnsureCustomIccDir()
 	{
@@ -38,6 +40,7 @@ public static class IccHelper
 		{
 			Directory.CreateDirectory(CustomIccDir);
 			MigrateLegacyCustomIccOnce();
+			MigrateLegacyUserIccOnce();
 			ImportBundledIccFromProgramDir();
 		}
 		catch
@@ -85,6 +88,35 @@ public static class IccHelper
 		{
 		}
 	}
+	/// <summary>旧版 %APPDATA%\MechrevoLite\customICC 迁移到 ICC 数据目录（只在新目录为空时做）。</summary>
+	private static void MigrateLegacyUserIccOnce()
+	{
+		try
+		{
+			string legacy = LegacyUserIccDir;
+			if (!Directory.Exists(legacy) || string.Equals(legacy.TrimEnd('\\'), CustomIccDir.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+			{
+				return;
+			}
+			if (Directory.EnumerateFiles(CustomIccDir, "*.ic*").FirstOrDefault() != null)
+			{
+				return;
+			}
+			foreach (string file in Directory.EnumerateFiles(legacy, "*.ic*"))
+			{
+				string dest = Path.Combine(CustomIccDir, Path.GetFileName(file));
+				if (!File.Exists(dest))
+				{
+					File.Copy(file, dest, overwrite: false);
+				}
+			}
+			Logger.WriteLine("已迁移旧 customICC 到数据 ICC 目录");
+		}
+		catch
+		{
+		}
+	}
+
 	/// <summary>旧版 customICC（程序目录）里的文件迁移到用户数据目录；只做一次，失败不影响启动。</summary>
 	private static void MigrateLegacyCustomIccOnce()
 	{
