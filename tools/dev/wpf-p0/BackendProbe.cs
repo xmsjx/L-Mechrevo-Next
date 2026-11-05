@@ -143,6 +143,9 @@ internal sealed class BackendProbe : IDisposable
                     return true;
                 case "acrecovery":
                     return _hw.Capabilities.AcRecovery || GcuEcExperimental.Enabled;
+                case "usb":
+                case "copilot":
+                    return GcuEcExperimental.Enabled || _hw.SupportsQuickSwitch(key);
                 case "fanboost":
                     return _hw.Capabilities.FanBoost || _hw.UsesBaolongda
                         || _hw.IsIntelNucMachine || _hw.IsUmiMachine
@@ -400,6 +403,18 @@ internal sealed class BackendProbe : IDisposable
                     break;
                 case "acrecovery":
                     ok = NucQuickSwitches.TrySetAcRecovery(on, out confirmed);
+                    break;
+                case "copilot":
+                    ok = AcpiDriverEc.TryReadByte(1832, out byte copilotBits)
+                        && AcpiDriverEc.TryWriteByte(1832, on ? (byte)(copilotBits | 0x04) : (byte)(copilotBits & ~0x04));
+                    confirmed = ok && AcpiDriverEc.TryReadByte(1832, out byte copilotAfter)
+                        && ((copilotAfter & 0x04) != 0) == on;
+                    break;
+                case "usb":
+                    ok = AcpiDriverEc.TryReadByte(1895, out byte usbTrigger)
+                        && AcpiDriverEc.TryWriteByte(1895, on ? (byte)(usbTrigger | 0x10) : (byte)(usbTrigger & ~0x10));
+                    confirmed = ok && AcpiDriverEc.TryReadByte(1895, out byte usbAfter)
+                        && ((usbAfter & 0x10) != 0) == on;
                     break;
                 default:
                     return false;
@@ -1337,6 +1352,14 @@ internal sealed class BackendProbe : IDisposable
             }
             return _hw.FanBoost;
         }
+        if (string.Equals(key, "copilot", StringComparison.OrdinalIgnoreCase))
+        {
+            return AcpiDriverEc.TryReadByte(1832, out byte copilotState) && (copilotState & 0x04) != 0;
+        }
+        if (string.Equals(key, "usb", StringComparison.OrdinalIgnoreCase))
+        {
+            return AcpiDriverEc.TryReadByte(1895, out byte usbState) && (usbState & 0x10) != 0;
+        }
         if (string.Equals(key, "highperf", StringComparison.OrdinalIgnoreCase))
         {
             // 50 系 GCU：状态来自 GCU 的 HighPerformancePowerModeSwitch 回包。
@@ -1397,7 +1420,11 @@ internal sealed class BackendProbe : IDisposable
             }
             if (string.Equals(key, "apuboost", StringComparison.OrdinalIgnoreCase))
             {
-                return MechrevoLite.Mode.PerfModeService.Instance?.ApuAntiDegradeEnabled == true;
+                return MechrevoLite.Mode.PerfModeService.ApuAntiDegradeStaticEnabled;
+            }
+            if (string.Equals(key, "highperf", StringComparison.OrdinalIgnoreCase))
+            {
+                return MechrevoLite.AppConfig.Get("bd_power_overlay", 1) != 0;
             }
             if (key.StartsWith("sleep", StringComparison.OrdinalIgnoreCase))
             {
@@ -1423,12 +1450,10 @@ internal sealed class BackendProbe : IDisposable
                 case "numpad":
                     return MechrevoLite.Helpers.NativeLockKey.TrySetNumLock(on, out _);
                 case "apuboost":
-                    if (MechrevoLite.Mode.PerfModeService.Instance is { } perf)
-                    {
-                        perf.ApuAntiDegradeEnabled = on;
-                        return true;
-                    }
-                    return false;
+                    return MechrevoLite.Mode.PerfModeService.SetApuAntiDegradeStatic(on);
+                case "highperf":
+                    MechrevoLite.Mode.PerfModeService.SetWindowsPowerOverlayEnabledStatic(on);
+                    return true;
                 case "transparency":
                     return InvokeBool(ShellType, "SetTransparencyEnabled", on);
                 case "darktheme":
@@ -1448,7 +1473,11 @@ internal sealed class BackendProbe : IDisposable
             }
             if (string.Equals(key, "apuboost", StringComparison.OrdinalIgnoreCase))
             {
-                return MechrevoLite.Mode.PerfModeService.Instance?.ApuAntiDegradeEnabled == true;
+                return MechrevoLite.Mode.PerfModeService.ApuAntiDegradeStaticEnabled;
+            }
+            if (string.Equals(key, "highperf", StringComparison.OrdinalIgnoreCase))
+            {
+                return MechrevoLite.AppConfig.Get("bd_power_overlay", 1) != 0;
             }
             if (key.StartsWith("sleep", StringComparison.OrdinalIgnoreCase))
             {

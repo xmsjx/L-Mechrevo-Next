@@ -501,6 +501,69 @@ internal sealed class PerfModeService
 		}
 	}
 
+	/// <summary>纯 Windows 电源策略入口：不依赖 GCU/PerfModeService 实例。</summary>
+	public static bool ApuAntiDegradeStaticEnabled
+	{
+		get
+		{
+			PowerNative.GetCPUBoostBoth(out int ac, out int dc);
+			return ac == 5 && dc == 5;
+		}
+	}
+
+	/// <summary>纯 Windows 电源策略入口：APU 防缩缸开关（不依赖 GCU 连接）。</summary>
+	public static bool SetApuAntiDegradeStatic(bool enable)
+	{
+		try
+		{
+			if (enable)
+			{
+				PowerNative.GetCPUBoostBoth(out int prevAc, out int prevDc);
+				if (prevAc != 5 || prevDc != 5)
+				{
+					AppConfig.Set("apuboost_prev", prevAc);
+					AppConfig.Set("apuboost_prev_dc", prevDc);
+					PowerNative.SetCPUBoost(5);
+				}
+				AppConfig.Set("apuboost", 1);
+				return true;
+			}
+			int restoreAc = AppConfig.Get("apuboost_prev", 1);
+			int restoreDc = AppConfig.Get("apuboost_prev_dc", restoreAc);
+			PowerNative.SetCPUBoost(restoreAc);
+			if (restoreDc != restoreAc)
+			{
+				PowerNative.SetCPUBoostDc(restoreDc);
+			}
+			AppConfig.Set("apuboost", 0);
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteError("[power] APU 防缩缸设置失败：" + ex.Message);
+			return false;
+		}
+	}
+
+	/// <summary>纯 Windows 电源模式联动入口；实例不存在时直接走 PowerNative。</summary>
+	public static void SetWindowsPowerOverlayEnabledStatic(bool enable)
+	{
+		AppConfig.Set("bd_power_overlay", enable ? 1 : 0);
+		if (Instance != null)
+		{
+			Instance.WindowsPowerOverlayEnabled = enable;
+			return;
+		}
+		try
+		{
+			PowerNative.SetPowerMode(enable ? 1 : 0);
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteError("[power] 高性能电源联动设置失败：" + ex.Message);
+		}
+	}
+
 	/// <summary>启动时按用户保存的意图恢复「APU 防缩缸」；不强制关闭（避免覆盖其它来源的设置）。</summary>
 	internal void ApplyApuAntiDegradeOnStartup()
 	{
