@@ -41,14 +41,24 @@ internal static class AcpiGpuHotSwitch
         }
     }
 
+    internal static bool IsPnpFallbackAvailable => FindNvidiaInstance(out string instance, out _) && instance.Length > 0;
+
+    internal static bool CanUseLocalSilence => IsSupported || IsPnpFallbackAvailable;
+
     internal static bool TryGetState(out bool active, out string detail)
     {
         active = false;
         detail = "";
         if (!IsSupported)
         {
-            detail = "ACPI 热切不支持";
-            return false;
+            if (!FindNvidiaInstance(out string instance, out bool enabled))
+            {
+                detail = "没有 NVIDIA PnP 设备";
+                return false;
+            }
+            active = !enabled;
+            detail = "PnP 静默状态=" + (enabled ? "独显启用" : "独显禁用");
+            return true;
         }
         if (!TryReadRaw(RawStatus, out ulong value))
         {
@@ -66,7 +76,39 @@ internal static class AcpiGpuHotSwitch
         detail = "";
         if (!IsSupported)
         {
-            detail = "ACPI 热切不支持";
+            if (!FindNvidiaInstance(out string pnpInstance, out _))
+            {
+                detail = "ACPI 不支持且没有 NVIDIA PnP 设备";
+                return false;
+            }
+            if (on)
+            {
+                StopNvContainers(out _);
+                bool disabled = RunPnp("/disable-device", pnpInstance, force: true, out string disableDetail);
+                for (int i = 0; i < 20; i++)
+                {
+                    Thread.Sleep(500);
+                    if (FindNvidiaInstance(out _, out bool stillEnabled) && !stillEnabled)
+                    {
+                        detail = "PnP 静默独显成功 · " + disableDetail;
+                        return true;
+                    }
+                }
+                detail = "PnP 禁用未确认 · " + disableDetail;
+                return false;
+            }
+            bool enabledOk = RunPnp("/enable-device", pnpInstance, force: false, out string enableDetail);
+            RestoreContainers(new[] { "NVDisplay.ContainerLocalSystem", "NVContainerLocalSystem" });
+            for (int i = 0; i < 20; i++)
+            {
+                Thread.Sleep(500);
+                if (FindNvidiaInstance(out _, out bool nowEnabled) && nowEnabled)
+                {
+                    detail = "PnP 独显已恢复 · " + enableDetail;
+                    return true;
+                }
+            }
+            detail = "PnP 恢复未确认 · " + enableDetail;
             return false;
         }
         string[] services = Array.Empty<string>();
@@ -310,6 +352,54 @@ internal static class AcpiGpuHotSwitch
             catch
             {
             }
+        }
+    }
+
+    private static bool FindNvidiaInstance(out string instanceId, out bool enabled)
+    {
+        instanceId = "";
+        enabled = false;
+        try
+        {
+            using ManagementObjectSearcher searcher = new("root\\CIMV2",
+                "SELECT DeviceID,Status FROM Win32_PnPEntity WHERE PNPDeviceID LIKE 'PCI\\\\VEN_10DE%'");
+            foreach (ManagementObject item in searcher.Get())
+            {
+                string? id = item["DeviceID"]?.ToString();
+                if (string.IsNullOrWhiteSpace(id)) continue;
+                instanceId = id;
+                enabled = string.Equals(item["Status"]?.ToString(), "OK", StringComparison.OrdinalIgnoreCase);
+                return true;
+            }
+        }
+        catch
+        {
+        }
+        return false;
+    }
+
+    private static bool RunPnp(string action, string instanceId, bool force, out string detail)
+    {
+        detail = "";
+        try
+        {
+            string args = action + " \"" + instanceId + "\"" + (force ? " /force" : "");
+            using Process p = Process.Start(new ProcessStartInfo("pnputil.exe", args)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true
+            })!;
+            string output = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+            p.WaitForExit(15000);
+            detail = "pnputil " + action + " exit=" + p.ExitCode + " " + output.Trim();
+            return p.ExitCode == 0;
+        }
+        catch (Exception ex)
+        {
+            detail = ex.GetType().Name + " " + ex.Message;
+            return false;
         }
     }
 

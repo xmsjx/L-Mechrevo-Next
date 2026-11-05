@@ -5003,6 +5003,7 @@ public partial class OriginalStyleWindow : Window
     private bool _igpuSavingBusy;
     private ToggleButton? SilentTurboModeButton;
     private Grid? IgpuSavingPreviewRow;
+    private TextBlock? _igpuSavingLabel;
     private ToggleButton? IgpuSavingOffPreview;
     private ToggleButton? IgpuSavingOnPreview;
     private ToggleButton? IgpuSavingAutoPreview;
@@ -5033,6 +5034,7 @@ public partial class OriginalStyleWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 10, 0)
         };
+        _igpuSavingLabel = label;
         row.Children.Add(label);
         StackPanel buttons = new() { Orientation = Orientation.Horizontal };
         Grid.SetColumn(buttons, 1);
@@ -5086,6 +5088,11 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         IgpuSavingPreviewRow.Visibility = igpuSavingVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (_igpuSavingLabel != null)
+        {
+            _igpuSavingLabel.Text = MechrevoLite.Hardware.AcpiGpuHotSwitch.IsSupported
+                ? "核显省电（热切）" : "静默独显";
+        }
         int mode = hardware.IgpuOnlySaveMode;
         if (IgpuSavingOffPreview != null) IgpuSavingOffPreview.IsChecked = mode == 1;
         if (IgpuSavingOnPreview != null) IgpuSavingOnPreview.IsChecked = mode == 0;
@@ -5259,8 +5266,10 @@ public partial class OriginalStyleWindow : Window
         MechrevoService? service = _backendProbe?.Service;
         MechrevoHw? hardware = _backendProbe?.Hw;
         if (hardware != null
-            && (service == null || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && !hardware.IsGcuConnected))
-            && MechrevoLite.Hardware.AcpiGpuHotSwitch.IsSupported)
+            && (service == null
+                || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && !hardware.IsGcuConnected)
+                || hardware.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
+            && MechrevoLite.Hardware.AcpiGpuHotSwitch.CanUseLocalSilence)
         {
             await SwitchAcpiIgpuSavingAsync(mode);
             return;

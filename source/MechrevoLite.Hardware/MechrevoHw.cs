@@ -828,7 +828,7 @@ public class MechrevoHw : IDisposable
 	/// </summary>
 	public bool SupportsGpuHotSwap => Capabilities.GpuHotSwap
 		|| (DgpuGeneration == DgpuGenerationKind.Gen50 && IgpuOnlyStatusSupport == true)
-		|| (DgpuGeneration == DgpuGenerationKind.Gen50 && AcpiGpuHotSwitch.IsSupported);
+		|| AcpiGpuHotSwitch.CanUseLocalSilence;
 
 	private bool ThreeModeCapability => SupportsIgpuOnly;
 
