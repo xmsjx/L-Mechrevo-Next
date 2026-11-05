@@ -126,6 +126,7 @@ internal sealed class BackendProbe : IDisposable
             {
                 case "apuboost":
                 case "capslock":
+                case "micmute":
                 case "highperf":
                 case "monitoroff":
                 case "transparency":
@@ -139,12 +140,18 @@ internal sealed class BackendProbe : IDisposable
                 case "winupdate":
                     return true;
                 case "numpad":
-                    return _hw.Capabilities.Numpad || _hw.Capabilities.Keyboard;
+                    return true;
                 case "acrecovery":
-                    return _hw.Capabilities.AcRecovery;
+                    return _hw.Capabilities.AcRecovery || GcuEcExperimental.Enabled;
                 case "fanboost":
                     return _hw.Capabilities.FanBoost || _hw.UsesBaolongda
-                        || _hw.IsIntelNucMachine || _hw.IsUmiMachine;
+                        || _hw.IsIntelNucMachine || _hw.IsUmiMachine
+                        || GcuEcExperimental.Enabled;
+                case "winkey":
+                case "fnkey":
+                case "touchpad":
+                case "touchpadtoggle":
+                    return GcuEcExperimental.Enabled || _hw.Capabilities.Keyboard || _hw.SupportsQuickSwitch(key);
                 default:
                     return false;
             }
@@ -1376,9 +1383,25 @@ internal sealed class BackendProbe : IDisposable
                 case "darktheme":
                     return InvokeBool(ShellType, "IsDarkTheme");
             }
+            if (string.Equals(key, "micmute", StringComparison.OrdinalIgnoreCase))
+            {
+                return MechrevoLite.Helpers.AudioEndpointMic.IsMuted;
+            }
+            if (string.Equals(key, "capslock", StringComparison.OrdinalIgnoreCase))
+            {
+                return MechrevoLite.Helpers.NativeLockKey.IsCapsLockOn();
+            }
+            if (string.Equals(key, "numpad", StringComparison.OrdinalIgnoreCase))
+            {
+                return MechrevoLite.Helpers.NativeLockKey.IsNumLockOn();
+            }
+            if (string.Equals(key, "apuboost", StringComparison.OrdinalIgnoreCase))
+            {
+                return MechrevoLite.Mode.PerfModeService.Instance?.ApuAntiDegradeEnabled == true;
+            }
             if (key.StartsWith("sleep", StringComparison.OrdinalIgnoreCase))
             {
-                return InvokeSleepRead(key, true);
+                return InvokeSleepRead(key, SleepScopeAc());
             }
         }
         catch
@@ -1393,10 +1416,39 @@ internal sealed class BackendProbe : IDisposable
         {
             switch (key)
             {
+                case "micmute":
+                    return MechrevoLite.Helpers.AudioEndpointMic.TrySetMute(on, out _);
+                case "capslock":
+                    return MechrevoLite.Helpers.NativeLockKey.TrySetCapsLock(on, out _);
+                case "numpad":
+                    return MechrevoLite.Helpers.NativeLockKey.TrySetNumLock(on, out _);
+                case "apuboost":
+                    if (MechrevoLite.Mode.PerfModeService.Instance is { } perf)
+                    {
+                        perf.ApuAntiDegradeEnabled = on;
+                        return true;
+                    }
+                    return false;
                 case "transparency":
                     return InvokeBool(ShellType, "SetTransparencyEnabled", on);
                 case "darktheme":
                     return InvokeBool(ShellType, "SetDarkTheme", on);
+            }
+            if (string.Equals(key, "micmute", StringComparison.OrdinalIgnoreCase))
+            {
+                return MechrevoLite.Helpers.AudioEndpointMic.IsMuted;
+            }
+            if (string.Equals(key, "capslock", StringComparison.OrdinalIgnoreCase))
+            {
+                return MechrevoLite.Helpers.NativeLockKey.IsCapsLockOn();
+            }
+            if (string.Equals(key, "numpad", StringComparison.OrdinalIgnoreCase))
+            {
+                return MechrevoLite.Helpers.NativeLockKey.IsNumLockOn();
+            }
+            if (string.Equals(key, "apuboost", StringComparison.OrdinalIgnoreCase))
+            {
+                return MechrevoLite.Mode.PerfModeService.Instance?.ApuAntiDegradeEnabled == true;
             }
             if (key.StartsWith("sleep", StringComparison.OrdinalIgnoreCase))
             {
@@ -1405,7 +1457,7 @@ internal sealed class BackendProbe : IDisposable
                 {
                     return null;
                 }
-                object?[] args = { key, on, true, null };
+                object?[] args = { key, on, SleepScopeAc(), null };
                 object? result = method.Invoke(null, args);
                 return result is bool ok && ok;
             }
@@ -1421,6 +1473,18 @@ internal sealed class BackendProbe : IDisposable
         MethodInfo? method = type?.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
         object? result = method?.Invoke(null, args);
         return result is bool value ? value : null;
+    }
+
+    private static bool SleepScopeAc()
+    {
+        try
+        {
+            return MechrevoLite.AppConfig.Get("sleep_scope_ac", 1) != 0;
+        }
+        catch
+        {
+            return true;
+        }
     }
 
     private static bool? InvokeSleepRead(string key, bool ac)

@@ -200,6 +200,17 @@ internal sealed class QuickSwitchService : IQuickSwitchService
         {
             return true;
         }
+        // 以下开关是纯 Windows/本地通道，不依赖 GCU/EC。
+        if (string.Equals(key, "capslock", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(key, "numpad", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(key, "apuboost", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+        if (string.Equals(key, "micmute", StringComparison.OrdinalIgnoreCase))
+        {
+            return MechrevoLite.Helpers.AudioEndpointMic.Available;
+        }
         BackendProbe? probe = _backend.Probe;
         if (probe == null)
         {
@@ -257,14 +268,8 @@ internal sealed class QuickSwitchService : IQuickSwitchService
             {
                 return false;
             }
-            if (_backend.Probe?.IsGcuConnected == true || _backend.Hw?.IsGcuConnected == true)
-            {
-                return true;
-            }
-            string variant = MechrevoLite.Hardware.GcuIdentity.Variant ?? "";
-            return variant.Length > 0
-                && !string.Equals(variant, "none", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(variant, "unknown", StringComparison.OrdinalIgnoreCase);
+            // 只看实际 GCU 连接；EC 实验/仅登记变体但没有 GCU 服务时不显示 GCU-OSD。
+            return _backend.Probe?.IsGcuConnected == true || _backend.Hw?.IsGcuConnected == true;
         }
         catch
         {

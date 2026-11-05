@@ -1768,7 +1768,7 @@
     <value>High performance</value>
   </data>
   <data name="QuickApuBoost" xml:space="preserve">
-    <value>APU anti-degrade</value>
+    <value>APU Stability Guard</value>
   </data>
   <data name="QuickFanBoost" xml:space="preserve">
     <value>Fan boost</value>

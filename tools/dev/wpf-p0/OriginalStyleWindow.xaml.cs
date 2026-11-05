@@ -6142,8 +6142,9 @@ public partial class OriginalStyleWindow : Window
                 Grid headerRow = new Grid { Margin = new Thickness(0, 8, 0, 2) };
                 headerRow.Children.Add(new TextBlock { Text = QuickSwitchService.GroupTitle(title), Style = (Style)FindResource("MutedText"), FontSize = 10 });
                 StackPanel scope = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-                ToggleButton ac = new ToggleButton { Content = WpfStrings.OriginalStyleWindow_xaml_Content, Style = (Style)FindResource("SmallSegment"), IsChecked = true, Tag = "ac", Margin = new Thickness(0, 0, 4, 0), Height = 24, FontSize = 11 };
-                ToggleButton dc = new ToggleButton { Content = WpfStrings.OriginalStyleWindow_xaml_Content_2, Style = (Style)FindResource("SmallSegment"), Tag = "dc", Height = 24, FontSize = 11 };
+                bool scopeAc = AppConfig.Get("sleep_scope_ac", 1) != 0;
+                ToggleButton ac = new ToggleButton { Content = "插电", Style = (Style)FindResource("SmallSegment"), IsChecked = scopeAc, Tag = "ac", Margin = new Thickness(0, 0, 4, 0), Height = 24, FontSize = 11 };
+                ToggleButton dc = new ToggleButton { Content = "离电", Style = (Style)FindResource("SmallSegment"), IsChecked = !scopeAc, Tag = "dc", Height = 24, FontSize = 11 };
                 ac.Click += SleepScope_Click;
                 dc.Click += SleepScope_Click;
                 scope.Children.Add(ac);
@@ -6183,6 +6184,19 @@ public partial class OriginalStyleWindow : Window
             if (child is ToggleButton button)
             {
                 button.IsChecked = ReferenceEquals(button, selected);
+            }
+        }
+        bool ac = string.Equals(selected.Tag as string, "ac", StringComparison.OrdinalIgnoreCase);
+        AppConfig.Set("sleep_scope_ac", ac ? 1 : 0);
+        AppConfig.Flush();
+        if (MoreGroupsPanel != null)
+        {
+            foreach (CheckBox box in EnumerateCheckBoxes(MoreGroupsPanel))
+            {
+                if (box.Tag is string key && key.StartsWith("sleep", StringComparison.OrdinalIgnoreCase) && _backendProbe != null)
+                {
+                    box.IsChecked = _backendProbe.QuickState(key);
+                }
             }
         }
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_45 + selected.Content;
