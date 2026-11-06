@@ -352,6 +352,11 @@ public partial class SettingsWindow : Window
                 ? Visibility.Visible : Visibility.Collapsed;
         }
         _syncing = false;
+        if (TrayCustomExpandCheck != null)
+        {
+            TrayCustomExpandCheck.Content = WpfStrings.L("展开自定义配置", "Expand custom profiles");
+            TrayCustomExpandCheck.IsChecked = TrayMenuConfig.ExpandCustom;
+        }
         BuildTrayMenuOptions();
     }
 
@@ -386,6 +391,13 @@ public partial class SettingsWindow : Window
             };
             TrayMenuPanel.Children.Add(box);
         }
+    }
+
+    private void TrayCustomExpand_Click(object sender, RoutedEventArgs e)
+    {
+        TrayMenuConfig.SetExpandCustom(TrayCustomExpandCheck.IsChecked == true);
+        _owner.WideRefreshTrayMenu();
+        Status(WpfStrings.TraySaved);
     }
 
     private static void SetChoices(string value, params ToggleButton[] buttons)

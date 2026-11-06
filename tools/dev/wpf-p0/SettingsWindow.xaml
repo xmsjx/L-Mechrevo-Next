@@ -332,6 +332,8 @@
                         <TextBlock Text="{x:Static loc:WpfStrings.SettingsWindow_Text_25}" Style="{StaticResource CardTitle}" />
                         <TextBlock Text="{x:Static loc:WpfStrings.SettingsWindow_Text_24}" Style="{StaticResource Hint}" />
                         <WrapPanel x:Name="TrayMenuPanel" Margin="0,8,0,0" />
+                        <CheckBox x:Name="TrayCustomExpandCheck" Style="{DynamicResource HeaderSwitch}" Margin="0,2,0,0"
+                                  Click="TrayCustomExpand_Click" />
                     </StackPanel>
                 </Border>
                 <Grid Margin="0,2,0,8">

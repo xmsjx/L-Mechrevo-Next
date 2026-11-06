@@ -377,9 +377,10 @@ public partial class OriginalStyleWindow : Window
         {
             if (_backendProbe?.Hw != null)
             {
+                bool current = _backendProbe.QuickState("fanboost");
                 _ = _services != null
-                    ? _services.Performance.SwitchFanBoostRawAsync(!(_backendProbe.Hw.FanBoost))
-                    : _backendProbe.SwitchQuickAsync("fanboost", !(_backendProbe.Hw.FanBoost));
+                    ? _services.Performance.SwitchFanBoostRawAsync(!current)
+                    : _backendProbe.SwitchQuickAsync("fanboost", !current);
             }
         };
         _trayIcon.KeyboardLightingRequested += () => KeyboardLightEdit_Click(this, new RoutedEventArgs());
@@ -2050,7 +2051,7 @@ public partial class OriginalStyleWindow : Window
             customRoot,
             customs,
             probe?.SupportsQuick("fanboost") == true,
-            probe?.Hw?.FanBoost == true,
+            probe?.QuickState("fanboost") == true,
             GpuSection.Visibility == Visibility.Visible,
             probe?.CurrentGpuMode ?? -1,
             KeyboardLightRow.Visibility == Visibility.Visible,

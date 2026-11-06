@@ -50,6 +50,7 @@ internal static class TrayMenuConfig
     };
 
     private const string ConfigKey = "tray_menu_items";
+    private const string CustomExpandedKey = "tray_custom_expanded";
 
     internal static HashSet<string> Load()
     {
@@ -63,6 +64,14 @@ internal static class TrayMenuConfig
     }
 
     internal static bool IsEnabled(string key) => Load().Contains(key);
+
+    internal static bool ExpandCustom => MechrevoLite.AppConfig.Get(CustomExpandedKey, 0) != 0;
+
+    internal static void SetExpandCustom(bool expanded)
+    {
+        MechrevoLite.AppConfig.Set(CustomExpandedKey, expanded ? 1 : 0);
+        MechrevoLite.AppConfig.Flush();
+    }
 
     internal static void Save(IEnumerable<string> keys)
     {
@@ -203,25 +212,38 @@ internal sealed class TrayIconService : IDisposable
 
             if (TrayMenuConfig.IsEnabled("custom"))
             {
-                ToolStripMenuItem customRoot = new(state?.CustomRootText ?? WpfStrings.TrayCustom)
+                if (TrayMenuConfig.ExpandCustom && state?.CustomItems is { Count: > 0 })
                 {
-                    Checked = state?.CustomItems.Any(i => i.Checked) == true
-                };
-                if (state?.CustomItems != null)
-                {
+                    _menu.Items.Add(new ToolStripSeparator());
+                    _menu.Items.Add(DisabledTitle(WpfStrings.TrayCustom));
                     foreach (TrayCustomItem item in state.CustomItems)
                     {
                         TrayCustomItem copy = item;
-                        ToolStripMenuItem sub = MenuItem(copy.Label, copy.Checked, () => CustomModeRequested?.Invoke(copy.Id));
-                        customRoot.DropDownItems.Add(sub);
+                        _menu.Items.Add(MenuItem(copy.Label, copy.Checked, () => CustomModeRequested?.Invoke(copy.Id)));
                     }
                 }
-                if (customRoot.DropDownItems.Count == 0)
+                else
                 {
-                    ToolStripMenuItem empty = new(WpfStrings.TrayNoCustom) { Enabled = false };
-                    customRoot.DropDownItems.Add(empty);
+                    ToolStripMenuItem customRoot = new(state?.CustomRootText ?? WpfStrings.TrayCustom)
+                    {
+                        Checked = state?.CustomItems.Any(i => i.Checked) == true
+                    };
+                    if (state?.CustomItems != null)
+                    {
+                        foreach (TrayCustomItem item in state.CustomItems)
+                        {
+                            TrayCustomItem copy = item;
+                            ToolStripMenuItem sub = MenuItem(copy.Label, copy.Checked, () => CustomModeRequested?.Invoke(copy.Id));
+                            customRoot.DropDownItems.Add(sub);
+                        }
+                    }
+                    if (customRoot.DropDownItems.Count == 0)
+                    {
+                        ToolStripMenuItem empty = new(WpfStrings.TrayNoCustom) { Enabled = false };
+                        customRoot.DropDownItems.Add(empty);
+                    }
+                    _menu.Items.Add(customRoot);
                 }
-                _menu.Items.Add(customRoot);
             }
 
             // 强冷放在「自定义模式」下面一格（不再插在狂暴/自定义之间）。
