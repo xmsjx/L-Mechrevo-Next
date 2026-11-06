@@ -1574,6 +1574,9 @@ public partial class MainWindow : Window
     {
         DisplayRefreshPanel.Children.Clear();
         _displayRefreshButtons.Clear();
+        // 固定行高，避免第二行按钮与第一行文字/边框叠在一起。
+        DisplayRefreshPanel.ItemHeight = 44;
+        DisplayRefreshPanel.ItemWidth = double.NaN;
         _refreshRatesSignature = string.Join(",", rates);
         foreach (int hz in rates)
         {
@@ -1584,6 +1587,8 @@ public partial class MainWindow : Window
                 Tag = hz.ToString(),
                 Style = (Style)FindResource("SegmentButton"),
                 IsChecked = Math.Abs(hz - currentHz) <= 2,
+                Height = 42,
+                VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 6, 0)
             };
             button.Click += (_, _) => _owner?.WideSetRefresh(target);
