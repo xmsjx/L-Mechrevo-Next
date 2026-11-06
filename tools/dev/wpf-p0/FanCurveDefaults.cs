@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace L_Mechrevo.WpfP0;
 
-/// <summary>GCU 自定义档的默认风扇曲线（M4T5 基准表）。</summary>
+/// <summary>自定义档的 16 点默认风扇温度轴与占空比兜底（不依赖 GCU/M4T5）。</summary>
 internal static class FanCurveDefaults
 {
     // 16 点默认温度轴：0 为保留点，30..100°C 每 5°C 一段。
