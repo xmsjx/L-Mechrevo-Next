@@ -793,6 +793,7 @@ public partial class CustomModeWindow : Window
         MechrevoHw? hwForRows = CurrentHw;
         bool apuOrNoDgpu = hwForRows != null
             && (hwForRows.SmuCustomApu || hwForRows.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu);
+        bool noDgpu = hwForRows?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
         // Intel 星耀只开放 PL1/PL2：fPPT、温度/GPU、风扇/超频都不显示。
         bool intelXingyaoMsr = hwForRows != null
             && MechrevoLite.Hardware.CpuVendor.IsIntel
@@ -855,8 +856,8 @@ public partial class CustomModeWindow : Window
             && (hwForRows.GpuTgpAdjustable || hwForRows.IsIntelNucMachine || hwForRows.IsUmiMachine);
         GpuTgpRow.Visibility = (apuOrNoDgpu || fixedBaseTgp || intelXingyaoMsr || !tgpAdjustable)
             ? Visibility.Collapsed : Visibility.Visible;
-        FanBoostRow.Visibility = (apuOrNoDgpu || intelXingyaoMsr) ? Visibility.Collapsed : Visibility.Visible;
-        FanCard.Visibility = (apuOrNoDgpu || intelXingyaoMsr) ? Visibility.Collapsed : Visibility.Visible;
+        FanBoostRow.Visibility = (noDgpu || intelXingyaoMsr) ? Visibility.Collapsed : Visibility.Visible;
+        FanCard.Visibility = (noDgpu || intelXingyaoMsr) ? Visibility.Collapsed : Visibility.Visible;
         StapmTimeRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuSlowLimitRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuSlowTimeRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;

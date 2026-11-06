@@ -762,7 +762,8 @@ public class MechrevoHw : IDisposable
 		}
 	}
 
-	public bool SupportsDgpuDirect => DgpuDirectStatusSupport ?? Capabilities.DgpuDirect;
+	public bool SupportsDgpuDirect => DgpuDirectStatusSupport
+		?? (Capabilities.DgpuDirect || (!IsGcuConnected && UefiGpuMux.HasMuxVariable));
 
 	public bool SupportsIgpuOnly => Capabilities.IgpuOnly;
 
@@ -1130,15 +1131,16 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		get
 		{
-			if (!Capabilities.DisplayRefresh)
+			if (Capabilities.DisplayRefresh)
 			{
-				if (GpuDeviceStatusSeen)
-				{
-					return HzList.Count > 0;
-				}
-				return false;
+				return true;
 			}
-			return true;
+			if (GpuDeviceStatusSeen && HzList.Count > 0)
+			{
+				return true;
+			}
+			// 刷新率本质是 Windows 显示 API，不依赖 GCU；本机有内屏即可。
+			return MechrevoLite.Display.ScreenNative.GetAvailableRefreshRates(null, allowCurrentDeviceFallback: true).Count > 0;
 		}
 	}
 

@@ -5403,7 +5403,9 @@ public partial class OriginalStyleWindow : Window
             && _backendProbe.Hw.UsesBaolongda == false
             && _backendProbe.Hw.IsIntelNucMachine == false
             && _backendProbe.Hw.IsUmiMachine == false;
-        if (!gcuEcGpuExperiment
+        bool localColdGpu = _backendProbe.Hw?.IsGcuConnected != true
+            && MechrevoLite.Hardware.UefiGpuMux.HasMuxVariable;
+        if (!gcuEcGpuExperiment && !localColdGpu
             && !(_services?.Gpu.CanSwitch(mode) ?? _backendProbe.CanSwitchGpuMode(mode)))
         {
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_37;
@@ -5420,7 +5422,7 @@ public partial class OriginalStyleWindow : Window
             RefreshFromBackend();
             return;
         }
-        if (_backendProbe.Hw?.IsUmiMachine == true || gcuEcGpuExperiment)
+        if (_backendProbe.Hw?.IsUmiMachine == true || gcuEcGpuExperiment || localColdGpu)
         {
             await SwitchUmiGpuColdAsync(mode, button);
             return;
@@ -7675,7 +7677,7 @@ public partial class OriginalStyleWindow : Window
                 ? WpfStrings.OriginalStyleWindow_Text_15
                 : WpfStrings.L("显卡", "Graphics");
             bool localIccAvailable = IccHelper.ListCustomIccFiles().Count > 0;
-            ScreenSection.Visibility = (caps.DisplayRefresh || caps.ColorCalibration || caps.LcdOverdrive || caps.LocalDimming || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
+            ScreenSection.Visibility = (caps.DisplayRefresh || _backendProbe?.Hw?.SupportsDisplayRefresh == true || caps.ColorCalibration || caps.LcdOverdrive || caps.LocalDimming || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
             bool hasKeyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
                 ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
                 : caps.Keyboard || (hw?.SupportsKeyboard ?? false)

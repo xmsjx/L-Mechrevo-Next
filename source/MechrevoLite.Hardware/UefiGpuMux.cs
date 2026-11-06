@@ -109,8 +109,25 @@ internal static class UefiGpuMux
     /// true = Legacy Dual-Mode 或无法证明是现代三模（无 NVRAM 变量 / payload < 80）；
     /// false = 现代三模；null = 读取失败，按保守值 true 处理。
     /// </summary>
+    private static bool? _hasMuxVariable;
     private static bool? _legacyOrUnknownMux;
     private static readonly object _muxGate = new();
+
+    internal static bool HasMuxVariable
+    {
+        get
+        {
+            lock (_muxGate)
+            {
+                if (_hasMuxVariable.HasValue)
+                {
+                    return _hasMuxVariable.Value;
+                }
+                _hasMuxVariable = TryRead(out _, out _, out _);
+                return _hasMuxVariable.Value;
+            }
+        }
+    }
 
     internal static bool IsLegacyOrUnknownMux
     {

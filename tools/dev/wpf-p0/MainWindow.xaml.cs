@@ -2307,7 +2307,7 @@ public partial class MainWindow : Window
         HomeMidColumn.Width = gpuSupported ? new GridLength(12) : new GridLength(0);
         Grid.SetColumn(HomePerfCard, 0);
         Grid.SetColumnSpan(HomePerfCard, gpuSupported ? 1 : 3);
-        bool displaySupported = caps.DisplayRefresh || caps.ColorCalibration || caps.LcdOverdrive || caps.LocalDimming;
+        bool displaySupported = caps.DisplayRefresh || _probe?.Hw?.SupportsDisplayRefresh == true || caps.ColorCalibration || caps.LcdOverdrive || caps.LocalDimming;
         HomeDisplayCard.Visibility = displaySupported ? Visibility.Visible : Visibility.Collapsed;
         HomeDisplayColumn.Width = displaySupported ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         HomeDisplayGap.Width = displaySupported ? new GridLength(10) : new GridLength(0);
