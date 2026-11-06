@@ -453,7 +453,7 @@ public partial class HidKeyboardWindow : Window
                 StatusText.Text = WpfStrings.HidKeyboardWindow_xaml_Text_8;
                 return;
             }
-            int brightness = Math.Clamp((int)Math.Round(BrightnessSlider.Value), 1, 100);
+            int brightness = Math.Clamp((int)Math.Round(BrightnessSlider.Value), 0, 100);
             _rgb.Brightness = brightness;
             bool ready = _rgb.IsConnected || await _rgb.EnsureHidReadyAsync() || _rgb.Connect();
             if (!ready)
