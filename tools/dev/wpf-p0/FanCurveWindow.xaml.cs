@@ -241,8 +241,8 @@ public partial class FanCurveWindow : Window
                 RpmsToPercent(curve.Channel0Rpms, curve.MaxRpm));
             return;
         }
-        if (_hw.WujieSmuApu && _hw.CpuCurveDuty.Length >= 16 && _hw.GpuCurveDuty.Length >= 16
-            && _hw.CpuCurveUpT.Length >= 16 && _hw.GpuCurveUpT.Length >= 16)
+        if (_hw.WujieSmuApu && FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
+            && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
         {
             CpuCurve.Load(_hw.CpuCurveUpT, _hw.CpuCurveDuty);
             GpuCurve.Load(_hw.GpuCurveUpT, _hw.GpuCurveDuty);
@@ -260,10 +260,8 @@ public partial class FanCurveWindow : Window
             || _modeId.StartsWith("fw", StringComparison.Ordinal))
         {
             // 优先用当前固件/EC 实际读取到的 16 点表；读不到才退回默认 30..100°C 轴。
-            if (_hw.CpuCurveUpT.Length >= 16 && _hw.CpuCurveDuty.Length >= 16
-                && _hw.GpuCurveUpT.Length >= 16 && _hw.GpuCurveDuty.Length >= 16
-                && _hw.CpuCurveUpT.Any(v => v != 0) && _hw.CpuCurveDuty.Any(v => v != 0)
-                && _hw.GpuCurveUpT.Any(v => v != 0) && _hw.GpuCurveDuty.Any(v => v != 0))
+            if (FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
+                && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
             {
                 CpuCurve.Load(_hw.CpuCurveUpT, _hw.CpuCurveDuty);
                 GpuCurve.Load(_hw.GpuCurveUpT, _hw.GpuCurveDuty);
@@ -277,8 +275,8 @@ public partial class FanCurveWindow : Window
                 PersistHardwareCurveIfMissing(cpuSaved, gpuSaved);
             }
         }
-        else if (_hw.CpuCurveDuty.Length >= 16 && _hw.GpuCurveDuty.Length >= 16
-            && _hw.CpuCurveUpT.Length >= 16 && _hw.GpuCurveUpT.Length >= 16)
+        else if (FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
+            && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
         {
             CpuCurve.Load(_hw.CpuCurveUpT, _hw.CpuCurveDuty);
             GpuCurve.Load(_hw.GpuCurveUpT, _hw.GpuCurveDuty);
@@ -626,6 +624,44 @@ public partial class FanCurveWindow : Window
         catch
         {
         }
+    }
+
+    /// <summary>表异常/错乱时回退默认 16 点轴：温度必须 0..120 或尾部 255，占空比 0..100 且单调不减。</summary>
+    private static bool FanTableLooksSane(byte[] temps, byte[] duties)
+    {
+        if (temps == null || duties == null || temps.Length < 16 || duties.Length < 16)
+        {
+            return false;
+        }
+        bool ended = false;
+        int previousTemp = -1;
+        int previousDuty = -1;
+        bool hasActive = false;
+        for (int i = 0; i < 16; i++)
+        {
+            int temp = temps[i];
+            if (temp == 255)
+            {
+                ended = true;
+                continue;
+            }
+            if (ended || temp < 0 || temp > 120 || temp < previousTemp)
+            {
+                return false;
+            }
+            previousTemp = temp;
+            int duty = duties[i];
+            if (duty < 0 || duty > 100 || duty < previousDuty)
+            {
+                return false;
+            }
+            previousDuty = duty;
+            if (i > 0 && temp > 0 && duty > 0)
+            {
+                hasActive = true;
+            }
+        }
+        return hasActive;
     }
 
     private static byte[] TempsToBytes(int[] temps)
