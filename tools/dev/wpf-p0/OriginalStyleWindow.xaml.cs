@@ -5613,6 +5613,11 @@ public partial class OriginalStyleWindow : Window
         bool modeGcu = !modeBaolongda
             && modeHw?.IsGcuConnected == true
             && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
+        bool modeLocalEc = !modeBaolongda
+            && modeHw?.IsGcuConnected != true
+            && modeHw?.IsIntelNucMachine != true
+            && modeHw?.IsUmiMachine != true
+            && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
         if (modeBaolongda && _services != null)
         {
             bool enable = mode != 0;
@@ -5734,7 +5739,7 @@ public partial class OriginalStyleWindow : Window
         }
         // GCU 路固定走 GCU 的 BatteryProtection（旧 LM 默认三档行为），
         // 不因 _services 存在就改走 DashboardCommands/EC 侧。
-        bool modeEcThree = (modeGcu || (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+        bool modeEcThree = (modeGcu || modeLocalEc || (MechrevoLite.Hardware.GcuEcExperimental.Enabled
                 && _backendRoute == BackendRoute.Ec))
             && !modeBaolongda
             && modeHw?.IsIntelNucMachine != true
