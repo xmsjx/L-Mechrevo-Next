@@ -42,7 +42,7 @@ public partial class FanCurveWindow : Window
         }
         try
         {
-            MechrevoLite.Mode.PerfModeSettings saved = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId);
+        MechrevoLite.Mode.PerfModeSettings saved = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId);
             if (SameDuties(CpuCurve.Duties, saved.CpuFanDuty)
                 && SameDuties(GpuCurve.Duties, saved.GpuFanDuty))
             {
@@ -246,6 +246,14 @@ public partial class FanCurveWindow : Window
         {
             CpuCurve.Load(_hw.CpuCurveUpT, _hw.CpuCurveDuty);
             GpuCurve.Load(_hw.GpuCurveUpT, _hw.GpuCurveDuty);
+            return;
+        }
+        if (!_hw.IsGcuConnected
+            && MechrevoLite.Hardware.NucFanTable.TryReadCurrent(out byte[] ecCpuT, out byte[] ecCpuD, out byte[] ecGpuT, out byte[] ecGpuD)
+            && FanTableLooksSane(ecCpuT, ecCpuD) && FanTableLooksSane(ecGpuT, ecGpuD))
+        {
+            CpuCurve.Load(ecCpuT, ecCpuD);
+            GpuCurve.Load(ecGpuT, ecGpuD);
             return;
         }
         MechrevoLite.Mode.PerfModeSettings saved = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId);

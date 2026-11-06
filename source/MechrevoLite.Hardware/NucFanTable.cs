@@ -239,6 +239,34 @@ internal static class NucFanTable
         return true;
     }
 
+    /// <summary>只读当前 EC 风扇表（UpT + Duty），用于无 GCU 时替代写死的默认表。</summary>
+    internal static bool TryReadCurrent(out byte[] cpuUpT, out byte[] cpuDuty, out byte[] gpuUpT, out byte[] gpuDuty)
+    {
+        cpuUpT = new byte[16];
+        cpuDuty = new byte[16];
+        gpuUpT = new byte[16];
+        gpuDuty = new byte[16];
+        for (int i = 1; i < 16; i++)
+        {
+            if (!TryRead(CpuUptBase + i - 1, out int cpuTemp)
+                || !TryRead(CpuDutyBase + i, out int cpuRaw)
+                || !TryRead(GpuUptBase + i - 1, out int gpuTemp)
+                || !TryRead(GpuDutyBase + i, out int gpuRaw))
+            {
+                return false;
+            }
+            cpuUpT[i] = (byte)cpuTemp;
+            cpuDuty[i] = (byte)Math.Clamp(cpuRaw / 2, 0, 100);
+            gpuUpT[i] = (byte)gpuTemp;
+            gpuDuty[i] = (byte)Math.Clamp(gpuRaw / 2, 0, 100);
+        }
+        cpuUpT[0] = 0;
+        cpuDuty[0] = 0;
+        gpuUpT[0] = 0;
+        gpuDuty[0] = 0;
+        return true;
+    }
+
     private static byte[] NormalizeDuty(int[] percents) { byte[] result = new byte[16]; int running = 0; for (int i = 0; i < 16; i++) { int raw = Math.Clamp(percents[i], 0, 100) * 2; running = Math.Max(running, raw); result[i] = (byte)running; } result[0] = 0; return result; }
     private static byte[] BuildDown(byte[] upt) { byte[] down = new byte[16]; int previous = 0; for (int i = 1; i < 16; i++) { if (upt[i] == 255) { down[i] = 255; continue; } int hysteresis = upt[i] <= 55 ? 8 : 5; int value = Math.Max(previous, upt[i] - hysteresis); value = Math.Max(0, Math.Min(value, upt[i])); down[i] = (byte)value; previous = value; } return down; }
     private static bool TryRead(int address, out int value) { if (AcpiDriverEc.TryReadByte(address, out byte b)) { value = b; return true; } if (EcPortIo.TryReadByteStable(address, out int legacy, out _)) { value = legacy; return true; } value = -1; return false; }
