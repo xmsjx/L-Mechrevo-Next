@@ -8775,7 +8775,7 @@ public partial class OriginalStyleWindow : Window
             bool calibrationOn = AppConfig.Exists("calib_enabled") && AppConfig.Is("calib_enabled");
             CalibrationSwitch.IsChecked = calibrationOn;
             CalibrationCombo.IsEnabled = calibrationOn;
-            CalibrationSettingsButton.IsEnabled = calibrationOn;
+            CalibrationSettingsButton.IsEnabled = true;
             CalibrationSwitch.IsEnabled = probe.IsGcuConnected || !probe.IsNonGcuBackend
                 || IccHelper.ListCustomIccFiles().Count > 0;
         }
@@ -8881,7 +8881,7 @@ public partial class OriginalStyleWindow : Window
             StatusText.Text = mode == 999 ? WpfStrings.DisplayIccMissing : WpfStrings.DisplayCalibrationFailed;
         }
         CalibrationCombo.IsEnabled = CalibrationSwitch.IsChecked == true;
-        CalibrationSettingsButton.IsEnabled = CalibrationSwitch.IsChecked == true;
+        CalibrationSettingsButton.IsEnabled = true;
         CalibrationSwitch.IsEnabled = true;
     }
 

@@ -79,6 +79,12 @@ internal static class EcChargeLimitOverride
                         AcpiDriverEc.TryWriteByte(PlatformIdRegister, 0x07);
                     }
                     AcpiDriverEc.TryWriteByte(UpperRegister, 0);
+                    // 门控恢复/清上限后，固件可能把 0x7A6 的档位位清掉；最后再写一次档位。
+                    if (AcpiDriverEc.TryReadByte(ProtectionModeRegister, out byte protectionAfterGate))
+                    {
+                        AcpiDriverEc.TryWriteByte(ProtectionModeRegister,
+                            (byte)((protectionAfterGate & ~0x31) | mode));
+                    }
                 }
             }
             bool modeRead = AcpiDriverEc.TryReadByte(ProtectionModeRegister, out byte modeAfter);

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Interop;
 using MechrevoLite;
@@ -20,6 +21,13 @@ public partial class CalibrationSettingsWindow : Window
         InitializeComponent();
         SourceInitialized += (_, _) => ApplyDarkTitleBar();
         LoadState();
+        Loaded += async (_, _) =>
+        {
+            if (_localIccProfiles.Count == 0)
+            {
+                await TryFetchMissingIccAsync();
+            }
+        };
         CloudButton.Visibility = (L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.IsIntelNucMachine == true
             || L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.IsGcuConnected != true)
             ? Visibility.Visible
@@ -45,6 +53,57 @@ public partial class CalibrationSettingsWindow : Window
     }
 
     private List<string> _localIccProfiles = new();
+
+    /// <summary>本地没有 ICC 时自动联网获取；拿到后直接关联，不用再点“云端获取”。</summary>
+    private async Task TryFetchMissingIccAsync()
+    {
+        if (_localIccProfiles.Count > 0)
+        {
+            return;
+        }
+        try
+        {
+            CloudButton.IsEnabled = false;
+            CloudIccFetcher.Result result = await CloudIccFetcher.FetchAsync();
+            if (!result.Ok || string.IsNullOrWhiteSpace(result.FileName))
+            {
+                return;
+            }
+            string path = Path.Combine(IccHelper.CustomIccDir, result.FileName);
+            if (!File.Exists(path))
+            {
+                return;
+            }
+            AppConfig.Set("calib_custom_icc", result.FileName);
+            AppConfig.Set("calib_custom_on", 1);
+            AppConfig.Flush();
+            _syncing = true;
+            try
+            {
+                CustomSwitch.IsChecked = true;
+                RefreshIccList();
+                IccCombo.IsEnabled = true;
+                ImportButton.IsEnabled = true;
+                int index = IccCombo.Items.IndexOf(result.FileName);
+                if (index >= 0)
+                {
+                    IccCombo.SelectedIndex = index;
+                }
+            }
+            finally
+            {
+                _syncing = false;
+            }
+            await Task.Run(() => IccHelper.ApplyIcc(path));
+        }
+        catch
+        {
+        }
+        finally
+        {
+            CloudButton.IsEnabled = true;
+        }
+    }
 
     private void RefreshIccList()
     {
