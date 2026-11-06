@@ -336,6 +336,7 @@
                             <ComboBoxItem Content="GCU 模式" Tag="gcu" />
                             <ComboBoxItem Content="EC 控制模式" Tag="ec" />
                         </ComboBox>
+                        <TextBlock x:Name="ControlModeStatus" Style="{StaticResource Hint}" Margin="0,6,0,0" />
                     </StackPanel>
                 </Border>
 

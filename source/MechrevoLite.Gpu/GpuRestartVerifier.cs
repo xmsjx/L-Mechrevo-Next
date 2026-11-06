@@ -26,7 +26,7 @@ internal static class GpuRestartVerifier
 		{
 			return false;
 		}
-		if (!UefiDisplayModeDiagnostics.TryGetPendingRoute(Program.hw?.IsAmdPlatformForLimits ?? false, out GpuRoute? pending) || !pending.HasValue)
+		if (!UefiDisplayModeDiagnostics.TryGetPendingRoute((Program.hw?.IsAmdPlatformForLimits == true || MechrevoLite.Hardware.CpuVendor.IsAmd), out GpuRoute? pending) || !pending.HasValue)
 		{
 			return false;
 		}
@@ -51,7 +51,7 @@ internal static class GpuRestartVerifier
 			// 若 NVRAM 的待生效路由与当前实际路由不同，则以 NVRAM 为准 ——
 			// 否则界面会把「重启以应用」的目标显示错（实测 target 残留 2=独显，
 			// 而 NVRAM 实际待生效是 2(IgpuOnly)=核显模式）。
-			if (UefiDisplayModeDiagnostics.TryGetPendingRoute(Program.hw?.IsAmdPlatformForLimits ?? false, out GpuRoute? pending)
+			if (UefiDisplayModeDiagnostics.TryGetPendingRoute((Program.hw?.IsAmdPlatformForLimits == true || MechrevoLite.Hardware.CpuVendor.IsAmd), out GpuRoute? pending)
 				&& pending.HasValue)
 			{
 				GpuRoute actual = GpuRouteMonitor.Snapshot().Route;
@@ -186,7 +186,7 @@ internal static class GpuRestartVerifier
 			if (!TryTakeRebootTarget(out var target))
 			{
 				GpuRouteReadback value = GpuRouteMonitor.Refresh();
-				Logger.WriteInfo($"GPU route at startup: {value}; {UefiDisplayModeDiagnostics.Describe(Program.hw?.IsAmdPlatformForLimits ?? false)}");
+				Logger.WriteInfo($"GPU route at startup: {value}; {UefiDisplayModeDiagnostics.Describe((Program.hw?.IsAmdPlatformForLimits == true || MechrevoLite.Hardware.CpuVendor.IsAmd))}");
 				return GpuRestartVerdict.NotPending;
 			}
 			GpuRouteReadback readback = GpuRouteReadback.Unavailable;
@@ -200,7 +200,7 @@ internal static class GpuRestartVerifier
 				await Task.Delay(ReadbackRetryDelay).ConfigureAwait(continueOnCapturedContext: false);
 			}
 			GpuRestartVerdict gpuRestartVerdict = Evaluate(target, readback.Route);
-			string logMessage = $"GPU route verify: target={target} actual={readback.Route} ({readback}) verdict={gpuRestartVerdict}; {UefiDisplayModeDiagnostics.Describe(Program.hw?.IsAmdPlatformForLimits ?? false)}";
+			string logMessage = $"GPU route verify: target={target} actual={readback.Route} ({readback}) verdict={gpuRestartVerdict}; {UefiDisplayModeDiagnostics.Describe((Program.hw?.IsAmdPlatformForLimits == true || MechrevoLite.Hardware.CpuVendor.IsAmd))}";
 			if (gpuRestartVerdict == GpuRestartVerdict.NotApplied)
 			{
 				Logger.WriteError(logMessage);

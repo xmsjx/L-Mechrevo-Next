@@ -411,6 +411,10 @@ public partial class SettingsWindow : Window
         }
         (bool Ok, string Detail) result = await MechrevoLite.Hardware.GcuEcMode.SetModeAsync(ecMode);
         Status(result.Detail);
+        if (ControlModeStatus != null)
+        {
+            ControlModeStatus.Text = ecMode ? "当前：EC 控制模式" : "当前：GCU 模式";
+        }
         if (result.Ok)
         {
             MessageBox.Show(this, "已切换控制模式，请重启 L-Mechrevo 使后端路由生效。",

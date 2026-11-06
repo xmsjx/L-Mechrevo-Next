@@ -1142,8 +1142,9 @@ internal sealed class BackendProbe : IDisposable
             {
                 if (UefiGpuMux.TryRead(out int raw, out _, out _))
                 {
+                    bool isAmd = _hw?.IsAmdPlatformForLimits == true || MechrevoLite.Hardware.CpuVendor.IsAmd;
                     MechrevoLite.Gpu.GpuRoute? route = MechrevoLite.Gpu.GpuRouteInference.DecodeOemDisplayMode(
-                        (byte)raw, _hw?.IsAmdPlatformForLimits == true);
+                        (byte)raw, isAmd);
                     if (route.HasValue)
                     {
                         int mode = MechrevoLite.Gpu.GpuRouteInference.ToGpuMode(route.Value);
