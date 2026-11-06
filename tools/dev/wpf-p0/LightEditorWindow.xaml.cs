@@ -207,6 +207,16 @@ public partial class LightEditorWindow : Window
         _suppressAutoApply = false;
         PowerCheck.Checked += (_, _) =>
         {
+            // 只在“关 → 开”的这一刻兜底：亮度为 0 时给 1 档。
+            // 不能放在 ApplyCore 里反复执行，否则用户主动拉到 0 会被一直改回 1。
+            if (_keyboard && _light <= 0 && LightSlider.Minimum <= 0)
+            {
+                _light = 1;
+                LightSlider.Value = 1;
+                LightText.Text = (_wujieWhite || _whiteBacklightOnly)
+                    ? WpfStrings.LightLevelDim
+                    : (_light + "/" + _lightMax);
+            }
             UpdateEditorPowerUi();
             ScheduleAutoApply();
         };
