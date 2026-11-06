@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
@@ -45,6 +46,7 @@ public partial class CalibrationSettingsWindow : Window
             bool customOn = CustomSwitch.IsChecked == true;
             IccCombo.IsEnabled = customOn;
             ImportButton.IsEnabled = customOn;
+            if (DeleteButton != null) DeleteButton.IsEnabled = _localIccProfiles.Count > 0;
         }
         finally
         {
@@ -115,6 +117,7 @@ public partial class CalibrationSettingsWindow : Window
             IccCombo.Items.Add("默认校色");
             IccCombo.Items.Add("自定义校色");
             IccCombo.SelectedIndex = AppConfig.Is("calib_custom_on") && _localIccProfiles.Count == 1 ? 1 : 0;
+            if (DeleteButton != null) DeleteButton.IsEnabled = _localIccProfiles.Count > 0;
             return;
         }
         foreach (string name in _localIccProfiles)
@@ -129,6 +132,32 @@ public partial class CalibrationSettingsWindow : Window
                 IccCombo.SelectedIndex = index;
             }
         }
+        if (DeleteButton != null) DeleteButton.IsEnabled = _localIccProfiles.Count > 0;
+    }
+
+    private void DeleteButton_Click(object sender, RoutedEventArgs e)
+    {
+        string? name = IccCombo.SelectedItem as string;
+        string? file = name;
+        if (_localIccProfiles.Count <= 1 && string.Equals(name, "自定义校色", StringComparison.Ordinal))
+        {
+            file = _localIccProfiles.FirstOrDefault();
+        }
+        if (string.IsNullOrWhiteSpace(file) || !_localIccProfiles.Contains(file, StringComparer.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(this, "请选择要删除的校色配置", "校色", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (MessageBox.Show(this, "删除校色配置 " + file + " ？", "校色", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+        {
+            return;
+        }
+        bool ok = IccHelper.DeleteIcc(file);
+        if (!ok)
+        {
+            MessageBox.Show(this, "删除失败：" + file, "校色", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        LoadState();
     }
 
     private void StartupSwitch_Click(object sender, RoutedEventArgs e)

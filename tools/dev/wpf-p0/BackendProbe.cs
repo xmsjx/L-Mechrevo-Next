@@ -196,7 +196,10 @@ internal sealed class BackendProbe : IDisposable
                 }
                 return _nucBatteryMode;
             }
-            if (_hw?.BatteryProtection is int protection && protection >= 0)
+            // GCU 在线才信 GCU 的 BatteryProtection；GCU 离线时它可能是默认 0/stale，
+            // 会把本地 EC 刚写的档位误读成长效模式。
+            if (_hw?.IsGcuConnected == true
+                && _hw.BatteryProtection is int protection && protection >= 0)
             {
                 return protection;
             }
@@ -204,6 +207,10 @@ internal sealed class BackendProbe : IDisposable
             if (MechrevoLite.Hardware.EcChargeLimitOverride.TryReadMode(out int ecMode, out _, out _))
             {
                 return ecMode;
+            }
+            if (_hw?.BatteryProtection is int fallbackProtection && fallbackProtection >= 0)
+            {
+                return fallbackProtection;
             }
             return -1;
         }

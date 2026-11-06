@@ -211,6 +211,40 @@ public static class IccHelper
 		}
 	}
 
+	/// <summary>删除 customICC/ICC 目录中的一个配置文件；如果它是当前应用项，先解除关联。</summary>
+	public static bool DeleteIcc(string fileName)
+	{
+		try
+		{
+			if (string.IsNullOrWhiteSpace(fileName)
+				|| !string.Equals(fileName, Path.GetFileName(fileName), StringComparison.Ordinal))
+			{
+				return false;
+			}
+			EnsureCustomIccDir();
+			string path = Path.Combine(CustomIccDir, fileName);
+			if (!File.Exists(path))
+			{
+				return false;
+			}
+			if (string.Equals(AppConfig.GetString("calib_custom_icc"), fileName, StringComparison.OrdinalIgnoreCase))
+			{
+				ClearAllIcc();
+				AppConfig.Remove("calib_custom_icc");
+				AppConfig.Set("calib_custom_on", 0);
+				AppConfig.Flush();
+			}
+			File.Delete(path);
+			Logger.WriteLine("自定义 ICC 已删除: " + fileName);
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("删除自定义 ICC 失败: " + ex.Message);
+			return false;
+		}
+	}
+
 	/// <summary>把指定 ICC 文件关联到笔记本内屏（不走 GCU）。</summary>
 	public static bool ApplyIcc(string profilePath)
 	{

@@ -1693,6 +1693,19 @@ public partial class OriginalStyleWindow : Window
 
     private void ApplyBatteryModeHighlight(int mode)
     {
+        // 无极限充开启时，三档按钮只是 60/80/100 的快捷高亮；
+        // 滑块在其它阈值时保持三个按钮都不高亮，避免误显示成某一档。
+        if (ChargeSliderToggle?.IsChecked == true && BatteryLimitSlider != null)
+        {
+            int percent = (int)Math.Round(BatteryLimitSlider.Value);
+            mode = percent switch
+            {
+                100 => 0,
+                80 => 1,
+                60 => 2,
+                _ => -1
+            };
+        }
         BatteryLongButton.IsChecked = mode == 0;
         BatteryBalancedButton.IsChecked = mode == 1;
         BatteryWorkButton.IsChecked = mode == 2;
@@ -1706,6 +1719,10 @@ public partial class OriginalStyleWindow : Window
         if (selected != null)
         {
             HighlightSegment(selected);
+        }
+        else if (BatteryLongButton.Parent is Panel panel)
+        {
+            ClearSegmentBorders(panel);
         }
     }
 

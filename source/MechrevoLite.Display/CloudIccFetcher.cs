@@ -189,15 +189,28 @@ public static class CloudIccFetcher
 
     private static async Task<string?> ImportAsync(byte[] data, string fileName, CancellationToken ct)
     {
-        string temp = Path.Combine(Path.GetTempPath(), "lm-cloud-" + Guid.NewGuid().ToString("N") + ".icm");
+        // 保留云端原始文件名；不能再用 lm-cloud-<hash> 临时名导入，否则下拉框会显示随机名。
+        string safe = Path.GetFileName(fileName ?? "");
+        if (string.IsNullOrWhiteSpace(safe))
+        {
+            safe = "cloud.icm";
+        }
+        if (!safe.EndsWith(".icm", StringComparison.OrdinalIgnoreCase)
+            && !safe.EndsWith(".icc", StringComparison.OrdinalIgnoreCase))
+        {
+            safe += ".icm";
+        }
+        string dir = Path.Combine(Path.GetTempPath(), "lm-icc-" + Guid.NewGuid().ToString("N"));
+        string temp = Path.Combine(dir, safe);
         try
         {
+            Directory.CreateDirectory(dir);
             await File.WriteAllBytesAsync(temp, data, ct).ConfigureAwait(false);
             return IccHelper.ImportIcc(temp);
         }
         finally
         {
-            try { File.Delete(temp); } catch { }
+            try { Directory.Delete(dir, recursive: true); } catch { }
         }
     }
 
