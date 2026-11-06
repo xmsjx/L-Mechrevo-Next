@@ -6924,6 +6924,16 @@ public partial class OriginalStyleWindow : Window
         int batteryMode = ChargeSliderToggle.IsChecked == true
             ? ModeForPercent(resolvedLimit > 0 ? resolvedLimit : (int)Math.Round(BatteryLimitSlider.Value))
             : probe.BatteryMode;
+        // 无 GCU 的本地 EC 档位：固件可能在刷新间隙把 0x7A6 清掉，后台刷新
+        // 不能再用瞬时回读覆盖用户刚选中的档位，否则按钮会来回弹。
+        if (ChargeSliderToggle.IsChecked != true
+            && probe.Hw?.IsGcuConnected != true
+            && probe.Hw?.UsesBaolongda != true
+            && probe.Hw?.IsIntelNucMachine != true
+            && probe.Hw?.IsUmiMachine != true)
+        {
+            batteryMode = ModeForPercent(MechrevoLite.Battery.BatteryControl.SelectedModePercent());
+        }
         for (int i = 0; i < batteryButtons.Length; i++)
         {
             batteryButtons[i].IsChecked = i == batteryMode;

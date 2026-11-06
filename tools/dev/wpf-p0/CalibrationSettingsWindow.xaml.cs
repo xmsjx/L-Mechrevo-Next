@@ -29,10 +29,7 @@ public partial class CalibrationSettingsWindow : Window
                 await TryFetchMissingIccAsync();
             }
         };
-        CloudButton.Visibility = (L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.IsIntelNucMachine == true
-            || L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.IsGcuConnected != true)
-            ? Visibility.Visible
-            : Visibility.Collapsed;
+        CloudButton.Visibility = Visibility.Visible;
     }
 
     private void LoadState()
@@ -243,8 +240,25 @@ public partial class CalibrationSettingsWindow : Window
             string importedList = result.FileNames is { Count: > 0 } names
                 ? string.Join(Environment.NewLine, names)
                 : result.FileName;
-            MessageBox.Show(this, result.Detail + Environment.NewLine + Environment.NewLine + importedList,
-                WpfStrings.L("云端获取 ICC", "Get ICC from cloud"), MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBoxResult openFolder = MessageBox.Show(this,
+                result.Detail + Environment.NewLine + Environment.NewLine + importedList
+                + Environment.NewLine + Environment.NewLine + "是否打开校色文件所在位置？",
+                WpfStrings.L("云端获取 ICC", "Get ICC from cloud"), MessageBoxButton.YesNo, MessageBoxImage.Information);
+            if (openFolder == MessageBoxResult.Yes)
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "explorer.exe",
+                        Arguments = "\"" + IccHelper.CustomIccDir + "\"",
+                        UseShellExecute = true
+                    });
+                }
+                catch
+                {
+                }
+            }
         }
         catch (Exception ex)
         {
