@@ -7700,7 +7700,12 @@ public partial class OriginalStyleWindow : Window
   bool nucUmiModeUi = _backendProbe?.Hw?.IsIntelNucMachine == true || _backendProbe?.Hw?.IsUmiMachine == true;
             // Intel 星耀暂时屏蔽自定义模式；AMD 星耀/无界走本机 SMU 自定义。
             bool smuCustom = hw?.SmuCustomApu == true;
-            bool customAllowed = nucUmiModeUi || smuCustom
+            // EC 实验模式/无 GCU 的同方独显机：本地 EC 也能跑自定义档，
+            // 不能因为 ItemSupport 能力位缺失就把自定义入口藏掉。
+            bool ecLocalCustom = MechrevoLite.Hardware.GcuEcExperimental.Enabled
+                && hw?.IsGcuConnected != true
+                && hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
+            bool customAllowed = nucUmiModeUi || smuCustom || ecLocalCustom
                 || ((caps.CpuPerformanceTuning || caps.FanSettings)
                     && !(_backendProbe?.Hw?.SupportsModeProfileConfig ?? false));
             CustomModeButton.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
