@@ -261,7 +261,9 @@ public partial class FanCurveWindow : Window
         {
             // 优先用当前固件/EC 实际读取到的 16 点表；读不到才退回默认 30..100°C 轴。
             if (_hw.CpuCurveUpT.Length >= 16 && _hw.CpuCurveDuty.Length >= 16
-                && _hw.GpuCurveUpT.Length >= 16 && _hw.GpuCurveDuty.Length >= 16)
+                && _hw.GpuCurveUpT.Length >= 16 && _hw.GpuCurveDuty.Length >= 16
+                && _hw.CpuCurveUpT.Any(v => v != 0) && _hw.CpuCurveDuty.Any(v => v != 0)
+                && _hw.GpuCurveUpT.Any(v => v != 0) && _hw.GpuCurveDuty.Any(v => v != 0))
             {
                 CpuCurve.Load(_hw.CpuCurveUpT, _hw.CpuCurveDuty);
                 GpuCurve.Load(_hw.GpuCurveUpT, _hw.GpuCurveDuty);
