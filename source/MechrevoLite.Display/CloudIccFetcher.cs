@@ -36,19 +36,37 @@ public static class CloudIccFetcher
                 return new Result(false, null, "云端获取校色失败：未读到面板 ID");
             }
 
-            // 路径 1：<pnp>_<面板序列号> / <pnp>_<BIOS 序列号>；优先 50 系服务器。
-            Hit? hit = await TryFetchAsync(
-                BuildSerialCandidates(monitors, biosSerial),
-                new[] { AistoneServer, UniwillServer },
-                ct).ConfigureAwait(false);
-
-            // 路径 2：<pnp>_<MAC>；优先 40 系服务器。
-            if (hit == null)
+            // 50 系优先序列号（aistone）；40 系/未知优先 MAC（uniwill）。
+            bool gen50 = MechrevoLite.Program.hw?.DgpuGeneration
+                == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
+            Hit? hit;
+            if (gen50)
+            {
+                hit = await TryFetchAsync(
+                    BuildSerialCandidates(monitors, biosSerial),
+                    new[] { AistoneServer, UniwillServer },
+                    ct).ConfigureAwait(false);
+                if (hit == null)
+                {
+                    hit = await TryFetchAsync(
+                        BuildMacCandidates(monitors, macs),
+                        new[] { UniwillServer, AistoneServer },
+                        ct).ConfigureAwait(false);
+                }
+            }
+            else
             {
                 hit = await TryFetchAsync(
                     BuildMacCandidates(monitors, macs),
                     new[] { UniwillServer, AistoneServer },
                     ct).ConfigureAwait(false);
+                if (hit == null)
+                {
+                    hit = await TryFetchAsync(
+                        BuildSerialCandidates(monitors, biosSerial),
+                        new[] { AistoneServer, UniwillServer },
+                        ct).ConfigureAwait(false);
+                }
             }
 
             // 兜底：<pnp> / <友好名>，两个服务器都试。
