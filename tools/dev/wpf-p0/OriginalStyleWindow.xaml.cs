@@ -3393,7 +3393,12 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            if (ScreenBrightness.TryGet(out int brightness))
+            if (BrightnessSlider == null || BrightnessSlider.IsMouseCaptureWithin)
+            {
+                return;
+            }
+            if (ScreenBrightness.TryGet(out int brightness)
+                && Math.Abs(BrightnessSlider.Value - brightness) >= 0.5)
             {
                 _syncingBrightness = true;
                 BrightnessSlider.Value = Math.Clamp(brightness, 0, 100);
@@ -6681,6 +6686,7 @@ public partial class OriginalStyleWindow : Window
         try { MechrevoLite.Battery.ChargeLimitMonitor.Tick(DateTime.Now); } catch { }
         probe.SyncNucQuickSwitches();
         probe.SyncCameraQuickState();
+        try { RefreshBrightness(); } catch { }
         BackendLine.Text = probe.Snapshot();
         UpdateTraySensorTooltip(probe);
         HookHardwareState(probe.Hw);

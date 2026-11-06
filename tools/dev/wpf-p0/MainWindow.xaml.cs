@@ -1363,8 +1363,9 @@ public partial class MainWindow : Window
                     Minimum = 40,
                     Maximum = 100,
                     Value = sliderValue,
-                    Width = 190,
-                    Margin = new Thickness(0, 8, 6, 0),
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 6, 0),
                     Style = (Style)FindResource("RoundSlider"),
                     Visibility = sliderOn ? Visibility.Visible : Visibility.Collapsed
                 };
@@ -1385,7 +1386,10 @@ public partial class MainWindow : Window
                     VerticalAlignment = VerticalAlignment.Center,
                     Visibility = sliderOn ? Visibility.Visible : Visibility.Collapsed
                 };
-                StackPanel sliderRow = new() { Orientation = Orientation.Horizontal };
+                Grid sliderRow = new() { Margin = new Thickness(0, 8, 0, 0) };
+                sliderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                sliderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                Grid.SetColumn(_chargeSliderText, 1);
                 sliderRow.Children.Add(_chargeSlider);
                 sliderRow.Children.Add(_chargeSliderText);
                 battery.Children.Add(sliderRow);
@@ -1431,7 +1435,7 @@ public partial class MainWindow : Window
             if (gcuExperiment)
             {
                 (bool gcuSliderOn, int gcuSliderValue) = _owner.WideBatteryLimitSlider();
-                _chargeSlider = new Slider { Minimum = 40, Maximum = 100, Value = gcuSliderValue, Width = 190, Margin = new Thickness(0, 8, 6, 0), Style = (Style)FindResource("RoundSlider"), Visibility = gcuSliderOn ? Visibility.Visible : Visibility.Collapsed };
+                _chargeSlider = new Slider { Minimum = 40, Maximum = 100, Value = gcuSliderValue, HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0), Style = (Style)FindResource("RoundSlider"), Visibility = gcuSliderOn ? Visibility.Visible : Visibility.Collapsed };
                 _chargeSlider.ValueChanged += (_, _) =>
                 {
                     if (_syncingChargeSlider)
@@ -1442,7 +1446,10 @@ public partial class MainWindow : Window
                     if (_chargeSliderText != null) _chargeSliderText.Text = (int)Math.Round(_chargeSlider.Value) + "%";
                 };
                 _chargeSliderText = new TextBlock { Text = gcuSliderValue + "%", Style = (Style)FindResource("MutedText"), Width = 46, VerticalAlignment = VerticalAlignment.Center, Visibility = gcuSliderOn ? Visibility.Visible : Visibility.Collapsed };
-                StackPanel gcuSliderRow = new() { Orientation = Orientation.Horizontal };
+                Grid gcuSliderRow = new() { Margin = new Thickness(0, 8, 0, 0) };
+                gcuSliderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+                gcuSliderRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                Grid.SetColumn(_chargeSliderText, 1);
                 gcuSliderRow.Children.Add(_chargeSlider);
                 gcuSliderRow.Children.Add(_chargeSliderText);
                 battery.Children.Add(gcuSliderRow);
