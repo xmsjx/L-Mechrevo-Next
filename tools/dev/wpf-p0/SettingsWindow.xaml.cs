@@ -393,6 +393,37 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private async void ControlMode_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncing || ControlModeCombo == null)
+        {
+            return;
+        }
+        bool ecMode = (ControlModeCombo.SelectedItem as ComboBoxItem)?.Tag as string == "ec";
+        if (ecMode && MessageBox.Show(this,
+                "切换到 EC 控制模式会停止 GCUBridge 和 GCUService，之后由本地 EC 接管。\n\n继续？",
+                "控制模式", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+        {
+            _syncing = true;
+            ControlModeCombo.SelectedIndex = 0;
+            _syncing = false;
+            return;
+        }
+        (bool Ok, string Detail) result = await MechrevoLite.Hardware.GcuEcMode.SetModeAsync(ecMode);
+        Status(result.Detail);
+        if (result.Ok)
+        {
+            MessageBox.Show(this, "已切换控制模式，请重启 L-Mechrevo 使后端路由生效。",
+                "控制模式", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        else
+        {
+            _syncing = true;
+            ControlModeCombo.SelectedIndex = GcuEcMode.IsEcMode ? 1 : 0;
+            _syncing = false;
+        }
+    }
+
     private void TrayCustomExpand_Click(object sender, RoutedEventArgs e)
     {
         TrayMenuConfig.SetExpandCustom(TrayCustomExpandCheck.IsChecked == true);

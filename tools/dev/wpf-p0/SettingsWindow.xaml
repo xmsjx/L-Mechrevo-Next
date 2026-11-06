@@ -329,6 +329,18 @@
 
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
+                        <TextBlock Text="控制模式" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="GCU 模式使用 GCUBridge/GCUService；EC 控制模式会停止 GCU 服务并改走本地 EC" Style="{StaticResource Hint}" />
+                        <ComboBox x:Name="ControlModeCombo" Width="180" HorizontalAlignment="Left" Margin="0,8,0,0"
+                                  Style="{DynamicResource RoundCombo}" SelectionChanged="ControlMode_Changed">
+                            <ComboBoxItem Content="GCU 模式" Tag="gcu" />
+                            <ComboBoxItem Content="EC 控制模式" Tag="ec" />
+                        </ComboBox>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
                         <TextBlock Text="{x:Static loc:WpfStrings.SettingsWindow_Text_25}" Style="{StaticResource CardTitle}" />
                         <TextBlock Text="{x:Static loc:WpfStrings.SettingsWindow_Text_24}" Style="{StaticResource Hint}" />
                         <WrapPanel x:Name="TrayMenuPanel" Margin="0,8,0,0" />
