@@ -259,6 +259,14 @@ public partial class FanCurveWindow : Window
         else if (_modeId.StartsWith("custom", StringComparison.Ordinal)
             || _modeId.StartsWith("fw", StringComparison.Ordinal))
         {
+            // 优先用当前固件/EC 实际读取到的 16 点表；读不到才退回默认 30..100°C 轴。
+            if (_hw.CpuCurveUpT.Length >= 16 && _hw.CpuCurveDuty.Length >= 16
+                && _hw.GpuCurveUpT.Length >= 16 && _hw.GpuCurveDuty.Length >= 16)
+            {
+                CpuCurve.Load(_hw.CpuCurveUpT, _hw.CpuCurveDuty);
+                GpuCurve.Load(_hw.GpuCurveUpT, _hw.GpuCurveDuty);
+                return;
+            }
             CpuCurve.Load(FanCurveDefaults.CpuTemperatures, FanCurveDefaults.CpuDutyBytes);
             GpuCurve.Load(FanCurveDefaults.GpuTemperatures, FanCurveDefaults.GpuDutyBytes);
             // LegacyMifs 等无 GCU 机型不把默认曲线落盘，避免污染存档。
