@@ -110,8 +110,7 @@ public partial class LightEditorWindow : Window
             else
             {
                 _lightMax = _wujieWhite ? 2 : (bd ? Math.Max(1, MechrevoHw.EffectiveKeyboardBrightnessMax()) : 4);
-                // 键盘亮度硬件最低档就是 1，0 会立刻被固件夹回 1（表现为滑块回弹）。
-                LightSlider.Minimum = 1;
+                LightSlider.Minimum = 0;
                 LightSlider.Maximum = _lightMax;
             }
         }
@@ -603,11 +602,6 @@ public partial class LightEditorWindow : Window
             {
                 PowerCheck.IsChecked = true;
             }
-            if (_light <= 0)
-            {
-                _light = 1;
-                LightSlider.Value = 1;
-            }
         }
         RefreshColorUi();
         ScheduleAutoApply();
@@ -728,12 +722,6 @@ public partial class LightEditorWindow : Window
             string effect = SelectedEffect;
             bool power = PowerCheck.IsChecked == true;
             bool powerWasOn = _settings.PowerOn;
-            if (power && _keyboard && _light <= 0)
-            {
-                _light = 1;
-                LightSlider.Value = 1;
-                LightText.Text = (_wujieWhite || _whiteBacklightOnly) ? WpfStrings.LightLevelDim : (_light + "/" + _lightMax);
-            }
             bool manualKeyboard = string.Equals(_topic, "Keyboard/Ctrl", StringComparison.Ordinal)
                 && string.Equals(effect, "Manual", StringComparison.Ordinal);
             int applySpeed = _keyboard ? (manualKeyboard ? _manualInterval : 0) : _speed;
