@@ -110,7 +110,8 @@ public partial class LightEditorWindow : Window
             else
             {
                 _lightMax = _wujieWhite ? 2 : (bd ? Math.Max(1, MechrevoHw.EffectiveKeyboardBrightnessMax()) : 4);
-                LightSlider.Minimum = bd || _wujieWhite ? 1 : 0;
+                // 键盘亮度硬件最低档就是 1，0 会立刻被固件夹回 1（表现为滑块回弹）。
+                LightSlider.Minimum = 1;
                 LightSlider.Maximum = _lightMax;
             }
         }
@@ -259,11 +260,20 @@ public partial class LightEditorWindow : Window
         bool on = PowerCheck.IsChecked == true;
         // 白键盘只有开关 + 2 档亮度：即使电源开关暂时是关，也允许拖亮度，
         // 拖动时自动开灯（与 23.5.1 的可用性一致）。
-        LightSlider.IsEnabled = on || (_keyboard && (_wujieWhite || _whiteBacklightOnly));
+        bool brightnessEnabled = on || (_keyboard && (_wujieWhite || _whiteBacklightOnly));
+        LightSlider.IsEnabled = brightnessEnabled;
         SpeedSlider.IsEnabled = on;
+        EffectRow.IsEnabled = on;
         ColorRow.IsEnabled = on;
         MixRow.IsEnabled = on;
         KeyboardExtraRow.IsEnabled = on;
+        double dim = on ? 1.0 : 0.45;
+        EffectRow.Opacity = dim;
+        BrightnessRow.Opacity = brightnessEnabled ? 1.0 : 0.45;
+        SpeedRow.Opacity = dim;
+        ColorRow.Opacity = dim;
+        MixRow.Opacity = dim;
+        KeyboardExtraRow.Opacity = dim;
     }
 
     private void ManualReset_Click(object sender, RoutedEventArgs e)
