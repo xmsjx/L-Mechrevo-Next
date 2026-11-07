@@ -4778,7 +4778,7 @@ public partial class OriginalStyleWindow : Window
             catch
             {
             }
-            BackendLine.Text = WpfStrings.L("EC 实验模式：GCU 未连接", "EC experiment: GCU unavailable") + " · " + reason;
+            BackendLine.Text = WpfStrings.BackendNonGcuReady + " · " + WpfStrings.L("EC 本地模式（GCU 未连接）", "EC local mode (GCU unavailable)");
             try
             {
                 MechrevoLite.HardwareControl.EnableLocalMonitoring();
@@ -4792,8 +4792,8 @@ public partial class OriginalStyleWindow : Window
             MechrevoLite.Hardware.GcuEcKeyboard.MarkActive();
             ApplyCapabilities();
             SyncEcKeyboardSwitch();
-            SetBackendStatus(WpfStrings.L("EC 实验模式", "EC experiment"), "#F59E0B",
-                WpfStrings.L("GCU 已停止，仅性能模式/显卡模式走 EC/NVRAM", "GCU stopped; mode/GPU use EC/NVRAM"));
+            SetBackendStatus(WpfStrings.BackendNonGcuReady, "#4ADE80",
+                WpfStrings.L("EC 本地模式已就绪（无需 GCU）", "EC local mode ready (GCU not required)"));
             BackendReady?.Invoke();
             _ = RestoreGpuOverclockOnStartupAsync();
             _backendRetryTimer.Stop();
@@ -7475,8 +7475,8 @@ public partial class OriginalStyleWindow : Window
         }
         if (_backendRoute == BackendRoute.Ec)
         {
-            SetBackendStatus(WpfStrings.L("EC 实验模式", "EC experiment"), "#4ADE80",
-                WpfStrings.L("GCU 未连接，性能模式/显卡模式走 EC/NVRAM", "GCU unavailable; mode/GPU use EC/NVRAM"));
+            SetBackendStatus(WpfStrings.BackendNonGcuReady, "#4ADE80",
+                WpfStrings.L("EC 本地模式已就绪（无需 GCU）", "EC local mode ready (GCU not required)"));
             return;
         }
         // NUC/UMI 的多数功能走本地 ACPI/EC，不依赖 GCU；GCU 未连接也按“已就绪”显示。
