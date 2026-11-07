@@ -1257,7 +1257,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 
 	public int FanSwitchSpeedMinimum { get; private set; } = 100;
 
-	public int FanSwitchSpeedMaximum { get; private set; } = 25500;
+	public int FanSwitchSpeedMaximum { get; private set; } = 12700;
 
 	public bool TccAdjustable
 	{
