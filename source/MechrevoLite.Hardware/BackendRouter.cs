@@ -48,7 +48,11 @@ internal static class BackendRouter
 		// ④ 设计文档 §1 规则 4：MICommonInterface 存在（且 GUID 与老同方一致）+ 未装 GCU ⇒ 老接口后端
 		//    ⚠️ 必须排在"装了 GCU"之后：MICommonInterface 是同方通用类，新机型也可能带（设计文档 §2）。
 		new Rule(4, "MICommonInterface(legacy GUID) && no GCU service -> LegacyMifs",
-			identity => identity.MifsLegacyCompatible && !identity.GcuServiceInstalled, MechrevoBackendKind.LegacyMifs)
+			identity => identity.MifsLegacyCompatible && !identity.GcuServiceInstalled, MechrevoBackendKind.LegacyMifs),
+		// ⑤ 同方族（无界 X / UMI / 原 GCU 同方板号）即使当前没装 GCU 服务，也明确归到同方通道；
+		//    无服务时由 EC 实验/本地 EC 回退接管，不再只表现为“未识别 → GCU 未连接”。
+		new Rule(5, "Tongfang family -> Gcu（无 GCU 时由本地 EC 接管）",
+			identity => identity.TongfangFamily, MechrevoBackendKind.Gcu)
 	};
 
 	// 后端能力声明（第 3 步）：事实需求 + 支持的机型类别
@@ -204,11 +208,11 @@ internal static class BackendRouter
 		// ⑤ 装了 GCU 时 MICommonInterface 在也不能抢老接口（设计文档 §2：同方通用类新机型也可能带）
 		Check("MICommonInterface + 已装 GCU ⇒ Gcu（老接口不得抢）", MechrevoBackendKind.Gcu, 3,
 			MachineIdentity.ForTest(board: "GM5HG0A", generation: "Unknown", gcuInstalled: true, mifsClass: true), pass, fail);
-		// ⑥ 只有代际、没有 GCU、没有 MIFS ⇒ 不声明 GCU 规则，落到兜底 GCU（行为=未连接如实提示）
-		Check("仅代际、无 GCU/MIFS ⇒ 兜底 Gcu", MechrevoBackendKind.Gcu, 5,
+		// ⑥ 同方板号、没有 GCU、没有 MIFS ⇒ 同方族规则（本地 EC 回退）
+		Check("GM 板号 + 无 GCU/MIFS ⇒ 同方族 Gcu", MechrevoBackendKind.Gcu, 5,
 			MachineIdentity.ForTest(board: "GM5HG0A", generation: "Gen40", gcuInstalled: false), pass, fail);
 		// ⑦ 什么都没识别到 ⇒ 兜底 Gcu（不误判成宝龙达/老接口）
-		Check("无任何事实 ⇒ 兜底 Gcu", MechrevoBackendKind.Gcu, 5,
+		Check("无任何事实 ⇒ 兜底 Gcu", MechrevoBackendKind.Gcu, 6,
 			MachineIdentity.ForTest(), pass, fail);
 		// ⑧ 白名单但 MICommonInterface 缺失：路由仍按机型证据声明 Baolongda（探测失败由候选循环兜底并记日志）
 		Check("白名单 + MIFS 缺失 ⇒ 仍声明 Baolongda", MechrevoBackendKind.Baolongda, 1,

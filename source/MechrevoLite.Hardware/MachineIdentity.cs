@@ -228,12 +228,16 @@ internal sealed record MachineIdentity(
 		string mifsText = mifsClass ? "present(guid=legacy)" : "absent";
 		string boardSource = boardText.Length == 0 ? "unknown" : "test";
 		string modelSource = modelText.Length == 0 ? "unknown" : "test";
+		bool tongfangFamily = ProbeTongfangFamily(boardText, modelText, generationText, gcuInstalled, whitelisted,
+			out string tongfangSource);
 		return new MachineIdentity(boardText, boardSource, whitelisted, generationText, gcuInstalled,
 			modelText, modelSource, mifsText, mifsClass, mifsClass,
 			projectIdText, projectIdText.Length == 0 ? "unknown" : "test",
 			variantText, variantFamily,
 			wujieApu, "test", string.Empty)
 		{
+			TongfangFamily = tongfangFamily,
+			TongfangFamilySource = tongfangSource,
 			Summary = BuildSummary(boardText, boardSource, whitelisted, generationText, gcuInstalled,
 				modelText, modelSource, mifsText, projectIdText,
 				projectIdText.Length == 0 ? "unknown" : "test", variantText, variantFamily,
