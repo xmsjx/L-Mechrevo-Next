@@ -4679,13 +4679,19 @@ public partial class OriginalStyleWindow : Window
             if (GcuEcExperimental.Enabled && _backendRoute == BackendRoute.Ec)
             {
                 int before = GcuEcExperimental.TryReadVisualMode(out int ecMode) ? ecMode : ResolveDisplayMode(probe);
-                bool ac = System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
-                    == System.Windows.Forms.PowerLineStatus.Online;
-                int next = ac
-                    ? before switch { 2 => 0, 0 => 1, 1 => 3, 3 => 2, _ => 0 }
-                    : before switch { 2 => 0, 0 => 2, _ => 0 };
-                Logger.WriteError("[perfkey] EC 性能键循环 " + before + " -> " + next + " (ac=" + ac + ")");
-                await SwitchModeAsync(next);
+                int next = before switch { 2 => 0, 0 => 1, 1 => 3, 3 => 2, _ => 0 };
+                // 狂暴档记忆上次子模式：只有本机确实有静音子模式通道时才带过去，
+                // 否则 50/40 系无 WMI 的机器会误报静音狂暴失败。
+                bool? turboSilent = null;
+                if (next == 1
+                    && (probe.Capabilities?.SilentTurboAvailability == MechrevoLite.Hardware.FeatureAvailability.Supported
+                        || MechrevoLite.Hardware.TurboSubModeWmi.IsSupported()))
+                {
+                    turboSilent = ReadRememberedTurboSubMode();
+                }
+                Logger.WriteError("[perfkey] EC 性能键循环 " + before + " -> " + next
+                    + " (silentTurbo=" + (turboSilent.HasValue ? turboSilent.Value.ToString() : "记忆/不适用") + ")");
+                await SwitchModeAsync(next, turboSilent);
                 return;
             }
 
