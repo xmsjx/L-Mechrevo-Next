@@ -86,9 +86,6 @@ public partial class FanCurveWindow : Window
     public FanCurveWindow(string modeId, bool showCpu = true, bool showGpu = true)
     {
         InitializeComponent();
-        // 16 点测试：实际 EC 表不足 16 点时，界面用官方近似轴补齐尾部。
-        CpuCurve.PadTemperatures = FanCurveDefaults.CpuTemperatures;
-        GpuCurve.PadTemperatures = FanCurveDefaults.GpuTemperatures;
         OpenEditors.Add(new WeakReference<FanCurveWindow>(this));
         _modeId = modeId;
         try

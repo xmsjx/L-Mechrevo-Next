@@ -23,9 +23,6 @@ public sealed class FanCurveCanvas : FrameworkElement
     internal int[] Duties => _duties;
     internal byte[] Temperatures => _temps;
 
-    /// <summary>实际表不足 16 点时，用于补齐的测试温度轴（测试 16 点用）。</summary>
-    internal byte[]? PadTemperatures { get; set; }
-
     public FanCurveCanvas()
     {
         Height = 190;
@@ -49,19 +46,6 @@ public sealed class FanCurveCanvas : FrameworkElement
             }
         }
         _valid = valid == PointCount ? PointCount : Math.Max(valid, 1);
-        // 16 点测试：实际表只有 9/10 段时，用测试轴补齐尾部，避免界面只画 10 个点。
-        if (_valid < PointCount)
-        {
-            int lastDuty = _valid > 0 ? _duties[_valid - 1] : 0;
-            for (int i = _valid; i < PointCount; i++)
-            {
-                _temps[i] = PadTemperatures != null && i < PadTemperatures.Length
-                    ? PadTemperatures[i]
-                    : (byte)Math.Min(100, _temps[i - 1] + 4);
-                _duties[i] = lastDuty;
-            }
-            _valid = PointCount;
-        }
         InvalidateVisual();
     }
 
