@@ -6220,11 +6220,17 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		{
 			return false;
 		}
+		// 先读占空比：0xFFFF 在风扇停转时也可能是“全 1/停转”标志，
+		// 若占空比为 0 就按 0 RPM 处理，而不是当成 65535 转速。
+		bool dutyOk = TryReadGcuEcFanDuties();
 		// 一次打开 ACPIDriver 批量读 4 个寄存器；失败再走单字节 ACPI/I2EC/LPC。
 		bool acpiOk = AcpiDriverEc.TryReadFanWords(0x0464, 0x0465, 0x046C, 0x046B, out int acpiCpu, out int acpiGpu);
-		// 0xFFFF/65535 常见于未映射填充值，不能当成真实转速。
-		bool cpuOk = IsPlausibleFanRpm(acpiCpu);
-		bool gpuOk = IsPlausibleFanRpm(acpiGpu);
+		bool cpuOk = IsPlausibleFanRpm(acpiCpu)
+			|| (acpiCpu == 0xFFFF && dutyOk && CpuFanDuty <= 0);
+		bool gpuOk = IsPlausibleFanRpm(acpiGpu)
+			|| (acpiGpu == 0xFFFF && dutyOk && GpuFanDuty <= 0);
+		if (acpiCpu == 0xFFFF && dutyOk && CpuFanDuty <= 0) acpiCpu = 0;
+		if (acpiGpu == 0xFFFF && dutyOk && GpuFanDuty <= 0) acpiGpu = 0;
 		if (cpuOk) cpuRpm = acpiCpu;
 		if (gpuOk) gpuRpm = acpiGpu;
 		if (!cpuOk)
@@ -6242,7 +6248,6 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 
 		// GCU 的 FanInfo 也是从 EC 0x75B/0x75C 读占空比后 /2；
 		// FanInfo 缺失时用同一对只读寄存器补百分比，避免只剩 RPM、没有百分比。
-		bool dutyOk = TryReadGcuEcFanDuties();
 		return acpiOk || cpuOk || gpuOk || dutyOk;
 	}
 
