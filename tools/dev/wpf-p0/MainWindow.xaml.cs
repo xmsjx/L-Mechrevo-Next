@@ -164,7 +164,12 @@ public partial class MainWindow : Window
         ApplyHomeCapabilities();
         RefreshSensors();
         UpdateWideBackendStatus();
-        StatusText.Text = "L-Mechrevo " + L_Mechrevo.WpfP0.Services.WpfBackend.ReleaseVersion;
+        string release = L_Mechrevo.WpfP0.Services.WpfBackend.ReleaseVersion;
+        int betaMark = release.LastIndexOf('-');
+        string displayVersion = betaMark >= 0 && betaMark + 1 < release.Length
+            ? release.Substring(betaMark + 1)
+            : release;
+        StatusText.Text = "L-Mechrevo " + displayVersion;
     }
 
     protected override void OnSourceInitialized(EventArgs e)
