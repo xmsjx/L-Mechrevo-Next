@@ -4,6 +4,8 @@ using System.Globalization;
 using System.Threading;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
+using System.Threading.Tasks;
 
 namespace L_Mechrevo.WpfP0;
 
@@ -21,6 +23,7 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        InstallCrashHandlers();
         // 独立更新器必须先于单实例/UI/硬件初始化处理，避免更新器加载安装目录里的旧 DLL。
         if (L_Mechrevo.WpfP0.Services.DllUpdateHelper.TryHandle(e.Args, out int updateExitCode))
         {
@@ -189,6 +192,49 @@ public partial class App : Application
                     Logger.WriteLine("[startup] 静默驻留失败（已吞掉）：" + ex.GetType().Name + " " + ex.Message);
                 }
             }), System.Windows.Threading.DispatcherPriority.SystemIdle);
+        }
+    }
+
+    /// <summary>兜底记录隐藏窗口/后台线程异常，避免只弹“应用程序错误”而没有堆栈。</summary>
+    private void InstallCrashHandlers()
+    {
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            WriteCrash("AppDomain", args.ExceptionObject as Exception);
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            WriteCrash("Task", args.Exception);
+            args.SetObserved();
+        };
+        DispatcherUnhandledException += (_, args) =>
+        {
+            WriteCrash("Dispatcher", args.Exception);
+            // UI 线程的单个命令/刷新异常不再弹系统“应用程序错误”对话框；
+            // 已写完整堆栈，方便下次直接定位。
+            args.Handled = true;
+            try
+            {
+                ToastService.Show("内部错误已记录，详情见 crash.txt", failure: true);
+            }
+            catch
+            {
+            }
+        };
+    }
+
+    private static void WriteCrash(string source, Exception? ex)
+    {
+        try
+        {
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MechrevoLite");
+            Directory.CreateDirectory(dir);
+            string path = Path.Combine(dir, "crash.txt");
+            string text = "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "] "
+                + source + " · " + (ex == null ? "(no exception object)" : ex.ToString())
+                + Environment.NewLine + new string('-', 72) + Environment.NewLine;
+            File.AppendAllText(path, text, System.Text.Encoding.UTF8);
+        }
+        catch
+        {
         }
     }
 
