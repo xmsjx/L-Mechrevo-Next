@@ -351,6 +351,15 @@ public partial class SettingsWindow : Window
             FeedbackButtonsPanel.Visibility = AppConfig.Is("ui_show_privacy_feedback")
                 ? Visibility.Visible : Visibility.Collapsed;
         }
+        if (ControlModeCombo != null)
+        {
+            bool ecMode = MechrevoLite.Hardware.GcuEcMode.IsEcMode;
+            ControlModeCombo.SelectedIndex = ecMode ? 1 : 0;
+            if (ControlModeStatus != null)
+            {
+                ControlModeStatus.Text = ecMode ? "当前：EC 控制模式" : "当前：GCU 模式";
+            }
+        }
         _syncing = false;
         if (TrayCustomExpandCheck != null)
         {
