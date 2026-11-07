@@ -287,6 +287,8 @@ internal static class NucQuickSwitches
         {
             hw.QuickSwitches["fanboost"] = (fb & FanBoostBit) != 0;
         }
+        // USB 供电没有常驻状态位，只能回读上次成功下发的持久化值。
+        hw.QuickSwitches["usb"] = AppConfig.Get("usb_charge", 0) != 0;
     }
 
     private static bool TryRead(int address, out int value)

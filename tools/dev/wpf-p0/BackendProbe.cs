@@ -417,10 +417,16 @@ internal sealed class BackendProbe : IDisposable
                         && ((copilotAfter & 0x04) != 0) == on;
                     break;
                 case "usb":
-                    ok = AcpiDriverEc.TryReadByte(1895, out byte usbTrigger)
-                        && AcpiDriverEc.TryWriteByte(1895, on ? (byte)(usbTrigger | 0x10) : (byte)(usbTrigger & ~0x10));
-                    confirmed = ok && AcpiDriverEc.TryReadByte(1895, out byte usbAfter)
-                        && ((usbAfter & 0x10) != 0) == on;
+                    // 1895 bit4 是脉冲触发位，不是常驻状态位；不能在写后拿它回读，
+                    // 否则脉冲清零后界面会永远显示关闭。状态落盘，供下次回读。
+                    bool usbCurrent = QuickState("usb");
+                    ok = NucQuickSwitches.TryPulseUsbCharging(on, usbCurrent, out confirmed);
+                    if (ok && confirmed)
+                    {
+                        MechrevoLite.AppConfig.Set("usb_charge", on ? 1 : 0);
+                        MechrevoLite.AppConfig.Flush();
+                        if (_hw != null) _hw.QuickSwitches["usb"] = on;
+                    }
                     break;
                 default:
                     return false;
@@ -1423,7 +1429,21 @@ internal sealed class BackendProbe : IDisposable
         }
         if (string.Equals(key, "usb", StringComparison.OrdinalIgnoreCase))
         {
-            return AcpiDriverEc.TryReadByte(1895, out byte usbState) && (usbState & 0x10) != 0;
+            // GCU 有状态回包时优先；否则用本地持久化的用户选择。
+            if (_hw?.UsbChargerSeen == true)
+            {
+                return _hw.UsbCharger;
+            }
+            return MechrevoLite.AppConfig.Get("usb_charge", 0) != 0;
+        }
+        if (string.Equals(key, "acrecovery", StringComparison.OrdinalIgnoreCase))
+        {
+            // 来电自启有常驻位：EC 1830 bit3 可直接回读。
+            if (AcpiDriverEc.TryReadByte(1830, out byte acState))
+            {
+                return (acState & 0x08) != 0;
+            }
+            return _hw?.QuickSwitches.TryGetValue("acrecovery", out bool acOld) == true && acOld;
         }
         if (string.Equals(key, "highperf", StringComparison.OrdinalIgnoreCase))
         {

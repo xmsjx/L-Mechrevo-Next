@@ -2946,6 +2946,8 @@ public class MechrevoService
 			{
 				// NUC/UMI 的 USB 供电没有状态回包；命令已下发就按成功处理（与原厂控制台一致）。
 				_hw.QuickSwitches["usb"] = on;
+				AppConfig.Set("usb_charge", on ? 1 : 0);
+				AppConfig.Flush();
 				flag = true;
 				Logger.WriteLine($"[quick] usb 无状态回读 ⇒ 已按下发成功处理({on})");
 			}
@@ -3021,6 +3023,11 @@ public class MechrevoService
 					bool usbCurrent = _hw.QuickSwitches.TryGetValue("usb", out bool usbOld) && usbOld;
 					bool usbOk = NucQuickSwitches.TryPulseUsbCharging(on, usbCurrent, out bool usbConfirmed);
 					_hw.QuickSwitches["usb"] = usbConfirmed ? on : usbCurrent;
+					if (usbConfirmed)
+					{
+						AppConfig.Set("usb_charge", on ? 1 : 0);
+						AppConfig.Flush();
+					}
 					Logger.WriteLine($"SwitchQuick(usb,{on}) ⭐ NUC/UMI EC trigger bit4 脉冲 ⇒ 确认={usbConfirmed}");
 					return usbOk;
 				}
