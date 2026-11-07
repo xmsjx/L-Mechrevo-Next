@@ -7740,10 +7740,14 @@ public partial class OriginalStyleWindow : Window
                 || hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
             bool hasLogo = caps.LogoLight || (hw?.SupportsLogoLight ?? false)
                 || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo);
+            bool hasHinge = _backendProbe?.SupportsHingeLight == true;
+            bool hasSync = _backendProbe?.SupportsSyncLight == true;
             bool xingyaoLightIdle = MechrevoLite.Hardware.XingyaoQuickSwitch.IsApplicable(hw);
-            LightingSection.Visibility = (hasKeyboard || hasLightbar || hasLogo || xingyaoLightIdle) ? Visibility.Visible : Visibility.Collapsed;
+            LightingSection.Visibility = (hasKeyboard || hasLightbar || hasLogo || hasHinge || hasSync || xingyaoLightIdle) ? Visibility.Visible : Visibility.Collapsed;
             KeyboardLightRow.Visibility = hasKeyboard ? Visibility.Visible : Visibility.Collapsed;
             LogoLightRow.Visibility = hasLogo ? Visibility.Visible : Visibility.Collapsed;
+            LightHingeRow.Visibility = hasHinge ? Visibility.Visible : Visibility.Collapsed;
+            LightSyncRow.Visibility = hasSync ? Visibility.Visible : Visibility.Collapsed;
             FillKeyboardEffects();
   FillLightChannelEffects();
   FillLightIdleOptions();
