@@ -6261,6 +6261,11 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			if (AcpiDriverEc.TryReadByte(1883, out byte cpuDuty)
 				&& AcpiDriverEc.TryReadByte(1884, out byte gpuDuty))
 			{
+				// 0xFF 是未映射/停转填充值，不能换算成 100%。
+				if (cpuDuty == 0xFF || gpuDuty == 0xFF)
+				{
+					return false;
+				}
 				CpuFanDuty = Math.Clamp(cpuDuty / 2, 0, 100);
 				GpuFanDuty = Math.Clamp(gpuDuty / 2, 0, 100);
 				return true;
