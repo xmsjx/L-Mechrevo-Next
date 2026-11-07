@@ -1093,7 +1093,17 @@ public static class HardwareControl
 		// NUC/UMI 的 GCU 厂商温度可能长期停在一个值（风扇却按真实温度转），
 		// 这两类机型改为 LHM 优先；其它机型仍保持厂商优先。
 		// 无界 APU / 耀世的 GCU 厂商温度可能长期停在固定值；优先 LHM。
-		bool preferLhmCpu = (hw.IsIntelNucMachine || hw.IsUmiMachine || hw.WujieSmuApu || hw.IsYaoshiMachine)
+		// 同方 GCU 的部分 Intel 机型会把“另一个温度点”当 CPU 温度上报，
+		// 与 LHM Package 长期相差 10℃ 以上（本次 GM6AQ7C：厂商 61℃ / LHM 39℃）。
+		// 这种明显分叉时以 LHM 为准，避免主界面显示错误温度。
+		bool vendorDivergesFromLhm = !lhmSuspect
+			&& vendorCelsius > 0
+			&& lhmCelsius > 0
+			&& vendorCelsius - lhmCelsius >= 10
+			&& MechrevoLite.Hardware.CpuVendor.IsIntel
+			&& hw.IsTongfangFamily;
+		bool preferLhmCpu = ((hw.IsIntelNucMachine || hw.IsUmiMachine || hw.WujieSmuApu || hw.IsYaoshiMachine)
+			|| vendorDivergesFromLhm)
 			&& !lhmSuspect && lhmCelsius > 0;
 		if (preferLhmCpu)
 		{

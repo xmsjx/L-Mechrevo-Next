@@ -2031,6 +2031,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// <summary>UMI 机器（型号名含 Umi）。</summary>
 	internal bool IsUmiMachine => BackendRouter.LastDecision?.Identity?.IsUmi == true;
 
+	internal bool IsTongfangFamily => BackendRouter.LastDecision?.Identity?.TongfangFamily == true;
+
 	/// <summary>耀世（同方 GCU，板号 YAOSHI Series-*）。GCU 的 CPU 温度可能长期停在一个值。</summary>
 	internal bool IsYaoshiMachine =>
 		BoardWhitelist.ReadBoardProduct().StartsWith("YAOSHI", StringComparison.OrdinalIgnoreCase);
@@ -6220,18 +6222,31 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 		// 一次打开 ACPIDriver 批量读 4 个寄存器；失败再走单字节 ACPI/I2EC/LPC。
 		bool acpiOk = AcpiDriverEc.TryReadFanWords(0x0464, 0x0465, 0x046C, 0x046B, out int acpiCpu, out int acpiGpu);
-		bool cpuOk = acpiCpu > 0;
-		bool gpuOk = acpiGpu > 0;
+		// 0xFFFF/65535 常见于未映射填充值，不能当成真实转速。
+		bool cpuOk = IsPlausibleFanRpm(acpiCpu);
+		bool gpuOk = IsPlausibleFanRpm(acpiGpu);
 		if (cpuOk) cpuRpm = acpiCpu;
 		if (gpuOk) gpuRpm = acpiGpu;
-		if (!cpuOk) cpuOk = TryReadEcFanWord(0x0464, out cpuRpm, lowOffset: 1, allowAcpi: false);
-		if (!gpuOk) gpuOk = TryReadEcFanWord(0x046C, out gpuRpm, lowOffset: -1, allowAcpi: false);
+		if (!cpuOk)
+		{
+			cpuOk = TryReadEcFanWord(0x0464, out int fallbackCpu, lowOffset: 1, allowAcpi: false)
+				&& IsPlausibleFanRpm(fallbackCpu);
+			if (cpuOk) cpuRpm = fallbackCpu;
+		}
+		if (!gpuOk)
+		{
+			gpuOk = TryReadEcFanWord(0x046C, out int fallbackGpu, lowOffset: -1, allowAcpi: false)
+				&& IsPlausibleFanRpm(fallbackGpu);
+			if (gpuOk) gpuRpm = fallbackGpu;
+		}
 
 		// GCU 的 FanInfo 也是从 EC 0x75B/0x75C 读占空比后 /2；
 		// FanInfo 缺失时用同一对只读寄存器补百分比，避免只剩 RPM、没有百分比。
 		bool dutyOk = TryReadGcuEcFanDuties();
 		return acpiOk || cpuOk || gpuOk || dutyOk;
 	}
+
+	private static bool IsPlausibleFanRpm(int rpm) => rpm is > 0 and < 12000;
 
 	internal bool TryReadGcuEcFanDuties()
 	{
