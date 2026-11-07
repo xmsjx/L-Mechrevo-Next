@@ -1169,7 +1169,7 @@ public partial class CustomModeWindow : Window
         TccSwitch.IsEnabled = nucDirectUi || hw.TccAdjustable || vendorProfile || ecPowerUi;
         DbSwitch.IsEnabled = nucDirectUi || hw.GpuDynamicBoostAdjustable || vendorProfile || ecPowerUi;
         GpuTgpSlider.IsEnabled = nucDirectUi || hw.GpuTgpAdjustable || vendorProfile || ecPowerUi;
-        FanSensitivitySwitch.IsEnabled = nucDirectUi || hw.SupportsFanSwitchSpeed || vendorProfile;
+        FanSensitivitySwitch.IsEnabled = nucDirectUi || hw.SupportsFanSwitchSpeed || vendorProfile || ecPowerUi;
         GpuOcSwitch.IsEnabled = nucDirectUi || hw.SupportsGpuOverclock || vendorProfile || ecPowerUi;
         if (!hw.GpuTgpAdjustable && !nucDirectUi && !ecPowerUi)
         {
