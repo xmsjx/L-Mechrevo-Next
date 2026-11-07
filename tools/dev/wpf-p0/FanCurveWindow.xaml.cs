@@ -244,8 +244,8 @@ public partial class FanCurveWindow : Window
         if (_hw.WujieSmuApu && FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
             && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
         {
-            CpuCurve.Load(_hw.CpuCurveUpT, _hw.CpuCurveDuty);
-            GpuCurve.Load(_hw.GpuCurveUpT, _hw.GpuCurveDuty);
+            CpuCurve.Load(FanCurveDefaults.CpuTemperatures, _hw.CpuCurveDuty);
+            GpuCurve.Load(FanCurveDefaults.GpuTemperatures, _hw.GpuCurveDuty);
             return;
         }
         if (!_hw.IsGcuConnected
@@ -271,8 +271,8 @@ public partial class FanCurveWindow : Window
             if (FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
                 && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
             {
-                CpuCurve.Load(_hw.CpuCurveUpT, _hw.CpuCurveDuty);
-                GpuCurve.Load(_hw.GpuCurveUpT, _hw.GpuCurveDuty);
+                CpuCurve.Load(FanCurveDefaults.CpuTemperatures, _hw.CpuCurveDuty);
+                GpuCurve.Load(FanCurveDefaults.GpuTemperatures, _hw.GpuCurveDuty);
                 return;
             }
             CpuCurve.Load(FanCurveDefaults.CpuTemperatures, FanCurveDefaults.CpuDutyBytes);
@@ -286,8 +286,8 @@ public partial class FanCurveWindow : Window
         else if (FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
             && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
         {
-            CpuCurve.Load(_hw.CpuCurveUpT, _hw.CpuCurveDuty);
-            GpuCurve.Load(_hw.GpuCurveUpT, _hw.GpuCurveDuty);
+            CpuCurve.Load(FanCurveDefaults.CpuTemperatures, _hw.CpuCurveDuty);
+            GpuCurve.Load(FanCurveDefaults.GpuTemperatures, _hw.GpuCurveDuty);
         }
         else if (_hw.TryGetBuiltInDefaultFanCurve(out byte[] cpuTemps, out byte[] cpuDuties,
                      out byte[] gpuTemps, out byte[] gpuDuties))
