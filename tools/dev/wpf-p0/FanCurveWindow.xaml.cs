@@ -244,9 +244,9 @@ public partial class FanCurveWindow : Window
         if (_hw.WujieSmuApu && FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
             && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
         {
-            // 无界走自己的 EC 表/官方表，不能套同方 GCU 的 10 点官方轴。
-            CpuCurve.Load(_hw.CpuCurveUpT, _hw.CpuCurveDuty);
-            GpuCurve.Load(_hw.GpuCurveUpT, _hw.GpuCurveDuty);
+            // 无界也统一使用官方 10 点温度轴；EC 只接收最终占空比。
+            CpuCurve.Load(FanCurveDefaults.CpuTemperatures, _hw.CpuCurveDuty);
+            GpuCurve.Load(FanCurveDefaults.GpuTemperatures, _hw.GpuCurveDuty);
             return;
         }
         if (!_hw.IsGcuConnected
@@ -262,10 +262,9 @@ public partial class FanCurveWindow : Window
         int[]? gpuSaved = saved.GpuFanDuty is { Length: >= 2 } gpuDuty ? gpuDuty : null;
         if (cpuSaved != null && gpuSaved != null)
         {
-            bool wujieSaved = _hw.WujieSmuApu;
-            CpuCurve.Load(wujieSaved ? _hw.CpuCurveUpT : FanCurveDefaults.CpuTemperatures,
+            CpuCurve.Load(FanCurveDefaults.CpuTemperatures,
                 cpuSaved.Select(v => (byte)Math.Clamp(v, 0, 100)).ToArray());
-            GpuCurve.Load(wujieSaved ? _hw.GpuCurveUpT : FanCurveDefaults.GpuTemperatures,
+            GpuCurve.Load(FanCurveDefaults.GpuTemperatures,
                 gpuSaved.Select(v => (byte)Math.Clamp(v, 0, 100)).ToArray());
         }
         else if (_modeId.StartsWith("custom", StringComparison.Ordinal)
@@ -275,9 +274,8 @@ public partial class FanCurveWindow : Window
             if (FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
                 && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
             {
-                bool wujieCustom = _hw.WujieSmuApu;
-                CpuCurve.Load(wujieCustom ? _hw.CpuCurveUpT : FanCurveDefaults.CpuTemperatures, _hw.CpuCurveDuty);
-                GpuCurve.Load(wujieCustom ? _hw.GpuCurveUpT : FanCurveDefaults.GpuTemperatures, _hw.GpuCurveDuty);
+                CpuCurve.Load(FanCurveDefaults.CpuTemperatures, _hw.CpuCurveDuty);
+                GpuCurve.Load(FanCurveDefaults.GpuTemperatures, _hw.GpuCurveDuty);
                 return;
             }
             CpuCurve.Load(FanCurveDefaults.CpuTemperatures, FanCurveDefaults.CpuDutyBytes);
@@ -291,9 +289,8 @@ public partial class FanCurveWindow : Window
         else if (FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
             && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
         {
-            bool wujieGeneric = _hw.WujieSmuApu;
-            CpuCurve.Load(wujieGeneric ? _hw.CpuCurveUpT : FanCurveDefaults.CpuTemperatures, _hw.CpuCurveDuty);
-            GpuCurve.Load(wujieGeneric ? _hw.GpuCurveUpT : FanCurveDefaults.GpuTemperatures, _hw.GpuCurveDuty);
+            CpuCurve.Load(FanCurveDefaults.CpuTemperatures, _hw.CpuCurveDuty);
+            GpuCurve.Load(FanCurveDefaults.GpuTemperatures, _hw.GpuCurveDuty);
         }
         else if (_hw.TryGetBuiltInDefaultFanCurve(out byte[] cpuTemps, out byte[] cpuDuties,
                      out byte[] gpuTemps, out byte[] gpuDuties))
