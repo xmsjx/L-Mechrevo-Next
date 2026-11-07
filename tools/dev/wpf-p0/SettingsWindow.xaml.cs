@@ -360,6 +360,10 @@ public partial class SettingsWindow : Window
                 ControlModeStatus.Text = ecMode ? "当前：EC 控制模式" : "当前：GCU 模式";
             }
         }
+        if (PerfOnBatteryCheck != null)
+        {
+            PerfOnBatteryCheck.IsChecked = AppConfig.Is("perf_allow_on_battery");
+        }
         _syncing = false;
         if (TrayCustomExpandCheck != null)
         {
@@ -400,6 +404,13 @@ public partial class SettingsWindow : Window
             };
             TrayMenuPanel.Children.Add(box);
         }
+    }
+
+    private void PerfOnBattery_Click(object sender, RoutedEventArgs e)
+    {
+        AppConfig.Set("perf_allow_on_battery", PerfOnBatteryCheck.IsChecked == true ? 1 : 0);
+        AppConfig.Flush();
+        _owner?.ReloadCapabilities();
     }
 
     private async void ControlMode_Changed(object sender, SelectionChangedEventArgs e)

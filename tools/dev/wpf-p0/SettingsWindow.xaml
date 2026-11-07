@@ -337,6 +337,8 @@
                             <ComboBoxItem Content="EC 控制模式" Tag="ec" />
                         </ComboBox>
                         <TextBlock x:Name="ControlModeStatus" Style="{StaticResource Hint}" Margin="0,6,0,0" />
+                        <CheckBox x:Name="PerfOnBatteryCheck" Content="允许离电使用狂暴/自定义模式"
+                                  Style="{DynamicResource HeaderSwitch}" Margin="0,8,0,0" Click="PerfOnBattery_Click" />
                     </StackPanel>
                 </Border>
 

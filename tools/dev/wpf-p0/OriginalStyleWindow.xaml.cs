@@ -571,6 +571,12 @@ public partial class OriginalStyleWindow : Window
     private static bool ShouldShowTurboMode(MechrevoDeviceCapabilities? caps, MechrevoHw? hw)
     {
         if (UiQaShowAll.Enabled) return true;
+        if (AppConfig.Is("perf_allow_on_battery")
+            && System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
+                != System.Windows.Forms.PowerLineStatus.Online)
+        {
+            return true;
+        }
         // 星耀 PTL 的三档由 WMAA 提供；GCU WJXY 的 TurboModeSupport=0 不能拿来做 UI 判据。
         if (MechrevoLite.Hardware.XingyaoPerformanceMode.IsApplicable(hw)) return true;
         if (caps == null) return true;
@@ -7687,6 +7693,12 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    internal void ReloadCapabilities()
+    {
+        ApplyCapabilities();
+        RefreshFromBackend();
+    }
+
     private void ApplyCapabilities()
     {
         if (_backendProbe?.Capabilities is not MechrevoDeviceCapabilities caps)
@@ -7743,7 +7755,10 @@ public partial class OriginalStyleWindow : Window
             bool ecLocalCustom = MechrevoLite.Hardware.GcuEcExperimental.Enabled
                 && hw?.IsGcuConnected != true
                 && hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
-            bool customAllowed = nucUmiModeUi || smuCustom || ecLocalCustom
+            bool allowPerfOnBattery = AppConfig.Is("perf_allow_on_battery")
+                && System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
+                    != System.Windows.Forms.PowerLineStatus.Online;
+            bool customAllowed = nucUmiModeUi || smuCustom || ecLocalCustom || allowPerfOnBattery
                 || ((caps.CpuPerformanceTuning || caps.FanSettings)
                     && !(_backendProbe?.Hw?.SupportsModeProfileConfig ?? false));
             CustomModeButton.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
