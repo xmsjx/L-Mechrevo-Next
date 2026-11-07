@@ -7010,7 +7010,8 @@ public partial class OriginalStyleWindow : Window
         {
             rpm = cpu ? hw.CpuFanRpm : hw.GpuFanRpm;
         }
-        if (rpm <= 0 && _backendRoute == BackendRoute.Ec
+        if (rpm <= 0
+            && ( _backendRoute == BackendRoute.Ec || hw.IsGcuConnected != true)
             && hw.TryReadGcuEcFanSpeeds(out int ecCpu, out int ecGpu))
         {
             rpm = cpu ? ecCpu : ecGpu;

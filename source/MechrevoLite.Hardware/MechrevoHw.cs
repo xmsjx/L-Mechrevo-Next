@@ -6216,7 +6216,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		cpuRpm = -1;
 		gpuRpm = -1;
-		if (!IsGcuServiceInstalled || UsesBaolongda || WujieSmuApu || IsIntelNucMachine || IsUmiMachine)
+		// 无 GCU 服务的同方机型也要能读 EC；只排除确实不走这套地址的机型。
+		if (UsesBaolongda || WujieSmuApu || IsIntelNucMachine || IsUmiMachine)
 		{
 			return false;
 		}
