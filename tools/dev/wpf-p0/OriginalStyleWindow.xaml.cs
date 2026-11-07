@@ -7188,7 +7188,9 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            if (GcuPackageImport.ShouldOffer())
+            // 只有 GCU 控制模式才允许从状态按钮导入 GCU 包；
+            // EC 模式下已是本地后端，再导入 GCU 会重新拉起服务、破坏当前路由。
+            if (!MechrevoLite.Hardware.GcuEcMode.IsEcMode && GcuPackageImport.ShouldOffer())
             {
                 using GcuOwnerWindow owner = new(this);
                 await GcuPackageImport.OfferAsync(owner);

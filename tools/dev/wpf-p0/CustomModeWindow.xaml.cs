@@ -1578,19 +1578,22 @@ public partial class CustomModeWindow : Window
                 }
             }
             bool fanOk = true;
-            string fanDetail = "未启用";
+            string fanDetail = "未启用曲线";
+            // 灵敏度是独立项：即使风扇曲线关闭，也要把 FanRamp(1927) 写进去。
+            bool ramp = MechrevoLite.Hardware.NucFanTable.TrySetFanRamp(
+                edited.FanSwitchSpeedOn == true, edited.FanSwitchSpeedMs ?? 300, out string rampDetail);
+            fanOk = fanOk && ramp;
+            fanDetail += " · " + rampDetail;
             if (edited.FanCurveOn != false
                 && edited.CpuFanDuty is { Length: 16 } cpuFan
                 && edited.GpuFanDuty is { Length: 16 } gpuFan)
             {
-                fanOk = MechrevoLite.Hardware.NucFanTable.TryApply(
+                bool curveOk = MechrevoLite.Hardware.NucFanTable.TryApply(
                     FanCurveDefaults.CpuTemperatures, cpuFan,
-                    FanCurveDefaults.GpuTemperatures, gpuFan, out fanDetail);
+                    FanCurveDefaults.GpuTemperatures, gpuFan, out string curveDetail);
                 bool isolated = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(true, out string isoDetail);
-                bool ramp = MechrevoLite.Hardware.NucFanTable.TrySetFanRamp(
-                    edited.FanSwitchSpeedOn == true, edited.FanSwitchSpeedMs ?? 300, out string rampDetail);
-                fanOk = fanOk && isolated && ramp;
-                fanDetail += " · " + isoDetail + " · " + rampDetail;
+                fanOk = fanOk && curveOk && isolated;
+                fanDetail += " · 曲线=" + curveDetail + " · " + isoDetail;
             }
             _settings = edited;
             _dirty = false;
