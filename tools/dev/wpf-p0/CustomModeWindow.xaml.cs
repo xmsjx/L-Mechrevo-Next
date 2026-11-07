@@ -742,7 +742,7 @@ public partial class CustomModeWindow : Window
         // 开关状态先应用，再按新状态刷新滑块可用性；否则切换配置时 GPU OC 滑块会停在旧状态。
         DbSlider.IsEnabled = DbSwitch.IsChecked == true;
         TccSlider.IsEnabled = TccSwitch.IsChecked == true;
-        FanDelaySlider.IsEnabled = FanSensitivitySwitch.IsChecked == true;
+        FanSensitivitySwitch_Changed(FanSensitivitySwitch, new RoutedEventArgs());
         CoreOffsetSlider.IsEnabled = GpuOcSwitch.IsChecked == true;
         MemoryOffsetSlider.IsEnabled = GpuOcSwitch.IsChecked == true;
         SelectComboInt(PowerModeCombo, s.WindowsPowerMode);
@@ -900,7 +900,7 @@ public partial class CustomModeWindow : Window
         SetSlider(MemoryOffsetSlider, MemoryOffsetText, hw.EffectiveGpuMemoryClockOffset);
         DbSlider.IsEnabled = DbSwitch.IsChecked == true;
         TccSlider.IsEnabled = TccSwitch.IsChecked == true;
-        FanDelaySlider.IsEnabled = FanSensitivitySwitch.IsChecked == true;
+        FanSensitivitySwitch_Changed(FanSensitivitySwitch, new RoutedEventArgs());
         CoreOffsetSlider.IsEnabled = GpuOcSwitch.IsChecked == true;
         MemoryOffsetSlider.IsEnabled = GpuOcSwitch.IsChecked == true;
     }
@@ -1126,7 +1126,7 @@ public partial class CustomModeWindow : Window
             SetSliderRange(DbSlider, 0, gpuCaps.DbMaxWatts);
             DbSlider.Value = Math.Clamp(DbSlider.Value, 0, gpuCaps.DbMaxWatts);
         }
-        SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, hw.FanSwitchSpeedMaximum);
+        SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, Math.Min(hw.FanSwitchSpeedMaximum, 12700));
         bool nucDirectUi = (hw.IsIntelNucMachine || hw.IsUmiMachine)
             && !MechrevoLite.Hardware.GcuEcExperimental.Enabled;
         bool intelXingyaoMsr = MechrevoLite.Hardware.CpuVendor.IsIntel
@@ -1148,7 +1148,7 @@ public partial class CustomModeWindow : Window
             SetSliderRange(TccSlider, hw.TccMinimum, hw.TccMaximum);
             SetSliderRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
             SetSliderRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
-            SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, hw.FanSwitchSpeedMaximum);
+            SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, Math.Min(hw.FanSwitchSpeedMaximum, 12700));
             if (MechrevoLite.Hardware.EcGpuPower.TryGetCapabilities(hw,
                 out MechrevoLite.Hardware.EcGpuPower.Capabilities nucGpuCaps, out _))
             {
@@ -1441,7 +1441,22 @@ public partial class CustomModeWindow : Window
     private void GpuOcSwitch_Changed(object sender, RoutedEventArgs e) { bool on = GpuOcSwitch?.IsChecked == true; if (CoreOffsetSlider != null) CoreOffsetSlider.IsEnabled = on; if (MemoryOffsetSlider != null) MemoryOffsetSlider.IsEnabled = on; MarkDirty(); }
     private void GpuPowerLimit_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (GpuPowerLimitText != null) GpuPowerLimitText.Text = ((int)e.NewValue).ToString(); }
     private void FanDelay_Changed(object sender, RoutedPropertyChangedEventArgs<double> e) { if (FanDelayText != null) FanDelayText.Text = ((int)e.NewValue).ToString(); }
-    private void FanSensitivitySwitch_Changed(object sender, RoutedEventArgs e) { if (FanDelaySlider != null && FanSensitivitySwitch != null) FanDelaySlider.IsEnabled = FanSensitivitySwitch.IsChecked == true; }
+    private void FanSensitivitySwitch_Changed(object sender, RoutedEventArgs e)
+    {
+        if (FanDelaySlider == null || FanSensitivitySwitch == null)
+        {
+            return;
+        }
+        bool on = FanSensitivitySwitch.IsChecked == true;
+        FanDelaySlider.IsEnabled = on;
+        FanDelaySlider.IsHitTestVisible = on;
+        FanDelaySlider.Opacity = on ? 1.0 : 0.4;
+        if (FanDelayText != null)
+        {
+            FanDelayText.IsEnabled = on;
+            FanDelayText.Opacity = on ? 1.0 : 0.4;
+        }
+    }
     private void CoreOffset_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (CoreOffsetText != null) CoreOffsetText.Text = ((int)e.NewValue).ToString();

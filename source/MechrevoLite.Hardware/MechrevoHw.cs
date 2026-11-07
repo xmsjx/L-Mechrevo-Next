@@ -10457,7 +10457,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 		if (num16 >= 0)
 		{
-			FanSwitchSpeedMaximum = num16;
+			// 官方控制台风扇灵敏度上限 12700ms。
+			FanSwitchSpeedMaximum = Math.Min(num16, 12700);
 		}
 		bool? flag4 = OptionalBool(o, "GameWhitelistSwitch");
 		if (flag4.HasValue)

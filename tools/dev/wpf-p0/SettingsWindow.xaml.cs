@@ -406,6 +406,29 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private void RestartApplicationForControlMode()
+    {
+        try
+        {
+            string? exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe))
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                    "cmd.exe",
+                    "/c timeout /t 2 >nul & start \"\" \"" + exe + "\"")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden
+                });
+            }
+        }
+        catch
+        {
+        }
+        Application.Current.Shutdown();
+    }
+
     private void PerfOnBattery_Click(object sender, RoutedEventArgs e)
     {
         AppConfig.Set("perf_allow_on_battery", PerfOnBatteryCheck.IsChecked == true ? 1 : 0);
@@ -437,8 +460,10 @@ public partial class SettingsWindow : Window
         }
         if (result.Ok)
         {
-            MessageBox.Show(this, "已切换控制模式，请重启 L-Mechrevo 使后端路由生效。",
-                "控制模式", MessageBoxButton.OK, MessageBoxImage.Information);
+            // 控制模式改变后必须重建后端路由；直接自动重启，避免用户忘记重启后
+            // 仍用旧后端操作 EC/GCU。
+            Status("控制模式已切换，正在自动重启…");
+            RestartApplicationForControlMode();
         }
         else
         {

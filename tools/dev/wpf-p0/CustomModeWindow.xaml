@@ -268,7 +268,7 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_4}" VerticalAlignment="Center" />
                             <CheckBox x:Name="FanSensitivitySwitch" Grid.Column="1" Style="{DynamicResource HeaderSwitch}" VerticalAlignment="Center" Margin="0,0,10,0" Checked="FanSensitivitySwitch_Changed" Unchecked="FanSensitivitySwitch_Changed" />
-                            <Slider x:Name="FanDelaySlider" Grid.Column="2" Style="{StaticResource RoundSlider}" Minimum="0" Maximum="1000" Value="300" ValueChanged="FanDelay_Changed" />
+                            <Slider x:Name="FanDelaySlider" Grid.Column="2" Style="{StaticResource RoundSlider}" Minimum="0" Maximum="12700" Value="300" ValueChanged="FanDelay_Changed" />
                             <TextBox x:Name="FanDelayText" Grid.Column="3" Text="300" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                     </StackPanel>

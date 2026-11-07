@@ -415,7 +415,7 @@ Filename: "{app}\L-Mechrevo.exe"; Parameters: "startup"; StatusMsg: "正在后�
 ;   加了这个开关后：目录不存在时脚本只跳过 -LogDir 那份日志（Write-Log 对 $null 已短路，
 ;   见 Uninstall-Gcu.ps1 L111），清理步骤一步不少；目录存在时行为不变、照常写。
 ;   ⚠️ 该开关只影响"写日志"，⛔ 与 -PurgeVendor 的厂商清理范围无关。
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\GCU\Uninstall-Gcu.ps1"" -TargetDir ""{app}\GCU"" -LogDir ""{commonappdata}\L-Mechrevo\logs"" -PurgeVendor -NoLogDir"; RunOnceId: "GcuUninstall"; Check: ShouldInstallGcu
+Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\GCU\Uninstall-Gcu.ps1"" -TargetDir ""{app}\GCU"" -LogDir ""{commonappdata}\L-Mechrevo\logs"" -PurgeVendor -NoLogDir"; RunOnceId: "GcuUninstall"; Check: ShouldCleanupGcu
 
 [Icons]
 ; 2026-10-13（r25）：快捷方式指回程序本体 —— ⛔ 启动壳已移除；缺 .NET 10 运行时由【安装阶段
@@ -2639,16 +2639,17 @@ end;
 // 精简包（/DNOGCU_PAYLOAD）没有可用 GCU 载荷时跳过 [Run] 的 GCU 安装步骤，但 LM 照常安装
 function ShouldRunGcuInstall(): Boolean;
 begin
-  if not ShouldInstallGcu() then
-  begin
-    Result := False;
-    Exit;
-  end;
-#ifdef NOGCU_PAYLOAD
-  Result := GcuPayloadReady;
-#else
-  Result := True;
-#endif
+  // 没有内置/外置载荷时只装 LM：不触发 Install-Gcu.ps1。
+  // 脚本本身仍会复制到 {app}\GCU，方便之后在应用内手动导入 GCU 包。
+  Result := ShouldInstallGcu() and GcuPayloadReady;
+end;
+
+// 卸载时只有 LM 自己确实装过 GCU 才清 GCU 服务/注册表。
+// 仅调用官方控制台的 GCU 服务时，{app}\GCU\AiStoneService 不存在 ⇒ 不清理官方组件。
+function ShouldCleanupGcu(): Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\GCU\Uninstall-Gcu.ps1'))
+    and DirExists(ExpandConstant('{app}\GCU\AiStoneService'));
 end;
 
 function GcuArchiveName(Index: Integer): String;
