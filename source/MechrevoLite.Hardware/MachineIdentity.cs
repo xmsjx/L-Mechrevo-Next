@@ -37,6 +37,11 @@ internal sealed record MachineIdentity(
 	string WujieApuSource,
 	string Summary)
 {
+	/// <summary>同方族：无界 X 系（14X/15X）、UMI、以及原有 GCU 同方机型；宝龙达白名单始终排除。</summary>
+	internal bool TongfangFamily { get; init; }
+
+	internal string TongfangFamilySource { get; init; } = "";
+
 	/// <summary>UMI 机器：型号名包含 Umi。</summary>
 	public bool IsUmi => (Model ?? "").Contains("Umi", StringComparison.OrdinalIgnoreCase);
 
@@ -183,14 +188,19 @@ internal sealed record MachineIdentity(
 		{
 		}
 
+		bool tongfangFamily = ProbeTongfangFamily(board, model, generation, gcuInstalled, whitelisted,
+			out string tongfangSource);
 		return new MachineIdentity(board, boardSource, whitelisted, generation, gcuInstalled,
 			model, modelSource, mifsClass, mifsPresent, mifsLegacyCompatible,
 			projectId, projectIdSource, gcuVariant, gcuVariantFamily,
 			wujieApu, wujieApuSource, string.Empty)
 		{
+			TongfangFamily = tongfangFamily,
+			TongfangFamilySource = tongfangSource,
 			Summary = BuildSummary(board, boardSource, whitelisted, generation, gcuInstalled,
 				model, modelSource, mifsClass, projectId, projectIdSource, gcuVariant, gcuVariantFamily,
 				wujieApu, wujieApuSource)
+				+ " · tongfang=" + tongfangFamily + "(" + tongfangSource + ")"
 		};
 	}
 
@@ -229,6 +239,48 @@ internal sealed record MachineIdentity(
 				projectIdText.Length == 0 ? "unknown" : "test", variantText, variantFamily,
 				wujieApu, "test")
 		};
+	}
+
+	/// <summary>同方族只读判定：名字命中（无界 X / UMI）或原 GCU 同方板号；宝龙达白名单优先排除。</summary>
+	private static bool ProbeTongfangFamily(string board, string model, string generation,
+		bool gcuInstalled, bool whitelisted, out string source)
+	{
+		source = "";
+		if (whitelisted)
+		{
+			source = "baolongda-whitelist";
+			return false;
+		}
+		string boardText = (board ?? "").Trim().ToUpperInvariant();
+		string modelText = (model ?? "").Trim();
+		if (modelText.Contains("无界14X", StringComparison.OrdinalIgnoreCase)
+			|| modelText.Contains("无界15X", StringComparison.OrdinalIgnoreCase)
+			|| modelText.Contains("WUJIE14X", StringComparison.OrdinalIgnoreCase)
+			|| modelText.Contains("WUJIE15X", StringComparison.OrdinalIgnoreCase)
+			|| boardText.StartsWith("WJ", StringComparison.Ordinal))
+		{
+			source = "wujie-x";
+			return true;
+		}
+		if (modelText.Contains("Umi", StringComparison.OrdinalIgnoreCase)
+			|| boardText.StartsWith("LAPKC", StringComparison.Ordinal))
+		{
+			source = "umi";
+			return true;
+		}
+		if (gcuInstalled)
+		{
+			source = "gcu-service";
+			return true;
+		}
+		if (boardText.StartsWith("GM", StringComparison.Ordinal)
+			|| boardText.StartsWith("NP", StringComparison.Ordinal)
+			|| boardText.StartsWith("NH", StringComparison.Ordinal))
+		{
+			source = "tongfang-board:" + boardText;
+			return true;
+		}
+		return false;
 	}
 
 	private static string BuildSummary(
