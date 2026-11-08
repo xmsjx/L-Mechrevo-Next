@@ -147,6 +147,16 @@ public static class IccHelper
 
 
 	/// <summary>列出 customICC 目录下的全部 .icc/.icm 文件名（排序）。</summary>
+	/// <summary>多文件 ICC 包里的默认校色文件名；单文件包没有这个文件。</summary>
+	public const string DefaultIccFileName = "default.icc";
+
+	public static bool IsDefaultIccName(string? fileName)
+	{
+		string name = Path.GetFileName(fileName ?? "");
+		return string.Equals(name, "default.icc", StringComparison.OrdinalIgnoreCase)
+			|| string.Equals(name, "default.icm", StringComparison.OrdinalIgnoreCase);
+	}
+
 	public static List<string> ListCustomIccFiles()
 	{
 		EnsureCustomIccDir();

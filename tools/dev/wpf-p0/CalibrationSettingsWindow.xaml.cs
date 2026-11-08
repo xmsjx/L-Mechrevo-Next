@@ -52,6 +52,7 @@ public partial class CalibrationSettingsWindow : Window
     }
 
     private List<string> _localIccProfiles = new();
+    private string _defaultIccFile = "";
 
     /// <summary>本地没有 ICC 时自动联网获取；拿到后直接关联，不用再点“云端获取”。</summary>
     private async Task TryFetchMissingIccAsync()
@@ -108,18 +109,26 @@ public partial class CalibrationSettingsWindow : Window
     {
         IccCombo.Items.Clear();
         _localIccProfiles = IccHelper.ListCustomIccFiles();
+        _defaultIccFile = _localIccProfiles.FirstOrDefault(IccHelper.IsDefaultIccName) ?? "";
         string saved = AppConfig.GetString("calib_custom_icc") ?? "";
         if (_localIccProfiles.Count <= 1)
         {
-            IccCombo.Items.Add("默认校色");
+            // 单文件包：那个文件本身就是屏幕厂商+序列号/MAC 的默认 ICC，直接显示真实文件名。
+            string sole = _localIccProfiles.FirstOrDefault() ?? "";
+            IccCombo.Items.Add(string.IsNullOrWhiteSpace(sole) || IccHelper.IsDefaultIccName(sole) ? "默认校色" : sole);
             IccCombo.Items.Add("自定义校色");
             IccCombo.SelectedIndex = AppConfig.Is("calib_custom_on") && _localIccProfiles.Count == 1 ? 1 : 0;
             if (DeleteButton != null) DeleteButton.IsEnabled = _localIccProfiles.Count > 0;
             return;
         }
+        // 多文件包：default.icc 是默认项，不再把它当普通自定义文件重复列出。
+        IccCombo.Items.Add("默认校色");
         foreach (string name in _localIccProfiles)
         {
-            IccCombo.Items.Add(name);
+            if (!IccHelper.IsDefaultIccName(name))
+            {
+                IccCombo.Items.Add(name);
+            }
         }
         if (!string.IsNullOrEmpty(saved))
         {
@@ -136,7 +145,9 @@ public partial class CalibrationSettingsWindow : Window
     {
         string? name = IccCombo.SelectedItem as string;
         string? file = name;
-        if (_localIccProfiles.Count <= 1 && string.Equals(name, "自定义校色", StringComparison.Ordinal))
+        if (_localIccProfiles.Count <= 1
+            && (string.Equals(name, "自定义校色", StringComparison.Ordinal)
+                || (name != null && _localIccProfiles.Contains(name, StringComparer.OrdinalIgnoreCase))))
         {
             file = _localIccProfiles.FirstOrDefault();
         }
@@ -197,9 +208,19 @@ public partial class CalibrationSettingsWindow : Window
         }
         if (string.Equals(name, "默认校色", StringComparison.Ordinal))
         {
-            AppConfig.Set("calib_custom_on", 0);
-            AppConfig.Flush();
-            System.Threading.Tasks.Task.Run(IccHelper.ClearAllIcc);
+            if (!string.IsNullOrWhiteSpace(_defaultIccFile))
+            {
+                // 多文件包的 default.icc 就是默认项；保留为可应用文件。
+                AppConfig.Set("calib_custom_icc", _defaultIccFile);
+                AppConfig.Set("calib_custom_on", 1);
+                AppConfig.Flush();
+            }
+            else
+            {
+                AppConfig.Set("calib_custom_on", 0);
+                AppConfig.Flush();
+                System.Threading.Tasks.Task.Run(IccHelper.ClearAllIcc);
+            }
             return;
         }
         if (string.Equals(name, "自定义校色", StringComparison.Ordinal))
@@ -235,7 +256,9 @@ public partial class CalibrationSettingsWindow : Window
             IccCombo.IsEnabled = true;
             ImportButton.IsEnabled = true;
             RefreshIccList();
-            int index = IccCombo.Items.IndexOf(result.FileName);
+            int index = IccHelper.IsDefaultIccName(result.FileName)
+                ? 0
+                : IccCombo.Items.IndexOf(result.FileName);
             if (index >= 0) IccCombo.SelectedIndex = index;
             string importedList = result.FileNames is { Count: > 0 } names
                 ? string.Join(Environment.NewLine, names)

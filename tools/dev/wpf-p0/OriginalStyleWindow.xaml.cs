@@ -8823,9 +8823,17 @@ public partial class OriginalStyleWindow : Window
                 }
                 else
                 {
+                    bool hasDefault = localIcc.Any(IccHelper.IsDefaultIccName);
+                    if (hasDefault)
+                    {
+                        CalibrationCombo.Items.Add(new ComboBoxItem { Content = "默认校色", Tag = 999 });
+                    }
                     foreach (string profile in localIcc)
                     {
-                        CalibrationCombo.Items.Add(new ComboBoxItem { Content = profile, Tag = 999 });
+                        if (!IccHelper.IsDefaultIccName(profile))
+                        {
+                            CalibrationCombo.Items.Add(new ComboBoxItem { Content = profile, Tag = 999 });
+                        }
                     }
                 }
             }
@@ -8842,7 +8850,9 @@ public partial class OriginalStyleWindow : Window
                     }
                     if (localIcc.Count <= 1
                         ? i == CalibrationCombo.Items.Count - 1
-                        : string.Equals(item.Content?.ToString(), savedIcc, StringComparison.OrdinalIgnoreCase))
+                        : string.Equals(item.Content?.ToString(), savedIcc, StringComparison.OrdinalIgnoreCase)
+                            || (string.Equals(item.Content?.ToString(), "默认校色", StringComparison.Ordinal)
+                                && IccHelper.IsDefaultIccName(savedIcc)))
                     {
                         index = i;
                         break;

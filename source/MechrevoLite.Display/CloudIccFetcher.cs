@@ -78,9 +78,15 @@ public static class CloudIccFetcher
                     ct).ConfigureAwait(false);
             }
 
-            return hit != null
-                ? new Result(true, hit.FileNames.FirstOrDefault(), $"已从云端获取 {hit.FileNames.Count} 个 ICC：{hit.Url}（{hit.Bytes} 字节）", hit.FileNames)
-                : new Result(false, null, "云端获取校色失败：未找到匹配当前面板的 ICC（已尝试序列号、MAC 和兜底路径）");
+            if (hit == null)
+            {
+                return new Result(false, null, "云端获取校色失败：未找到匹配当前面板的 ICC（已尝试序列号、MAC 和兜底路径）");
+            }
+            // 多文件包的默认项固定是 default.icc；单文件包只有屏幕厂商+序列号/MAC 那个文件。
+            string primary = hit.FileNames.FirstOrDefault(IccHelper.IsDefaultIccName)
+                ?? hit.FileNames.FirstOrDefault()
+                ?? "";
+            return new Result(true, primary, $"已从云端获取 {hit.FileNames.Count} 个 ICC：{hit.Url}（{hit.Bytes} 字节）", hit.FileNames);
         }
         catch (OperationCanceledException)
         {
