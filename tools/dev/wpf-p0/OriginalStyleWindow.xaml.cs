@@ -610,7 +610,7 @@ public partial class OriginalStyleWindow : Window
     internal int WideCurrentMode => _backendProbe != null ? ResolveDisplayMode(_backendProbe) : VisualModeForId(MechrevoLite.Mode.PerfModeStore.ActiveModeId);
 
     internal bool WideSilentTurboActive => WideCurrentMode == 1 && WideSilentTurboVisible
-        && MechrevoService.IsSilentTurboActive;
+        && ReadRememberedTurboSubMode();
 
     internal void WideSetSilentTurbo()
     {
@@ -6863,7 +6863,9 @@ public partial class OriginalStyleWindow : Window
             _pendingMode = -1;
         }
         bool silentTurboSupported = WideSilentTurboVisible;
-        bool silentTurboActive = mode == 1 && silentTurboSupported && MechrevoService.IsSilentTurboActive;
+        // 50 系双狂暴的按钮高亮以本机最后一次成功下发的子模式为准；
+        // GCU 的 SilentPerformanceModeSwitch 回读存在滞后，直接读会让静音按钮跳回高能。
+        bool silentTurboActive = mode == 1 && silentTurboSupported && ReadRememberedTurboSubMode();
         CurrentModeText.Text = WpfStrings.CurrentPrefix + (mode switch
         {
             2 => WpfStrings.ModeSilent,
