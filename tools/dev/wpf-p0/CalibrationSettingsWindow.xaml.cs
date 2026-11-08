@@ -40,6 +40,8 @@ public partial class CalibrationSettingsWindow : Window
         {
             StartupSwitch.IsChecked = AppConfig.Is("calib_apply_on_startup");
             CustomSwitch.IsChecked = AppConfig.Is("calib_custom_on");
+            CustomSwitch.Content = string.Equals(AppConfig.GetString("calib_icc_origin"), "cloud", StringComparison.OrdinalIgnoreCase)
+                ? "原厂校色" : "自定义校色";
             RefreshIccList();
             bool customOn = CustomSwitch.IsChecked == true;
             IccCombo.IsEnabled = customOn;
@@ -87,9 +89,12 @@ public partial class CalibrationSettingsWindow : Window
                 return;
             }
             AppConfig.Set("calib_custom_icc", result.FileName);
+            AppConfig.Set("calib_factory_icc", result.FileName);
+            AppConfig.Set("calib_icc_origin", "cloud");
             AppConfig.Set("calib_custom_on", 1);
             AppConfig.Set("calib_mode", 999);
             AppConfig.Flush();
+            CustomSwitch.Content = "原厂校色";
             _syncing = true;
             try
             {
@@ -135,11 +140,13 @@ public partial class CalibrationSettingsWindow : Window
         {
             // 单文件包：和以前一样只显示「默认校色 / 自定义校色」。
             IccCombo.Items.Add("默认校色");
-            IccCombo.Items.Add("自定义校色");
+            string customLabel = string.Equals(AppConfig.GetString("calib_icc_origin"), "cloud", StringComparison.OrdinalIgnoreCase)
+                ? "原厂校色" : "自定义校色";
+            IccCombo.Items.Add(customLabel);
             string sole = _localIccProfiles.FirstOrDefault() ?? "";
             if (!string.IsNullOrWhiteSpace(sole))
             {
-                _iccLabelToFile["自定义校色"] = sole;
+                _iccLabelToFile[customLabel] = sole;
             }
             IccCombo.SelectedIndex = AppConfig.Is("calib_custom_on") && _localIccProfiles.Count == 1 ? 1 : 0;
             if (DeleteButton != null) DeleteButton.IsEnabled = _localIccProfiles.Count > 0;
@@ -183,6 +190,7 @@ public partial class CalibrationSettingsWindow : Window
         string? file = name != null && _iccLabelToFile.TryGetValue(name, out string mapped) ? mapped : name;
         if (_localIccProfiles.Count <= 1
             && (string.Equals(name, "自定义校色", StringComparison.Ordinal)
+                || string.Equals(name, "原厂校色", StringComparison.Ordinal)
                 || (name != null && _localIccProfiles.Contains(name, StringComparer.OrdinalIgnoreCase))))
         {
             file = _localIccProfiles.FirstOrDefault();
@@ -259,7 +267,8 @@ public partial class CalibrationSettingsWindow : Window
             }
             return;
         }
-        if (string.Equals(name, "自定义校色", StringComparison.Ordinal))
+        if (string.Equals(name, "自定义校色", StringComparison.Ordinal)
+            || string.Equals(name, "原厂校色", StringComparison.Ordinal))
         {
             if (_localIccProfiles.Count == 1)
             {
@@ -288,9 +297,12 @@ public partial class CalibrationSettingsWindow : Window
                 return;
             }
             AppConfig.Set("calib_custom_icc", result.FileName);
+            AppConfig.Set("calib_factory_icc", result.FileName);
+            AppConfig.Set("calib_icc_origin", "cloud");
             AppConfig.Set("calib_custom_on", 1);
             AppConfig.Set("calib_mode", 999);
             AppConfig.Flush();
+            CustomSwitch.Content = "原厂校色";
             CustomSwitch.IsChecked = true;
             IccCombo.IsEnabled = true;
             ImportButton.IsEnabled = true;
@@ -350,6 +362,8 @@ public partial class CalibrationSettingsWindow : Window
             return;
         }
         AppConfig.Set("calib_custom_icc", imported);
+        AppConfig.Set("calib_icc_origin", "user");
+        AppConfig.Remove("calib_factory_icc");
         AppConfig.Flush();
         _syncing = true;
         try

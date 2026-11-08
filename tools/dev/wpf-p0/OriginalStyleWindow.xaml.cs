@@ -8824,7 +8824,12 @@ public partial class OriginalStyleWindow : Window
             {
                 if (localIcc.Count <= 1)
                 {
-                    CalibrationCombo.Items.Add(new ComboBoxItem { Content = WpfStrings.OriginalStyleWindow_xaml_Content_5, Tag = 999 });
+                    CalibrationCombo.Items.Add(new ComboBoxItem
+                    {
+                        Content = string.Equals(AppConfig.GetString("calib_icc_origin"), "cloud", StringComparison.OrdinalIgnoreCase)
+                            ? "原厂校色" : WpfStrings.OriginalStyleWindow_xaml_Content_5,
+                        Tag = 999
+                    });
                 }
                 else
                 {

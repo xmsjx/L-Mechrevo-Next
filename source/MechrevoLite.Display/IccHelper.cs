@@ -264,6 +264,8 @@ public static class IccHelper
 				AppConfig.Set("calib_custom_on", 0);
 				AppConfig.Set("calib_enabled", 0);
 				AppConfig.Set("calib_mode", 0);
+				AppConfig.Remove("calib_factory_icc");
+				AppConfig.Remove("calib_icc_origin");
 				AppConfig.Flush();
 			}
 			else if (lastCustom)
@@ -271,6 +273,8 @@ public static class IccHelper
 				// 删的是最后一个未应用 ICC：清掉自定义选择，但不关闭当前原生校色。
 				AppConfig.Remove("calib_custom_icc");
 				AppConfig.Set("calib_custom_on", 0);
+				AppConfig.Remove("calib_factory_icc");
+				AppConfig.Remove("calib_icc_origin");
 				AppConfig.Flush();
 			}
 			File.Delete(path);

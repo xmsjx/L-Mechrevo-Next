@@ -673,6 +673,12 @@ internal sealed class BackendProbe : IDisposable
                 }
                 return false;
             }
+            if ((_service == null || _hw?.IsGcuConnected != true) && mode <= 1)
+            {
+                // EC 实验模式没有 GCU：默认/关闭只操作本地 ICC，不能走 GCU 服务。
+                await Task.Run(MechrevoLite.Display.IccHelper.ClearAllIcc).ConfigureAwait(false);
+                return true;
+            }
             return _service != null && await _service.SetColorCalibration(mode).ConfigureAwait(false);
         }
         catch
