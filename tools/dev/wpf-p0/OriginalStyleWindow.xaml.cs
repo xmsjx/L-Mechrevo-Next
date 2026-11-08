@@ -6787,7 +6787,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             MechrevoHw hw = probe.Hw;
-            L_Mechrevo.WpfP0.Services.PowerStatusSnapshot power = L_Mechrevo.WpfP0.Services.PowerStatusService.Read(sample: true);
+            L_Mechrevo.WpfP0.Services.PowerStatusSnapshot power = L_Mechrevo.WpfP0.Services.PowerStatusService.Read();
             L_Mechrevo.WpfP0.Services.SensorSnapshot sensor = _services?.Sensors.Read() ?? L_Mechrevo.WpfP0.Services.SensorSnapshot.Empty;
             int battery = power.Percent;
             string cpuFan = hw.CpuFanRpm > 0
@@ -6850,7 +6850,8 @@ public partial class OriginalStyleWindow : Window
         }
         try
         {
-            L_Mechrevo.WpfP0.Services.PowerStatusService.Read(sample: true);
+            // 本地采样由后台泵负责，界面心跳只读缓存，避免原生调用卡 UI。
+            L_Mechrevo.WpfP0.Services.PowerStatusService.Read();
         }
         catch
         {
