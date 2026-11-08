@@ -75,6 +75,7 @@ public partial class OriginalStyleWindow : Window
 
     /// <summary>同方家族（含无 GCU 的本地 EC 接管机型）才提供 GCU/EC 控制模式切换。</summary>
     internal bool IsTongfangFamilyForSettings => _backendProbe?.Hw?.IsTongfangFamily == true
+        || _backendProbe?.Hw?.WujieSmuApu == true // 无界 X 系也显示 GCU/EC 控制模式
         || MechrevoLite.Hardware.MachineIdentity.Collect().TongfangFamily;
     private bool _overlayPreloaded;
     private bool _appClosing;
