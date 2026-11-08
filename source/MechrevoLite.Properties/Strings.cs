@@ -1505,6 +1505,8 @@ internal class Strings
 	internal static string PowerSourceBarrel => ResourceManager.GetString("PowerSourceBarrel", resourceCulture);
 	internal static string PowerSourceBarrelWatts => ResourceManager.GetString("PowerSourceBarrelWatts", resourceCulture);
 	internal static string PowerSourceTypeC => ResourceManager.GetString("PowerSourceTypeC", resourceCulture);
+
+	internal static string PowerSourceTypeCWatts => ResourceManager.GetString("PowerSourceTypeCWatts", resourceCulture);
 	internal static string PowerSourceBarrelAndTypeC => ResourceManager.GetString("PowerSourceBarrelAndTypeC", resourceCulture);
 	internal static string PowerSourceExternal => ResourceManager.GetString("PowerSourceExternal", resourceCulture);
 	internal static string BatteryStateCharging => ResourceManager.GetString("BatteryStateCharging", resourceCulture);

@@ -22,7 +22,9 @@ internal static class SettingsText
                     ? string.Format(Strings.PowerSourceBarrelWatts, PowerInputDecoder.DisplayAdapterWatts(adapterWatts.GetValueOrDefault()))
                     : Strings.PowerSourceBarrel;
             case PowerInputKind.TypeC:
-                return Strings.PowerSourceTypeC;
+                return adapterWatts.HasValue
+                    ? string.Format(Strings.PowerSourceTypeCWatts, PowerInputDecoder.DisplayAdapterWatts(adapterWatts.GetValueOrDefault()))
+                    : Strings.PowerSourceTypeC;
             default:
                 return Strings.PowerSourceExternal;
         }

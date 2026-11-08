@@ -6491,9 +6491,9 @@ public partial class OriginalStyleWindow : Window
             MechrevoLite.Hardware.PowerInputSample? sample = L_Mechrevo.WpfP0.Services.PowerStatusService.Read().Input;
             MechrevoLite.Hardware.PowerInputKind kind = MechrevoLite.Hardware.PowerInputDecoder.Reconcile(
                 sample, acOnline);
-            if (sample?.AdapterWatts is int watts)
+            if (sample != null)
             {
-                string text = SettingsText.PowerSourceHeadline(kind, watts);
+                string text = SettingsText.PowerSourceHeadline(kind, sample.AdapterWatts);
                 if (!string.IsNullOrWhiteSpace(text))
                 {
                     return text;

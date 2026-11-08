@@ -4151,6 +4151,9 @@ It applies the selected ICC via Windows color management (not via GCU); turning 
     
   
   </data>
+<data name="PowerSourceTypeCWatts" xml:space="preserve">
+    <value>{0} W USB-C power</value>
+  </data>
 <data name="PowerSourceBarrelAndTypeC" xml:space="preserve">
     
     

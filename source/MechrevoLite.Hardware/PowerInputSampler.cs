@@ -70,6 +70,7 @@ public sealed class PowerInputSampler
 			bool decodeEnabled = SafeDecodeEnabled();
 			int complex = -1;
 			int biosInfo3 = -1;
+			int adapterRaw = -1;
 			if (decodeEnabled)
 			{
 				IEcReadTransport? transport = null;
@@ -81,6 +82,10 @@ public sealed class PowerInputSampler
 						complex = transport.ReadByte(1996);
 						bool complexChanged = _lastBiosInfo3 < 0 || complex != _lastComplex || _lastAc != ac;
 						biosInfo3 = (complex >= 0 && complexChanged) ? transport.ReadByte(1183) : _lastBiosInfo3;
+						// 适配器瓦数：0x7CD 为主，0x7CE 为无界例外；不参与“是否接电”判定。
+						int adapterA = transport.ReadByte(1997);
+						int adapterB = adapterA > 0 ? adapterA : transport.ReadByte(1998);
+						adapterRaw = adapterB > 0 ? adapterB : adapterA;
 					}
 				}
 				catch (Exception ex)
@@ -114,12 +119,14 @@ public sealed class PowerInputSampler
 			_lastAc = ac;
 			PowerInputKind kind = PowerInputDecoder.Decode(ac, complex, decodeEnabled);
 			bool isBarrel = kind == PowerInputKind.Barrel || kind == PowerInputKind.BarrelAndTypeC;
-			int? watts = isBarrel && PowerInputDecoder.TryDecodeAdapterWatts(_lastBiosInfo3, out var decodedWatts) ? decodedWatts : (int?)null;
+			int? watts = adapterRaw > 0
+				? adapterRaw
+				: (isBarrel && PowerInputDecoder.TryDecodeAdapterWatts(_lastBiosInfo3, out var decodedWatts) ? decodedWatts : (int?)null);
 			PowerInputSample sample = new PowerInputSample(kind, watts, complex, decodeEnabled ? _lastBiosInfo3 : -1, now, decodeEnabled);
 			PowerInputSample? prev = _current;
 			if (prev == null || prev.Kind != sample.Kind || prev.ComplexStatusRaw != sample.ComplexStatusRaw)
 			{
-				Logger.WriteLineIfChanged("power-input", $"Power input: {kind} (ac={ac}, 0x7CC={(complex >= 0 ? "0x" + complex.ToString("X2") : "-")}, 0x49F={(sample.BiosInfo3Raw >= 0 ? "0x" + sample.BiosInfo3Raw.ToString("X2") : "-")}, watts={watts?.ToString() ?? "-"})");
+				Logger.WriteLineIfChanged("power-input", $"Power input: {kind} (ac={ac}, 0x7CC={(complex >= 0 ? "0x" + complex.ToString("X2") : "-")}, 0x49F={(sample.BiosInfo3Raw >= 0 ? "0x" + sample.BiosInfo3Raw.ToString("X2") : "-")}, adapterRaw={(adapterRaw >= 0 ? "0x" + adapterRaw.ToString("X2") : "-")}, watts={watts?.ToString() ?? "-"})");
 			}
 			Volatile.Write(ref _current, sample);
 			return sample;

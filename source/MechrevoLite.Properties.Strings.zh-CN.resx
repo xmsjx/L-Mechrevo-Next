@@ -4177,6 +4177,9 @@
     
   
   </data>
+<data name="PowerSourceTypeCWatts" xml:space="preserve">
+    <value>Type-C 供电 {0}W</value>
+  </data>
 <data name="PowerSourceBarrelAndTypeC" xml:space="preserve">
     
     
