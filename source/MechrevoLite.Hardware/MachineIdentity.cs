@@ -266,6 +266,11 @@ internal sealed record MachineIdentity(
 			source = "wujie-x";
 			return true;
 		}
+		if (boardText.StartsWith("YAOSHI", StringComparison.OrdinalIgnoreCase))
+		{
+			source = "yaoshi";
+			return true;
+		}
 		if (modelText.Contains("Umi", StringComparison.OrdinalIgnoreCase)
 			|| boardText.StartsWith("LAPKC", StringComparison.Ordinal))
 		{
