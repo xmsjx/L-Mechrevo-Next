@@ -8995,6 +8995,29 @@ public partial class OriginalStyleWindow : Window
             await Task.Run(IccHelper.ClearAllIcc);
             ok = true;
         }
+        else if (on && mode != 999 && _backendProbe.Hw?.IsGcuConnected != true)
+        {
+            // EC 官方档：走与自定义完全相同的 IccHelper.ApplyIcc 关联路径。
+            string selected = mode <= 1
+                ? IccHelper.ResolveDefaultIccFile()
+                : (IccHelper.FindStandardIcc(mode) ?? "");
+            string selectedPath = string.IsNullOrWhiteSpace(selected)
+                ? ""
+                : System.IO.Path.Combine(IccHelper.OfficialIccDir, selected);
+            if (!string.IsNullOrWhiteSpace(selectedPath) && File.Exists(selectedPath))
+            {
+                ok = await Task.Run(() => IccHelper.ApplyIcc(selectedPath));
+            }
+            else if (mode <= 1)
+            {
+                await Task.Run(IccHelper.ClearAllIcc);
+                ok = true;
+            }
+            else
+            {
+                ok = false;
+            }
+        }
         else if (on && mode == 999)
         {
             string iccName = AppConfig.GetString("calib_custom_icc") ?? "";
