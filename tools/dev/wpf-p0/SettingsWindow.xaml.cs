@@ -444,6 +444,8 @@ public partial class SettingsWindow : Window
             }
             CustomButtonActionCombo.SelectedIndex = actionIndex;
             CustomButtonQuickRow.Visibility = action == "quick" ? Visibility.Visible : Visibility.Collapsed;
+            CustomButtonAppRow.Visibility = action == "app" ? Visibility.Visible : Visibility.Collapsed;
+            UpdateCustomButtonAppPath();
 
             CustomButtonQuickCombo.Items.Clear();
             string savedKey = AppConfig.GetString("perf_key_quick") ?? "fanboost";
@@ -480,6 +482,23 @@ public partial class SettingsWindow : Window
         }
         AppConfig.Flush();
         CustomButtonQuickRow.Visibility = action == "quick" ? Visibility.Visible : Visibility.Collapsed;
+        CustomButtonAppRow.Visibility = action == "app" ? Visibility.Visible : Visibility.Collapsed;
+        UpdateCustomButtonAppPath();
+    }
+
+    private void UpdateCustomButtonAppPath()
+    {
+        string path = AppConfig.GetString("perf_key_app") ?? "";
+        CustomButtonAppPath.Text = string.IsNullOrWhiteSpace(path) ? "未选择" : path;
+        CustomButtonAppPath.ToolTip = string.IsNullOrWhiteSpace(path) ? null : path;
+    }
+
+    private void CustomButtonChooseApp_Click(object sender, RoutedEventArgs e)
+    {
+        if (AppLauncherService.PickAndRemember("选择性能模式按键要启动的应用"))
+        {
+            UpdateCustomButtonAppPath();
+        }
     }
 
     private void CustomButtonQuick_Changed(object sender, SelectionChangedEventArgs e)

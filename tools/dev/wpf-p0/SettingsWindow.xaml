@@ -354,6 +354,7 @@
                                       SelectionChanged="CustomButtonAction_Changed">
                                 <ComboBoxItem Content="默认：切换自定义性能档" Tag="mode" />
                                 <ComboBoxItem Content="快捷开关" Tag="quick" />
+                                <ComboBoxItem Content="启动应用" Tag="app" />
                                 <ComboBoxItem Content="轮换自定义配置" Tag="cycle" />
                             </ComboBox>
                         </Grid>
@@ -362,6 +363,13 @@
                             <TextBlock Text="快捷开关" VerticalAlignment="Center" />
                             <ComboBox x:Name="CustomButtonQuickCombo" Grid.Column="1" Style="{DynamicResource RoundCombo}"
                                       SelectionChanged="CustomButtonQuick_Changed" />
+                        </Grid>
+                        <Grid x:Name="CustomButtonAppRow" Margin="0,6,0,0" Visibility="Collapsed">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="启动应用" VerticalAlignment="Center" />
+                            <TextBlock x:Name="CustomButtonAppPath" Grid.Column="1" Style="{StaticResource Hint}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <Button Grid.Column="2" Content="选择…" Style="{StaticResource FlatButton}" Margin="8,0,0,0"
+                                    Click="CustomButtonChooseApp_Click" />
                         </Grid>
                     </StackPanel>
                 </Border>

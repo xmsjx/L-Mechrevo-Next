@@ -211,8 +211,7 @@ public partial class OriginalStyleWindow : Window
         ("gamewhitelist", QuickSwitchService.Label("gamewhitelist", "游戏白名单"), "\uE7FC"), ("cpuadvperf", QuickSwitchService.Label("cpuadvperf", "解锁BIOS菜单"), "\uE7EF"),
         ("transparency", QuickSwitchService.Label("transparency", "系统透明效果"), "\uE790"),
         ("darktheme", QuickSwitchService.Label("darktheme", "系统深色主题"), "\uE793"), ("monitoroff", QuickSwitchService.Label("monitoroff", "息屏"), "\uE7F4"),
-        ("winupdate", QuickSwitchService.Label("winupdate", "禁用Win更新"), "\uE895"),
-        ("launchapp", "启动应用", "\uE7C3")
+        ("winupdate", QuickSwitchService.Label("winupdate", "禁用Win更新"), "\uE895")
     };
 
     /// <summary>复用快捷磁贴目录里的图标，供 OSD 等复用，避免另造一套图标。</summary>
@@ -655,6 +654,14 @@ public partial class OriginalStyleWindow : Window
             bool ok = await DashboardCommands.ToggleQuickAsync(key);
             StatusText.Text = (ok ? WpfStrings.L("已触发快捷开关：", "Triggered quick switch: ")
                 : WpfStrings.L("快捷开关失败：", "Quick switch failed: ")) + QuickSwitchService.DisplayLabel(key);
+            return true;
+        }
+        if (string.Equals(action, "app", StringComparison.OrdinalIgnoreCase))
+        {
+            bool ok = AppLauncherService.LaunchRememberedOrPick();
+            StatusText.Text = ok
+                ? WpfStrings.L("已启动应用。", "Application launched.")
+                : WpfStrings.L("应用未启动。", "Application not launched.");
             return true;
         }
         if (string.Equals(action, "cycle", StringComparison.OrdinalIgnoreCase))

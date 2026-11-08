@@ -6,12 +6,12 @@ using MechrevoLite;
 
 namespace L_Mechrevo.WpfP0.Services;
 
-/// <summary>快捷开关「启动应用」：首次点击选择并记忆，之后直接启动；目标被删除时不抛异常。</summary>
+/// <summary>性能模式按键「启动应用」：选择并记忆，之后直接启动；目标被删除时不抛异常。</summary>
 internal static class AppLauncherService
 {
-    internal const string ConfigKey = "quick_launch_app_path";
+    internal const string ConfigKey = "perf_key_app";
 
-    internal static bool LaunchOrPick()
+    internal static bool LaunchRememberedOrPick()
     {
         try
         {
@@ -23,39 +23,53 @@ internal static class AppLauncherService
                     AppConfig.Remove(ConfigKey);
                     AppConfig.Flush();
                 }
-                path = PickApplication("请选择要启动的应用");
-                if (string.IsNullOrWhiteSpace(path))
+                if (!PickAndRemember("请选择性能模式按键要启动的应用"))
                 {
                     return false;
                 }
-                AppConfig.Set(ConfigKey, path);
-                AppConfig.Flush();
+                path = AppConfig.GetString(ConfigKey) ?? "";
             }
-
-            if (!File.Exists(path))
-            {
-                return false;
-            }
-            try
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = path,
-                    WorkingDirectory = Path.GetDirectoryName(path) ?? "",
-                    UseShellExecute = true
-                });
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Logger.WriteError("[quick-launch] 启动失败：" + path + " · " + ex.Message);
-                MessageBoxCompat("应用启动失败，可能已被删除或没有权限。", "启动应用");
-                return false;
-            }
+            return LaunchPath(path);
         }
         catch (Exception ex)
         {
             Logger.WriteError("[quick-launch] 异常：" + ex.Message);
+            return false;
+        }
+    }
+
+    internal static bool PickAndRemember(string title)
+    {
+        string? path = PickApplication(title);
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+        AppConfig.Set(ConfigKey, path);
+        AppConfig.Flush();
+        return true;
+    }
+
+    private static bool LaunchPath(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return false;
+            }
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = path,
+                WorkingDirectory = Path.GetDirectoryName(path) ?? "",
+                UseShellExecute = true
+            });
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteError("[quick-launch] 启动失败：" + path + " · " + ex.Message);
+            MessageBoxCompat("应用启动失败，可能已被删除或没有权限。", "启动应用");
             return false;
         }
     }

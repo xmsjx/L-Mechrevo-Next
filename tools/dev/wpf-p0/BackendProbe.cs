@@ -113,10 +113,6 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            if (string.Equals(key, "launchapp", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
             if (_hw == null)
             {
                 return false;
