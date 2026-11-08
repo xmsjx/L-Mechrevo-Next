@@ -474,6 +474,10 @@ public partial class SettingsWindow : Window
         if (_syncing) return;
         string action = (CustomButtonActionCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "mode";
         AppConfig.Set("perf_key_action", action);
+        if (action == "quick" && string.IsNullOrWhiteSpace(AppConfig.GetString("perf_key_quick")))
+        {
+            AppConfig.Set("perf_key_quick", "fanboost");
+        }
         AppConfig.Flush();
         CustomButtonQuickRow.Visibility = action == "quick" ? Visibility.Visible : Visibility.Collapsed;
     }

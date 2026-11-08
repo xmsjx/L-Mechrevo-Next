@@ -649,7 +649,7 @@ public partial class OriginalStyleWindow : Window
             string key = AppConfig.GetString("perf_key_quick") ?? "";
             if (string.IsNullOrWhiteSpace(key))
             {
-                return false;
+                key = "fanboost";
             }
             bool ok = await DashboardCommands.ToggleQuickAsync(key);
             StatusText.Text = (ok ? WpfStrings.L("已触发快捷开关：", "Triggered quick switch: ")
