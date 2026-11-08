@@ -8988,7 +8988,14 @@ public partial class OriginalStyleWindow : Window
             ? await MechrevoLite.Display.GcuIccProfileAssociator.CaptureAsync("ui-calib-on").ConfigureAwait(true)
             : null;
         bool ok;
-        if (on && mode == 999)
+        if (!on && _backendProbe.Hw?.IsGcuConnected != true)
+        {
+            // EC 关闭校色必须真正解除本地 ICC；不能走 SetColorCalibrationAsync(0)，
+            // 那里默认档会重新应用官方 ICC。
+            await Task.Run(IccHelper.ClearAllIcc);
+            ok = true;
+        }
+        else if (on && mode == 999)
         {
             string iccName = AppConfig.GetString("calib_custom_icc") ?? "";
             string iccPath = string.IsNullOrWhiteSpace(iccName) ? "" : System.IO.Path.Combine(IccHelper.CustomIccDir, iccName);

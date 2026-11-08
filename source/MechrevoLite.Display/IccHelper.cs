@@ -527,6 +527,8 @@ public static class IccHelper
 				}
 			}
 			Logger.WriteLine("自定义 ICC 已应用: " + fileName);
+			AppConfig.Set("calib_applied_icc", fileName);
+			AppConfig.Flush();
 			return true;
 		}
 		catch (Exception ex)
@@ -559,6 +561,10 @@ public static class IccHelper
 		EnsureCustomIccDir();
 		// 不遍历目录：只清理当前应用的自定义 ICC（AppConfig calib_custom_icc 记录文件名）
 		string? appliedName = AppConfig.GetString("calib_custom_icc");
+		if (string.IsNullOrWhiteSpace(appliedName))
+		{
+			appliedName = AppConfig.GetString("calib_applied_icc");
+		}
 		try
 		{
 			using (RegistryKey? key = Registry.CurrentUser.OpenSubKey(IcmRoot + @"\ProfileAssociations\Display\DISPLAY", writable: true))
@@ -624,6 +630,8 @@ public static class IccHelper
 		{
 			Logger.WriteLine("取消自定义 ICC 关联槽清理异常: " + ex.Message);
 		}
+		AppConfig.Remove("calib_applied_icc");
+		AppConfig.Flush();
 		Logger.WriteLine("取消自定义 ICC 完成");
 	}
 }
