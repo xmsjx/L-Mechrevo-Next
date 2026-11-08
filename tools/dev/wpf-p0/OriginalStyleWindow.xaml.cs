@@ -9887,6 +9887,9 @@ public partial class OriginalStyleWindow : Window
             _lastKeyboardPowerForOsd = _backendProbe?.Hw?.KeyboardPower;
             _lastKeyboardBrightnessOsd = _backendProbe?.Hw?.KeyboardBrightness ?? -2;
             _keyboardOsdSilentUntil = Environment.TickCount64 + 5000;
+            // 启动/唤醒后显式同步一次固件自动关灯计时器；HID 键盘固件默认可能是 5 分钟，
+            // 若配置为 0 却不补发，会周期性熄灯再被帧流点亮，表现成“每 5 分钟闪一下”。
+            _services?.Lighting.ApplyHardwareLightIdleTimer();
         }
         catch
         {
