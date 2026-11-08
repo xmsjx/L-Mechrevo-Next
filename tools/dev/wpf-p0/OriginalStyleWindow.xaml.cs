@@ -3575,8 +3575,10 @@ public partial class OriginalStyleWindow : Window
                 : selected == ExtremeModeButton ? MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode
                 : selected == CustomModeButton ? 3
                 : -1;
+            // 高能狂暴按钮永远显式要求 silent=false；不能读“上次记忆”，
+            // 否则上次是静音狂暴时点高能会被重新切回静音按钮。
             bool? silentTurbo = SilentTurboModeButton != null && ReferenceEquals(selected, SilentTurboModeButton) ? true
-                : ReferenceEquals(selected, TurboModeButton) ? ReadRememberedTurboSubMode()
+                : ReferenceEquals(selected, TurboModeButton) ? false
                 : null;
             if (ReferenceEquals(selected, CustomModeButton))
             {
