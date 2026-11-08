@@ -9091,7 +9091,31 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        if (mode == 999)
+        bool ecLocalMode = MechrevoLite.Hardware.GcuEcMode.IsEcMode
+            || _backendProbe.Hw?.IsGcuConnected != true;
+        if (mode != 999 && ecLocalMode)
+        {
+            string file = mode <= 1
+                ? IccHelper.ResolveDefaultIccFile()
+                : (IccHelper.FindStandardIcc(mode) ?? "");
+            string path = string.IsNullOrWhiteSpace(file)
+                ? ""
+                : System.IO.Path.Combine(IccHelper.OfficialIccDir, file);
+            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            {
+                ok = await Task.Run(() => IccHelper.ApplyIcc(path));
+            }
+            else if (mode <= 1)
+            {
+                await Task.Run(IccHelper.ClearAllIcc);
+                ok = true;
+            }
+            else
+            {
+                ok = false;
+            }
+        }
+        else if (mode == 999)
         {
             List<string> localIcc = IccHelper.ListCustomIccFiles()
                 .Where(file => !IccHelper.IsFactoryIcc(file))
