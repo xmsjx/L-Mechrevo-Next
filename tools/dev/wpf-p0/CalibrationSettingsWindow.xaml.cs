@@ -40,8 +40,8 @@ public partial class CalibrationSettingsWindow : Window
         {
             StartupSwitch.IsChecked = AppConfig.Is("calib_apply_on_startup");
             CustomSwitch.IsChecked = AppConfig.Is("calib_custom_on");
-            CustomSwitch.Content = string.Equals(AppConfig.GetString("calib_icc_origin"), "cloud", StringComparison.OrdinalIgnoreCase)
-                ? "原厂校色" : "自定义校色";
+            // 开关是“是否启用 ICC”，不能和下拉项“自定义校色/原厂校色”共用一个词。
+            CustomSwitch.Content = WpfStrings.L("使用校色文件", "Use color profile");
             RefreshIccList();
             bool customOn = CustomSwitch.IsChecked == true;
             IccCombo.IsEnabled = customOn;
@@ -94,7 +94,7 @@ public partial class CalibrationSettingsWindow : Window
             AppConfig.Set("calib_custom_on", 1);
             AppConfig.Set("calib_mode", 999);
             AppConfig.Flush();
-            CustomSwitch.Content = "原厂校色";
+            CustomSwitch.Content = WpfStrings.L("使用校色文件", "Use color profile");
             _syncing = true;
             try
             {
@@ -302,7 +302,7 @@ public partial class CalibrationSettingsWindow : Window
             AppConfig.Set("calib_custom_on", 1);
             AppConfig.Set("calib_mode", 999);
             AppConfig.Flush();
-            CustomSwitch.Content = "原厂校色";
+            CustomSwitch.Content = WpfStrings.L("使用校色文件", "Use color profile");
             CustomSwitch.IsChecked = true;
             IccCombo.IsEnabled = true;
             ImportButton.IsEnabled = true;
