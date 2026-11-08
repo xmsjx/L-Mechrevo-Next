@@ -71,6 +71,7 @@ Source: "files\Resources\qrcode2.jpg"; DestDir: "{app}\Resources"; Flags: ignore
 Source: "files\Resources\qrcode3.png"; DestDir: "{app}\Resources"; Flags: ignoreversion 
 Source: "files\Resources\qrcode4.png"; DestDir: "{app}\Resources"; Flags: ignoreversion 
 Source: "files\zh-CN\L-Mechrevo.resources.dll"; DestDir: "{app}\zh-CN"; Flags: ignoreversion 
+Source: "files\zh-CN\MechrevoLite.Core.resources.dll"; DestDir: "{app}\zh-CN"; Flags: ignoreversion 
 Source: "files\zh-CN\Microsoft.Win32.TaskScheduler.resources.dll"; DestDir: "{app}\zh-CN"; Flags: ignoreversion 
 Source: "files\LICENSE,2.txt"; DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion 
 Source: "files\THIRD_PARTY_NOTICES,2.txt"; DestDir: "{app}"; DestName: "THIRD_PARTY_NOTICES.txt"; Flags: ignoreversion 
