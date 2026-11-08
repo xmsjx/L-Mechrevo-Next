@@ -425,7 +425,7 @@ public partial class SettingsWindow : Window
             {
                 return;
             }
-            string action = AppConfig.GetString("custom_button_action") ?? "mode";
+            string action = AppConfig.GetString("perf_key_action") ?? "mode";
             int actionIndex = 0;
             for (int i = 0; i < CustomButtonActionCombo.Items.Count; i++)
             {
@@ -440,7 +440,7 @@ public partial class SettingsWindow : Window
             CustomButtonQuickRow.Visibility = action == "quick" ? Visibility.Visible : Visibility.Collapsed;
 
             CustomButtonQuickCombo.Items.Clear();
-            string savedKey = AppConfig.GetString("custom_button_quick") ?? "fanboost";
+            string savedKey = AppConfig.GetString("perf_key_quick") ?? "fanboost";
             int quickIndex = 0;
             int i2 = 0;
             foreach (QuickSwitchItem item in QuickSwitchService.CustomButtonQuickItems())
@@ -467,7 +467,7 @@ public partial class SettingsWindow : Window
     {
         if (_syncing) return;
         string action = (CustomButtonActionCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "mode";
-        AppConfig.Set("custom_button_action", action);
+        AppConfig.Set("perf_key_action", action);
         AppConfig.Flush();
         CustomButtonQuickRow.Visibility = action == "quick" ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -477,7 +477,7 @@ public partial class SettingsWindow : Window
         if (_syncing) return;
         if (CustomButtonQuickCombo.SelectedItem is ComboBoxItem item && item.Tag is string key)
         {
-            AppConfig.Set("custom_button_quick", key);
+            AppConfig.Set("perf_key_quick", key);
             AppConfig.Flush();
         }
     }

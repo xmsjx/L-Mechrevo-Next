@@ -636,17 +636,17 @@ public partial class OriginalStyleWindow : Window
         _ = WideActivateCustomModeAsync();
     }
 
-    /// <summary>自定义性能按钮的替代行为：快捷开关 / 轮换自定义配置；只在 EC 模式生效。</summary>
-    private async Task<bool> TryHandleCustomButtonActionAsync()
+    /// <summary>电脑实体性能模式按键的替代行为：快捷开关 / 轮换自定义配置；只在 EC 模式生效。</summary>
+    private async Task<bool> TryHandlePerformanceKeyOverrideAsync()
     {
         if (!MechrevoLite.Hardware.GcuEcMode.IsEcMode)
         {
             return false;
         }
-        string action = AppConfig.GetString("custom_button_action") ?? "mode";
+        string action = AppConfig.GetString("perf_key_action") ?? "mode";
         if (string.Equals(action, "quick", StringComparison.OrdinalIgnoreCase))
         {
-            string key = AppConfig.GetString("custom_button_quick") ?? "";
+            string key = AppConfig.GetString("perf_key_quick") ?? "";
             if (string.IsNullOrWhiteSpace(key))
             {
                 return false;
@@ -3649,11 +3649,6 @@ public partial class OriginalStyleWindow : Window
             bool? silentTurbo = SilentTurboModeButton != null && ReferenceEquals(selected, SilentTurboModeButton) ? true
                 : ReferenceEquals(selected, TurboModeButton) ? false
                 : null;
-            if (ReferenceEquals(selected, CustomModeButton)
-                && await TryHandleCustomButtonActionAsync())
-            {
-                return;
-            }
             if (ReferenceEquals(selected, CustomModeButton))
             {
                 _pendingMode = 3;
@@ -4771,6 +4766,11 @@ public partial class OriginalStyleWindow : Window
             }
             MechrevoHw? hw = probe.Hw;
             bool nuc = IsNucLike(hw);
+
+            if (await TryHandlePerformanceKeyOverrideAsync())
+            {
+                return;
+            }
 
             if (GcuEcExperimental.Enabled && _backendRoute == BackendRoute.Ec)
             {

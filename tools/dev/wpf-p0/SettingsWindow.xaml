@@ -344,8 +344,8 @@
 
                 <Border x:Name="CustomButtonCard" Style="{StaticResource Card}" Visibility="Collapsed">
                     <StackPanel>
-                        <TextBlock Text="自定义性能按钮" Style="{StaticResource CardTitle}" />
-                        <TextBlock Text="将首页「自定义」按钮改为快捷开关或自定义配置切换；仅在 EC 控制模式下生效。"
+                        <TextBlock Text="性能模式按键" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="自定义电脑实体性能模式按键：可改绑快捷开关或轮换自定义配置；仅在 EC 控制模式下生效。"
                                    Style="{StaticResource Hint}" TextWrapping="Wrap" />
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
