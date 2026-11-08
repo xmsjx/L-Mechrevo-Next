@@ -25,9 +25,13 @@ public static class IccHelper
 	[return: MarshalAs(UnmanagedType.Bool)]
 	private static extern bool WcsDisassociateColorProfileFromDevice(uint scope, string profileName, string deviceName);
 
-	/// <summary>自定义 ICC 目录（放在用户数据目录，随设置备份/升级保留）。</summary>
-	public static string CustomIccDir => Path.Combine(
+	/// <summary>云端官方 ICC 目录。</summary>
+	public static string OfficialIccDir => Path.Combine(
 		Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MechrevoLite", "ICC");
+
+	/// <summary>用户自定义 ICC 目录。</summary>
+	public static string CustomIccDir => Path.Combine(
+		Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MechrevoLite", "customICC");
 
 	/// <summary>旧版本放在程序根目录的 customICC（只用于一次性迁移）。</summary>
 	private static string LegacyCustomIccDir => Path.Combine(AppContext.BaseDirectory, "customICC");
@@ -38,6 +42,7 @@ public static class IccHelper
 	{
 		try
 		{
+			Directory.CreateDirectory(OfficialIccDir);
 			Directory.CreateDirectory(CustomIccDir);
 			MigrateLegacyCustomIccOnce();
 			MigrateLegacyUserIccOnce();
@@ -189,7 +194,7 @@ public static class IccHelper
 
 	public static string? FindStandardIcc(int mode)
 	{
-		foreach (string file in ListCustomIccFiles())
+		foreach (string file in ListOfficialIccFiles())
 		{
 			if (StandardLevelFor(file) == mode)
 			{
@@ -202,7 +207,7 @@ public static class IccHelper
 	public static int HighestStandardLevel()
 	{
 		int level = 1;
-		foreach (string file in ListCustomIccFiles())
+		foreach (string file in ListOfficialIccFiles())
 		{
 			level = Math.Max(level, StandardLevelFor(file));
 		}
@@ -217,7 +222,8 @@ public static class IccHelper
 			return raw.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 		}
 		string one = AppConfig.GetString("calib_factory_icc") ?? "";
-		return string.IsNullOrWhiteSpace(one) ? Array.Empty<string>() : new[] { one };
+		if (!string.IsNullOrWhiteSpace(one)) return new[] { one };
+		return ListOfficialIccFiles();
 	}
 
 	/// <summary>当前应作为“默认校色”的 ICC：优先云端 factory，其次单文件包唯一文件，最后 Default.icm。</summary>
@@ -225,7 +231,7 @@ public static class IccHelper
 	{
 		string configured = AppConfig.GetString("calib_factory_icc") ?? "";
 		if (!string.IsNullOrWhiteSpace(configured)) return configured;
-		List<string> files = ListCustomIccFiles();
+		List<string> files = ListOfficialIccFiles();
 		if (files.Count == 1) return files[0];
 		return files.FirstOrDefault(IsDefaultIccName) ?? "";
 	}
@@ -234,27 +240,14 @@ public static class IccHelper
 	public static string EnsureFactoryIccBound()
 	{
 		string configured = AppConfig.GetString("calib_factory_icc") ?? "";
-		if (!string.IsNullOrWhiteSpace(configured)) return configured;
-		List<string> files = ListCustomIccFiles();
-		// 重装/配置重置但 ICC 目录保留：只要有 Default.icm，就按残留的官方包恢复识别。
-		string? defaultFile = files.FirstOrDefault(IsDefaultIccName);
-		if (!string.IsNullOrWhiteSpace(defaultFile))
+		if (!string.IsNullOrWhiteSpace(configured))
 		{
-			List<string> factoryFiles = files
-				.Where(file => IsDefaultIccName(file) || StandardLevelFor(file) > 0)
-				.ToList();
-			AppConfig.Set("calib_factory_icc", defaultFile);
-			AppConfig.Set("calib_factory_files", string.Join("|", factoryFiles));
-			AppConfig.Set("calib_icc_origin", "cloud");
-			AppConfig.Flush();
-			return defaultFile;
+			return configured;
 		}
-		if (!string.Equals(AppConfig.GetString("calib_icc_origin"), "cloud", StringComparison.OrdinalIgnoreCase))
-		{
-			return "";
-		}
-		string candidate = files.Count == 1 ? files[0] : "";
-		if (string.IsNullOrWhiteSpace(candidate)) return "";
+		// ICC 目录本身就是官方云端目录；单文件 BOE 也属于官方，不再要求 origin 标记。
+		List<string> files = ListOfficialIccFiles();
+		if (files.Count == 0) return "";
+		string candidate = files.FirstOrDefault(IsDefaultIccName) ?? files[0];
 		AppConfig.Set("calib_factory_icc", candidate);
 		AppConfig.Set("calib_factory_files", string.Join("|", files));
 		AppConfig.Set("calib_icc_origin", "cloud");
@@ -266,7 +259,7 @@ public static class IccHelper
 	{
 		foreach (string file in FactoryIccFiles())
 		{
-			if (File.Exists(Path.Combine(CustomIccDir, Path.GetFileName(file))))
+			if (File.Exists(Path.Combine(OfficialIccDir, Path.GetFileName(file))))
 			{
 				return true;
 			}
@@ -287,17 +280,28 @@ public static class IccHelper
 		return false;
 	}
 
+	public static List<string> ListOfficialIccFiles()
+	{
+		EnsureCustomIccDir();
+		return EnumerateIccFiles(OfficialIccDir);
+	}
+
 	public static List<string> ListCustomIccFiles()
 	{
 		EnsureCustomIccDir();
+		return EnumerateIccFiles(CustomIccDir);
+	}
+
+	private static List<string> EnumerateIccFiles(string dir)
+	{
 		List<string> list = new List<string>();
 		try
 		{
-			foreach (string file in Directory.EnumerateFiles(CustomIccDir, "*.icc"))
+			foreach (string file in Directory.EnumerateFiles(dir, "*.icc"))
 			{
 				list.Add(Path.GetFileName(file));
 			}
-			foreach (string file in Directory.EnumerateFiles(CustomIccDir, "*.icm"))
+			foreach (string file in Directory.EnumerateFiles(dir, "*.icm"))
 			{
 				list.Add(Path.GetFileName(file));
 			}
@@ -352,6 +356,27 @@ public static class IccHelper
 	}
 
 	/// <summary>删除 customICC/ICC 目录中的一个配置文件；如果它是当前应用项，先解除关联。</summary>
+	public static string? ImportOfficialIcc(string sourcePath)
+	{
+		string? name = ImportIcc(sourcePath);
+		if (string.IsNullOrWhiteSpace(name)) return null;
+		string from = Path.Combine(CustomIccDir, name);
+		string to = Path.Combine(OfficialIccDir, name);
+		try
+		{
+			if (File.Exists(from))
+			{
+				File.Copy(from, to, overwrite: true);
+				File.Delete(from);
+			}
+			return name;
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
 	public static bool DeleteIcc(string fileName)
 	{
 		try
@@ -379,8 +404,6 @@ public static class IccHelper
 				AppConfig.Set("calib_custom_on", 0);
 				AppConfig.Set("calib_enabled", 0);
 				AppConfig.Set("calib_mode", 0);
-				AppConfig.Remove("calib_factory_icc");
-				AppConfig.Remove("calib_icc_origin");
 				AppConfig.Flush();
 			}
 			else if (lastCustom)
@@ -388,8 +411,6 @@ public static class IccHelper
 				// 删的是最后一个未应用 ICC：清掉自定义选择，但不关闭当前原生校色。
 				AppConfig.Remove("calib_custom_icc");
 				AppConfig.Set("calib_custom_on", 0);
-				AppConfig.Remove("calib_factory_icc");
-				AppConfig.Remove("calib_icc_origin");
 				AppConfig.Flush();
 			}
 			File.Delete(path);

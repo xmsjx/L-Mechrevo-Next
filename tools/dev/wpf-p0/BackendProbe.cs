@@ -677,7 +677,7 @@ internal sealed class BackendProbe : IDisposable
                     string factory = MechrevoLite.Display.IccHelper.EnsureFactoryIccBound();
                     string factoryPath = string.IsNullOrWhiteSpace(factory)
                         ? ""
-                        : System.IO.Path.Combine(MechrevoLite.Display.IccHelper.CustomIccDir, factory);
+                        : System.IO.Path.Combine(MechrevoLite.Display.IccHelper.OfficialIccDir, factory);
                     if (!string.IsNullOrWhiteSpace(factoryPath) && System.IO.File.Exists(factoryPath))
                     {
                         return await Task.Run(() => MechrevoLite.Display.IccHelper.ApplyIcc(factoryPath)).ConfigureAwait(false);
@@ -700,7 +700,7 @@ internal sealed class BackendProbe : IDisposable
                 {
                     return false;
                 }
-                string path = System.IO.Path.Combine(MechrevoLite.Display.IccHelper.CustomIccDir, icc);
+                string path = System.IO.Path.Combine(MechrevoLite.Display.IccHelper.OfficialIccDir, icc);
                 if (!System.IO.File.Exists(path))
                 {
                     return false;

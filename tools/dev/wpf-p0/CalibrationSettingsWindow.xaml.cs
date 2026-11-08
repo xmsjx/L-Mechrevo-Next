@@ -90,7 +90,7 @@ public partial class CalibrationSettingsWindow : Window
                 }
                 return;
             }
-            string path = Path.Combine(IccHelper.CustomIccDir, result.FileName);
+            string path = Path.Combine(IccHelper.OfficialIccDir, result.FileName);
             if (!File.Exists(path))
             {
                 if (CloudStatusText != null)
@@ -309,7 +309,7 @@ public partial class CalibrationSettingsWindow : Window
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = "explorer.exe",
-                        Arguments = "\"" + IccHelper.CustomIccDir + "\"",
+                        Arguments = "\"" + IccHelper.OfficialIccDir + "\"",
                         UseShellExecute = true
                     });
                 }

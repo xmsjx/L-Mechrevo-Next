@@ -212,7 +212,7 @@ public static class CloudIccFetcher
         {
             Directory.CreateDirectory(dir);
             await File.WriteAllBytesAsync(temp, data, ct).ConfigureAwait(false);
-            return IccHelper.ImportIcc(temp);
+            return IccHelper.ImportOfficialIcc(temp);
         }
         finally
         {
