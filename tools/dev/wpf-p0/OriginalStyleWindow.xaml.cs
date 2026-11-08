@@ -8766,6 +8766,8 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    internal void ReloadCalibrationUi() => InitScreenColorControls();
+
     private void InitScreenColorControls()
     {
         BackendProbe? probe = _backendProbe;

@@ -227,9 +227,23 @@ public static class IccHelper
 			{
 				return false;
 			}
-			if (string.Equals(AppConfig.GetString("calib_custom_icc"), fileName, StringComparison.OrdinalIgnoreCase))
+			bool applied = string.Equals(AppConfig.GetString("calib_custom_icc"), fileName, StringComparison.OrdinalIgnoreCase);
+			bool customMode = AppConfig.Get("calib_mode") == 999;
+			bool lastCustom = ListCustomIccFiles().Count <= 1;
+			if (applied || customMode)
 			{
+				// 删掉的如果是当前自定义 ICC：先切回默认校色，
+				// 不能留下 calib_mode=999 + calib_custom_on=1 的悬空状态。
 				ClearAllIcc();
+				AppConfig.Remove("calib_custom_icc");
+				AppConfig.Set("calib_custom_on", 0);
+				AppConfig.Set("calib_enabled", 0);
+				AppConfig.Set("calib_mode", 0);
+				AppConfig.Flush();
+			}
+			else if (lastCustom)
+			{
+				// 删的是最后一个未应用 ICC：清掉自定义选择，但不关闭当前原生校色。
 				AppConfig.Remove("calib_custom_icc");
 				AppConfig.Set("calib_custom_on", 0);
 				AppConfig.Flush();
