@@ -240,7 +240,8 @@ public static class IccHelper
 	public static string EnsureFactoryIccBound()
 	{
 		string configured = AppConfig.GetString("calib_factory_icc") ?? "";
-		if (!string.IsNullOrWhiteSpace(configured))
+		if (!string.IsNullOrWhiteSpace(configured)
+			&& File.Exists(Path.Combine(OfficialIccDir, Path.GetFileName(configured))))
 		{
 			return configured;
 		}
@@ -358,22 +359,42 @@ public static class IccHelper
 	/// <summary>删除 customICC/ICC 目录中的一个配置文件；如果它是当前应用项，先解除关联。</summary>
 	public static string? ImportOfficialIcc(string sourcePath)
 	{
-		string? name = ImportIcc(sourcePath);
+		EnsureCustomIccDir();
+		string name = Path.GetFileName(sourcePath);
 		if (string.IsNullOrWhiteSpace(name)) return null;
-		string from = Path.Combine(CustomIccDir, name);
-		string to = Path.Combine(OfficialIccDir, name);
+		string dest = Path.Combine(OfficialIccDir, name);
 		try
 		{
-			if (File.Exists(from))
+			if (string.Equals(sourcePath, dest, StringComparison.OrdinalIgnoreCase))
 			{
-				File.Copy(from, to, overwrite: true);
-				File.Delete(from);
+				return name;
 			}
+			File.Copy(sourcePath, dest, overwrite: true);
 			return name;
 		}
 		catch
 		{
 			return null;
+		}
+	}
+
+	/// <summary>手动云端获取成功后，用新包覆盖官方目录：删除不在新包里的旧文件。</summary>
+	public static void ReplaceOfficialIccSet(IEnumerable<string> fileNames)
+	{
+		try
+		{
+			HashSet<string> keep = new(fileNames.Select(Path.GetFileName), StringComparer.OrdinalIgnoreCase);
+			EnsureCustomIccDir();
+			foreach (string file in Directory.EnumerateFiles(OfficialIccDir, "*.ic*"))
+			{
+				if (!keep.Contains(Path.GetFileName(file)))
+				{
+					File.Delete(file);
+				}
+			}
+		}
+		catch
+		{
 		}
 	}
 

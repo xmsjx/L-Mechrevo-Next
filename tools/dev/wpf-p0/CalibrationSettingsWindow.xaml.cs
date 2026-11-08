@@ -288,6 +288,7 @@ public partial class CalibrationSettingsWindow : Window
                 MessageBox.Show(this, result.Detail, WpfStrings.L("云端获取 ICC", "Get ICC from cloud"), MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
+            IccHelper.ReplaceOfficialIccSet(result.FileNames ?? new[] { result.FileName });
             AppConfig.Set("calib_factory_icc", result.FileName);
             AppConfig.Set("calib_factory_files", string.Join("|", result.FileNames ?? new[] { result.FileName }));
             AppConfig.Set("calib_icc_origin", "cloud");
