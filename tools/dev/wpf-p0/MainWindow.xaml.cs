@@ -1092,6 +1092,28 @@ public partial class MainWindow : Window
             canvas.Children.Add(path);
             return new Viewbox { Width = 16, Height = 16, Child = canvas, HorizontalAlignment = HorizontalAlignment.Center };
         }
+        // 触摸板与迷你窗共用同一套矢量线条，不再用 MDL2 字形。
+        if (string.Equals(key, "touchpad", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(key, "touchpadtoggle", StringComparison.OrdinalIgnoreCase))
+        {
+            Path outline = new()
+            {
+                Data = Geometry.Parse("M2,3 L14,3 L14,13 L2,13 Z"),
+                StrokeThickness = 1.3,
+                Fill = Brushes.Transparent,
+                Stroke = (Brush)FindResource("TextBrush")
+            };
+            Path line = new()
+            {
+                Data = Geometry.Parse("M5,10 L11,10"),
+                StrokeThickness = 1.3,
+                Stroke = (Brush)FindResource("TextBrush")
+            };
+            Canvas canvas = new() { Width = 16, Height = 16 };
+            canvas.Children.Add(outline);
+            canvas.Children.Add(line);
+            return new Viewbox { Width = 16, Height = 16, Child = canvas, HorizontalAlignment = HorizontalAlignment.Center };
+        }
         return new TextBlock
         {
             Text = glyph,
