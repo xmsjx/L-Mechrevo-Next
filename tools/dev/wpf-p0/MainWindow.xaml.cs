@@ -114,10 +114,6 @@ public partial class MainWindow : Window
             ApplyRoundedWindowChrome(square: false);
             WindowBackdrop.Apply(this);
             ReloadWideBackground();
-            if (PresentationSource.FromVisual(this) is HwndSource source)
-            {
-                source.AddHook(WideWndProc);
-            }
         };
         RootContent.Opacity = 1;
         AppTheme.Apply(_dark);
@@ -4136,77 +4132,6 @@ public partial class MainWindow : Window
         catch
         {
         }
-    }
-
-    private const int WM_GETMINMAXINFO = 0x0024;
-    private const uint MONITOR_DEFAULTTONEAREST = 2;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WidePoint
-    {
-        public int X;
-        public int Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WideRect
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WideMinMaxInfo
-    {
-        public WidePoint Reserved;
-        public WidePoint MaxSize;
-        public WidePoint MaxPosition;
-        public WidePoint MinTrackSize;
-        public WidePoint MaxTrackSize;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WideMonitorInfo
-    {
-        public int Size;
-        public WideRect Monitor;
-        public WideRect Work;
-        public int Flags;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    private static extern bool GetMonitorInfo(IntPtr monitor, ref WideMonitorInfo info);
-
-    private static IntPtr WideWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (msg != WM_GETMINMAXINFO || lParam == IntPtr.Zero)
-        {
-            return IntPtr.Zero;
-        }
-        try
-        {
-            WideMinMaxInfo info = Marshal.PtrToStructure<WideMinMaxInfo>(lParam);
-            IntPtr monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-            WideMonitorInfo monitorInfo = new() { Size = Marshal.SizeOf<WideMonitorInfo>() };
-            if (monitor != IntPtr.Zero && GetMonitorInfo(monitor, ref monitorInfo))
-            {
-                info.MaxPosition.X = monitorInfo.Work.Left - monitorInfo.Monitor.Left;
-                info.MaxPosition.Y = monitorInfo.Work.Top - monitorInfo.Monitor.Top;
-                info.MaxSize.X = monitorInfo.Work.Right - monitorInfo.Work.Left;
-                info.MaxSize.Y = monitorInfo.Work.Bottom - monitorInfo.Work.Top;
-                Marshal.StructureToPtr(info, lParam, false);
-                handled = true;
-            }
-        }
-        catch
-        {
-        }
-        return IntPtr.Zero;
     }
 
     [DllImport("dwmapi.dll")]
