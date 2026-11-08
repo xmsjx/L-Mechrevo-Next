@@ -260,43 +260,123 @@ begin
   end;
 end;
 
+function GcuVariantName(Index: Integer): String;
+begin
+  case Index of
+    0: Result := '1020.7z';
+    1: Result := '30.7z';
+    2: Result := '40.7z';
+    3: Result := '50.7z';
+    4: Result := 'WJ.7z';
+    5: Result := 'WJXY.7z';
+  else
+    Result := '';
+  end;
+end;
+
+// 支持：同目录/GCU/payload、同目录/GCU、同目录/GCU.7z、GCU 内再套 GCU.7z、直接放变体 7z。
+function FindGcuStagedFile(Root, Name: String): String;
+var
+  Candidates: array[0..7] of String;
+  I: Integer;
+begin
+  Result := '';
+  if (Root = '') or (Name = '') then Exit;
+  Candidates[0] := AddBackslash(Root) + Name;
+  Candidates[1] := AddBackslash(Root) + 'payload\' + Name;
+  Candidates[2] := AddBackslash(Root) + 'GCU\' + Name;
+  Candidates[3] := AddBackslash(Root) + 'GCU\payload\' + Name;
+  Candidates[4] := AddBackslash(Root) + 'GCU\GCU\' + Name;
+  Candidates[5] := AddBackslash(Root) + 'GCU\GCU\payload\' + Name;
+  Candidates[6] := AddBackslash(Root) + 'payload\GCU\' + Name;
+  Candidates[7] := AddBackslash(Root) + 'GCU\payload\GCU\' + Name;
+  for I := 0 to 7 do
+  begin
+    if FileExists(Candidates[I]) then
+    begin
+      Result := Candidates[I];
+      Exit;
+    end;
+  end;
+end;
+
 procedure InstallExternalGcuIfPresent();
 var
-  SourceArchive, SourceFolder, Staging, SevenZip, Script, Params: String;
-  ResultCode: Integer;
+  SourceArchive, SourceFolder, Staging, Root, NestedArchive, ExtractedDir, Src, Dest: String;
+  SevenZip, Script, Params: String;
+  I, Found, ResultCode: Integer;
 begin
   SourceArchive := ExpandConstant('{src}\GCU.7z');
   SourceFolder := ExpandConstant('{src}\GCU');
   if not FileExists(SourceArchive) and not DirExists(SourceFolder) then
-    Exit;
+  begin
+    // 同目录直接放 50.7z / 30.7z 也算外置包。
+    Found := 0;
+    for I := 0 to 5 do
+      if FileExists(ExpandConstant('{src}\') + GcuVariantName(I)) then
+        Found := 1;
+    if Found = 0 then Exit;
+  end;
 
   Staging := ExpandConstant('{tmp}\lm-external-gcu');
-  ForceDirectories(Staging);
+  DelTree(Staging, True, True, True);
+  ForceDirectories(Staging + '\payload');
   SevenZip := ExpandConstant('{app}\GCU\7za.exe');
+  if not FileExists(SevenZip) then
+  begin
+    Log('LM-GCU: 7za.exe 缺失，跳过外置 GCU 包');
+    Exit;
+  end;
+
+  Root := '';
   if FileExists(SourceArchive) then
   begin
-    if not FileExists(SevenZip) then
-    begin
-      Log('LM-GCU: 7za.exe 缺失，跳过外置 GCU 包');
-      Exit;
-    end;
-    if not Exec(SevenZip, 'x -y -o"' + Staging + '" "' + SourceArchive + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
+    ExtractedDir := ExpandConstant('{tmp}\lm-external-gcu-ext');
+    DelTree(ExtractedDir, True, True, True);
+    if not Exec(SevenZip, 'x -y -o"' + ExtractedDir + '" "' + SourceArchive + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) or (ResultCode <> 0) then
     begin
       Log('LM-GCU: 外置 GCU.7z 解压失败，跳过');
       Exit;
     end;
+    Root := ExtractedDir;
+  end
+  else if DirExists(SourceFolder) then
+  begin
+    Root := SourceFolder;
+    NestedArchive := AddBackslash(SourceFolder) + 'GCU.7z';
+    if FileExists(NestedArchive) then
+    begin
+      ExtractedDir := ExpandConstant('{tmp}\lm-external-gcu-ext');
+      DelTree(ExtractedDir, True, True, True);
+      if Exec(SevenZip, 'x -y -o"' + ExtractedDir + '" "' + NestedArchive + '"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode) and (ResultCode = 0) then
+        Root := ExtractedDir
+      else
+        Log('LM-GCU: GCU\GCU.7z 解压失败，继续按目录查找');
+    end;
   end
   else
-    Staging := SourceFolder;
+    Root := ExpandConstant('{src}');
 
-  // Install-Gcu.ps1 需要 StagingRoot 下有 payload 和 7za.exe。
-  if not DirExists(Staging + '\payload') then
+  Found := 0;
+  for I := 0 to 5 do
   begin
-    Log('LM-GCU: 外置目录没有 payload，跳过');
+    Src := FindGcuStagedFile(Root, GcuVariantName(I));
+    if Src = '' then
+      Src := FindGcuStagedFile(ExpandConstant('{src}'), GcuVariantName(I));
+    if Src <> '' then
+    begin
+      Dest := Staging + '\payload\' + GcuVariantName(I);
+      if CopyFile(Src, Dest, False) then
+        Found := Found + 1;
+    end;
+  end;
+  if Found = 0 then
+  begin
+    Log('LM-GCU: 外置目录没有 payload/变体 7z，跳过');
     Exit;
   end;
-  if FileExists(SevenZip) then
-    CopyFile(SevenZip, Staging + '\7za.exe', False);
+  Log('LM-GCU: 外置 GCU 包已识别 ' + IntToStr(Found) + ' 个变体');
+  CopyFile(SevenZip, Staging + '\7za.exe', False);
 
   Script := ExpandConstant('{app}\GCU\Install-Gcu.ps1');
   if not FileExists(Script) then
