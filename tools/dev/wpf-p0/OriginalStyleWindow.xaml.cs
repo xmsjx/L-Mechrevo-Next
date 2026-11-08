@@ -8822,7 +8822,8 @@ public partial class OriginalStyleWindow : Window
                 AppConfig.Flush();
                 selected = 0;
             }
-            bool customAvailable = customOn || localIcc.Count > 0;
+            // 自定义校色关闭时不再把 customICC 的文件塞进主下拉。
+            bool customAvailable = customOn && localIcc.Count > 0;
             if (customAvailable)
             {
                 foreach (string profile in localIcc)
@@ -9023,6 +9024,7 @@ public partial class OriginalStyleWindow : Window
         }
         else if (on && mode == 999)
         {
+            AppConfig.Set("calib_custom_on", 1);
             string iccName = AppConfig.GetString("calib_custom_icc") ?? "";
             string iccPath = string.IsNullOrWhiteSpace(iccName) ? "" : System.IO.Path.Combine(IccHelper.CustomIccDir, iccName);
             if (!string.IsNullOrWhiteSpace(iccPath) && File.Exists(iccPath))
@@ -9102,6 +9104,7 @@ public partial class OriginalStyleWindow : Window
             if (!string.IsNullOrWhiteSpace(selectedFile))
             {
                 AppConfig.Set("calib_custom_icc", selectedFile);
+                AppConfig.Set("calib_custom_on", 1);
             }
             AppConfig.Flush();
             string iccName = AppConfig.GetString("calib_custom_icc") ?? "";
