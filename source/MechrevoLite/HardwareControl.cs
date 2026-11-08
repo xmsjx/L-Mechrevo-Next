@@ -344,6 +344,8 @@ public static class HardwareControl
 
 	/// <summary>⭐ 2026-10-18：⭐ 上一次读到的厂商功能号 22 原始值（⭐ -1 = 没试/不适用 · ⭐ 0 = 可读但无效 · ⭐ &gt;0 = 有效 ✅；⭐ 诊断用）。</summary>
 	private static int _cpuTempLastFunc22Celsius = -1;
+	private static int _cpuTempVendorWatchValue = -1;
+	private static long _cpuTempVendorWatchSinceTick;
 
 	/// <summary>
 	/// ⭐⭐ 2026-10-18（机主实测：调「节电」后**真实温度降了、显示没变**）：⭐ **LHM 是否在刷新**的判定状态 ✅
@@ -1102,8 +1104,29 @@ public static class HardwareControl
 			&& vendorCelsius - lhmCelsius >= 10
 			&& MechrevoLite.Hardware.CpuVendor.IsIntel
 			&& hw.IsTongfangFamily;
+		// 厂商温度长期卡在同一个值、而 LHM 在变化 ⇒ 厂商源已失效，改跟 LHM。
+		// 本机实测：厂商恒 81℃，LHM Tctl/Tdie 在 45~85℃ 正常变化。
+		long vendorNow = Environment.TickCount64;
+		bool vendorStuck = false;
+		if (vendorCelsius > 0 && lhmCelsius > 0)
+		{
+			if (vendorCelsius == _cpuTempVendorWatchValue)
+			{
+				if (_cpuTempVendorWatchSinceTick != 0L
+					&& vendorNow - _cpuTempVendorWatchSinceTick >= 10000L
+					&& Math.Abs(lhmCelsius - vendorCelsius) >= 3)
+				{
+					vendorStuck = true;
+				}
+			}
+			else
+			{
+				_cpuTempVendorWatchValue = vendorCelsius;
+				_cpuTempVendorWatchSinceTick = vendorNow;
+			}
+		}
 		bool preferLhmCpu = ((hw.IsIntelNucMachine || hw.IsUmiMachine || hw.WujieSmuApu || hw.IsYaoshiMachine)
-			|| vendorDivergesFromLhm)
+			|| vendorDivergesFromLhm || vendorStuck)
 			&& !lhmSuspect && lhmCelsius > 0;
 		if (preferLhmCpu)
 		{
