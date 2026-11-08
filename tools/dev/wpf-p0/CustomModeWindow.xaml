@@ -274,29 +274,6 @@
                     </StackPanel>
                 </Border>
 
-                <Border x:Name="CustomButtonCard" Style="{StaticResource Card}" Margin="0,0,0,8" Visibility="Collapsed">
-                    <StackPanel>
-                        <TextBlock Text="自定义性能按钮" Style="{StaticResource CardTitle}" />
-                        <TextBlock Text="将首页「自定义」按钮改为快捷开关或自定义配置切换；仅在 EC 控制模式下生效。"
-                                   Style="{StaticResource Hint}" TextWrapping="Wrap" />
-                        <Grid Margin="0,8,0,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                            <TextBlock Text="按钮功能" VerticalAlignment="Center" />
-                            <ComboBox x:Name="CustomButtonActionCombo" Grid.Column="1" Style="{StaticResource RoundCombo}"
-                                      SelectionChanged="CustomButtonAction_Changed">
-                                <ComboBoxItem Content="默认：切换自定义性能档" Tag="mode" />
-                                <ComboBoxItem Content="快捷开关" Tag="quick" />
-                                <ComboBoxItem Content="轮换自定义配置" Tag="cycle" />
-                            </ComboBox>
-                        </Grid>
-                        <Grid x:Name="CustomButtonQuickRow" Margin="0,6,0,0" Visibility="Collapsed">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                            <TextBlock Text="快捷开关" VerticalAlignment="Center" />
-                            <ComboBox x:Name="CustomButtonQuickCombo" Grid.Column="1" Style="{StaticResource RoundCombo}"
-                                      SelectionChanged="CustomButtonQuick_Changed" />
-                        </Grid>
-                    </StackPanel>
-                </Border>
             </StackPanel>
         </ScrollViewer>
 

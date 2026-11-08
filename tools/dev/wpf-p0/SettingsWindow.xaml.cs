@@ -370,6 +370,7 @@ public partial class SettingsWindow : Window
         {
             PerfOnBatteryCheck.IsChecked = AppConfig.Is("perf_allow_on_battery");
         }
+        LoadCustomButtonAction();
         _syncing = false;
         if (TrayCustomExpandCheck != null)
         {
@@ -409,6 +410,75 @@ public partial class SettingsWindow : Window
                 Status(WpfStrings.TraySaved);
             };
             TrayMenuPanel.Children.Add(box);
+        }
+    }
+
+    private void LoadCustomButtonAction()
+    {
+        _syncing = true;
+        try
+        {
+            MechrevoHw? hw = _owner?.CurrentBackend?.Hw ?? L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+            bool eligible = hw?.IsTongfangFamily == true && hw.WujieSmuApu != true;
+            CustomButtonCard.Visibility = eligible ? Visibility.Visible : Visibility.Collapsed;
+            if (!eligible)
+            {
+                return;
+            }
+            string action = AppConfig.GetString("custom_button_action") ?? "mode";
+            int actionIndex = 0;
+            for (int i = 0; i < CustomButtonActionCombo.Items.Count; i++)
+            {
+                if (CustomButtonActionCombo.Items[i] is ComboBoxItem item
+                    && string.Equals(item.Tag as string, action, StringComparison.OrdinalIgnoreCase))
+                {
+                    actionIndex = i;
+                    break;
+                }
+            }
+            CustomButtonActionCombo.SelectedIndex = actionIndex;
+            CustomButtonQuickRow.Visibility = action == "quick" ? Visibility.Visible : Visibility.Collapsed;
+
+            CustomButtonQuickCombo.Items.Clear();
+            string savedKey = AppConfig.GetString("custom_button_quick") ?? "fanboost";
+            int quickIndex = 0;
+            int i2 = 0;
+            foreach (QuickSwitchItem item in QuickSwitchService.CustomButtonQuickItems())
+            {
+                CustomButtonQuickCombo.Items.Add(new ComboBoxItem { Content = item.Label, Tag = item.Key });
+                if (string.Equals(item.Key, savedKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    quickIndex = i2;
+                }
+                i2++;
+            }
+            if (CustomButtonQuickCombo.Items.Count > 0)
+            {
+                CustomButtonQuickCombo.SelectedIndex = quickIndex;
+            }
+        }
+        finally
+        {
+            _syncing = false;
+        }
+    }
+
+    private void CustomButtonAction_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncing) return;
+        string action = (CustomButtonActionCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "mode";
+        AppConfig.Set("custom_button_action", action);
+        AppConfig.Flush();
+        CustomButtonQuickRow.Visibility = action == "quick" ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void CustomButtonQuick_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_syncing) return;
+        if (CustomButtonQuickCombo.SelectedItem is ComboBoxItem item && item.Tag is string key)
+        {
+            AppConfig.Set("custom_button_quick", key);
+            AppConfig.Flush();
         }
     }
 

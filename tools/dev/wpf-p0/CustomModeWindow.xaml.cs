@@ -66,7 +66,6 @@ public partial class CustomModeWindow : Window
         ApplyDeviceRanges();
         ApplyCpuPowerLabels();
         LoadModes(initialModeId);
-        LoadCustomButtonAction();
     }
 
     private void WireNumericBoxes()
@@ -110,75 +109,6 @@ public partial class CustomModeWindow : Window
         box.Text = ((int)slider.Value).ToString();
     }
 
-    private void LoadCustomButtonAction()
-    {
-        _loadingUi = true;
-        try
-        {
-            MechrevoHw? hw = CurrentHw;
-            bool eligible = hw?.IsTongfangFamily == true && hw.WujieSmuApu != true;
-            CustomButtonCard.Visibility = eligible ? Visibility.Visible : Visibility.Collapsed;
-            if (!eligible)
-            {
-                return;
-            }
-            string action = AppConfig.GetString("custom_button_action") ?? "mode";
-            int actionIndex = 0;
-            for (int i = 0; i < CustomButtonActionCombo.Items.Count; i++)
-            {
-                if (CustomButtonActionCombo.Items[i] is ComboBoxItem item
-                    && string.Equals(item.Tag as string, action, StringComparison.OrdinalIgnoreCase))
-                {
-                    actionIndex = i;
-                    break;
-                }
-            }
-            CustomButtonActionCombo.SelectedIndex = actionIndex;
-            CustomButtonQuickRow.Visibility = action == "quick" ? Visibility.Visible : Visibility.Collapsed;
-
-            CustomButtonQuickCombo.Items.Clear();
-            string savedKey = AppConfig.GetString("custom_button_quick") ?? "fanboost";
-            int quickIndex = 0;
-            int i2 = 0;
-            foreach (QuickSwitchItem item in QuickSwitchService.CustomButtonQuickItems())
-            {
-                CustomButtonQuickCombo.Items.Add(new ComboBoxItem { Content = item.Label, Tag = item.Key });
-                if (string.Equals(item.Key, savedKey, StringComparison.OrdinalIgnoreCase))
-                {
-                    quickIndex = i2;
-                }
-                i2++;
-            }
-            if (CustomButtonQuickCombo.Items.Count > 0)
-            {
-                CustomButtonQuickCombo.SelectedIndex = quickIndex;
-            }
-        }
-        finally
-        {
-            _loadingUi = false;
-        }
-    }
-
-    private void CustomButtonAction_Changed(object sender, SelectionChangedEventArgs e)
-    {
-        if (_loadingUi) return;
-        string action = (CustomButtonActionCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "mode";
-        AppConfig.Set("custom_button_action", action);
-        AppConfig.Flush();
-        CustomButtonQuickRow.Visibility = action == "quick" ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void CustomButtonQuick_Changed(object sender, SelectionChangedEventArgs e)
-    {
-        if (_loadingUi) return;
-        if (CustomButtonQuickCombo.SelectedItem is ComboBoxItem item && item.Tag is string key)
-        {
-            AppConfig.Set("custom_button_quick", key);
-            AppConfig.Flush();
-        }
-    }
-
     private void ApplyCpuPowerLabels()
     {
         MechrevoHw? hw = CurrentHw;
@@ -209,7 +139,6 @@ public partial class CustomModeWindow : Window
         {
             LoadSettingsToUi(_settings);
         }
-        LoadCustomButtonAction();
         if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
         {
             DbSwitch.IsEnabled = true;
