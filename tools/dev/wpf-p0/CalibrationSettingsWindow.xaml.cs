@@ -26,6 +26,7 @@ public partial class CalibrationSettingsWindow : Window
         {
             if (_localIccProfiles.Count == 0)
             {
+                CloudStatusText.Text = "本地没有校色文件，正在从云端获取…";
                 await TryFetchMissingIccAsync();
             }
         };
@@ -68,11 +69,21 @@ public partial class CalibrationSettingsWindow : Window
             CloudIccFetcher.Result result = await CloudIccFetcher.FetchAsync();
             if (!result.Ok || string.IsNullOrWhiteSpace(result.FileName))
             {
+                if (CloudStatusText != null)
+                {
+                    CloudStatusText.Text = string.IsNullOrWhiteSpace(result.Detail)
+                        ? "云端未找到本机校色文件。"
+                        : result.Detail;
+                }
                 return;
             }
             string path = Path.Combine(IccHelper.CustomIccDir, result.FileName);
             if (!File.Exists(path))
             {
+                if (CloudStatusText != null)
+                {
+                    CloudStatusText.Text = "云端返回了校色文件，但本地文件不存在：" + result.FileName;
+                }
                 return;
             }
             AppConfig.Set("calib_custom_icc", result.FileName);
@@ -85,7 +96,9 @@ public partial class CalibrationSettingsWindow : Window
                 RefreshIccList();
                 IccCombo.IsEnabled = true;
                 ImportButton.IsEnabled = true;
-                int index = IccCombo.Items.IndexOf(result.FileName);
+                int index = IccHelper.IsDefaultIccName(result.FileName)
+                    ? 0
+                    : (_localIccProfiles.Count <= 1 ? 1 : IccCombo.Items.IndexOf(result.FileName));
                 if (index >= 0)
                 {
                     IccCombo.SelectedIndex = index;
@@ -96,6 +109,10 @@ public partial class CalibrationSettingsWindow : Window
                 _syncing = false;
             }
             await Task.Run(() => IccHelper.ApplyIcc(path));
+            if (CloudStatusText != null)
+            {
+                CloudStatusText.Text = "已从云端获取并应用：" + result.FileName;
+            }
         }
         catch
         {

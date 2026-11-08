@@ -40,6 +40,7 @@
             <Button x:Name="CloudButton" Content="{x:Static loc:WpfStrings.CloudIcc_Content}" Style="{StaticResource FlatButton}"
                     HorizontalAlignment="Left" Click="CloudButton_Click" />
             <TextBlock Text="从云端服务器获取本机校色文件" Style="{StaticResource HintText}" Margin="0,6,0,0" />
+            <TextBlock x:Name="CloudStatusText" Style="{StaticResource HintText}" Margin="0,4,0,0" TextWrapping="Wrap" />
             <CheckBox x:Name="StartupSwitch" Content="{x:Static loc:WpfStrings.StartupSwitch_Content}" Style="{StaticResource HeaderSwitch}"
                       Click="StartupSwitch_Click" />
             <TextBlock Text="{x:Static loc:WpfStrings.CalibrationSettingsWindow_Text_2}"
