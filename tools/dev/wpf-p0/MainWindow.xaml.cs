@@ -110,7 +110,7 @@ public partial class MainWindow : Window
         _dark = owner?.IsDark ?? (AppConfig.Get("ui_dark_theme", 1) != 0);
         SourceInitialized += (_, _) =>
         {
-            ApplyRoundedWindowChrome();
+            ApplyRoundedWindowChrome(square: false);
             WindowBackdrop.Apply(this);
             ReloadWideBackground();
         };
@@ -573,13 +573,13 @@ public partial class MainWindow : Window
         StatusText.Text = WpfStrings.MainWindow_xaml_Text_4;
     }
 
-    private void ApplyRoundedWindowChrome()
+    private void ApplyRoundedWindowChrome(bool square = false)
     {
         try
         {
             IntPtr hwnd = new WindowInteropHelper(this).Handle;
             if (hwnd == 0) return;
-            int corner = 2;
+            int corner = square ? 1 : 2;
             DwmSetWindowAttribute(hwnd, 33, ref corner, sizeof(int));
             int transitionsDisabled = 0;
             DwmSetWindowAttribute(hwnd, 3, ref transitionsDisabled, sizeof(int));
@@ -740,20 +740,40 @@ public partial class MainWindow : Window
     private void ToggleWideMaximize()
     {
         if (_animatingWindow) return;
-        Rect target;
         if (!_wideMaximized)
         {
             _wideRestoreBounds = new Rect(Left, Top, ActualWidth, ActualHeight);
-            target = SystemParameters.WorkArea;
             _wideMaximized = true;
+            ApplyWideMaximizedChrome(true);
+            WindowState = WindowState.Maximized;
         }
         else
         {
-            target = _wideRestoreBounds;
+            WindowState = WindowState.Normal;
+            Left = _wideRestoreBounds.Left;
+            Top = _wideRestoreBounds.Top;
+            Width = _wideRestoreBounds.Width;
+            Height = _wideRestoreBounds.Height;
             _wideMaximized = false;
+            ApplyWideMaximizedChrome(false);
         }
-        AnimateWindowBounds(target);
         if (WideMaxButton != null) WideMaxButton.Content = _wideMaximized ? "❐" : "□";
+    }
+
+    private void ApplyWideMaximizedChrome(bool maximized)
+    {
+        try
+        {
+            if (WideChrome != null)
+            {
+                WideChrome.CornerRadius = maximized ? new CornerRadius(0) : new CornerRadius(12);
+                WideChrome.ResizeBorderThickness = maximized ? new Thickness(0) : new Thickness(6);
+            }
+            ApplyRoundedWindowChrome(square: maximized);
+        }
+        catch
+        {
+        }
     }
 
     private void AnimateWindowBounds(Rect target)
@@ -796,8 +816,15 @@ public partial class MainWindow : Window
 
     private void OnWideStateChanged()
     {
-        if (WindowState == WindowState.Normal)
+        if (WindowState == WindowState.Maximized)
         {
+            _wideMaximized = true;
+            ApplyWideMaximizedChrome(true);
+        }
+        else if (WindowState == WindowState.Normal)
+        {
+            _wideMaximized = false;
+            ApplyWideMaximizedChrome(false);
             RootContent.Opacity = 1;
             if (RootContent.RenderTransform is ScaleTransform scale)
             {

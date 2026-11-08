@@ -21,7 +21,7 @@
         Icon="Assets/Icons/app.png">
 
     <shell:WindowChrome.WindowChrome>
-        <shell:WindowChrome CaptionHeight="34" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="12" UseAeroCaptionButtons="False" />
+        <shell:WindowChrome x:Name="WideChrome" CaptionHeight="34" ResizeBorderThickness="6" GlassFrameThickness="0" CornerRadius="12" UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
