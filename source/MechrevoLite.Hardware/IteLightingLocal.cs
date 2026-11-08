@@ -82,9 +82,22 @@ internal static class IteLightingLocal
     internal static bool TryApplyHinge(string effect, bool on, int brightness, int speed, int colorArgb, out string detail)
         => TryApply(HingePid, 0, ControlHinge, BlankHinge, effect, on, brightness, speed, colorArgb, out detail);
 
-    /// <summary>Logo：USB 7001 的 lettering 通道。</summary>
+    /// <summary>Logo：USB 7001 的 lettering 通道；没有 7001 时回退 7000。</summary>
     internal static bool TryApplyLogo(string effect, bool on, int brightness, int speed, int colorArgb, out string detail)
-        => TryApply(LightbarPid, LightbarUsage, ControlLogo, BlankLogo, effect, on, brightness, speed, colorArgb, out detail);
+    {
+        if (HasUsbDevice(LightbarPid, LightbarUsage))
+        {
+            return TryApply(LightbarPid, LightbarUsage, ControlLogo, BlankLogo,
+                effect, on, brightness, speed, colorArgb, out detail);
+        }
+        if (HasUsbDevice(HingePid, 0))
+        {
+            return TryApply(HingePid, 0, ControlLogo, BlankLogo,
+                effect, on, brightness, speed, colorArgb, out detail);
+        }
+        detail = "无 USB 7001/7000 Logo 通道";
+        return false;
+    }
 
     private static bool TryApply(ushort pid, ushort usage, byte control, byte blank,
         string effect, bool on, int brightness, int speed, int colorArgb, out string detail)
