@@ -39,6 +39,7 @@ public partial class CalibrationSettingsWindow : Window
         try
         {
             StartupSwitch.IsChecked = AppConfig.Is("calib_apply_on_startup");
+            IccHelper.EnsureFactoryIccBound();
             RefreshIccList();
             bool hasCustom = _localIccProfiles.Count > 0;
             bool customOn = hasCustom && AppConfig.Is("calib_custom_on");

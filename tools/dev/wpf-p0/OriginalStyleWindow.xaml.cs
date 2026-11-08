@@ -8790,6 +8790,7 @@ public partial class OriginalStyleWindow : Window
         _syncingCalibration = true;
         try
         {
+            IccHelper.EnsureFactoryIccBound();
             int level = probe.ColorCalibrationLevel;
             int selected = AppConfig.Exists("calib_mode") ? AppConfig.Get("calib_mode") : 1;
             CalibrationCombo.Items.Clear();

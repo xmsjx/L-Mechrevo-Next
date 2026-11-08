@@ -674,7 +674,7 @@ internal sealed class BackendProbe : IDisposable
                 if (mode <= 1)
                 {
                     // EC 默认档：有云端官方 ICC 就应用官方文件，否则清掉本地关联。
-                    string factory = MechrevoLite.Display.IccHelper.ResolveDefaultIccFile();
+                    string factory = MechrevoLite.Display.IccHelper.EnsureFactoryIccBound();
                     string factoryPath = string.IsNullOrWhiteSpace(factory)
                         ? ""
                         : System.IO.Path.Combine(MechrevoLite.Display.IccHelper.CustomIccDir, factory);
