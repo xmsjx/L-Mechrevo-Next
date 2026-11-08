@@ -53,6 +53,7 @@ public partial class CalibrationSettingsWindow : Window
 
     private List<string> _localIccProfiles = new();
     private string _defaultIccFile = "";
+    private readonly Dictionary<string, string> _iccLabelToFile = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>本地没有 ICC 时自动联网获取；拿到后直接关联，不用再点“云端获取”。</summary>
     private async Task TryFetchMissingIccAsync()
@@ -110,32 +111,49 @@ public partial class CalibrationSettingsWindow : Window
         IccCombo.Items.Clear();
         _localIccProfiles = IccHelper.ListCustomIccFiles();
         _defaultIccFile = _localIccProfiles.FirstOrDefault(IccHelper.IsDefaultIccName) ?? "";
+        _iccLabelToFile.Clear();
         string saved = AppConfig.GetString("calib_custom_icc") ?? "";
         if (_localIccProfiles.Count <= 1)
         {
-            // 单文件包：那个文件本身就是屏幕厂商+序列号/MAC 的默认 ICC，直接显示真实文件名。
-            string sole = _localIccProfiles.FirstOrDefault() ?? "";
-            IccCombo.Items.Add(string.IsNullOrWhiteSpace(sole) || IccHelper.IsDefaultIccName(sole) ? "默认校色" : sole);
+            // 单文件包：和以前一样只显示「默认校色 / 自定义校色」。
+            IccCombo.Items.Add("默认校色");
             IccCombo.Items.Add("自定义校色");
+            string sole = _localIccProfiles.FirstOrDefault() ?? "";
+            if (!string.IsNullOrWhiteSpace(sole))
+            {
+                _iccLabelToFile["自定义校色"] = sole;
+            }
             IccCombo.SelectedIndex = AppConfig.Is("calib_custom_on") && _localIccProfiles.Count == 1 ? 1 : 0;
             if (DeleteButton != null) DeleteButton.IsEnabled = _localIccProfiles.Count > 0;
             return;
         }
-        // 多文件包：default.icc 是默认项，不再把它当普通自定义文件重复列出。
+        // 多文件包：default.icc = 默认校色；sRGB / P3 / AdobeRGB 按实际文件显示。
         IccCombo.Items.Add("默认校色");
-        foreach (string name in _localIccProfiles)
+        foreach (string file in _localIccProfiles)
         {
-            if (!IccHelper.IsDefaultIccName(name))
+            if (IccHelper.IsDefaultIccName(file))
             {
-                IccCombo.Items.Add(name);
+                _iccLabelToFile["默认校色"] = file;
+                continue;
             }
+            string label = IccHelper.DisplayNameFor(file);
+            if (_iccLabelToFile.ContainsKey(label))
+            {
+                label = file;
+            }
+            _iccLabelToFile[label] = file;
+            IccCombo.Items.Add(label);
         }
         if (!string.IsNullOrEmpty(saved))
         {
-            int index = IccCombo.Items.IndexOf(saved);
-            if (index >= 0)
+            foreach (string label in IccCombo.Items.OfType<string>())
             {
-                IccCombo.SelectedIndex = index;
+                if (string.Equals(_iccLabelToFile.GetValueOrDefault(label), saved, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(label, IccHelper.DisplayNameFor(saved), StringComparison.OrdinalIgnoreCase))
+                {
+                    IccCombo.SelectedItem = label;
+                    break;
+                }
             }
         }
         if (DeleteButton != null) DeleteButton.IsEnabled = _localIccProfiles.Count > 0;
@@ -144,7 +162,7 @@ public partial class CalibrationSettingsWindow : Window
     private void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
         string? name = IccCombo.SelectedItem as string;
-        string? file = name;
+        string? file = name != null && _iccLabelToFile.TryGetValue(name, out string mapped) ? mapped : name;
         if (_localIccProfiles.Count <= 1
             && (string.Equals(name, "自定义校色", StringComparison.Ordinal)
                 || (name != null && _localIccProfiles.Contains(name, StringComparer.OrdinalIgnoreCase))))
@@ -206,6 +224,7 @@ public partial class CalibrationSettingsWindow : Window
         {
             return;
         }
+        string? selectedFile = _iccLabelToFile.TryGetValue(name, out string mappedFile) ? mappedFile : name;
         if (string.Equals(name, "默认校色", StringComparison.Ordinal))
         {
             if (!string.IsNullOrWhiteSpace(_defaultIccFile))
@@ -233,7 +252,7 @@ public partial class CalibrationSettingsWindow : Window
             AppConfig.Flush();
             return;
         }
-        AppConfig.Set("calib_custom_icc", name);
+        AppConfig.Set("calib_custom_icc", selectedFile ?? name);
         AppConfig.Set("calib_custom_on", 1);
         AppConfig.Flush();
     }

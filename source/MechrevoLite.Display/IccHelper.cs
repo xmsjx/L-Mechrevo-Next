@@ -157,6 +157,21 @@ public static class IccHelper
 			|| string.Equals(name, "default.icm", StringComparison.OrdinalIgnoreCase);
 	}
 
+	/// <summary>多文件 ICC 包按标准名显示；未知文件保留文件名。</summary>
+	public static string DisplayNameFor(string? fileName)
+	{
+		string name = Path.GetFileName(fileName ?? "");
+		if (IsDefaultIccName(name)) return "默认校色";
+		string stem = Path.GetFileNameWithoutExtension(name);
+		return stem.ToLowerInvariant() switch
+		{
+			"srgb" => "sRGB",
+			"displayp3" or "p3" => "P3",
+			"adobergb" => "AdobeRGB",
+			_ => name
+		};
+	}
+
 	public static List<string> ListCustomIccFiles()
 	{
 		EnsureCustomIccDir();
