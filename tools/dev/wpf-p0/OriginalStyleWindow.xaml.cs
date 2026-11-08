@@ -8806,7 +8806,9 @@ public partial class OriginalStyleWindow : Window
             {
                 CalibrationCombo.Items.Add(new ComboBoxItem { Content = "AdobeRGB", Tag = 4 });
             }
-            List<string> localIcc = IccHelper.ListCustomIccFiles();
+            List<string> localIcc = IccHelper.ListCustomIccFiles()
+                .Where(file => !IccHelper.IsFactoryIcc(file))
+                .ToList();
             bool customOn = AppConfig.Is("calib_custom_on");
             // 自愈：配置还停在“自定义校色”，但 ICC 已被删掉/不存在 ⇒ 直接切回默认。
             if ((selected == 999 || customOn) && localIcc.Count == 0)

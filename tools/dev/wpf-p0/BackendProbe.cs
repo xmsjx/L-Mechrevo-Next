@@ -673,6 +673,15 @@ internal sealed class BackendProbe : IDisposable
                 // NUC/UMI 没有 GCU 校色通道：原生/关闭只清本地 ICC，不做任何 MQTT。
                 if (mode <= 1)
                 {
+                    // EC 默认档：有云端官方 ICC 就应用官方文件，否则清掉本地关联。
+                    string factory = MechrevoLite.AppConfig.GetString("calib_factory_icc") ?? "";
+                    string factoryPath = string.IsNullOrWhiteSpace(factory)
+                        ? ""
+                        : System.IO.Path.Combine(MechrevoLite.Display.IccHelper.CustomIccDir, factory);
+                    if (!string.IsNullOrWhiteSpace(factoryPath) && System.IO.File.Exists(factoryPath))
+                    {
+                        return await Task.Run(() => MechrevoLite.Display.IccHelper.ApplyIcc(factoryPath)).ConfigureAwait(false);
+                    }
                     await Task.Run(MechrevoLite.Display.IccHelper.ClearAllIcc).ConfigureAwait(false);
                     return true;
                 }
