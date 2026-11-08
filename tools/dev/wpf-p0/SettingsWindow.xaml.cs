@@ -351,6 +351,12 @@ public partial class SettingsWindow : Window
             FeedbackButtonsPanel.Visibility = AppConfig.Is("ui_show_privacy_feedback")
                 ? Visibility.Visible : Visibility.Collapsed;
         }
+        if (ControlModeCard != null)
+        {
+            ControlModeCard.Visibility = _owner?.IsTongfangFamilyForSettings == true
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
         if (ControlModeCombo != null)
         {
             bool ecMode = MechrevoLite.Hardware.GcuEcMode.IsEcMode;

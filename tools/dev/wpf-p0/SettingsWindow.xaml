@@ -327,7 +327,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Style="{StaticResource Card}">
+                <Border x:Name="ControlModeCard" Style="{StaticResource Card}">
                     <StackPanel>
                         <TextBlock Text="控制模式" Style="{StaticResource CardTitle}" />
                         <TextBlock Text="GCU 模式使用 GCUBridge/GCUService；EC 控制模式会停止 GCU 服务并改走本地 EC" Style="{StaticResource Hint}" />

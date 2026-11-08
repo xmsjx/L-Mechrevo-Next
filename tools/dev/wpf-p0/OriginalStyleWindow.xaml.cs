@@ -72,6 +72,10 @@ public partial class OriginalStyleWindow : Window
     private IDashboardCommands? _dashboardCommands;
     internal event Action? BackendReady;
     internal BackendProbe? CurrentBackend => _backendProbe;
+
+    /// <summary>同方家族（含无 GCU 的本地 EC 接管机型）才提供 GCU/EC 控制模式切换。</summary>
+    internal bool IsTongfangFamilyForSettings => _backendProbe?.Hw?.IsTongfangFamily == true
+        || MechrevoLite.Hardware.MachineIdentity.Collect().TongfangFamily;
     private bool _overlayPreloaded;
     private bool _appClosing;
     private bool _gpuBootChecksStarted;
