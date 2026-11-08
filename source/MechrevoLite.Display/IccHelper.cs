@@ -220,6 +220,16 @@ public static class IccHelper
 		return string.IsNullOrWhiteSpace(one) ? Array.Empty<string>() : new[] { one };
 	}
 
+	/// <summary>当前应作为“默认校色”的 ICC：优先云端 factory，其次单文件包唯一文件，最后 Default.icm。</summary>
+	public static string ResolveDefaultIccFile()
+	{
+		string configured = AppConfig.GetString("calib_factory_icc") ?? "";
+		if (!string.IsNullOrWhiteSpace(configured)) return configured;
+		List<string> files = ListCustomIccFiles();
+		if (files.Count == 1) return files[0];
+		return files.FirstOrDefault(IsDefaultIccName) ?? "";
+	}
+
 	public static bool IsFactoryIcc(string? fileName)
 	{
 		string name = Path.GetFileName(fileName ?? "");
