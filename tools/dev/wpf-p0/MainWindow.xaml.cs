@@ -2946,6 +2946,48 @@ public partial class MainWindow : Window
                     whiteKeyboard: isKeyboard && whiteKeyboard));
             }
         }
+        LightingCardsGrid.Children.Add(BuildWelcomeLightCard());
+    }
+
+    private Border BuildWelcomeLightCard()
+    {
+        Button welcome = new()
+        {
+            Content = "触发迎宾灯效",
+            Style = (Style)FindResource("FlatButton"),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(0, 10, 0, 0)
+        };
+        welcome.Click += async (_, _) =>
+        {
+            MechrevoService? service = _probe?.Service ?? WpfBackend.Service;
+            if (service == null || !await service.TriggerWelcomeAsync("宽屏灯光页"))
+            {
+                StatusText.Text = "迎宾灯效仅支持 GCU 键盘";
+                return;
+            }
+            StatusText.Text = "迎宾灯效已触发";
+        };
+        StackPanel panel = new();
+        panel.Children.Add(new TextBlock
+        {
+            Text = "迎宾灯效",
+            Style = (Style)FindResource("CardTitle")
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = "触发一次 GCU 键盘迎宾效果；EC 单分区/白键盘不支持。",
+            Style = (Style)FindResource("MutedText"),
+            Margin = new Thickness(0, 6, 0, 0),
+            TextWrapping = TextWrapping.Wrap
+        });
+        panel.Children.Add(welcome);
+        return new Border
+        {
+            Style = (Style)FindResource("Card"),
+            Margin = new Thickness(0, 0, 0, 10),
+            Child = panel
+        };
     }
 
     private void BuildLightingGlobalControls()

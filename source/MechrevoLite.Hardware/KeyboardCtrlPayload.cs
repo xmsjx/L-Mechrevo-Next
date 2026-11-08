@@ -26,6 +26,9 @@ internal static class KeyboardCtrlPayload
 	/// <summary>键盘灯主题（与 <see cref="MqttTopics.KeyboardCtrl"/> 同值，这里单列一份是为了本文件零依赖、可单独编译自测）。</summary>
 	internal const string Topic = "Keyboard/Ctrl";
 
+	/// <summary>迎宾帧的 RGBKB_Mode：SetEffectALL + mode="Welcome"。</summary>
+	internal const string EffectModeWelcome = "Welcome";
+
 	/// <summary>
 	/// 键盘侧 ColorBlocks 的**官方固定值 = 7**（一个固定 7 槽格式）。
 	/// ⚠️ 2026-10-09（用户更正）：「【7 分区】的蛟龙17也是单分区的」⇒ <c>ColorBlocks:7</c> **不代表 7 分区键盘**，
@@ -135,6 +138,31 @@ internal static class KeyboardCtrlPayload
 		{
 			return (colorBlocks > 1) ? indexes[i].ToString(CultureInfo.InvariantCulture) : null;
 		}
+	}
+
+	/// <summary>迎宾灯效帧：与 SetEffectALL 同构，只把 mode 改为 Welcome。</summary>
+	internal static Dictionary<string, object> BuildSetWelcome(
+		string effect,
+		int light,
+		int speed,
+		int monochromeIndex = CustomColorMonochromeIndex,
+		int[] manualIndexes = null,
+		int manualInterval = 10,
+		int breathingIndex = 1,
+		int[] colorBufferArgb = null,
+		int colorBlocks = KeyboardColorBlocks)
+	{
+		Dictionary<string, object> payload = BuildSetEffectAll(
+			effect, light, speed, powerstatus: 0,
+			monochromeIndex: monochromeIndex,
+			manualIndexes: manualIndexes,
+			manualInterval: manualInterval,
+			breathingIndex: breathingIndex,
+			colorBufferArgb: colorBufferArgb,
+			colorBlocks: colorBlocks);
+		payload["mode"] = EffectModeWelcome;
+		payload["nv_save"] = null;
+		return payload;
 	}
 
 	/// <summary><c>SetPower</c>：实测与老路径同形，只有 function + powerstatus 两个键（powerstatus 为数字 1/0）。</summary>

@@ -690,6 +690,17 @@ public partial class LightEditorWindow : Window
         ScheduleAutoApply();
     }
 
+    private async void Welcome_Click(object sender, RoutedEventArgs e)
+    {
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.Service is not MechrevoService service
+            || await service.TriggerWelcomeAsync("迷你窗") == false)
+        {
+            StatusText.Text = "迎宾灯效仅支持 GCU 键盘";
+            return;
+        }
+        StatusText.Text = "迎宾灯效已触发";
+    }
+
     private void Color_Click(object sender, RoutedEventArgs e)
     {
         ColorPickerWindow picker = CreateColorPicker(System.Drawing.Color.FromArgb(_colorArgb));

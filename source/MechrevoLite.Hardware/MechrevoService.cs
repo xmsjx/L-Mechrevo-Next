@@ -5619,6 +5619,50 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 		}
 	}
 
+	/// <summary>手动触发一次迎宾灯效（Keyboard/Ctrl + SetEffectALL + mode=Welcome）。</summary>
+	public async Task<bool> TriggerWelcomeAsync(string trigger = "manual")
+	{
+		try
+		{
+			if (_hw == null || !_hw.IsGcuConnected)
+			{
+				Logger.WriteLine("[kbd-welcome] 跳过（GCU 未连接）");
+				return false;
+			}
+			if (ShouldUseEcKeyboardLight())
+			{
+				Logger.WriteLine("[kbd-welcome] 跳过（EC 白键盘无灯效）");
+				return false;
+			}
+			if (KeyboardFirmwareEffects.IsSingleZoneRgb(_hw.Capabilities.KeyboardType))
+			{
+				Logger.WriteLine("[kbd-welcome] 跳过（EC 单分区不支持 SetWelcomeEffect）");
+				return false;
+			}
+			LightChannelSettings settings = LightingSettingsStore.Load(KeyboardCtrlPayload.Topic, "Single");
+			string effect = string.IsNullOrWhiteSpace(settings.Effect) ? "Single" : settings.Effect;
+			int speed = Math.Clamp(settings.Speed, 0, 4);
+			int light = Math.Clamp(settings.Light, 0, 4);
+			if (light <= 0) light = 4;
+			Color? color = ResolveKeyboardColor(effect, settings);
+			(int BlockCount, string Source) blocks = KeyboardCtrlBlockCountSwitch.Resolve();
+			int mono = ResolveKeyboardCtrlMonochromeIndex(settings, color.HasValue);
+			int[] colorBuffer = color.HasValue ? KeyboardCtrlPayload.SingleColorBuffer(color.Value.ToArgb(), blocks.BlockCount) : null;
+			Dictionary<string, object> payload = KeyboardCtrlPayload.BuildSetWelcome(
+				effect, light, speed, mono, settings.ManualIndexes,
+				string.Equals(effect, "Manual", StringComparison.Ordinal) ? speed : 10,
+				settings.BreathingIndex, colorBuffer, blocks.BlockCount);
+			await _hw.Publish(KeyboardCtrlPayload.Topic, payload).ConfigureAwait(continueOnCapturedContext: false);
+			Logger.WriteError("[kbd-welcome] 迎宾灯效已发送（" + trigger + "）effect=" + effect + " light=" + light + " speed=" + speed);
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteError("[kbd-welcome] 迎宾灯效失败（" + trigger + "）：" + ex.Message);
+			return false;
+		}
+	}
+
 	/// <summary>亮度：<c>Keyboard/Ctrl</c> + <c>SetLightingLevel</c>（沿用老路径的"保留当前灯效"口径来取 effect/颜色）。</summary>
 	public async Task<bool> PublishKeyboardCtrlBrightnessAsync(int level0to4)
 	{
