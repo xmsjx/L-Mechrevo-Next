@@ -13,7 +13,8 @@
         </Style>
     </UserControl.Resources>
 <ScrollViewer x:Name="HomePage" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly" CanContentScroll="False">
-                        <StackPanel>
+                        <Grid x:Name="HomeContentRoot">
+                        <StackPanel x:Name="HomeStack" VerticalAlignment="Center">
 
                             <UniformGrid x:Name="SensorBlocksGrid" Columns="2" />
 
@@ -118,5 +119,6 @@
                             </Grid>
 
                         </StackPanel>
+                        </Grid>
                     </ScrollViewer>
 </UserControl>
