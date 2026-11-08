@@ -230,11 +230,15 @@ public static class IccHelper
 		return files.FirstOrDefault(IsDefaultIccName) ?? "";
 	}
 
-	/// <summary>旧配置只有 calib_custom_icc、没有 factory 时，把唯一的/default ICC 补登记为官方默认。</summary>
+	/// <summary>只对“云端获取”的来源补登记官方默认；用户导入的 ICC 不能被误当成出厂校色。</summary>
 	public static string EnsureFactoryIccBound()
 	{
 		string configured = AppConfig.GetString("calib_factory_icc") ?? "";
 		if (!string.IsNullOrWhiteSpace(configured)) return configured;
+		if (!string.Equals(AppConfig.GetString("calib_icc_origin"), "cloud", StringComparison.OrdinalIgnoreCase))
+		{
+			return "";
+		}
 		List<string> files = ListCustomIccFiles();
 		string candidate = files.Count == 1 ? files[0]
 			: (files.FirstOrDefault(IsDefaultIccName) ?? "");
