@@ -1,4 +1,4 @@
-# L-Mechrevo 版本控制忽略表
+﻿# L-Mechrevo 版本控制忽略表
 # ============================================================================
 # ⚠️ 目的：**只把"我们写的源码与文档"纳入版本控制**，
 #    ⛔ 排除 **生成物 / 下载物 / 大二进制 / 厂商载荷 / 备份**。
@@ -124,3 +124,6 @@ tools/dev/*_dump.txt
 tools/dev/mojibake*.txt
 tools/dev/wpf-p0/preview*.png
 
+
+# GCU 载荷只放 Release，不进代码仓库
+installer-src/files/GCU/GCU.7z
