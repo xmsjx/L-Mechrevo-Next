@@ -8916,6 +8916,33 @@ public partial class OriginalStyleWindow : Window
         bool on = CalibrationSwitch.IsChecked == true;
         int mode = SelectedCalibrationMode();
         CalibrationSwitch.IsEnabled = false;
+        // EC 模式还没有官方 ICC 时，先自动从云端取；不能再直接走“清空自定义”后报已校色。
+        if (on && mode != 999
+            && _backendProbe.Hw?.IsGcuConnected != true
+            && !IccHelper.HasFactoryIccFile())
+        {
+            StatusText.Text = WpfStrings.L("正在从云端获取官方校色文件…", "Fetching factory ICC from cloud…");
+            MechrevoLite.Display.CloudIccFetcher.Result fetched =
+                await MechrevoLite.Display.CloudIccFetcher.FetchAsync().ConfigureAwait(true);
+            if (!fetched.Ok || string.IsNullOrWhiteSpace(fetched.FileName))
+            {
+                _syncingCalibration = true;
+                CalibrationSwitch.IsChecked = false;
+                _syncingCalibration = false;
+                CalibrationSwitch.IsEnabled = true;
+                StatusText.Text = string.IsNullOrWhiteSpace(fetched.Detail)
+                    ? WpfStrings.DisplayIccMissing
+                    : fetched.Detail;
+                return;
+            }
+            AppConfig.Set("calib_factory_icc", fetched.FileName);
+            AppConfig.Set("calib_factory_files",
+                string.Join("|", fetched.FileNames ?? new[] { fetched.FileName }));
+            AppConfig.Set("calib_icc_origin", "cloud");
+            AppConfig.Set("calib_custom_on", 0);
+            AppConfig.Flush();
+            IccHelper.EnsureFactoryIccBound();
+        }
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_58;
         bool gcuCalibrationPath = mode != 999
             && _backendProbe.Hw?.IsGcuConnected == true
