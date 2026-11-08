@@ -106,6 +106,8 @@ public partial class OriginalStyleWindow : Window
     private TextBlock? _liquidLightStatus;
     private bool _syncingLighting;
     private bool _welcomeEffectBusy;
+    private bool _welcomeSentForBoot;
+    private bool _welcomeSentForWake;
     private readonly System.Threading.SemaphoreSlim _keyboardLightApplyLock = new(1, 1);
     private readonly System.Threading.SemaphoreSlim _hidApplyLock = new(1, 1);
     private int _hidRetryGeneration;
@@ -2258,7 +2260,9 @@ public partial class OriginalStyleWindow : Window
             Dispatcher.BeginInvoke(new Action(async () =>
             {
                 await Task.Delay(1500);
+                _welcomeSentForWake = false;
                 await RestoreLightingOnStartupAsync();
+                await MaybeAutoWelcomeAsync(wake: true);
             }));
         }
         return IntPtr.Zero;
@@ -2443,6 +2447,7 @@ public partial class OriginalStyleWindow : Window
         if (e.Mode == Microsoft.Win32.PowerModes.Resume)
         {
             MarkResumeShowSuppression("PowerModes.Resume");
+            _welcomeSentForWake = false;
             _ = Task.Run(async () =>
             {
                 await Task.Delay(1500).ConfigureAwait(false);
@@ -2450,6 +2455,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     await RestoreLightingOnStartupAsync();
                     await RestoreKeyboardLightAfterWakeAsync();
+                    await MaybeAutoWelcomeAsync(wake: true);
                 }));
             });
             _ = Task.Run(async () =>
@@ -9809,6 +9815,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         _lastLightingRestoreTick = now;
+        _ = MaybeAutoWelcomeAsync(wake: false);
         if (_backendProbe == null
             || !MechrevoLite.Hardware.LightingSettingsStore.HasUserLightingIntent()
             || L_Mechrevo.WpfP0.Services.WpfBackend.IsLightingTemporarilySuspended
@@ -10038,6 +10045,19 @@ public partial class OriginalStyleWindow : Window
         {
             _lightingPowerBusy = false;
         }
+    }
+
+    private async Task MaybeAutoWelcomeAsync(bool wake)
+    {
+        if (_welcomeEffectBusy || _backendProbe == null) return;
+        if (!MechrevoLite.AppConfig.Is("welcome_auto")) return;
+        if (wake ? _welcomeSentForWake : _welcomeSentForBoot) return;
+        if (wake) _welcomeSentForWake = true;
+        else _welcomeSentForBoot = true;
+        // 等启动/唤醒的灯光恢复和 HID 帧流稳定后再演迎宾。
+        await Task.Delay(3000);
+        if (_backendProbe == null || _welcomeEffectBusy) return;
+        await TriggerWelcomeEffectAsync(wake ? "睡眠唤醒" : "启动完成");
     }
 
     /// <summary>全矩阵迎宾：灯带/LOGO/铰链 + 键盘（GCU/EC/HID），约 3 秒后恢复用户灯效。</summary>

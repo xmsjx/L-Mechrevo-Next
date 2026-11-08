@@ -48,6 +48,7 @@ public partial class LightEditorWindow : Window
     public LightEditorWindow(string topic, string title, (string Effect, string Name)[] effects, bool whiteBacklightOnly = false)
     {
         InitializeComponent();
+        WelcomeAutoCheck.IsChecked = MechrevoLite.AppConfig.Is("welcome_auto");
         ManualResetButton.Content = WpfStrings.L("恢复默认六色", "Restore default six colors");
         _topic = topic;
         _effects = effects;
@@ -688,6 +689,12 @@ public partial class LightEditorWindow : Window
         {
         }
         ScheduleAutoApply();
+    }
+
+    private void WelcomeAuto_Changed(object sender, RoutedEventArgs e)
+    {
+        MechrevoLite.AppConfig.Set("welcome_auto", WelcomeAutoCheck.IsChecked == true ? 1 : 0);
+        MechrevoLite.AppConfig.Flush();
     }
 
     private async void Welcome_Click(object sender, RoutedEventArgs e)
