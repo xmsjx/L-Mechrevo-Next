@@ -673,7 +673,7 @@ internal sealed class BackendProbe : IDisposable
                 // NUC/UMI 没有 GCU 校色通道：原生/关闭只清本地 ICC，不做任何 MQTT。
                 if (mode <= 1)
                 {
-                    // EC 默认档：有云端官方 ICC 就应用官方文件，否则清掉本地关联。
+                    // EC 默认档：有默认 ICC 就应用默认文件，否则清掉本地关联。
                     string factory = MechrevoLite.Display.IccHelper.EnsureFactoryIccBound();
                     string factoryPath = string.IsNullOrWhiteSpace(factory)
                         ? ""
@@ -1112,7 +1112,7 @@ internal sealed class BackendProbe : IDisposable
             (int light, int speed, Color? color) = ReadLightArgs("HidLightbar/Ctrl", effect, keyboard: false);
             if (_hw?.IsIntelNucMachine == true)
             {
-                // 原厂灯带 Monocolor / Rainbow 都会写 RGB；不是单色效果也要带颜色，
+                // 灯带 Monocolor / Rainbow 都会写 RGB；不是单色效果也要带颜色，
                 // 否则彩虹模式的亮度和混色不会变。
                 if (color == null)
                 {

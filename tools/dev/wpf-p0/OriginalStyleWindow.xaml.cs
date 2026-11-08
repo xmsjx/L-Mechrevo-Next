@@ -1055,7 +1055,7 @@ public partial class OriginalStyleWindow : Window
             if (string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
                 && hw?.IsIntelNucMachine == true)
             {
-                // NUC 原厂 ApplySetting 对 Monocolor / Rainbow 都会写 R/G/B；
+                // NUC ApplySetting 对 Monocolor / Rainbow 都会写 R/G/B；
                 // 彩虹/混色的亮度、混色也必须把当前颜色带下去。
                 if (effect is not "Off" and not "None" and not "")
                 {
@@ -3602,7 +3602,7 @@ public partial class OriginalStyleWindow : Window
             || _backendProbe?.Hw?.IsUmiMachine == true;
         if (nucDirect)
         {
-            // 官方控制台以 CurrentProfile 事件/回读为准，不在点击瞬间改按钮。
+            // 控制台以 CurrentProfile 事件/回读为准，不在点击瞬间改按钮。
             if (sender is ToggleButton clicked)
             {
                 clicked.IsChecked = false;
@@ -4633,7 +4633,7 @@ public partial class OriginalStyleWindow : Window
             ?? MechrevoLite.Mode.PerfModeStore.ActiveModeId;
         bool customDisplayed = displayedId?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) == true;
         MechrevoHw? hw = probe.Hw;
-        // 极致狂暴没有独立 EC 字节（原厂 Benchmark 与性能风扇同为 1），只能靠本进程标志；
+        // 极致狂暴没有独立 EC 字节（Benchmark 与性能风扇同为 1），只能靠本进程标志；
         // 自定义编辑态优先显示自定义，避免打开自定义时误亮极致狂暴。
         if (!customDisplayed
             && IsNucLike(hw)
@@ -4670,7 +4670,7 @@ public partial class OriginalStyleWindow : Window
         }
         if (IsNucLike(hw))
         {
-            // 等同于官方 CurrentProfile 事件：直接读 EC 1963 的模式字节。
+            // 等同于 CurrentProfile 事件：直接读 EC 1963 的模式字节。
             if (MechrevoLite.Hardware.NucPerformanceMode.TryReadVisualMode(out int ecMode))
             {
                 if (ecMode != 1)
@@ -4808,7 +4808,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     before = ecBefore;
                 }
-                // 原厂 NUC 的顺序：Performance -> BatterySaver -> Balanced -> Performance
+                // NUC 顺序：Performance -> BatterySaver -> Balanced -> Performance
                 int next = before switch
                 {
                     1 => 2,
@@ -5361,7 +5361,7 @@ public partial class OriginalStyleWindow : Window
         else if (string.Equals(mode, "OFF", StringComparison.OrdinalIgnoreCase)) on = false;
         else if (autoMode)
         {
-            // 与原厂自动一致：电池供电且没有外接显示器时切核显；插电或接显示器时恢复独显。
+            // 与自动切换一致：电池供电且没有外接显示器时切核显；插电或接显示器时恢复独显。
             bool acOnline = System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
                 == System.Windows.Forms.PowerLineStatus.Online;
             bool externalMonitor = System.Windows.Forms.Screen.AllScreens.Length > 1;
@@ -7872,7 +7872,7 @@ public partial class OriginalStyleWindow : Window
             ExtremeModeButton.Visibility = hw?.IsIntelNucMachine == true ? Visibility.Visible : Visibility.Collapsed;
             ApplyModeSegmentDensity();
             // 原版只保证静音/平衡；部分 30 系机型没有狂暴档 ⇒ 隐藏狂暴按钮，30 系配置行随之隐藏。
-            // 仅 Intel NUC/UMI 的原厂控制台在 TurboModeSupport=0 时仍提供三档；
+            // 仅 Intel NUC/UMI 控制台在 TurboModeSupport=0 时仍提供三档；
         // LNL 无界/星耀等办公本如果上报不支持狂暴，必须继续隐藏，不能强制显示。
         bool vendorNucModes = hw?.IsIntelNucMachine == true
             && hw.WujieSmuApu != true
@@ -9081,13 +9081,13 @@ public partial class OriginalStyleWindow : Window
         if (!on && (MechrevoLite.Hardware.GcuEcMode.IsEcMode || _backendProbe.Hw?.IsGcuConnected != true))
         {
             // EC 关闭校色必须真正解除本地 ICC；不能走 SetColorCalibrationAsync(0)，
-            // 那里默认档会重新应用官方 ICC。
+            // 那里默认档会重新应用默认 ICC。
             await Task.Run(IccHelper.ClearAllIcc);
             ok = true;
         }
         else if (on && mode != 999 && (MechrevoLite.Hardware.GcuEcMode.IsEcMode || _backendProbe.Hw?.IsGcuConnected != true))
         {
-            // EC 官方档：走与自定义完全相同的 IccHelper.ApplyIcc 关联路径。
+            // EC 默认档：走与自定义完全相同的 IccHelper.ApplyIcc 关联路径。
             string selected = mode <= 1
                 ? IccHelper.ResolveDefaultIccFile()
                 : (IccHelper.FindStandardIcc(mode) ?? "");

@@ -146,7 +146,7 @@ internal static class GcuEcExperimental
             byte clamp = visualMode == 2 ? (byte)0xA0 : visualMode is 1 or 3 ? (byte)0x10 : (byte)0x00;
             // 保留强冷位（bit6），模式切换不能把强冷关掉。
             clamp = (byte)(clamp | (currentClamp & 0x40));
-            // 按官方顺序：风扇 clamp → 自定义档标记 → 模式字节 → trigger → turbo 标记。
+            // 写入顺序：风扇 clamp → 自定义档标记 → 模式字节 → trigger → turbo 标记。
             bool clampWrite = AcpiDriverEc.TryWriteByte(FanBoostClampAddress, clamp);
             bool customWrite = visualMode == 3
                 || AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 64);
