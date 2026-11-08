@@ -21,8 +21,9 @@ public static class GcuEcMode
             if (ecMode)
             {
                 // 先停 GCU 服务端，避免它继续覆盖 EC。
-                Run("taskkill", "/IM GCUService.exe /F");
                 Run("net", "stop GCUBridge");
+                Run("net", "stop GCUService");
+                Run("taskkill", "/IM GCUService.exe /F");
                 MechrevoLite.AppConfig.Set(ExperimentKey, 1);
                 MechrevoLite.AppConfig.Set(DirectKey, 1);
                 MechrevoLite.AppConfig.Flush();
@@ -32,8 +33,10 @@ public static class GcuEcMode
             MechrevoLite.AppConfig.Set(ExperimentKey, 0);
             MechrevoLite.AppConfig.Set(DirectKey, 0);
             MechrevoLite.AppConfig.Flush();
+            // EC 模式曾停止/结束 GCUService；回 GCU 必须先拉起服务端，再拉起 Bridge。
+            Run("net", "start GCUService");
             Run("net", "start GCUBridge");
-            return (true, "已切换 GCU 模式：GCUBridge 已启动");
+            return (true, "已切换 GCU 模式：已请求启动 GCUService / GCUBridge");
         }
         catch (Exception ex)
         {
