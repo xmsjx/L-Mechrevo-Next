@@ -14,12 +14,17 @@
     </UserControl.Resources>
 <ScrollViewer x:Name="HomePage" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly" CanContentScroll="False">
                         <Grid x:Name="HomeContentRoot">
-                        <StackPanel x:Name="HomeStack" VerticalAlignment="Center">
+                        <Grid x:Name="HomeStack">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
 
-                            <UniformGrid x:Name="SensorBlocksGrid" Columns="2" />
+                            <UniformGrid x:Name="SensorBlocksGrid" Grid.Row="0" Columns="2" />
 
 
-                            <Grid Margin="0">
+                            <Grid Grid.Row="1" Margin="0">
                                 <Grid.ColumnDefinitions><ColumnDefinition x:Name="HomePerfColumn" Width="*" /><ColumnDefinition x:Name="HomeMidColumn" Width="12" /><ColumnDefinition x:Name="HomeGpuColumn" Width="*" /></Grid.ColumnDefinitions>
                                 <Border x:Name="HomePerfCard" Grid.Column="0" Style="{StaticResource Card}">
                                     <Grid>
@@ -82,7 +87,7 @@
                                 </Border>
                             </Grid>
 
-                            <Grid Margin="0,0,0,14">
+                            <Grid Grid.Row="2" Margin="0,0,0,14">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition x:Name="HomeDisplayColumn" Width="*" />
                                     <ColumnDefinition x:Name="HomeDisplayGap" Width="10" />
@@ -118,7 +123,7 @@
                                 <ContentControl x:Name="BatteryCardHost" Grid.Column="2" />
                             </Grid>
 
-                        </StackPanel>
+                        </Grid>
                         </Grid>
                     </ScrollViewer>
 </UserControl>

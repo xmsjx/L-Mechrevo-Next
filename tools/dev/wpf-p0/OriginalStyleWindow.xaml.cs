@@ -6812,7 +6812,7 @@ public partial class OriginalStyleWindow : Window
     private void RefreshFromBackend()
     {
         BackendProbe? probe = _backendProbe;
-        if (probe == null)
+        if (probe == null || L_Mechrevo.WpfP0.Services.WindowInteractionState.Active)
         {
             return;
         }

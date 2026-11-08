@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private readonly OriginalStyleWindow? _owner;
     private BackendProbe? _probe;
     private readonly DispatcherTimer _sensorTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private readonly DispatcherTimer _interactionTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private bool _dark = true;
     private bool _navCollapsed;
     private readonly List<(RoundedBar Bar, TextBlock Value, string Unit)> _cpuMetrics = new();
@@ -132,6 +133,15 @@ public partial class MainWindow : Window
         ApplyPage("home");
         _sensorTimer.Tick += (_, _) => RefreshSensors();
         _sensorTimer.Start();
+        _interactionTimer.Tick += (_, _) =>
+        {
+            _interactionTimer.Stop();
+            L_Mechrevo.WpfP0.Services.WindowInteractionState.Clear();
+            RefreshSensors();
+        };
+        LocationChanged += (_, _) => NoteWindowInteraction();
+        SizeChanged += (_, _) => NoteWindowInteraction();
+        PreviewMouseWheel += (_, _) => NoteWindowInteraction();
         StateChanged += (_, _) =>
         {
             OnWideStateChanged();
@@ -221,9 +231,16 @@ public partial class MainWindow : Window
         WideBackendStatus.ToolTip = tip;
     }
 
+    private void NoteWindowInteraction()
+    {
+        L_Mechrevo.WpfP0.Services.WindowInteractionState.Note();
+        _interactionTimer.Stop();
+        _interactionTimer.Start();
+    }
+
     private void RefreshSensors()
     {
-        if (_owner == null)
+        if (_owner == null || L_Mechrevo.WpfP0.Services.WindowInteractionState.Active)
         {
             return;
         }
