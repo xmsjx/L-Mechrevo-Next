@@ -39,13 +39,21 @@ public partial class CalibrationSettingsWindow : Window
         try
         {
             StartupSwitch.IsChecked = AppConfig.Is("calib_apply_on_startup");
-            CustomSwitch.IsChecked = AppConfig.Is("calib_custom_on");
+            RefreshIccList();
+            bool hasCustom = _localIccProfiles.Count > 0;
+            bool customOn = hasCustom && AppConfig.Is("calib_custom_on");
+            if (!hasCustom && (AppConfig.Is("calib_custom_on") || AppConfig.Get("calib_mode") == 999))
+            {
+                AppConfig.Set("calib_custom_on", 0);
+                AppConfig.Set("calib_mode", 0);
+                AppConfig.Remove("calib_custom_icc");
+                AppConfig.Flush();
+            }
+            CustomSwitch.IsChecked = customOn;
             // 开关是“是否启用 ICC”，不能和下拉项“自定义校色/原厂校色”共用一个词。
             CustomSwitch.Content = WpfStrings.L("使用校色文件", "Use color profile");
-            RefreshIccList();
-            bool customOn = CustomSwitch.IsChecked == true;
-            IccCombo.IsEnabled = customOn;
-            ImportButton.IsEnabled = customOn;
+            IccCombo.IsEnabled = customOn && hasCustom;
+            ImportButton.IsEnabled = true;
             if (DeleteButton != null) DeleteButton.IsEnabled = _localIccProfiles.Count > 0;
         }
         finally
@@ -135,7 +143,11 @@ public partial class CalibrationSettingsWindow : Window
             ? sole
             : (_localIccProfiles.FirstOrDefault(IccHelper.IsDefaultIccName) ?? "");
         _iccLabelToFile.Clear();
-        if (_localIccProfiles.Count <= 1)
+        if (_localIccProfiles.Count == 0)
+        {
+            // 自定义列表里没有文件就留空；官方 ICC 不属于自定义。
+        }
+        else if (_localIccProfiles.Count == 1)
         {
             // 单文件就是本机默认校色，只显示「默认校色」。
             IccCombo.Items.Add("默认校色");
@@ -228,8 +240,8 @@ public partial class CalibrationSettingsWindow : Window
         // 自定义必须和主界面的 calib_mode=999 同步，否则主界面会按原生校色模式 0 下发而失败。
         AppConfig.Set("calib_mode", on ? 999 : 0);
         AppConfig.Flush();
-        IccCombo.IsEnabled = on;
-        ImportButton.IsEnabled = on;
+        IccCombo.IsEnabled = on && _localIccProfiles.Count > 0;
+        ImportButton.IsEnabled = true;
         if (!on)
         {
             _ = System.Threading.Tasks.Task.Run(() => IccHelper.ClearAllIcc());
