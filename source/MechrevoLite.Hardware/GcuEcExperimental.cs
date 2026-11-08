@@ -86,6 +86,38 @@ internal static class GcuEcExperimental
         }
     }
 
+    /// <summary>EC 本地静音狂暴子模式：1832 bit0。true=静音狂暴，false=高能狂暴。</summary>
+    internal static bool TrySetSilentTurbo(bool silent, out string detail)
+    {
+        detail = "";
+        if (!Enabled)
+        {
+            detail = "实验通道未启用";
+            return false;
+        }
+        try
+        {
+            if (!AcpiDriverEc.TryReadByte(1832, out byte current))
+            {
+                detail = "读取 1832 失败";
+                return false;
+            }
+            byte target = (byte)(silent ? (current | 0x01) : (current & ~0x01));
+            bool write = AcpiDriverEc.TryWriteByte(1832, target);
+            bool read = AcpiDriverEc.TryReadByte(1832, out byte readback);
+            bool ok = write && read && ((readback & 0x01) == (target & 0x01));
+            detail = $"1832 0x{current:X2}->0x{target:X2}/0x{readback:X2} silent={silent}";
+            Logger.WriteError("[gcu-ec] 静音狂暴 " + detail + " ⇒ " + (ok ? "OK" : "FAIL"));
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            detail = ex.GetType().Name + " " + ex.Message;
+            Logger.WriteError("[gcu-ec] 静音狂暴异常：" + detail);
+            return false;
+        }
+    }
+
     internal static bool TryApplyMode(int visualMode, out string detail)
     {
         detail = "";

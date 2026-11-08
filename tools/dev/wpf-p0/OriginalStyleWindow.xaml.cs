@@ -579,6 +579,12 @@ public partial class OriginalStyleWindow : Window
     private static bool ShouldShowTurboMode(MechrevoDeviceCapabilities? caps, MechrevoHw? hw)
     {
         if (UiQaShowAll.Enabled) return true;
+        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+            && MechrevoLite.Hardware.GcuEcMode.IsEcMode
+            && hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
+        {
+            return true;
+        }
         if (AppConfig.Is("perf_allow_on_battery")
             && System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
                 != System.Windows.Forms.PowerLineStatus.Online)
@@ -597,6 +603,12 @@ public partial class OriginalStyleWindow : Window
     private static bool ShouldShowSilentTurbo(MechrevoDeviceCapabilities? caps, MechrevoHw? hw)
     {
         if (UiQaShowAll.Enabled) return true;
+        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+            && MechrevoLite.Hardware.GcuEcMode.IsEcMode
+            && hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
+        {
+            return true;
+        }
         if (caps == null) return hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
         bool gen50 = hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
         return caps.SilentTurboAvailability switch
@@ -3707,7 +3719,10 @@ public partial class OriginalStyleWindow : Window
         _pendingModeTick = Environment.TickCount64;
         _modeSwitchInFlight = true;
         bool turboSubModeSupported = _backendProbe?.Capabilities?.SilentTurboAvailability
-            == MechrevoLite.Hardware.FeatureAvailability.Supported;
+            == MechrevoLite.Hardware.FeatureAvailability.Supported
+            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+                && MechrevoLite.Hardware.GcuEcMode.IsEcMode
+                && _backendProbe?.Hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50);
         string osdMode = mode switch
         {
             2 => WpfStrings.ModeSilent,
@@ -3819,8 +3834,19 @@ public partial class OriginalStyleWindow : Window
             }
             else if (!nucDirect && !xingyaoDirect && ok && mode == 1 && silentTurbo.HasValue && turboSubModeSupported)
             {
-                ok = _backendProbe?.Service != null
-                    && await _backendProbe.Service.SwitchTurboSubMode(silentTurbo.Value);
+                if (_backendRoute == BackendRoute.Ec && GcuEcExperimental.Enabled)
+                {
+                    ok = GcuEcExperimental.TrySetSilentTurbo(silentTurbo.Value, out string silentDetail);
+                    if (!ok)
+                    {
+                        Logger.WriteError("[gcu-ec] 静音狂暴写入失败：" + silentDetail);
+                    }
+                }
+                else
+                {
+                    ok = _backendProbe?.Service != null
+                        && await _backendProbe.Service.SwitchTurboSubMode(silentTurbo.Value);
+                }
                 if (ok)
                 {
                     AppConfig.Set("turbo_submode_silent", silentTurbo.Value ? 1 : 0);
