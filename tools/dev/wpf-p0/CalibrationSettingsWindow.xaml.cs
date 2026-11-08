@@ -16,6 +16,7 @@ namespace L_Mechrevo.WpfP0;
 public partial class CalibrationSettingsWindow : Window
 {
     private bool _syncing;
+    private static bool _cloudAutoAttempted;
 
     public CalibrationSettingsWindow()
     {
@@ -24,9 +25,11 @@ public partial class CalibrationSettingsWindow : Window
         LoadState();
         Loaded += async (_, _) =>
         {
-            if (_localIccProfiles.Count == 0)
+            // 自定义 ICC 存在不代表官方 ICC 已下载；只要没有 factory 文件就尝试一次云端。
+            if (!IccHelper.HasFactoryIccFile() && !_cloudAutoAttempted)
             {
-                CloudStatusText.Text = "本地没有校色文件，正在从云端获取…";
+                _cloudAutoAttempted = true;
+                CloudStatusText.Text = "本地没有官方校色文件，正在从云端获取…";
                 await TryFetchMissingIccAsync();
             }
         };
@@ -69,7 +72,7 @@ public partial class CalibrationSettingsWindow : Window
     /// <summary>本地没有 ICC 时自动联网获取；拿到后直接关联，不用再点“云端获取”。</summary>
     private async Task TryFetchMissingIccAsync()
     {
-        if (_localIccProfiles.Count > 0)
+        if (IccHelper.HasFactoryIccFile())
         {
             return;
         }

@@ -250,6 +250,18 @@ public static class IccHelper
 		return candidate;
 	}
 
+	public static bool HasFactoryIccFile()
+	{
+		foreach (string file in FactoryIccFiles())
+		{
+			if (File.Exists(Path.Combine(CustomIccDir, Path.GetFileName(file))))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public static bool IsFactoryIcc(string? fileName)
 	{
 		string name = Path.GetFileName(fileName ?? "");
