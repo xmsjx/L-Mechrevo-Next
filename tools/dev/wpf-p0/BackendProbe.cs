@@ -281,6 +281,11 @@ internal sealed class BackendProbe : IDisposable
         {
             try
             {
+                if (_hw?.IsGcuConnected != true)
+                {
+                    // EC 无 GCU：档位由云端/本地标准 ICC 文件决定（default/sRGB/P3/AdobeRGB）。
+                    return Math.Clamp(Math.Max(1, MechrevoLite.Display.IccHelper.HighestStandardLevel()), 1, 4);
+                }
                 int level = _hw?.MqttColorCalibrationLevel ?? _hw?.Capabilities?.ColorCalibrationLevel ?? 1;
                 return Math.Clamp(level, 1, 4);
             }
@@ -673,11 +678,25 @@ internal sealed class BackendProbe : IDisposable
                 }
                 return false;
             }
-            if ((_service == null || _hw?.IsGcuConnected != true) && mode <= 1)
+            if (_service == null || _hw?.IsGcuConnected != true)
             {
-                // EC 实验模式没有 GCU：默认/关闭只操作本地 ICC，不能走 GCU 服务。
-                await Task.Run(MechrevoLite.Display.IccHelper.ClearAllIcc).ConfigureAwait(false);
-                return true;
+                // EC 实验模式没有 GCU：档位映射到云端/本地标准 ICC 文件，不走 GCU。
+                if (mode <= 1)
+                {
+                    await Task.Run(MechrevoLite.Display.IccHelper.ClearAllIcc).ConfigureAwait(false);
+                    return true;
+                }
+                string? icc = MechrevoLite.Display.IccHelper.FindStandardIcc(mode);
+                if (string.IsNullOrWhiteSpace(icc))
+                {
+                    return false;
+                }
+                string path = System.IO.Path.Combine(MechrevoLite.Display.IccHelper.CustomIccDir, icc);
+                if (!System.IO.File.Exists(path))
+                {
+                    return false;
+                }
+                return await Task.Run(() => MechrevoLite.Display.IccHelper.ApplyIcc(path)).ConfigureAwait(false);
             }
             return _service != null && await _service.SetColorCalibration(mode).ConfigureAwait(false);
         }

@@ -172,6 +172,43 @@ public static class IccHelper
 		};
 	}
 
+	/// <summary>标准校色文件 → 原生档位：2=sRGB、3=P3、4=AdobeRGB。</summary>
+	public static int StandardLevelFor(string? fileName)
+	{
+		string name = Path.GetFileName(fileName ?? "");
+		if (IsDefaultIccName(name)) return 1;
+		string stem = Path.GetFileNameWithoutExtension(name);
+		return stem.ToLowerInvariant() switch
+		{
+			"srgb" => 2,
+			"displayp3" or "p3" => 3,
+			"adobergb" => 4,
+			_ => 0
+		};
+	}
+
+	public static string? FindStandardIcc(int mode)
+	{
+		foreach (string file in ListCustomIccFiles())
+		{
+			if (StandardLevelFor(file) == mode)
+			{
+				return file;
+			}
+		}
+		return null;
+	}
+
+	public static int HighestStandardLevel()
+	{
+		int level = 1;
+		foreach (string file in ListCustomIccFiles())
+		{
+			level = Math.Max(level, StandardLevelFor(file));
+		}
+		return level;
+	}
+
 	public static List<string> ListCustomIccFiles()
 	{
 		EnsureCustomIccDir();
