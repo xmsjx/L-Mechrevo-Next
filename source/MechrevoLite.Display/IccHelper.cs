@@ -235,13 +235,25 @@ public static class IccHelper
 	{
 		string configured = AppConfig.GetString("calib_factory_icc") ?? "";
 		if (!string.IsNullOrWhiteSpace(configured)) return configured;
+		List<string> files = ListCustomIccFiles();
+		// 重装/配置重置但 ICC 目录保留：只要有 Default.icm，就按残留的官方包恢复识别。
+		string? defaultFile = files.FirstOrDefault(IsDefaultIccName);
+		if (!string.IsNullOrWhiteSpace(defaultFile))
+		{
+			List<string> factoryFiles = files
+				.Where(file => IsDefaultIccName(file) || StandardLevelFor(file) > 0)
+				.ToList();
+			AppConfig.Set("calib_factory_icc", defaultFile);
+			AppConfig.Set("calib_factory_files", string.Join("|", factoryFiles));
+			AppConfig.Set("calib_icc_origin", "cloud");
+			AppConfig.Flush();
+			return defaultFile;
+		}
 		if (!string.Equals(AppConfig.GetString("calib_icc_origin"), "cloud", StringComparison.OrdinalIgnoreCase))
 		{
 			return "";
 		}
-		List<string> files = ListCustomIccFiles();
-		string candidate = files.Count == 1 ? files[0]
-			: (files.FirstOrDefault(IsDefaultIccName) ?? "");
+		string candidate = files.Count == 1 ? files[0] : "";
 		if (string.IsNullOrWhiteSpace(candidate)) return "";
 		AppConfig.Set("calib_factory_icc", candidate);
 		AppConfig.Set("calib_factory_files", string.Join("|", files));
