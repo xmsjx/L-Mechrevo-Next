@@ -2312,12 +2312,15 @@ public partial class MainWindow : Window
         }
         bool nucUmi = _probe?.Hw?.IsIntelNucMachine == true || _probe?.Hw?.IsUmiMachine == true;
         bool nucNoGpu = _probe?.Hw?.IsIntelNucMachine == true;
+        bool ecLocal = MechrevoLite.Hardware.GcuEcExperimental.Enabled
+            && MechrevoLite.Hardware.GcuEcMode.IsEcMode;
         // Intel 星耀暂时屏蔽自定义；AMD 星耀/无界走本机 SMU 自定义。
         bool smuCustom = _probe?.Hw?.SmuCustomApu == true;
         bool customAllowed = nucUmi || smuCustom
             || ((caps.CpuPerformanceTuning || caps.FanSettings || HasAnyCustomRange(_probe?.Hw, caps))
                 && !(_probe?.Hw?.SupportsModeProfileConfig ?? false))
-            || _probe?.Hw?.UsesBaolongda == true;
+            || _probe?.Hw?.UsesBaolongda == true
+            || (ecLocal && _probe?.Hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu);
         HomePerf自定义.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
         bool gpuRowHidden = _probe?.Hw?.GpuRowHiddenByGcuReports == true;
         bool directSupported = _probe?.Hw?.SupportsDgpuDirect ?? caps.DgpuDirect;
@@ -2342,19 +2345,27 @@ public partial class MainWindow : Window
         Grid.SetColumnSpan(BatteryCardHost, displaySupported ? 1 : 3);
         bool hasLighting = caps.Keyboard || caps.Lightbar || caps.LogoLight
             || _probe?.Hw?.SupportsKeyboard == true || _probe?.Hw?.SupportsLightbar == true
-            || _probe?.Hw?.SupportsLogoLight == true;
+            || _probe?.Hw?.SupportsLogoLight == true
+            || (ecLocal && (MechrevoLite.Hardware.GcuEcKeyboard.Active
+                || MechrevoLite.Hardware.IteLightingLocal.HasLightbar
+                || MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo
+                || MechrevoLite.Hardware.IteLightingLocal.HasHinge));
         NavLighting.Visibility = hasLighting ? Visibility.Visible : Visibility.Collapsed;
         NavCustom.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
         NavScreen.Visibility = displaySupported ? Visibility.Visible : Visibility.Collapsed;
         if (ScreenCalibrationCard != null)
         {
-            ScreenCalibrationCard.Visibility = caps.ColorCalibration ? Visibility.Visible : Visibility.Collapsed;
+            ScreenCalibrationCard.Visibility = caps.ColorCalibration
+                || (ecLocal && (MechrevoLite.Display.IccHelper.HasFactoryIccFile()
+                    || MechrevoLite.Display.IccHelper.ListCustomIccFiles().Count > 0))
+                ? Visibility.Visible : Visibility.Collapsed;
         }
         if (ScreenEffectCard != null)
         {
             ScreenEffectCard.Visibility = _owner?.WideDisplayEffectSupported == true ? Visibility.Visible : Visibility.Collapsed;
         }
         if (ScreenCalibrationCard != null && ScreenEffectCard != null
+            && !displaySupported
             && ScreenCalibrationCard.Visibility != Visibility.Visible && ScreenEffectCard.Visibility != Visibility.Visible)
         {
             NavScreen.Visibility = Visibility.Collapsed;
