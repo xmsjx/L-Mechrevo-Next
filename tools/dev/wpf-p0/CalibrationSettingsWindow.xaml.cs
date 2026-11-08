@@ -88,6 +88,7 @@ public partial class CalibrationSettingsWindow : Window
             }
             AppConfig.Set("calib_custom_icc", result.FileName);
             AppConfig.Set("calib_custom_on", 1);
+            AppConfig.Set("calib_mode", 999);
             AppConfig.Flush();
             _syncing = true;
             try
@@ -221,17 +222,14 @@ public partial class CalibrationSettingsWindow : Window
         }
         bool on = CustomSwitch.IsChecked == true;
         AppConfig.Set("calib_custom_on", on ? 1 : 0);
+        // 自定义必须和主界面的 calib_mode=999 同步，否则主界面会按原生校色模式 0 下发而失败。
+        AppConfig.Set("calib_mode", on ? 999 : 0);
         AppConfig.Flush();
         IccCombo.IsEnabled = on;
         ImportButton.IsEnabled = on;
         if (!on)
         {
             _ = System.Threading.Tasks.Task.Run(() => IccHelper.ClearAllIcc());
-            if (AppConfig.Get("calib_mode") == 999)
-            {
-                AppConfig.Set("calib_mode", 1);
-                AppConfig.Flush();
-            }
         }
     }
 
@@ -249,11 +247,13 @@ public partial class CalibrationSettingsWindow : Window
                 // 多文件包的 default.icc 就是默认项；保留为可应用文件。
                 AppConfig.Set("calib_custom_icc", _defaultIccFile);
                 AppConfig.Set("calib_custom_on", 1);
+                AppConfig.Set("calib_mode", 999);
                 AppConfig.Flush();
             }
             else
             {
                 AppConfig.Set("calib_custom_on", 0);
+                AppConfig.Set("calib_mode", 0);
                 AppConfig.Flush();
                 System.Threading.Tasks.Task.Run(IccHelper.ClearAllIcc);
             }
@@ -266,11 +266,13 @@ public partial class CalibrationSettingsWindow : Window
                 AppConfig.Set("calib_custom_icc", _localIccProfiles[0]);
             }
             AppConfig.Set("calib_custom_on", 1);
+            AppConfig.Set("calib_mode", 999);
             AppConfig.Flush();
             return;
         }
         AppConfig.Set("calib_custom_icc", selectedFile ?? name);
         AppConfig.Set("calib_custom_on", 1);
+        AppConfig.Set("calib_mode", 999);
         AppConfig.Flush();
     }
 
@@ -287,6 +289,7 @@ public partial class CalibrationSettingsWindow : Window
             }
             AppConfig.Set("calib_custom_icc", result.FileName);
             AppConfig.Set("calib_custom_on", 1);
+            AppConfig.Set("calib_mode", 999);
             AppConfig.Flush();
             CustomSwitch.IsChecked = true;
             IccCombo.IsEnabled = true;
