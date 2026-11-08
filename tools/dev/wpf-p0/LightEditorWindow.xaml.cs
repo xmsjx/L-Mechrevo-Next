@@ -692,6 +692,12 @@ public partial class LightEditorWindow : Window
 
     private async void Welcome_Click(object sender, RoutedEventArgs e)
     {
+        if (Owner is OriginalStyleWindow owner)
+        {
+            await owner.TriggerWelcomeEffectAsync("迷你窗");
+            StatusText.Text = "迎宾灯效已触发";
+            return;
+        }
         if (L_Mechrevo.WpfP0.Services.WpfBackend.Service is not MechrevoService service
             || await service.TriggerWelcomeAsync("迷你窗") == false)
         {

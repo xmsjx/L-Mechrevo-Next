@@ -105,6 +105,7 @@ public partial class OriginalStyleWindow : Window
     private Button? _liquidLightColorButton;
     private TextBlock? _liquidLightStatus;
     private bool _syncingLighting;
+    private bool _welcomeEffectBusy;
     private readonly System.Threading.SemaphoreSlim _keyboardLightApplyLock = new(1, 1);
     private readonly System.Threading.SemaphoreSlim _hidApplyLock = new(1, 1);
     private int _hidRetryGeneration;
@@ -10036,6 +10037,114 @@ public partial class OriginalStyleWindow : Window
         finally
         {
             _lightingPowerBusy = false;
+        }
+    }
+
+    /// <summary>全矩阵迎宾：灯带/LOGO/铰链 + 键盘（GCU/EC/HID），约 3 秒后恢复用户灯效。</summary>
+    internal async Task TriggerWelcomeEffectAsync(string reason)
+    {
+        if (_welcomeEffectBusy || _backendProbe == null)
+        {
+            return;
+        }
+        _welcomeEffectBusy = true;
+        try
+        {
+            // 灯带 / LOGO / 铰链
+            await TriggerWelcomeChannelAsync("HidLightbar/Ctrl");
+            await TriggerWelcomeChannelAsync("HidLightbar_Logo/Ctrl");
+            await TriggerWelcomeChannelAsync("HidLightbar_Hinge/Ctrl");
+
+            // 键盘
+            if (MechrevoLite.Hardware.GcuEcKeyboard.Active)
+            {
+                if (MechrevoLite.Hardware.GcuEcKeyboard.IsEcWhite)
+                {
+                    MechrevoLite.Hardware.GcuEcKeyboard.ApplyWhite(true, 2);
+                }
+                else
+                {
+                    MechrevoLite.Hardware.GcuEcKeyboard.ApplyFromSettings("Rainbow", true, 4);
+                }
+            }
+            else if (IsHidKeyboard(_backendProbe.Hw))
+            {
+                await _backendProbe.SetKeyboardEffectAsync("Rainbow");
+            }
+            else if (_backendProbe.Service != null)
+            {
+                await _backendProbe.Service.TriggerWelcomeAsync(reason);
+            }
+
+            await Task.Delay(3000);
+
+            // 恢复用户保存的灯效与电源状态
+            await ApplyKeyboardLightAsync(showStatus: false);
+            await ApplyLogoLightAsync(restoreEffect: true);
+            await ApplyHingeLightAsync(restoreEffect: true);
+            await ApplySyncLightAsync(restoreEffect: true);
+            await ApplyLightStripLightAsync(restoreEffect: true);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[welcome] " + reason + " 失败：" + ex.Message);
+        }
+        finally
+        {
+            _welcomeEffectBusy = false;
+        }
+    }
+
+    private async Task TriggerWelcomeChannelAsync(string topic)
+    {
+        try
+        {
+            if (_backendProbe == null) return;
+            bool supported = topic switch
+            {
+                "HidLightbar/Ctrl" => _backendProbe.SupportsLightbar,
+                "HidLightbar_Logo/Ctrl" => _backendProbe.Hw?.SupportsLogoLight == true
+                    || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo),
+                "HidLightbar_Hinge/Ctrl" => _backendProbe.SupportsHingeLight,
+                _ => false
+            };
+            if (!supported) return;
+
+            if (_backendProbe.Service == null && MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            {
+                string detail;
+                bool ok = topic switch
+                {
+                    "HidLightbar/Ctrl" => MechrevoLite.Hardware.IteLightingLocal.TryApplyLightbar(
+                        "Rainbow", true, 4, 2, unchecked((int)0xFFFFFFFF), out detail),
+                    "HidLightbar_Logo/Ctrl" => MechrevoLite.Hardware.IteLightingLocal.TryApplyLogo(
+                        "ColorMarquee", true, 4, 2, unchecked((int)0xFFFFFFFF), out detail),
+                    "HidLightbar_Hinge/Ctrl" => MechrevoLite.Hardware.IteLightingLocal.TryApplyHinge(
+                        "Rainbow", true, 4, 2, unchecked((int)0xFFFFFFFF), out detail),
+                    _ => false
+                };
+                if (ok)
+                {
+                    Logger.WriteLine("[welcome] " + topic + " 本地迎宾已下发");
+                    return;
+                }
+            }
+
+            bool remote = topic switch
+            {
+                "HidLightbar/Ctrl" => await _backendProbe.SetLightbarEffectAsync("Rainbow"),
+                "HidLightbar_Logo/Ctrl" => await _backendProbe.SetLogoEffectAsync("ColorMarquee"),
+                "HidLightbar_Hinge/Ctrl" => await _backendProbe.SetHingeEffectAsync("Rainbow"),
+                _ => false
+            };
+            if (remote)
+            {
+                Logger.WriteLine("[welcome] " + topic + " 后端迎宾已下发");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[welcome] " + topic + " 失败：" + ex.Message);
         }
     }
 

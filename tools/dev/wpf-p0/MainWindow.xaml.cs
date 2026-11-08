@@ -2960,12 +2960,12 @@ public partial class MainWindow : Window
         };
         welcome.Click += async (_, _) =>
         {
-            MechrevoService? service = _probe?.Service ?? WpfBackend.Service;
-            if (service == null || !await service.TriggerWelcomeAsync("宽屏灯光页"))
+            if (_owner == null)
             {
-                StatusText.Text = "迎宾灯效仅支持 GCU 键盘";
+                StatusText.Text = "迎宾灯效不可用";
                 return;
             }
+            await _owner.TriggerWelcomeEffectAsync("宽屏灯光页");
             StatusText.Text = "迎宾灯效已触发";
         };
         StackPanel panel = new();
