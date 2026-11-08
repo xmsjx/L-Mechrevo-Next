@@ -8957,6 +8957,11 @@ public partial class OriginalStyleWindow : Window
             }
             AppConfig.Set("calib_mode", mode);
             AppConfig.Set("calib_enabled", on ? 1 : 0);
+            if (mode != 999)
+            {
+                AppConfig.Set("calib_custom_on", 0);
+                AppConfig.Remove("calib_custom_icc");
+            }
             AppConfig.Flush();
             StatusText.Text = on ? WpfStrings.DisplayCalibrationOn : WpfStrings.DisplayCalibrationOff;
         }
@@ -9012,6 +9017,12 @@ public partial class OriginalStyleWindow : Window
         {
             AppConfig.Set("calib_mode", mode);
             AppConfig.Set("calib_enabled", 1);
+            if (mode != 999)
+            {
+                // 切到默认/sRGB/P3/AdobeRGB 时必须退出自定义绑定，否则下次刷新又回到旧自定义 ICC。
+                AppConfig.Set("calib_custom_on", 0);
+                AppConfig.Remove("calib_custom_icc");
+            }
             AppConfig.Flush();
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_59 + (CalibrationCombo.SelectedItem as ComboBoxItem)?.Content;
         }
