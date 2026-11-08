@@ -8802,7 +8802,19 @@ public partial class OriginalStyleWindow : Window
                 CalibrationCombo.Items.Add(new ComboBoxItem { Content = "AdobeRGB", Tag = 4 });
             }
             List<string> localIcc = IccHelper.ListCustomIccFiles();
-            bool customAvailable = AppConfig.Is("calib_custom_on") || localIcc.Count > 0;
+            bool customOn = AppConfig.Is("calib_custom_on");
+            // 自愈：配置还停在“自定义校色”，但 ICC 已被删掉/不存在 ⇒ 直接切回默认。
+            if ((selected == 999 || customOn) && localIcc.Count == 0)
+            {
+                Logger.WriteError("[calib] 自定义 ICC 已不存在 ⇒ 自动切回默认校色");
+                AppConfig.Set("calib_mode", 0);
+                AppConfig.Set("calib_enabled", 0);
+                AppConfig.Set("calib_custom_on", 0);
+                AppConfig.Remove("calib_custom_icc");
+                AppConfig.Flush();
+                selected = 0;
+            }
+            bool customAvailable = customOn || localIcc.Count > 0;
             if (customAvailable)
             {
                 if (localIcc.Count <= 1)
@@ -8916,7 +8928,13 @@ public partial class OriginalStyleWindow : Window
             }
             else
             {
-                ok = false;
+                // ICC 不在了：不报失败，自动切回默认校色。
+                mode = 0;
+                AppConfig.Set("calib_mode", 0);
+                AppConfig.Set("calib_custom_on", 0);
+                AppConfig.Remove("calib_custom_icc");
+                AppConfig.Flush();
+                ok = await _backendProbe.SetColorCalibrationAsync(0);
             }
         }
         else if (!on && AppConfig.Get("calib_mode") == 999)
