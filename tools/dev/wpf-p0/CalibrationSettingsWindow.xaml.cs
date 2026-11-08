@@ -50,8 +50,7 @@ public partial class CalibrationSettingsWindow : Window
                 AppConfig.Flush();
             }
             CustomSwitch.IsChecked = customOn;
-            // 开关是“是否启用 ICC”，不能和下拉项“自定义校色/原厂校色”共用一个词。
-            CustomSwitch.Content = WpfStrings.L("使用校色文件", "Use color profile");
+            CustomSwitch.Content = WpfStrings.CustomSwitch_Content;
             IccCombo.IsEnabled = customOn && hasCustom;
             ImportButton.IsEnabled = true;
             if (DeleteButton != null) DeleteButton.IsEnabled = _localIccProfiles.Count > 0;
@@ -104,7 +103,6 @@ public partial class CalibrationSettingsWindow : Window
             AppConfig.Set("calib_mode", 0);
             AppConfig.Set("calib_enabled", 1);
             AppConfig.Flush();
-            CustomSwitch.Content = WpfStrings.L("使用校色文件", "Use color profile");
             _syncing = true;
             try
             {
@@ -143,31 +141,11 @@ public partial class CalibrationSettingsWindow : Window
             ? sole
             : (_localIccProfiles.FirstOrDefault(IccHelper.IsDefaultIccName) ?? "");
         _iccLabelToFile.Clear();
-        if (_localIccProfiles.Count == 0)
+        // 自定义列表：只显示导入的 ICC 文件名，不再混入「默认校色」。
+        foreach (string file in _localIccProfiles)
         {
-            // 自定义列表里没有文件就留空；官方 ICC 不属于自定义。
-        }
-        else if (_localIccProfiles.Count == 1)
-        {
-            // 单文件就是本机默认校色，只显示「默认校色」。
-            IccCombo.Items.Add("默认校色");
-            if (!string.IsNullOrWhiteSpace(sole))
-            {
-                _iccLabelToFile["默认校色"] = sole;
-            }
-        }
-        else
-        {
-            foreach (string file in _localIccProfiles)
-            {
-                string label = IccHelper.DisplayNameFor(file);
-                if (_iccLabelToFile.ContainsKey(label))
-                {
-                    label = file;
-                }
-                _iccLabelToFile[label] = file;
-                IccCombo.Items.Add(label);
-            }
+            _iccLabelToFile[file] = file;
+            IccCombo.Items.Add(file);
         }
         string saved = AppConfig.GetString("calib_custom_icc") ?? "";
         if (!string.IsNullOrEmpty(saved))
@@ -309,7 +287,6 @@ public partial class CalibrationSettingsWindow : Window
             AppConfig.Set("calib_custom_on", 0);
             AppConfig.Set("calib_mode", 0);
             AppConfig.Flush();
-            CustomSwitch.Content = WpfStrings.L("使用校色文件", "Use color profile");
             CustomSwitch.IsChecked = false;
             IccCombo.IsEnabled = false;
             ImportButton.IsEnabled = false;

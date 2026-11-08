@@ -8826,20 +8826,7 @@ public partial class OriginalStyleWindow : Window
             {
                 foreach (string profile in localIcc)
                 {
-                    string label;
-                    if (IccHelper.IsDefaultIccName(profile))
-                    {
-                        label = "默认校色";
-                    }
-                    else if (IccHelper.IsFactoryIcc(profile))
-                    {
-                        label = "官方校色 · " + profile;
-                    }
-                    else
-                    {
-                        label = profile;
-                    }
-                    CalibrationCombo.Items.Add(new ComboBoxItem { Content = label, Tag = 999 });
+                    CalibrationCombo.Items.Add(new ComboBoxItem { Content = profile, Tag = 999 });
                 }
             }            int index = 0;
             string savedIcc = AppConfig.GetString("calib_custom_icc") ?? "";
@@ -8853,14 +8840,7 @@ public partial class OriginalStyleWindow : Window
                         break;
                     }
                     string content = item.Content?.ToString() ?? "";
-                    if (localIcc.Count <= 1 && i == CalibrationCombo.Items.Count - 1)
-                    {
-                        index = i;
-                        break;
-                    }
-                    if (string.Equals(content, savedIcc, StringComparison.OrdinalIgnoreCase)
-                        || content.EndsWith(" · " + savedIcc, StringComparison.OrdinalIgnoreCase)
-                        || (string.Equals(content, "默认校色", StringComparison.Ordinal) && IccHelper.IsDefaultIccName(savedIcc)))
+                    if (string.Equals(content, savedIcc, StringComparison.OrdinalIgnoreCase))
                     {
                         index = i;
                         break;
@@ -9001,28 +8981,14 @@ public partial class OriginalStyleWindow : Window
         bool ok;
         if (mode == 999)
         {
-            List<string> localIcc = IccHelper.ListCustomIccFiles();
+            List<string> localIcc = IccHelper.ListCustomIccFiles()
+                .Where(file => !IccHelper.IsFactoryIcc(file))
+                .ToList();
             string? selectedText = (CalibrationCombo.SelectedItem as ComboBoxItem)?.Content?.ToString();
-            string? selectedFile = null;
-            if (!string.IsNullOrWhiteSpace(selectedText))
-            {
-                if (selectedText.StartsWith("官方校色 · ", StringComparison.Ordinal))
-                {
-                    selectedFile = selectedText.Substring("官方校色 · ".Length);
-                }
-                else if (string.Equals(selectedText, "默认校色", StringComparison.Ordinal))
-                {
-                    selectedFile = localIcc.FirstOrDefault(IccHelper.IsDefaultIccName);
-                }
-                else if (localIcc.Contains(selectedText, StringComparer.OrdinalIgnoreCase))
-                {
-                    selectedFile = selectedText;
-                }
-            }
-            if (string.IsNullOrWhiteSpace(selectedFile) && localIcc.Count == 1)
-            {
-                selectedFile = localIcc[0];
-            }
+            string? selectedFile = !string.IsNullOrWhiteSpace(selectedText)
+                && localIcc.Contains(selectedText, StringComparer.OrdinalIgnoreCase)
+                ? selectedText
+                : (localIcc.Count == 1 ? localIcc[0] : null);
             if (!string.IsNullOrWhiteSpace(selectedFile))
             {
                 AppConfig.Set("calib_custom_icc", selectedFile);
