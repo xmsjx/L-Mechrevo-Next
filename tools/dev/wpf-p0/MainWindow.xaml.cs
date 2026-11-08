@@ -750,18 +750,7 @@ public partial class MainWindow : Window
             _wideRestoreBounds = new Rect(Left, Top, ActualWidth, ActualHeight);
             _wideMaximized = true;
             ApplyWideMaximizedChrome(true);
-            // 无边框窗口直接铺满工作区；WindowChrome 不参与非客户区计算。
-            if (WindowState == WindowState.Maximized)
-            {
-                WindowState = WindowState.Normal;
-            }
-            Rect area = SystemParameters.WorkArea;
-            Left = area.Left;
-            Top = area.Top;
-            Width = area.Width;
-            Height = area.Height;
-            _wideMaximized = true;
-            ApplyWideMaximizedChrome(true);
+            WindowState = WindowState.Maximized;
         }
         else
         {
