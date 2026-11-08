@@ -192,8 +192,18 @@ internal sealed record MachineIdentity(
 		try { hasTongfangNvram = UefiGpuMux.HasMuxVariable; } catch { }
 		bool hasNvidiaDgpu = false;
 		try { hasNvidiaDgpu = MechrevoLite.Gpu.GpuGenerationProvider.Current().HasDgpu; } catch { }
+		bool hasUwacpiService = false;
+		try
+		{
+			using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+				@"SYSTEM\CurrentControlSet\Services\UWACPIDriver");
+			hasUwacpiService = key != null;
+		}
+		catch { }
+		bool hasFunctionalMulong = false;
+		try { hasFunctionalMulong = MechrevoLite.Hardware.TurboSubModeWmi.IsSupported(); } catch { }
 		bool tongfangFamily = ProbeTongfangFamily(board, model, generation, gcuInstalled, whitelisted,
-			hasTongfangNvram, hasNvidiaDgpu, out string tongfangSource);
+			hasTongfangNvram, hasNvidiaDgpu, hasUwacpiService, hasFunctionalMulong, out string tongfangSource);
 		return new MachineIdentity(board, boardSource, whitelisted, generation, gcuInstalled,
 			model, modelSource, mifsClass, mifsPresent, mifsLegacyCompatible,
 			projectId, projectIdSource, gcuVariant, gcuVariantFamily,
@@ -233,7 +243,8 @@ internal sealed record MachineIdentity(
 		string boardSource = boardText.Length == 0 ? "unknown" : "test";
 		string modelSource = modelText.Length == 0 ? "unknown" : "test";
 		bool tongfangFamily = ProbeTongfangFamily(boardText, modelText, generationText, gcuInstalled, whitelisted,
-			hasTongfangNvram: false, hasNvidiaDgpu: false, out string tongfangSource);
+			hasTongfangNvram: false, hasNvidiaDgpu: false, hasUwacpiService: false, hasFunctionalMulong: false,
+			out string tongfangSource);
 		return new MachineIdentity(boardText, boardSource, whitelisted, generationText, gcuInstalled,
 			modelText, modelSource, mifsText, mifsClass, mifsClass,
 			projectIdText, projectIdText.Length == 0 ? "unknown" : "test",
@@ -254,11 +265,12 @@ internal sealed record MachineIdentity(
 		bool gcuInstalled, bool whitelisted, out string source)
 	{
 		return ProbeTongfangFamily(board, model, generation, gcuInstalled, whitelisted,
-			hasTongfangNvram: false, hasNvidiaDgpu: false, out source);
+			hasTongfangNvram: false, hasNvidiaDgpu: false, hasUwacpiService: false, hasFunctionalMulong: false, out source);
 	}
 
 	private static bool ProbeTongfangFamily(string board, string model, string generation,
-		bool gcuInstalled, bool whitelisted, bool hasTongfangNvram, bool hasNvidiaDgpu, out string source)
+		bool gcuInstalled, bool whitelisted, bool hasTongfangNvram, bool hasNvidiaDgpu,
+		bool hasUwacpiService, bool hasFunctionalMulong, out string source)
 	{
 		source = "";
 		if (whitelisted)
@@ -296,6 +308,16 @@ internal sealed record MachineIdentity(
 		if (hasNvidiaDgpu)
 		{
 			source = "nvidia-dgpu";
+			return true;
+		}
+		if (hasUwacpiService)
+		{
+			source = "uwacpi-service";
+			return true;
+		}
+		if (hasFunctionalMulong)
+		{
+			source = "mulong";
 			return true;
 		}
 		if (gcuInstalled)
