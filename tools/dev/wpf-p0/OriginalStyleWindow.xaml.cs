@@ -8918,6 +8918,51 @@ public partial class OriginalStyleWindow : Window
         return DisplayEffectCombo.SelectedItem is ComboBoxItem item ? item.Tag as string ?? "" : "";
     }
 
+    /// <summary>当前档位没有对应 ICC 时先等云端下载；已有文件直接匹配，不重复联网。</summary>
+    private async Task<bool> EnsureCloudIccForModeAsync(int mode)
+    {
+        if (mode == 999 || _backendProbe?.Hw?.IsGcuConnected == true)
+        {
+            return true;
+        }
+        bool need = !IccHelper.HasFactoryIccFile()
+            || (mode > 1 && IccHelper.FindStandardIcc(mode) == null);
+        if (!need)
+        {
+            return true;
+        }
+        StatusText.Text = WpfStrings.L("正在从云端获取官方校色文件…", "Fetching factory ICC from cloud…");
+        using CancellationTokenSource fetchCts = new(TimeSpan.FromSeconds(20));
+        MechrevoLite.Display.CloudIccFetcher.Result fetched =
+            await MechrevoLite.Display.CloudIccFetcher.FetchAsync(fetchCts.Token).ConfigureAwait(true);
+        if (!fetched.Ok || string.IsNullOrWhiteSpace(fetched.FileName))
+        {
+            StatusText.Text = string.IsNullOrWhiteSpace(fetched.Detail)
+                ? WpfStrings.DisplayIccMissing : fetched.Detail;
+            return false;
+        }
+        string fetchedPath = System.IO.Path.Combine(IccHelper.OfficialIccDir, fetched.FileName);
+        if (!System.IO.File.Exists(fetchedPath))
+        {
+            StatusText.Text = "云端返回 ICC，但文件未落地：" + fetched.FileName;
+            return false;
+        }
+        AppConfig.Set("calib_factory_icc", fetched.FileName);
+        AppConfig.Set("calib_factory_files",
+            string.Join("|", fetched.FileNames ?? new[] { fetched.FileName }));
+        AppConfig.Set("calib_icc_origin", "cloud");
+        AppConfig.Set("calib_custom_on", 0);
+        AppConfig.Flush();
+        IccHelper.EnsureFactoryIccBound();
+        if (mode > 1 && IccHelper.FindStandardIcc(mode) == null)
+        {
+            StatusText.Text = "云端校色包不包含当前档位对应的 ICC 文件。";
+            return false;
+        }
+        InitScreenColorControls();
+        return true;
+    }
+
     private async void CalibrationSwitch_Click(object sender, RoutedEventArgs e)
     {
         if (_syncingCalibration || _backendProbe == null)
@@ -8927,43 +8972,13 @@ public partial class OriginalStyleWindow : Window
         bool on = CalibrationSwitch.IsChecked == true;
         int mode = SelectedCalibrationMode();
         CalibrationSwitch.IsEnabled = false;
-        // EC 模式还没有官方 ICC 时，先自动从云端取；不能再直接走“清空自定义”后报已校色。
-        if (on && mode != 999
-            && _backendProbe.Hw?.IsGcuConnected != true
-            && !IccHelper.HasFactoryIccFile())
+        if (on && !await EnsureCloudIccForModeAsync(mode))
         {
-            StatusText.Text = WpfStrings.L("正在从云端获取官方校色文件…", "Fetching factory ICC from cloud…");
-            using CancellationTokenSource fetchCts = new(TimeSpan.FromSeconds(20));
-            MechrevoLite.Display.CloudIccFetcher.Result fetched =
-                await MechrevoLite.Display.CloudIccFetcher.FetchAsync(fetchCts.Token).ConfigureAwait(true);
-            if (!fetched.Ok || string.IsNullOrWhiteSpace(fetched.FileName))
-            {
-                _syncingCalibration = true;
-                CalibrationSwitch.IsChecked = false;
-                _syncingCalibration = false;
-                CalibrationSwitch.IsEnabled = true;
-                StatusText.Text = string.IsNullOrWhiteSpace(fetched.Detail)
-                    ? WpfStrings.DisplayIccMissing
-                    : fetched.Detail;
-                return;
-            }
-            string fetchedPath = System.IO.Path.Combine(IccHelper.OfficialIccDir, fetched.FileName);
-            if (!System.IO.File.Exists(fetchedPath))
-            {
-                _syncingCalibration = true;
-                CalibrationSwitch.IsChecked = false;
-                _syncingCalibration = false;
-                CalibrationSwitch.IsEnabled = true;
-                StatusText.Text = "云端返回 ICC，但文件未落地：" + fetched.FileName;
-                return;
-            }
-            AppConfig.Set("calib_factory_icc", fetched.FileName);
-            AppConfig.Set("calib_factory_files",
-                string.Join("|", fetched.FileNames ?? new[] { fetched.FileName }));
-            AppConfig.Set("calib_icc_origin", "cloud");
-            AppConfig.Set("calib_custom_on", 0);
-            AppConfig.Flush();
-            IccHelper.EnsureFactoryIccBound();
+            _syncingCalibration = true;
+            CalibrationSwitch.IsChecked = false;
+            _syncingCalibration = false;
+            CalibrationSwitch.IsEnabled = true;
+            return;
         }
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_58;
         bool gcuCalibrationPath = mode != 999
@@ -9037,6 +9052,10 @@ public partial class OriginalStyleWindow : Window
         }
         int mode = SelectedCalibrationMode();
         bool ok;
+        if (mode != 999 && !await EnsureCloudIccForModeAsync(mode))
+        {
+            return;
+        }
         if (mode == 999)
         {
             List<string> localIcc = IccHelper.ListCustomIccFiles()

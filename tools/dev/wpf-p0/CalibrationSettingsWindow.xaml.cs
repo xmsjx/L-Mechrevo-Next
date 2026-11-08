@@ -26,7 +26,8 @@ public partial class CalibrationSettingsWindow : Window
         Loaded += async (_, _) =>
         {
             // 自定义 ICC 存在不代表官方 ICC 已下载；只要没有 factory 文件就尝试一次云端。
-            if (!IccHelper.HasFactoryIccFile() && !_cloudAutoAttempted)
+            bool customSelected = AppConfig.Is("calib_custom_on") || AppConfig.Get("calib_mode") == 999;
+            if (!customSelected && !IccHelper.HasFactoryIccFile() && !_cloudAutoAttempted)
             {
                 _cloudAutoAttempted = true;
                 CloudStatusText.Text = "本地没有官方校色文件，正在从云端获取…";
@@ -72,7 +73,9 @@ public partial class CalibrationSettingsWindow : Window
     /// <summary>本地没有 ICC 时自动联网获取；拿到后直接关联，不用再点“云端获取”。</summary>
     private async Task TryFetchMissingIccAsync()
     {
-        if (IccHelper.HasFactoryIccFile())
+        if (IccHelper.HasFactoryIccFile()
+            || AppConfig.Is("calib_custom_on")
+            || AppConfig.Get("calib_mode") == 999)
         {
             return;
         }
