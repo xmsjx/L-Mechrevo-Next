@@ -8981,21 +8981,24 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_58;
-        bool gcuCalibrationPath = mode != 999
+        bool ecLocalMode = MechrevoLite.Hardware.GcuEcMode.IsEcMode
+            || _backendProbe.Hw?.IsGcuConnected != true;
+        bool gcuCalibrationPath = !ecLocalMode
+            && mode != 999
             && _backendProbe.Hw?.IsGcuConnected == true
             && _backendProbe.Service != null;
         var gcuIccSnapshot = on && gcuCalibrationPath
             ? await MechrevoLite.Display.GcuIccProfileAssociator.CaptureAsync("ui-calib-on").ConfigureAwait(true)
             : null;
         bool ok;
-        if (!on && _backendProbe.Hw?.IsGcuConnected != true)
+        if (!on && (MechrevoLite.Hardware.GcuEcMode.IsEcMode || _backendProbe.Hw?.IsGcuConnected != true))
         {
             // EC 关闭校色必须真正解除本地 ICC；不能走 SetColorCalibrationAsync(0)，
             // 那里默认档会重新应用官方 ICC。
             await Task.Run(IccHelper.ClearAllIcc);
             ok = true;
         }
-        else if (on && mode != 999 && _backendProbe.Hw?.IsGcuConnected != true)
+        else if (on && mode != 999 && (MechrevoLite.Hardware.GcuEcMode.IsEcMode || _backendProbe.Hw?.IsGcuConnected != true))
         {
             // EC 官方档：走与自定义完全相同的 IccHelper.ApplyIcc 关联路径。
             string selected = mode <= 1

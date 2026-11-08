@@ -687,7 +687,9 @@ internal sealed class BackendProbe : IDisposable
                 }
                 return false;
             }
-            if (_service == null || _hw?.IsGcuConnected != true)
+            if (MechrevoLite.Hardware.GcuEcMode.IsEcMode
+                || _service == null
+                || _hw?.IsGcuConnected != true)
             {
                 // EC 实验模式没有 GCU：档位映射到云端/本地标准 ICC 文件，不走 GCU。
                 if (mode <= 1)
