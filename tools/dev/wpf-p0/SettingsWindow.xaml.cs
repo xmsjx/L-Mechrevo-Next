@@ -57,6 +57,7 @@ public partial class SettingsWindow : Window
   };
   Loaded += (_, _) =>
   {
+      LoadCustomButtonAction();
       PositionAdjacentToOwner();
       SchedulePeripheralBatteryRefresh();
   };
@@ -419,7 +420,12 @@ public partial class SettingsWindow : Window
         try
         {
             MechrevoHw? hw = _owner?.CurrentBackend?.Hw ?? L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
-            bool eligible = hw?.IsTongfangFamily == true && hw.WujieSmuApu != true;
+            bool family = hw?.IsTongfangFamily == true;
+            if (!family)
+            {
+                try { family = MechrevoLite.Hardware.MachineIdentity.Collect().TongfangFamily; } catch { }
+            }
+            bool eligible = family && hw?.WujieSmuApu != true;
             CustomButtonCard.Visibility = eligible ? Visibility.Visible : Visibility.Collapsed;
             if (!eligible)
             {
