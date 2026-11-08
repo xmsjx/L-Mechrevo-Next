@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -1194,7 +1194,7 @@ public partial class SettingsWindow : Window
 
     private void Status(string text)
     {
-        StatusText.Text = "beta23.7.5 · " + text;
+        StatusText.Text = "beta23.7.6 · " + text;
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)

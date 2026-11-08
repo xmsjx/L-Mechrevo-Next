@@ -110,6 +110,15 @@ internal sealed class QuickSwitchService : IQuickSwitchService
     /// 未登记的 key 回退调用方给的 label（行为不变）。</para>
     /// </summary>
     /// <summary>按 key 取当前语言的完整显示名（优先使用更多开关目录里的本地化名称）。</summary>
+    /// <summary>自定义性能按钮可绑定的快捷开关：排除睡眠/省电类。</summary>
+    internal static IReadOnlyList<QuickSwitchItem> CustomButtonQuickItems()
+    {
+        return FlatCatalog
+            .Where(static item => !item.Key.StartsWith("sleep", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(item.Key, "deepsleep", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+    }
+
     internal static string DisplayLabel(string key)
     {
         foreach (QuickSwitchGroup group in GroupCatalog)

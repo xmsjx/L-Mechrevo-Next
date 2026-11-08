@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 ﻿using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -634,6 +634,51 @@ public partial class OriginalStyleWindow : Window
     internal void WideActivateCustomMode()
     {
         _ = WideActivateCustomModeAsync();
+    }
+
+    /// <summary>自定义性能按钮的替代行为：快捷开关 / 轮换自定义配置；只在 EC 模式生效。</summary>
+    private async Task<bool> TryHandleCustomButtonActionAsync()
+    {
+        if (!MechrevoLite.Hardware.GcuEcMode.IsEcMode)
+        {
+            return false;
+        }
+        string action = AppConfig.GetString("custom_button_action") ?? "mode";
+        if (string.Equals(action, "quick", StringComparison.OrdinalIgnoreCase))
+        {
+            string key = AppConfig.GetString("custom_button_quick") ?? "";
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return false;
+            }
+            bool ok = await DashboardCommands.ToggleQuickAsync(key);
+            StatusText.Text = (ok ? WpfStrings.L("已触发快捷开关：", "Triggered quick switch: ")
+                : WpfStrings.L("快捷开关失败：", "Quick switch failed: ")) + QuickSwitchService.DisplayLabel(key);
+            return true;
+        }
+        if (string.Equals(action, "cycle", StringComparison.OrdinalIgnoreCase))
+        {
+            MechrevoLite.Mode.PerfModeService? perf = MechrevoLite.Mode.PerfModeService.Instance;
+            if (perf == null)
+            {
+                return false;
+            }
+            List<MechrevoLite.Mode.PerfModeDefinition> customs = perf.Modes
+                .Where(mode => mode.IsCustom)
+                .ToList();
+            if (customs.Count < 2)
+            {
+                StatusText.Text = WpfStrings.L("只有一个自定义配置，无法轮换。", "Only one custom profile.");
+                return true;
+            }
+            int current = customs.FindIndex(mode => string.Equals(mode.Id, perf.ActiveModeId, StringComparison.OrdinalIgnoreCase));
+            MechrevoLite.Mode.PerfModeDefinition next = customs[(current + 1 + customs.Count) % customs.Count];
+            MechrevoLite.Mode.PerfApplyOutcome? outcome = await perf.ActivateAsync(next.Id, "custom-button-cycle", forceParameters: true);
+            StatusText.Text = (outcome?.AnyFailed == false ? WpfStrings.L("已切换自定义配置：", "Custom profile switched: ")
+                : WpfStrings.L("切换自定义配置失败：", "Custom profile switch failed: ")) + (next.UserName ?? next.Id);
+            return true;
+        }
+        return false;
     }
 
     private async Task WideActivateCustomModeAsync()
@@ -3604,6 +3649,11 @@ public partial class OriginalStyleWindow : Window
             bool? silentTurbo = SilentTurboModeButton != null && ReferenceEquals(selected, SilentTurboModeButton) ? true
                 : ReferenceEquals(selected, TurboModeButton) ? false
                 : null;
+            if (ReferenceEquals(selected, CustomModeButton)
+                && await TryHandleCustomButtonActionAsync())
+            {
+                return;
+            }
             if (ReferenceEquals(selected, CustomModeButton))
             {
                 _pendingMode = 3;
@@ -11181,7 +11231,7 @@ public partial class OriginalStyleWindow : Window
         AppConfig.Flush();
         UpdateBackgroundVisibility();
         RefreshSegmentHighlights();
-        StatusText.Text = "beta23.7.5 / WPF P0 · " + (_dark ? WpfStrings.DarkTheme : WpfStrings.LightTheme);
+        StatusText.Text = "beta23.7.6 / WPF P0 · " + (_dark ? WpfStrings.DarkTheme : WpfStrings.LightTheme);
         _wideWindow?.ApplyThemeFromOwner(_dark);
     }
 
@@ -11213,7 +11263,7 @@ public partial class OriginalStyleWindow : Window
         AppConfig.Flush();
         UpdateBackgroundVisibility();
         RefreshSegmentHighlights();
-        StatusText.Text = "beta23.7.5 / WPF P0 · " + (_dark ? WpfStrings.DarkTheme : WpfStrings.LightTheme);
+        StatusText.Text = "beta23.7.6 / WPF P0 · " + (_dark ? WpfStrings.DarkTheme : WpfStrings.LightTheme);
         _wideWindow?.ApplyThemeFromOwner(_dark);
     }
 
