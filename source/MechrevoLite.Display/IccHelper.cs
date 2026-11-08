@@ -596,33 +596,34 @@ public static class IccHelper
 		{
 			Logger.WriteLine("取消自定义 ICC 注册表清理异常: " + ex.Message);
 		}
-		// 按当前应用文件名精确匹配删除关联槽（不删子树，避免误伤外屏/其他显示器关联）
+		// 清掉显示器下所有 LM 写过的关联槽；不能只按 appliedName 匹配，
+		// 否则配置里的 applied marker 丢失后会残留 000* 槽。
 		try
 		{
-			using (RegistryKey? pa = Registry.CurrentUser.OpenSubKey(IcmRoot + @"\ProfileAssociations\Display\{4d36e96e-e325-11ce-bfc1-08002be10318}", writable: true))
+			using RegistryKey? pa = Registry.CurrentUser.OpenSubKey(IcmRoot + @"\ProfileAssociations\Display\{4d36e96e-e325-11ce-bfc1-08002be10318}", writable: true);
+			if (pa != null)
 			{
-				if (pa != null && !string.IsNullOrEmpty(appliedName))
+				foreach (string sub in pa.GetSubKeyNames())
 				{
-					foreach (string sub in pa.GetSubKeyNames())
+					if (!sub.StartsWith("000"))
 					{
-						if (!sub.StartsWith("000"))
-						{
-							continue;
-						}
-						using (RegistryKey? slot = pa.OpenSubKey(sub, writable: true))
-						{
-							if (slot == null)
-							{
-								continue;
-							}
-							object? v = slot.GetValue("ICMProfile");
-							string? first = v is string[] arr && arr.Length > 0 ? arr[0] : v as string;
-							if (!string.IsNullOrEmpty(first) && string.Equals(first, appliedName, StringComparison.OrdinalIgnoreCase))
-							{
-								slot.DeleteValue("ICMProfile");
-							}
-						}
+						continue;
 					}
+					using RegistryKey? slot = pa.OpenSubKey(sub, writable: true);
+					if (slot == null)
+					{
+						continue;
+					}
+					object? v = slot.GetValue("ICMProfile");
+					string? first = v is string[] arr && arr.Length > 0 ? arr[0] : v as string;
+					if (!string.IsNullOrEmpty(first))
+					{
+						if (string.IsNullOrEmpty(appliedName)) appliedName = first;
+						using RegistryKey? registered = Registry.CurrentUser.OpenSubKey(IcmRoot + @"\RegisteredProfiles", writable: true);
+						registered?.DeleteValue(first, throwOnMissingValue: false);
+						Registry.CurrentUser.DeleteSubKey(IcmRoot + @"\RegisteredProfiles\" + first, throwOnMissingSubKey: false);
+					}
+					slot.DeleteValue("ICMProfile", throwOnMissingValue: false);
 				}
 			}
 		}
