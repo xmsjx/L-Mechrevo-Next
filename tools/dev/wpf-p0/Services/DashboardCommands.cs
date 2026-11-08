@@ -56,6 +56,10 @@ internal sealed class DashboardCommands : IDashboardCommands
 
     public async Task<bool> ToggleQuickAsync(string key)
     {
+        if (string.Equals(key, "launchapp", StringComparison.OrdinalIgnoreCase))
+        {
+            return AppLauncherService.LaunchOrPick();
+        }
         if (_services != null)
         {
             bool cameraBefore = string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase)
@@ -82,6 +86,10 @@ internal sealed class DashboardCommands : IDashboardCommands
 
     public async Task<bool> SetQuickAsync(string key, bool on)
     {
+        if (string.Equals(key, "launchapp", StringComparison.OrdinalIgnoreCase))
+        {
+            return on && AppLauncherService.LaunchOrPick();
+        }
         if (_services != null)
         {
             bool ok = (await _services.QuickSwitches.SetAsync(key, on).ConfigureAwait(false)).Ok;
