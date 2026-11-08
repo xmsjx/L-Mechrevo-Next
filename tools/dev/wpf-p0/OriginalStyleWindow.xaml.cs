@@ -239,7 +239,9 @@ public partial class OriginalStyleWindow : Window
             _miniHeightSaveTimer.Stop();
             SaveMiniHeight();
         };
-        SizeChanged += (_, _) => ScheduleMiniHeightSave();
+        SizeChanged += (_, _) => { L_Mechrevo.WpfP0.Services.WindowInteractionState.Note(); ScheduleMiniHeightSave(); };
+        LocationChanged += (_, _) => L_Mechrevo.WpfP0.Services.WindowInteractionState.Note();
+        PreviewMouseWheel += (_, _) => L_Mechrevo.WpfP0.Services.WindowInteractionState.Note();
         _statusResetTimer.Tick += (_, _) =>
         {
             _statusResetTimer.Stop();
@@ -2729,14 +2731,6 @@ public partial class OriginalStyleWindow : Window
     private static bool IsStartupLaunch()
     {
         return StartupPopupGate.IsStartupLaunch;
-    }
-
-    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ClickCount == 1)
-        {
-            DragMove();
-        }
     }
 
     private void HideMinMaxButtons()
@@ -7674,6 +7668,7 @@ public partial class OriginalStyleWindow : Window
     /// <summary>宽屏内容区的滚轮统一转发给 MainScroll；Sliders/ComboBox 不再吃掉页面滚动。</summary>
     private void MainScroll_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
+        L_Mechrevo.WpfP0.Services.WindowInteractionState.Note();
         if (e.Handled || MainScroll == null)
         {
             return;
