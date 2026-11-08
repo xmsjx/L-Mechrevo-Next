@@ -36,9 +36,6 @@ internal sealed class PerfModeService
 	/// <summary>2026-10-21：最近一次用户/面板下发时刻（TickCount64；0=还没发过）。启动重放据此避让。</summary>
 	private static long _lastApplyTick;
 
-	/// <summary>启动恢复只调度一次（硬件 ConnectionReady 可能触发多次）。</summary>
-	private int _startupReplayStarted;
-
 	private int _guardSeq;
 
 	private int _activating;
@@ -334,11 +331,6 @@ internal sealed class PerfModeService
 		PerfModeStore.MigrateLegacy();
 		PerfModeService perfModeService = new PerfModeService(hw, new PerfModeBackend(service, hw));
 		Instance = perfModeService;
-		// 启动恢复自举：宝龙达等机型没有独立的自定义固件档，重启后只能靠本地存档恢复；
-		// 硬件就绪后按 perf_active 重放一次，避免界面掉回内置档。
-		SynchronizationContext? startupContext = SynchronizationContext.Current;
-		hw.ConnectionReady += delegate { perfModeService.ScheduleStartupReplay(startupContext); };
-		perfModeService.ScheduleStartupReplay(startupContext);
 		// 2026-10-09（修 B1「旧键 split-brain」）：托盘切自定义档（SettingsForm）与电源变化重应用
 		// （ModeControl.ReapplyCustomProfileAsync）都走 WinPowerPlan.ApplyProfile(固件档位号)，而旧实现
 		// 读的是已废弃的旧键 customN_plan / customN_boost（从不清除，还会被「当前活动方案」自动播种），
@@ -1269,53 +1261,6 @@ internal sealed class PerfModeService
 			Logger.WriteError(activateLog);
 		}
 		RaiseActiveChanged();
-	}
-	/// <summary>
-	/// 启动恢复调度：等硬件就绪后延迟一点再重放一次本地存档档位（只跑一次）。
-	/// 宝龙达没有自定义固件档，重启后必须由软件重新下发一次自定义参数；
-	/// 若存档当前档不是自定义，ReplayLocalProfileOnStartupAsync 会直接返回，不会跳到自定义。
-	/// </summary>
-	internal void ScheduleStartupReplay(SynchronizationContext? uiContext = null)
-	{
-		// 只给宝龙达补启动重放；GCU/无界/EC 已有各自的启动路径。
-		if (_hw == null || !_hw.UsesBaolongda)
-		{
-			return;
-		}
-		if (Interlocked.Exchange(ref _startupReplayStarted, 1) != 0)
-		{
-			return;
-		}
-		if (uiContext != null)
-		{
-			// ActiveChanged 会回到 UI；不能在 Task.Run 线程里直接重放。
-			uiContext.Post(_ => _ = RunStartupReplayAsync(), null);
-			return;
-		}
-		_ = RunStartupReplayAsync();
-	}
-
-	private async Task RunStartupReplayAsync()
-	{
-		try
-		{
-			// ConnectionReady 之前硬件可能还没就绪；2.5s 首探后继续等，避免一次失败就永久放弃。
-			for (int attempt = 0; attempt < 20; attempt++)
-			{
-				await Task.Delay(attempt == 0 ? 2500 : 1000);
-				if (_hw == null || !_hw.IsConnected)
-				{
-					continue;
-				}
-				await ReplayLocalProfileOnStartupAsync();
-				return;
-			}
-			Logger.WriteError("[perfmode] 宝龙达启动恢复：等待硬件就绪超时（20 次）⇒ 放弃本次重放");
-		}
-		catch (Exception ex)
-		{
-			Logger.WriteError("[perfmode] 启动恢复调度失败（已吞掉）：" + ex.Message);
-		}
 	}
 	// <summary> （启动预热顺序）：④ 模式对账（串行 await；Wujie 已有“不被固件覆盖”门控）</summary>
 	internal Task ReconcileForStartupAsync()
