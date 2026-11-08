@@ -188,8 +188,12 @@ internal sealed record MachineIdentity(
 		{
 		}
 
+		bool hasTongfangNvram = false;
+		try { hasTongfangNvram = UefiGpuMux.HasMuxVariable; } catch { }
+		bool hasNvidiaDgpu = false;
+		try { hasNvidiaDgpu = MechrevoLite.Gpu.GpuGenerationProvider.Current().HasDgpu; } catch { }
 		bool tongfangFamily = ProbeTongfangFamily(board, model, generation, gcuInstalled, whitelisted,
-			out string tongfangSource);
+			hasTongfangNvram, hasNvidiaDgpu, out string tongfangSource);
 		return new MachineIdentity(board, boardSource, whitelisted, generation, gcuInstalled,
 			model, modelSource, mifsClass, mifsPresent, mifsLegacyCompatible,
 			projectId, projectIdSource, gcuVariant, gcuVariantFamily,
@@ -229,7 +233,7 @@ internal sealed record MachineIdentity(
 		string boardSource = boardText.Length == 0 ? "unknown" : "test";
 		string modelSource = modelText.Length == 0 ? "unknown" : "test";
 		bool tongfangFamily = ProbeTongfangFamily(boardText, modelText, generationText, gcuInstalled, whitelisted,
-			out string tongfangSource);
+			hasTongfangNvram: false, hasNvidiaDgpu: false, out string tongfangSource);
 		return new MachineIdentity(boardText, boardSource, whitelisted, generationText, gcuInstalled,
 			modelText, modelSource, mifsText, mifsClass, mifsClass,
 			projectIdText, projectIdText.Length == 0 ? "unknown" : "test",
@@ -248,6 +252,13 @@ internal sealed record MachineIdentity(
 	/// <summary>同方族只读判定：名字命中（无界 X / UMI）或原 GCU 同方板号；宝龙达白名单优先排除。</summary>
 	private static bool ProbeTongfangFamily(string board, string model, string generation,
 		bool gcuInstalled, bool whitelisted, out string source)
+	{
+		return ProbeTongfangFamily(board, model, generation, gcuInstalled, whitelisted,
+			hasTongfangNvram: false, hasNvidiaDgpu: false, out source);
+	}
+
+	private static bool ProbeTongfangFamily(string board, string model, string generation,
+		bool gcuInstalled, bool whitelisted, bool hasTongfangNvram, bool hasNvidiaDgpu, out string source)
 	{
 		source = "";
 		if (whitelisted)
@@ -275,6 +286,16 @@ internal sealed record MachineIdentity(
 			|| boardText.StartsWith("LAPKC", StringComparison.Ordinal))
 		{
 			source = "umi";
+			return true;
+		}
+		if (hasTongfangNvram)
+		{
+			source = "tongfang-nvram";
+			return true;
+		}
+		if (hasNvidiaDgpu)
+		{
+			source = "nvidia-dgpu";
 			return true;
 		}
 		if (gcuInstalled)
