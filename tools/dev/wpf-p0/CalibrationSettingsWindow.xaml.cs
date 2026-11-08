@@ -90,6 +90,7 @@ public partial class CalibrationSettingsWindow : Window
             }
             AppConfig.Set("calib_custom_icc", result.FileName);
             AppConfig.Set("calib_factory_icc", result.FileName);
+            AppConfig.Set("calib_factory_files", string.Join("|", result.FileNames ?? new[] { result.FileName }));
             AppConfig.Set("calib_icc_origin", "cloud");
             AppConfig.Set("calib_custom_on", 1);
             AppConfig.Set("calib_mode", 999);
@@ -102,13 +103,10 @@ public partial class CalibrationSettingsWindow : Window
                 RefreshIccList();
                 IccCombo.IsEnabled = true;
                 ImportButton.IsEnabled = true;
-                int index = IccHelper.IsDefaultIccName(result.FileName)
-                    ? 0
-                    : (_localIccProfiles.Count <= 1 ? 1 : IccCombo.Items.IndexOf(result.FileName));
-                if (index >= 0)
-                {
-                    IccCombo.SelectedIndex = index;
-                }
+                string selectedLabel = _iccLabelToFile
+                    .FirstOrDefault(pair => string.Equals(pair.Value, result.FileName, StringComparison.OrdinalIgnoreCase)).Key
+                    ?? result.FileName;
+                IccCombo.SelectedItem = selectedLabel;
             }
             finally
             {
@@ -135,33 +133,12 @@ public partial class CalibrationSettingsWindow : Window
         _localIccProfiles = IccHelper.ListCustomIccFiles();
         _defaultIccFile = _localIccProfiles.FirstOrDefault(IccHelper.IsDefaultIccName) ?? "";
         _iccLabelToFile.Clear();
-        string saved = AppConfig.GetString("calib_custom_icc") ?? "";
-        if (_localIccProfiles.Count <= 1)
-        {
-            // 单文件包：和以前一样只显示「默认校色 / 自定义校色」。
-            IccCombo.Items.Add("默认校色");
-            string customLabel = string.Equals(AppConfig.GetString("calib_icc_origin"), "cloud", StringComparison.OrdinalIgnoreCase)
-                ? "原厂校色" : "自定义校色";
-            IccCombo.Items.Add(customLabel);
-            string sole = _localIccProfiles.FirstOrDefault() ?? "";
-            if (!string.IsNullOrWhiteSpace(sole))
-            {
-                _iccLabelToFile[customLabel] = sole;
-            }
-            IccCombo.SelectedIndex = AppConfig.Is("calib_custom_on") && _localIccProfiles.Count == 1 ? 1 : 0;
-            if (DeleteButton != null) DeleteButton.IsEnabled = _localIccProfiles.Count > 0;
-            return;
-        }
-        // 多文件包：default.icc = 默认校色；sRGB / P3 / AdobeRGB 按实际文件显示。
         IccCombo.Items.Add("默认校色");
         foreach (string file in _localIccProfiles)
         {
-            if (IccHelper.IsDefaultIccName(file))
-            {
-                _iccLabelToFile["默认校色"] = file;
-                continue;
-            }
-            string label = IccHelper.DisplayNameFor(file);
+            string label = IccHelper.IsFactoryIcc(file)
+                ? "官方校色 · " + file
+                : file;
             if (_iccLabelToFile.ContainsKey(label))
             {
                 label = file;
@@ -169,12 +146,13 @@ public partial class CalibrationSettingsWindow : Window
             _iccLabelToFile[label] = file;
             IccCombo.Items.Add(label);
         }
+        string saved = AppConfig.GetString("calib_custom_icc") ?? "";
         if (!string.IsNullOrEmpty(saved))
         {
             foreach (string label in IccCombo.Items.OfType<string>())
             {
                 if (string.Equals(_iccLabelToFile.GetValueOrDefault(label), saved, StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(label, IccHelper.DisplayNameFor(saved), StringComparison.OrdinalIgnoreCase))
+                    || string.Equals(label, saved, StringComparison.OrdinalIgnoreCase))
                 {
                     IccCombo.SelectedItem = label;
                     break;
@@ -230,6 +208,12 @@ public partial class CalibrationSettingsWindow : Window
         }
         bool on = CustomSwitch.IsChecked == true;
         AppConfig.Set("calib_custom_on", on ? 1 : 0);
+        // 开关必须绑定当前下拉选中的 ICC，否则只改开关不会关联文件。
+        if (on && IccCombo.SelectedItem is string selected
+            && _iccLabelToFile.TryGetValue(selected, out string selectedFile))
+        {
+            AppConfig.Set("calib_custom_icc", selectedFile);
+        }
         // 自定义必须和主界面的 calib_mode=999 同步，否则主界面会按原生校色模式 0 下发而失败。
         AppConfig.Set("calib_mode", on ? 999 : 0);
         AppConfig.Flush();
@@ -298,6 +282,7 @@ public partial class CalibrationSettingsWindow : Window
             }
             AppConfig.Set("calib_custom_icc", result.FileName);
             AppConfig.Set("calib_factory_icc", result.FileName);
+            AppConfig.Set("calib_factory_files", string.Join("|", result.FileNames ?? new[] { result.FileName }));
             AppConfig.Set("calib_icc_origin", "cloud");
             AppConfig.Set("calib_custom_on", 1);
             AppConfig.Set("calib_mode", 999);
@@ -307,10 +292,10 @@ public partial class CalibrationSettingsWindow : Window
             IccCombo.IsEnabled = true;
             ImportButton.IsEnabled = true;
             RefreshIccList();
-            int index = IccHelper.IsDefaultIccName(result.FileName)
-                ? 0
-                : IccCombo.Items.IndexOf(result.FileName);
-            if (index >= 0) IccCombo.SelectedIndex = index;
+            string selectedLabel = _iccLabelToFile
+                .FirstOrDefault(pair => string.Equals(pair.Value, result.FileName, StringComparison.OrdinalIgnoreCase)).Key
+                ?? result.FileName;
+            IccCombo.SelectedItem = selectedLabel;
             string importedList = result.FileNames is { Count: > 0 } names
                 ? string.Join(Environment.NewLine, names)
                 : result.FileName;

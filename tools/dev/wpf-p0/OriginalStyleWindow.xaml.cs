@@ -8822,32 +8822,24 @@ public partial class OriginalStyleWindow : Window
             bool customAvailable = customOn || localIcc.Count > 0;
             if (customAvailable)
             {
-                if (localIcc.Count <= 1)
+                foreach (string profile in localIcc)
                 {
-                    CalibrationCombo.Items.Add(new ComboBoxItem
+                    string label;
+                    if (IccHelper.IsDefaultIccName(profile))
                     {
-                        Content = string.Equals(AppConfig.GetString("calib_icc_origin"), "cloud", StringComparison.OrdinalIgnoreCase)
-                            ? "原厂校色" : WpfStrings.OriginalStyleWindow_xaml_Content_5,
-                        Tag = 999
-                    });
-                }
-                else
-                {
-                    bool hasDefault = localIcc.Any(IccHelper.IsDefaultIccName);
-                    if (hasDefault)
-                    {
-                        CalibrationCombo.Items.Add(new ComboBoxItem { Content = "默认校色", Tag = 999 });
+                        label = "默认校色";
                     }
-                    foreach (string profile in localIcc)
+                    else if (IccHelper.IsFactoryIcc(profile))
                     {
-                        if (!IccHelper.IsDefaultIccName(profile))
-                        {
-                            CalibrationCombo.Items.Add(new ComboBoxItem { Content = profile, Tag = 999 });
-                        }
+                        label = "官方校色 · " + profile;
                     }
+                    else
+                    {
+                        label = profile;
+                    }
+                    CalibrationCombo.Items.Add(new ComboBoxItem { Content = label, Tag = 999 });
                 }
-            }
-            int index = 0;
+            }            int index = 0;
             string savedIcc = AppConfig.GetString("calib_custom_icc") ?? "";
             for (int i = 0; i < CalibrationCombo.Items.Count; i++)
             {
@@ -8858,11 +8850,19 @@ public partial class OriginalStyleWindow : Window
                         index = i;
                         break;
                     }
-                    if (localIcc.Count <= 1
-                        ? i == CalibrationCombo.Items.Count - 1
-                        : string.Equals(item.Content?.ToString(), savedIcc, StringComparison.OrdinalIgnoreCase)
-                            || (string.Equals(item.Content?.ToString(), "默认校色", StringComparison.Ordinal)
-                                && IccHelper.IsDefaultIccName(savedIcc)))
+                    string content = item.Content?.ToString() ?? "";
+                    if (localIcc.Count <= 1 && i == CalibrationCombo.Items.Count - 1)
+                    {
+                        index = i;
+                        break;
+                    }
+                    if (string.Equals(content, savedIcc, StringComparison.OrdinalIgnoreCase)
+                        || content.EndsWith(" · " + savedIcc, StringComparison.OrdinalIgnoreCase)
+                        || (string.Equals(content, "默认校色", StringComparison.Ordinal) && IccHelper.IsDefaultIccName(savedIcc)))
+                    {
+                        index = i;
+                        break;
+                    }
                     {
                         index = i;
                         break;
@@ -9001,13 +9001,29 @@ public partial class OriginalStyleWindow : Window
         {
             List<string> localIcc = IccHelper.ListCustomIccFiles();
             string? selectedText = (CalibrationCombo.SelectedItem as ComboBoxItem)?.Content?.ToString();
-            if (localIcc.Count == 1)
+            string? selectedFile = null;
+            if (!string.IsNullOrWhiteSpace(selectedText))
             {
-                AppConfig.Set("calib_custom_icc", localIcc[0]);
+                if (selectedText.StartsWith("官方校色 · ", StringComparison.Ordinal))
+                {
+                    selectedFile = selectedText.Substring("官方校色 · ".Length);
+                }
+                else if (string.Equals(selectedText, "默认校色", StringComparison.Ordinal))
+                {
+                    selectedFile = localIcc.FirstOrDefault(IccHelper.IsDefaultIccName);
+                }
+                else if (localIcc.Contains(selectedText, StringComparer.OrdinalIgnoreCase))
+                {
+                    selectedFile = selectedText;
+                }
             }
-            else if (!string.IsNullOrWhiteSpace(selectedText) && localIcc.Contains(selectedText, StringComparer.OrdinalIgnoreCase))
+            if (string.IsNullOrWhiteSpace(selectedFile) && localIcc.Count == 1)
             {
-                AppConfig.Set("calib_custom_icc", selectedText);
+                selectedFile = localIcc[0];
+            }
+            if (!string.IsNullOrWhiteSpace(selectedFile))
+            {
+                AppConfig.Set("calib_custom_icc", selectedFile);
             }
             AppConfig.Flush();
             string iccName = AppConfig.GetString("calib_custom_icc") ?? "";

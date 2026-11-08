@@ -209,6 +209,30 @@ public static class IccHelper
 		return level;
 	}
 
+	public static IReadOnlyList<string> FactoryIccFiles()
+	{
+		string raw = AppConfig.GetString("calib_factory_files") ?? "";
+		if (!string.IsNullOrWhiteSpace(raw))
+		{
+			return raw.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+		}
+		string one = AppConfig.GetString("calib_factory_icc") ?? "";
+		return string.IsNullOrWhiteSpace(one) ? Array.Empty<string>() : new[] { one };
+	}
+
+	public static bool IsFactoryIcc(string? fileName)
+	{
+		string name = Path.GetFileName(fileName ?? "");
+		foreach (string factory in FactoryIccFiles())
+		{
+			if (string.Equals(Path.GetFileName(factory), name, StringComparison.OrdinalIgnoreCase))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	public static List<string> ListCustomIccFiles()
 	{
 		EnsureCustomIccDir();
