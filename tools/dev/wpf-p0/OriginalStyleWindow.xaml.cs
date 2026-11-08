@@ -8917,7 +8917,10 @@ public partial class OriginalStyleWindow : Window
         int mode = SelectedCalibrationMode();
         CalibrationSwitch.IsEnabled = false;
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_58;
-        var gcuIccSnapshot = on && mode != 999
+        bool gcuCalibrationPath = mode != 999
+            && _backendProbe.Hw?.IsGcuConnected == true
+            && _backendProbe.Service != null;
+        var gcuIccSnapshot = on && gcuCalibrationPath
             ? await MechrevoLite.Display.GcuIccProfileAssociator.CaptureAsync("ui-calib-on").ConfigureAwait(true)
             : null;
         bool ok;
@@ -8951,7 +8954,7 @@ public partial class OriginalStyleWindow : Window
         }
         if (ok)
         {
-            if (on && mode != 999 && gcuIccSnapshot != null)
+            if (on && gcuCalibrationPath && gcuIccSnapshot != null)
             {
                 MechrevoLite.Display.GcuIccProfileAssociator.ApplyAfterCalibrationOnDetached(gcuIccSnapshot, "ui-calib-on");
             }
