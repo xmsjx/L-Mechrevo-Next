@@ -108,7 +108,7 @@
             </Grid.RowDefinitions>
 
             <!-- 自绘标题栏 -->
-            <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="WideTitleBar_MouseLeftButtonDown">
+            <Grid Grid.Row="0" Background="Transparent">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
                     <Border Width="18" Height="18" CornerRadius="5" Background="{DynamicResource TextBrush}" Margin="0,0,8,0">
                         <TextBlock Text="L" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource WindowBgBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />

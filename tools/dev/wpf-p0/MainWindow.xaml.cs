@@ -703,18 +703,6 @@ public partial class MainWindow : Window
         }));
     }
 
-    private void WideTitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ClickCount == 1)
-        {
-            DragMove();
-        }
-        else
-        {
-            ToggleWideMaximize();
-        }
-    }
-
     private async void WideMinimize_Click(object sender, RoutedEventArgs e)
     {
         if (_animatingWindow) return;
@@ -820,11 +808,13 @@ public partial class MainWindow : Window
         {
             _wideMaximized = true;
             ApplyWideMaximizedChrome(true);
+            if (WideMaxButton != null) WideMaxButton.Content = "❐";
         }
         else if (WindowState == WindowState.Normal)
         {
             _wideMaximized = false;
             ApplyWideMaximizedChrome(false);
+            if (WideMaxButton != null) WideMaxButton.Content = "□";
             RootContent.Opacity = 1;
             if (RootContent.RenderTransform is ScaleTransform scale)
             {
