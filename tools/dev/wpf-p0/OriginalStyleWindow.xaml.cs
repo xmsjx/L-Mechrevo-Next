@@ -8959,7 +8959,7 @@ public partial class OriginalStyleWindow : Window
             StatusText.Text = "云端校色包不包含当前档位对应的 ICC 文件。";
             return false;
         }
-        InitScreenColorControls();
+        // 不在获取成功时重建界面：此时 calib_enabled 还是旧值，会把用户刚打开的开关刷回关闭。
         return true;
     }
 
