@@ -8854,6 +8854,17 @@ public partial class OriginalStyleWindow : Window
             }
             CalibrationCombo.SelectedIndex = index;
             bool calibrationOn = AppConfig.Exists("calib_enabled") && AppConfig.Is("calib_enabled");
+            if (calibrationOn
+                && probe.Hw?.IsGcuConnected != true
+                && !IccHelper.HasFactoryIccFile())
+            {
+                // ICC 目录为空/文件丢失时，不能沿用旧的已校色状态。
+                calibrationOn = false;
+                AppConfig.Set("calib_enabled", 0);
+                AppConfig.Flush();
+                StatusText.Text = WpfStrings.L("未找到官方校色文件，请重新开启校色以从云端获取。",
+                    "No factory ICC found; turn calibration on again to fetch it.");
+            }
             CalibrationSwitch.IsChecked = calibrationOn;
             CalibrationCombo.IsEnabled = calibrationOn;
             CalibrationSettingsButton.IsEnabled = true;
@@ -8922,8 +8933,9 @@ public partial class OriginalStyleWindow : Window
             && !IccHelper.HasFactoryIccFile())
         {
             StatusText.Text = WpfStrings.L("正在从云端获取官方校色文件…", "Fetching factory ICC from cloud…");
+            using CancellationTokenSource fetchCts = new(TimeSpan.FromSeconds(20));
             MechrevoLite.Display.CloudIccFetcher.Result fetched =
-                await MechrevoLite.Display.CloudIccFetcher.FetchAsync().ConfigureAwait(true);
+                await MechrevoLite.Display.CloudIccFetcher.FetchAsync(fetchCts.Token).ConfigureAwait(true);
             if (!fetched.Ok || string.IsNullOrWhiteSpace(fetched.FileName))
             {
                 _syncingCalibration = true;
@@ -8933,6 +8945,16 @@ public partial class OriginalStyleWindow : Window
                 StatusText.Text = string.IsNullOrWhiteSpace(fetched.Detail)
                     ? WpfStrings.DisplayIccMissing
                     : fetched.Detail;
+                return;
+            }
+            string fetchedPath = System.IO.Path.Combine(IccHelper.OfficialIccDir, fetched.FileName);
+            if (!System.IO.File.Exists(fetchedPath))
+            {
+                _syncingCalibration = true;
+                CalibrationSwitch.IsChecked = false;
+                _syncingCalibration = false;
+                CalibrationSwitch.IsEnabled = true;
+                StatusText.Text = "云端返回 ICC，但文件未落地：" + fetched.FileName;
                 return;
             }
             AppConfig.Set("calib_factory_icc", fetched.FileName);

@@ -35,6 +35,7 @@ public static class CloudIccFetcher
             {
                 return new Result(false, null, "云端获取校色失败：未读到面板 ID");
             }
+            Logger.WriteError("[icc-cloud] monitors=" + monitors.Count + " macs=" + macs.Count);
 
             // 50 系优先序列号（aistone）；40 系/未知优先 MAC（uniwill）。
             bool gen50 = MechrevoLite.Program.hw?.DgpuGeneration
@@ -80,8 +81,10 @@ public static class CloudIccFetcher
 
             if (hit == null)
             {
+                Logger.WriteError("[icc-cloud] 未命中（monitors=" + monitors.Count + " macs=" + macs.Count + "）");
                 return new Result(false, null, "云端获取校色失败：未找到匹配当前面板的 ICC（已尝试序列号、MAC 和兜底路径）");
             }
+            Logger.WriteError("[icc-cloud] 命中 " + hit.Url + " files=" + hit.FileNames.Count);
             // 多文件包的默认项固定是 default.icc；单文件包只有屏幕厂商+序列号/MAC 那个文件。
             string primary = hit.FileNames.FirstOrDefault(IccHelper.IsDefaultIccName)
                 ?? hit.FileNames.FirstOrDefault()
