@@ -789,6 +789,18 @@ public partial class MainWindow : Window
     {
         try
         {
+            // 工作区策略会把 MaxWidth/MaxHeight 限制为工作区-32；最大化时必须放开，否则右侧/底部永远差 32px。
+            if (maximized)
+            {
+                MaxWidth = double.PositiveInfinity;
+                MaxHeight = double.PositiveInfinity;
+            }
+            else
+            {
+                Rect work = SystemParameters.WorkArea;
+                MaxWidth = Math.Max(MinWidth, work.Width - 32);
+                MaxHeight = Math.Max(MinHeight, work.Height - 32);
+            }
             if (WideChrome != null)
             {
                 WideChrome.CornerRadius = maximized ? new CornerRadius(0) : new CornerRadius(12);
