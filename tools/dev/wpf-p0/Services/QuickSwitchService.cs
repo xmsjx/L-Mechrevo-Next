@@ -327,7 +327,11 @@ internal sealed class QuickSwitchService : IQuickSwitchService
                 {
                     return ServiceResult.Fail(WpfStrings.QuickBackendOffline);
                 }
-                bool handled = hw.TrySetFanBoostViaBackend(on, out bool confirmed);
+                (bool handled, bool confirmed) = await Task.Run(() =>
+                {
+                    bool h = hw.TrySetFanBoostViaBackend(on, out bool c);
+                    return (h, c);
+                }).ConfigureAwait(false);
                 if (!handled)
                 {
                     return ServiceResult.Fail(WpfStrings.QuickFanBoostBackendUnavailable);

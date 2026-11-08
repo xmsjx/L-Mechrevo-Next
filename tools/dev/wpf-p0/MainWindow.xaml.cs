@@ -1213,11 +1213,13 @@ public partial class MainWindow : Window
                 if (_owner != null)
                 {
                     bool previous = _owner.WideQuickTiles().FirstOrDefault(item => item.Key == key).On;
+                    _quickTilePending[key] = !previous;
+                    _quickTilePendingTick[key] = Environment.TickCount64;
+                    RefreshQuickTiles();
                     bool ok = await _owner.WideToggleQuickAsync(key);
-                    if (ok)
+                    if (!ok)
                     {
-                        _quickTilePending[key] = !previous;
-                        _quickTilePendingTick[key] = Environment.TickCount64;
+                        _quickTilePending.Remove(key);
                     }
                     RefreshQuickTiles();
                     RefreshIgpuSaving();
