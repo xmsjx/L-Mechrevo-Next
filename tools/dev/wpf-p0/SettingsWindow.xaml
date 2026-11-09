@@ -599,7 +599,7 @@
                 </Border>
 
                 <Grid Margin="0,4,0,0">
-                    <TextBlock x:Name="StatusText" Text="beta23.7.8" Style="{StaticResource Hint}" Margin="0" />
+                    <TextBlock x:Name="StatusText" Text="beta23.7.8r2" Style="{StaticResource Hint}" Margin="0" />
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                         <Button Content="{x:Static loc:WpfStrings.SettingsWindow_Content_2}" Style="{StaticResource FlatButton}" Click="OpenLicenses_Click" Margin="0,0,8,0" />
                         <Button Content="{x:Static loc:WpfStrings.SettingsWindow_Content}" Style="{StaticResource FlatButton}" Click="OpenFolder_Click" />
