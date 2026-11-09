@@ -11235,7 +11235,7 @@ public partial class OriginalStyleWindow : Window
         AppConfig.Flush();
         UpdateBackgroundVisibility();
         RefreshSegmentHighlights();
-        StatusText.Text = "beta23.7.7 / WPF P0 · " + (_dark ? WpfStrings.DarkTheme : WpfStrings.LightTheme);
+        StatusText.Text = "beta23.7.7r2 / WPF P0 · " + (_dark ? WpfStrings.DarkTheme : WpfStrings.LightTheme);
         _wideWindow?.ApplyThemeFromOwner(_dark);
     }
 
@@ -11267,7 +11267,7 @@ public partial class OriginalStyleWindow : Window
         AppConfig.Flush();
         UpdateBackgroundVisibility();
         RefreshSegmentHighlights();
-        StatusText.Text = "beta23.7.7 / WPF P0 · " + (_dark ? WpfStrings.DarkTheme : WpfStrings.LightTheme);
+        StatusText.Text = "beta23.7.7r2 / WPF P0 · " + (_dark ? WpfStrings.DarkTheme : WpfStrings.LightTheme);
         _wideWindow?.ApplyThemeFromOwner(_dark);
     }
 
