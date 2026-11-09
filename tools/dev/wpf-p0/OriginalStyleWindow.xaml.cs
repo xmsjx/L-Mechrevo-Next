@@ -519,6 +519,7 @@ public partial class OriginalStyleWindow : Window
     }
 
     private bool _customModeCycleBusy;
+    private bool _wideOpening;
 
     /// <summary>
     /// Ctrl+Alt+4：连续按依次循环「自定义 1/2/3...」，每次都按保存的配置重新下发一次，
@@ -6295,7 +6296,12 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
+        bool wasCollapsed = LiquidBody.Visibility != Visibility.Visible;
         ToggleSection(LiquidBody, LiquidArrow, LiquidOpenConfigKey);
+        if (wasCollapsed)
+        {
+            _ = Dispatcher.BeginInvoke(new Action(RefreshLiquidCoolingUi), DispatcherPriority.Background);
+        }
     }
 
     private void MoreHeader_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -8232,6 +8238,16 @@ public partial class OriginalStyleWindow : Window
     private void RefreshLiquidCoolingUi()
     {
         EnsureLiquidLightRow();
+        if (LiquidBody.Visibility != Visibility.Visible)
+        {
+            // 折叠状态只保留区域的显隐，不刷新隐藏的下拉/灯光控件。
+            bool forceCollapsed = MechrevoLite.AppConfig.Is("force_liquid_cooling_menu");
+            LiquidSection.Visibility = (forceCollapsed || _backendProbe?.Hw?.SupportsLiquidCooling == true
+                || _backendProbe?.Capabilities?.LiquidCooling == true
+                || EnsureWaterCoolerRouting()?.Route != LiquidCoolingControlRoute.None)
+                ? Visibility.Visible : Visibility.Collapsed;
+            return;
+        }
         try
         {
             WaterCoolerRoutingService? routing = EnsureWaterCoolerRouting();
@@ -11375,26 +11391,48 @@ public partial class OriginalStyleWindow : Window
 
     internal void ShowWideWindow()
     {
-        _wideWindowCacheTimer.Stop();
-        if (_wideWindow == null)
+        if (!Dispatcher.CheckAccess())
         {
-            MainWindow window = new(this, _backendProbe);
-            window.Closed += (_, _) => _wideWindow = null;
-            _wideWindow = window;
+            Dispatcher.BeginInvoke(new Action(ShowWideWindow));
+            return;
         }
-        AppConfig.Set("last_window_mode", "wide");
-        AppConfig.Flush();
-        Opacity = 0;
-        ShowInTaskbar = false;
-        Hide();
-        ScheduleMiniRenderRelease();
-        if (_wideWindow.WindowState == WindowState.Minimized)
+        if (_wideOpening)
         {
-            _wideWindow.WindowState = WindowState.Normal;
+            return;
         }
-        _wideWindow.Show();
-        _wideWindow.Activate();
-        _wideWindow.RefreshFromOwner();
+        if (_wideWindow?.IsVisible == true)
+        {
+            _wideWindow.Activate();
+            return;
+        }
+        _wideOpening = true;
+        try
+        {
+            _wideWindowCacheTimer.Stop();
+            if (_wideWindow == null)
+            {
+                MainWindow window = new(this, _backendProbe);
+                window.Closed += (_, _) => _wideWindow = null;
+                _wideWindow = window;
+            }
+            AppConfig.Set("last_window_mode", "wide");
+            AppConfig.Flush();
+            Opacity = 0;
+            ShowInTaskbar = false;
+            Hide();
+            ScheduleMiniRenderRelease();
+            if (_wideWindow.WindowState == WindowState.Minimized)
+            {
+                _wideWindow.WindowState = WindowState.Normal;
+            }
+            _wideWindow.Show();
+            _wideWindow.Activate();
+            _wideWindow.RefreshFromOwner();
+        }
+        finally
+        {
+            _wideOpening = false;
+        }
     }
 
     internal void RefreshWideBackground()
