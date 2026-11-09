@@ -821,32 +821,35 @@ public partial class CustomModeWindow : Window
         // 没有独显（无界办公本等）不显示 GPU 超频/动态加速卡片。
         TempGpuCard.Visibility = (apuOrNoDgpu || intelXingyaoMsr)
             ? Visibility.Collapsed : Visibility.Visible;
-        Pl4UnitRow.Visibility = gcuTongfangIntel ? Visibility.Visible : Visibility.Collapsed;
-        if (gcuTongfangIntel)
+        // 机主要求先强制显示本行用于审查，实际可用性由 EC 读取结果决定。
+        Pl4UnitRow.Visibility = Visibility.Visible;
+        _syncingPl4Unit = true;
+        try
         {
-            _syncingPl4Unit = true;
-            try
+            bool open = !MechrevoLite.AppConfig.Exists("pl4_edit_open")
+                || MechrevoLite.AppConfig.Is("pl4_edit_open");
+            Pl4EditSwitch.IsChecked = open;
+            Pl4UnitControls.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+            if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool pl4Double, out byte pl4Raw))
             {
-                if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool pl4Double, out byte pl4Raw))
-                {
-                    _pl4Unit = pl4Double ? 2 : 1;
-                    Pl4UnitSwitch.IsChecked = pl4Double;
-                    // EC 门控为权威：同步到门面层，后续 GCU 回报不覆盖。
-                    CurrentHw?.SetPl4UnitDouble(pl4Double);
-                    Pl4UnitStatus.Text = "0x0727=0x" + pl4Raw.ToString("X2") + " · " + (pl4Double ? "2W/LSB" : "1W/LSB");
-                    RefreshPl4Readback("");
-                }
-                else
-                {
-                    Pl4UnitSwitch.IsChecked = false;
-                    Pl4UnitSwitch.IsEnabled = false;
-                    Pl4UnitStatus.Text = "0x0727 读取失败";
-                }
+                _pl4Unit = pl4Double ? 2 : 1;
+                Pl4UnitSwitch.IsChecked = pl4Double;
+                Pl4UnitSwitch.IsEnabled = MechrevoLite.Hardware.EcPl4Unit.IsSupported;
+                CurrentHw?.SetPl4UnitDouble(pl4Double);
+                Pl4UnitStatus.Text = "0x0727=0x" + pl4Raw.ToString("X2") + " · " + (pl4Double ? "2W/LSB" : "1W/LSB");
+                RefreshPl4Readback("");
+                RecordPl4Default(pl4Double);
             }
-            finally
+            else
             {
-                _syncingPl4Unit = false;
+                Pl4UnitSwitch.IsChecked = false;
+                Pl4UnitSwitch.IsEnabled = false;
+                Pl4UnitStatus.Text = "0x0727 读取失败";
             }
+        }
+        finally
+        {
+            _syncingPl4Unit = false;
         }
         // 30 系 NUC/UMI 是固定基础 TGP，只能调 Dynamic Boost；基础 TGP 行直接隐藏。
         bool fixedBaseTgp = hwForRows != null
@@ -1311,6 +1314,66 @@ public partial class CustomModeWindow : Window
         catch
         {
         }
+    }
+
+    private static string Pl4DefaultKey()
+    {
+        string board = MechrevoLite.Hardware.BoardWhitelist.ReadBoardProduct();
+        foreach (char ch in System.IO.Path.GetInvalidFileNameChars())
+        {
+            board = board.Replace(ch, '_');
+        }
+        return "pl4_unit_default_" + (string.IsNullOrWhiteSpace(board) ? "unknown" : board.Trim());
+    }
+
+    private void RecordPl4Default(bool defaultDouble)
+    {
+        string key = Pl4DefaultKey();
+        if (MechrevoLite.AppConfig.Exists(key))
+        {
+            return;
+        }
+        MechrevoLite.AppConfig.Set(key, defaultDouble ? 1 : 0);
+        MechrevoLite.AppConfig.Flush();
+        Pl4UnitStatus.Text += " · 已记录默认=" + (defaultDouble ? "2W/LSB" : "1W/LSB");
+    }
+
+    private bool ReadPl4Default()
+    {
+        string key = Pl4DefaultKey();
+        if (MechrevoLite.AppConfig.Exists(key))
+        {
+            return MechrevoLite.AppConfig.Get(key, 0) != 0;
+        }
+        return MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool actual, out _) && actual;
+    }
+
+    private void Pl4EditSwitch_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loadingUi || _syncingPl4Unit || Pl4UnitControls == null)
+        {
+            return;
+        }
+        bool open = Pl4EditSwitch.IsChecked == true;
+        Pl4UnitControls.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
+        MechrevoLite.AppConfig.Set("pl4_edit_open", open ? 1 : 0);
+        MechrevoLite.AppConfig.Flush();
+    }
+
+    private void Pl4UnitDefault_Click(object sender, RoutedEventArgs e)
+    {
+        bool target = ReadPl4Default();
+        _syncingPl4Unit = true;
+        try
+        {
+            Pl4UnitSwitch.IsChecked = target;
+        }
+        finally
+        {
+            _syncingPl4Unit = false;
+        }
+        Pl4UnitSwitch_Changed(Pl4UnitSwitch, new RoutedEventArgs());
+        Pl4UnitStatus.Text = "已恢复默认 · " + (target ? "2W/LSB" : "1W/LSB") + " · " + Pl4UnitStatus.Text;
     }
 
     private void Pl4UnitSwitch_Changed(object sender, RoutedEventArgs e)
