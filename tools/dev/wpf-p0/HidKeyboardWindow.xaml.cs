@@ -62,7 +62,17 @@ public partial class HidKeyboardWindow : Window
         int mode = HidStreamerEffects.ToLocalMode(SelectedMode);
         ColorRow.Visibility = HidStreamerEffects.HasColor(mode) ? Visibility.Visible : Visibility.Collapsed;
         SpeedRow.Visibility = HidStreamerEffects.HasSpeed(mode) ? Visibility.Visible : Visibility.Collapsed;
-        AngleRow.Visibility = mode == 1 ? Visibility.Visible : Visibility.Collapsed;
+        bool wave = mode == 1;
+        DirectionRow.Visibility = wave ? Visibility.Visible : Visibility.Collapsed;
+        AngleRow.Visibility = Visibility.Collapsed;
+        if (wave)
+        {
+            int directionIndex = Math.Abs(_rgb.WaveAngle - 180) < 45 ? 1
+                : Math.Abs(_rgb.WaveAngle - 90) < 45 ? 2
+                : Math.Abs(_rgb.WaveAngle - 270) < 45 ? 3
+                : 0;
+            DirectionCombo.SelectedIndex = directionIndex;
+        }
         if (HidStreamerEffects.HasColor(mode))
         {
             _color = mode switch
@@ -350,6 +360,16 @@ public partial class HidKeyboardWindow : Window
         {
             AngleText.Text = ((int)e.NewValue) + "°";
         }
+    }
+
+    private void Direction_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (DirectionCombo.SelectedItem is not ComboBoxItem item || !int.TryParse(item.Tag as string, out int angle))
+        {
+            return;
+        }
+        AngleSlider.Value = angle;
+        _rgb.WaveAngle = angle;
     }
 
     private void ApplyEffectParams(int mode)

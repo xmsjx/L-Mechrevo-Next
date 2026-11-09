@@ -56,6 +56,16 @@
                 <Slider x:Name="AngleSlider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="0" Maximum="360" Value="30" ValueChanged="Angle_Changed" />
                 <TextBlock x:Name="AngleText" Grid.Column="2" Text="30°" TextAlignment="Right" VerticalAlignment="Center" />
             </Grid>
+            <Grid x:Name="DirectionRow" Margin="0,0,0,8" Visibility="Collapsed">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="90" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="方向" VerticalAlignment="Center" />
+                <ComboBox x:Name="DirectionCombo" Grid.Column="1" Style="{StaticResource RoundCombo}" SelectionChanged="Direction_Changed">
+                    <ComboBoxItem Content="从左到右" Tag="0" />
+                    <ComboBoxItem Content="从右到左" Tag="180" />
+                    <ComboBoxItem Content="从上到下" Tag="90" />
+                    <ComboBoxItem Content="从下到上" Tag="270" />
+                </ComboBox>
+            </Grid>
             <Grid x:Name="FpsRow" Margin="0,0,0,8">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="90" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                 <TextBlock Text="{x:Static loc:WpfStrings.HidKeyboardWindow_Text}" VerticalAlignment="Center" />
