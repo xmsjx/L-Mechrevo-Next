@@ -821,13 +821,13 @@ public partial class CustomModeWindow : Window
         // 没有独显（无界办公本等）不显示 GPU 超频/动态加速卡片。
         TempGpuCard.Visibility = (apuOrNoDgpu || intelXingyaoMsr)
             ? Visibility.Collapsed : Visibility.Visible;
-        // 机主要求先强制显示本行用于审查，实际可用性由 EC 读取结果决定。
-        Pl4UnitRow.Visibility = Visibility.Visible;
+        Pl4UnitRow.Visibility = (gcuTongfangIntel || MechrevoLite.Hardware.EcPl4Unit.IsSupported)
+            ? Visibility.Visible : Visibility.Collapsed;
         _syncingPl4Unit = true;
         try
         {
-            bool open = !MechrevoLite.AppConfig.Exists("pl4_edit_open")
-                || MechrevoLite.AppConfig.Is("pl4_edit_open");
+            bool open = MechrevoLite.AppConfig.Exists("pl4_edit_open")
+                && MechrevoLite.AppConfig.Is("pl4_edit_open");
             Pl4EditSwitch.IsChecked = open;
             Pl4UnitControls.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
             if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool pl4Double, out byte pl4Raw))
