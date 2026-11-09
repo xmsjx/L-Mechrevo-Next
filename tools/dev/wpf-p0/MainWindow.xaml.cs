@@ -1042,6 +1042,12 @@ public partial class MainWindow : Window
             StatusText.Text = WpfStrings.MainWindow_xaml_Text_6 + button.Content;
             return;
         }
+        if (ReferenceEquals(button, HomePerf狂暴) && _owner?.WideSilentTurboVisible == true)
+        {
+            _owner.WideSetMode(1, false);
+            StatusText.Text = WpfStrings.MainWindow_xaml_Text_6 + button.Content;
+            return;
+        }
         if (button.Tag is string text && int.TryParse(text, out int mode))
         {
             _owner?.WideSetMode(mode);

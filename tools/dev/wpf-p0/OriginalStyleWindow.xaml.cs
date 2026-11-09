@@ -382,6 +382,16 @@ public partial class OriginalStyleWindow : Window
             Application.Current.Shutdown();
         };
         _trayIcon.ModeRequested += RequestMode;
+        _trayIcon.ModeRequestedEx += (mode, silentTurbo) =>
+        {
+            if (_backendProbe == null)
+            {
+                return;
+            }
+            _pendingMode = mode;
+            _pendingModeTick = Environment.TickCount64;
+            _ = SwitchModeAsync(mode, silentTurbo);
+        };
         _trayIcon.StateProvider = BuildTrayMenuState;
         _trayIcon.FanBoostRequested += () =>
         {
@@ -722,8 +732,15 @@ public partial class OriginalStyleWindow : Window
         _wideWindow?.RefreshCustomModeEditor();
     }
 
-    internal void WideSetMode(int mode)
+    internal void WideSetMode(int mode, bool? silentTurbo = null)
     {
+        if (mode == 1 && silentTurbo.HasValue && _backendProbe != null)
+        {
+            _pendingMode = mode;
+            _pendingModeTick = Environment.TickCount64;
+            _ = SwitchModeAsync(1, silentTurbo);
+            return;
+        }
         RequestMode(mode);
     }
 

@@ -101,6 +101,7 @@ internal sealed class TrayIconService : IDisposable
     internal event Action? DiagnosticsRequested;
     internal event Action? FanBoostRequested;
     internal event Action<int>? ModeRequested;
+    internal event Action<int, bool?>? ModeRequestedEx;
     internal event Action<int>? GpuModeRequested;
     internal event Action<string>? CustomModeRequested;
     internal event Action? SilentTurboRequested;
@@ -206,7 +207,17 @@ internal sealed class TrayIconService : IDisposable
                 }
                 if (state?.TurboVisible == true)
                 {
-                    _menu.Items.Add(MenuItem(state?.SilentTurboVisible == true ? WpfStrings.TurboHighEnergy : WpfStrings.TrayTurbo, mode == 1 && state?.SilentTurboOn != true, () => ModeRequested?.Invoke(1)));
+                    _menu.Items.Add(MenuItem(state?.SilentTurboVisible == true ? WpfStrings.TurboHighEnergy : WpfStrings.TrayTurbo, mode == 1 && state?.SilentTurboOn != true, delegate
+                    {
+                        if (state?.SilentTurboVisible == true)
+                        {
+                            ModeRequestedEx?.Invoke(1, false);
+                        }
+                        else
+                        {
+                            ModeRequested?.Invoke(1);
+                        }
+                    }));
                 }
             }
 
