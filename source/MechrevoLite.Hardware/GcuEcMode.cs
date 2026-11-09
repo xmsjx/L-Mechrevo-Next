@@ -9,10 +9,18 @@ public static class GcuEcMode
 {
     private const string ExperimentKey = "gcu_ec_experiment";
     private const string DirectKey = "gcu_ec_direct";
+    private static int _active;
 
+    /// <summary>EC 控制模式是否生效：运行时已进入 EC，或用户明确选择 EC。</summary>
     public static bool IsEcMode =>
-        MechrevoLite.AppConfig.Get(ExperimentKey, 0) != 0
-        || MechrevoLite.AppConfig.Get(DirectKey, 0) != 0;
+        System.Threading.Volatile.Read(ref _active) != 0
+        || MechrevoLite.AppConfig.Get(DirectKey, 0) != 0
+        || MechrevoLite.AppConfig.Get(ExperimentKey, 0) != 0;
+
+    /// <summary>进入 EC 后端时标记，供灯光/校准/风扇等本地通道判断。</summary>
+    public static void MarkActive() => System.Threading.Volatile.Write(ref _active, 1);
+
+    public static void ClearActive() => System.Threading.Volatile.Write(ref _active, 0);
 
     public static async Task<(bool Ok, string Detail)> SetModeAsync(bool ecMode)
     {
@@ -24,12 +32,14 @@ public static class GcuEcMode
                 Run("net", "stop GCUBridge");
                 Run("net", "stop GCUService");
                 Run("taskkill", "/IM GCUService.exe /F");
-                MechrevoLite.AppConfig.Set(ExperimentKey, 1);
+                MarkActive();
+                MechrevoLite.AppConfig.Set(ExperimentKey, 0);
                 MechrevoLite.AppConfig.Set(DirectKey, 1);
                 MechrevoLite.AppConfig.Flush();
                 return (true, "已切换 EC 控制模式：GCUService/GCUBridge 已停止");
             }
 
+            ClearActive();
             MechrevoLite.AppConfig.Set(ExperimentKey, 0);
             MechrevoLite.AppConfig.Set(DirectKey, 0);
             MechrevoLite.AppConfig.Flush();

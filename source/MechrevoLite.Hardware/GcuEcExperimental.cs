@@ -4,10 +4,7 @@ using MechrevoLite.Helpers;
 
 namespace MechrevoLite.Hardware;
 
-/// <summary>
-/// 实验性 GCU EC 模式通道：只走 ACPIDriver H2RAM，不扫描 EC 端口。
-/// 仅当环境变量 LM_GCU_EC_EXPERIMENT=1 或配置 gcu_ec_experiment=1 时启用。
-/// </summary>
+/// <summary>EC 控制模式通道：只走 ACPIDriver H2RAM，不扫描 EC 端口。</summary>
 internal static class GcuEcExperimental
 {
     private const int ModeIndexAddress = 1963;
@@ -18,11 +15,10 @@ internal static class GcuEcExperimental
     private const int FanRampAddress = 1927;
     private static int _probeLogged;
 
-    internal static bool Enabled =>
-        string.Equals(Environment.GetEnvironmentVariable("LM_GCU_EC_EXPERIMENT"), "1", StringComparison.Ordinal)
-        || AppConfig.Get("gcu_ec_experiment", 0) != 0;
+    /// <summary>EC 控制模式是否生效；不再是实验开关。</summary>
+    internal static bool Enabled => GcuEcMode.IsEcMode;
 
-    /// <summary>实验启动时直接进入 EC-only，不等待 GCU 连接。</summary>
+    /// <summary>用户明确选择 EC 时直接进入 EC-only，不等待 GCU 连接。</summary>
     internal static bool DirectMode =>
         string.Equals(Environment.GetEnvironmentVariable("LM_GCU_EC_DIRECT"), "1", StringComparison.Ordinal)
         || AppConfig.Get("gcu_ec_direct", 0) != 0;

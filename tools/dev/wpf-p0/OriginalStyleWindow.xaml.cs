@@ -4880,6 +4880,7 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
+            MechrevoLite.Hardware.GcuEcMode.MarkActive();
             MechrevoHw offlineHw = new();
             BackendProbe probe = new(offlineHw, null);
             _backendProbe = probe;
@@ -7548,7 +7549,8 @@ public partial class OriginalStyleWindow : Window
                 _gcuConnectFailures++;
                 Logger.WriteError("[backend] GCU 连接失败 " + _gcuConnectFailures + "/5：" + reason);
                 if (_gcuConnectFailures >= 5
-                    && GcuEcExperimental.Enabled
+                    && (GcuEcMode.IsEcMode
+                        || MechrevoLite.Hardware.MachineIdentity.Collect().TongfangFamily)
                     && TryStartExperimentalOfflineBackend(reason))
                 {
                     return;
