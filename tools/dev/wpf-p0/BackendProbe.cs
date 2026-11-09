@@ -643,6 +643,15 @@ internal sealed class BackendProbe : IDisposable
                 Logger.WriteLine("[xingyao-quick] " + xingyaoDetail);
                 return true;
             }
+            // 关机 USB 供电：GCU 在线时走绝对 ON/OFF 命令，拿得到设备状态；
+            // EC 本地只有翻转脉冲，配置缓存过期时会出现“点了关不掉”。
+            bool usbCharger = string.Equals(key, "usb", StringComparison.OrdinalIgnoreCase);
+            if (usbCharger && _service != null && _hw?.IsGcuConnected == true)
+            {
+                bool usbOk = await _service.SwitchUsbCharger(on).ConfigureAwait(false);
+                Logger.WriteError("[usb] GCU 绝对开关 " + (on ? "开" : "关") + " ⇒ " + usbOk);
+                return usbOk;
+            }
             if (TrySetEcQuickSwitch(key, on, out string ecDetail))
             {
                 Logger.WriteError("[gcu-ec] 快捷开关 " + key + "=" + on + "：" + ecDetail);

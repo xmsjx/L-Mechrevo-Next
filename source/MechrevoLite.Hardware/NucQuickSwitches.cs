@@ -146,9 +146,14 @@ internal static class NucQuickSwitches
             return false;
         }
         Thread.Sleep(30);
-        // 清掉 trigger，别让它一直挂着。
-        TryWrite(TriggerAddress, trigger & ~UsbChargeTriggerBit);
-        bool pulseOk = TryRead(TriggerAddress, out int after) && (after & UsbChargeTriggerBit) == 0;
+        // 清掉 trigger，别让它一直挂着；清失败重读再清一次，避免 bit4 残留导致下次翻转失效。
+        bool clearOk = TryWrite(TriggerAddress, trigger & ~UsbChargeTriggerBit);
+        if (!clearOk)
+        {
+            clearOk = TryRead(TriggerAddress, out int retryTrigger)
+                && TryWrite(TriggerAddress, retryTrigger & ~UsbChargeTriggerBit);
+        }
+        bool pulseOk = clearOk && TryRead(TriggerAddress, out int after) && (after & UsbChargeTriggerBit) == 0;
         // USB 触发可能顺带清掉来电自启；按切换前的值恢复。
         if (TryRead(AcRecoveryAddress, out int acAfter) && (acAfter & AcRecoveryBit) == 0 && acBefore)
         {
