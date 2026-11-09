@@ -1559,13 +1559,6 @@ public partial class CustomModeWindow : Window
             }
             bool cpuOk = MechrevoLite.Hardware.NucPerformanceMode.TryApplyCustom(
                 pl1, pl2, pl4ForEc, tcc, out string detail);
-            // EC 只改 EC 自定义寄存器；Intel 的实际 PL1/PL2 还需要 MSR 才生效。
-            if (MechrevoLite.Hardware.CpuVendor.IsIntel && CurrentHw is MechrevoHw msrHw)
-            {
-                _ = msrHw.TryApplyCpuPowerLimitViaBackend(true, pl1, pl2, tcc ?? 0, out bool msrConfirmed);
-                cpuOk = cpuOk && msrConfirmed;
-                detail += " · IntelMSR=" + (msrConfirmed ? "已确认" : "未确认/失败");
-            }
             MechrevoLite.Hardware.GcuEcExperimental.TryApplyMode(3, out string customModeDetail);
             detail += " · " + customModeDetail;
             bool gpuPowerOk = true;
