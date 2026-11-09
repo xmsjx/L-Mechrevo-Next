@@ -365,11 +365,9 @@ internal static class EcChargeLimit
 				string model = ((evidence.RegSystemProduct ?? string.Empty) + " " + (evidence.WmiModel ?? string.Empty)).Trim();
 				bool wujieName = model.IndexOf("无界", StringComparison.OrdinalIgnoreCase) >= 0
 					|| model.IndexOf("WUJIE", StringComparison.OrdinalIgnoreCase) >= 0;
-				bool xingyaoName = model.IndexOf("星耀", StringComparison.OrdinalIgnoreCase) >= 0
-					|| model.IndexOf("XINGYAO", StringComparison.OrdinalIgnoreCase) >= 0;
-				if (xingyaoName)
+				if (XingyaoPmc2.IsXingyaoPlatform())
 				{
-					reason = "星耀机型暂未验证 EC 限充地址（model=" + model + "）";
+					reason = "星耀14（P916F）暂未验证 EC 限充地址（model=" + model + "）";
 					return true;
 				}
 				if (wujieName && IsLunarLakeCpu())

@@ -70,16 +70,14 @@ internal static class XingyaoPmc2
 
 	private static Out32Delegate _out32;
 
-	/// <summary>是否疑似星耀 14（P916F）平台：机型含星耀 / 板号含 P916F。WJ 载荷属于 Lunar Lake 无界，不再作为星耀证据。</summary>
+	/// <summary>星耀 14 平台只认 P916F 板号；单独出现“星耀/XINGYAO”不作为判据，避免把其它星耀模具当成 14。</summary>
 	internal static bool IsXingyaoPlatform()
 	{
 		try
 		{
 			BoardWhitelist.BoardProductEvidence evidence = BoardWhitelist.GetBoardProductEvidence();
-			string text = ((evidence.RegSystemProduct ?? string.Empty) + " " + (evidence.WmiModel ?? string.Empty) + " " + (evidence.Product ?? string.Empty) + " " + (evidence.RegBaseBoard ?? string.Empty) + " " + (evidence.WmiBaseBoard ?? string.Empty)).Trim();
-			if (text.IndexOf("星耀", StringComparison.OrdinalIgnoreCase) >= 0
-				|| text.IndexOf("XINGYAO", StringComparison.OrdinalIgnoreCase) >= 0
-				|| text.IndexOf("P916F", StringComparison.OrdinalIgnoreCase) >= 0)
+			string board = ((evidence.Product ?? string.Empty) + " " + (evidence.RegBaseBoard ?? string.Empty) + " " + (evidence.WmiBaseBoard ?? string.Empty)).Trim();
+			if (board.IndexOf("P916F", StringComparison.OrdinalIgnoreCase) >= 0)
 			{
 				return true;
 			}
@@ -97,7 +95,7 @@ internal static class XingyaoPmc2
 		sb.AppendLine("[星耀 P916F PMC2 电池限充（只读）]");
 		try
 		{
-			sb.AppendLine("平台识别：" + (IsXingyaoPlatform() ? "命中（机型含星耀 / 板号含 P916F）" : "未命中（本机不是星耀 P916F，跳过）"));
+			sb.AppendLine("平台识别：" + (IsXingyaoPlatform() ? "命中（板号含 P916F）" : "未命中（本机不是星耀 P916F，跳过）"));
 			if (!IsXingyaoPlatform())
 			{
 				return sb.ToString();
