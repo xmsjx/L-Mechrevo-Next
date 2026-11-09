@@ -1287,7 +1287,10 @@ public partial class OriginalStyleWindow : Window
                 return _backendProbe?.Hw?.IsIntelNucMachine == true
                     || _backendProbe?.Hw?.IsUmiMachine == true
                     || _backendProbe?.Hw?.DisplayEffectProfiles.Count > 0
-                    || _backendProbe?.Capabilities?.ColorCalibration == true;
+                    || _backendProbe?.Capabilities?.ColorCalibration == true
+                    || (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+                        && _backendProbe?.Hw != null
+                        && !_backendProbe.Hw.UsesBaolongda);
             }
             catch
             {
