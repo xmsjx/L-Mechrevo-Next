@@ -1293,7 +1293,7 @@ public partial class SettingsWindow : Window
 
     private void Status(string text)
     {
-        StatusText.Text = "beta23.7.7r2 · " + text;
+        StatusText.Text = "beta23.7.8 · " + text;
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)
