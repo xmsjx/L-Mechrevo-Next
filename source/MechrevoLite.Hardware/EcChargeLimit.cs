@@ -354,7 +354,8 @@ internal static class EcChargeLimit
 		try
 		{
 			// 星耀：GCU 载荷为 WJ（安装器登记 / 包特征识别）
-			if (string.Equals(GcuIdentity.Variant, "WJ", StringComparison.OrdinalIgnoreCase))
+			if (string.Equals(GcuIdentity.Variant, "WJ", StringComparison.OrdinalIgnoreCase)
+				|| string.Equals(GcuIdentity.Variant, "WJXY", StringComparison.OrdinalIgnoreCase))
 			{
 				reason = "星耀机型（GCU 载荷 WJ）暂未验证 EC 限充地址";
 				return true;

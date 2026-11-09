@@ -44,8 +44,8 @@ $ErrorActionPreference = $ErrorActionPreference
 Set-StrictMode -Version 2.0
 
 # ===========================================================================
-# Machine-model judge: XINGYAO / LNL => the special WJXY variant.
-# Owner rule (2026-10-14): if the machine string contains XINGYAO or LNL, go WJXY;
+# Machine-model judge: XINGYAO / LNL => the special WJ variant.
+# Owner rule (2026-10-14): if the machine string contains XINGYAO or LNL, go WJ;
 # otherwise fall through to the normal 30/40/50 judge. Never silently pick a variant:
 # an unparseable model is logged and judged by the legacy rules.
 # ===========================================================================
@@ -60,7 +60,7 @@ function Test-WjxyMachine {
     .SYNOPSIS
         True when any of the machine-model strings contains XINGYAO or LNL.
     .DESCRIPTION
-        Owner rule (2026-10-14): XINGYAO / LNL => WJXY special variant. Case-insensitive.
+        Owner rule (2026-10-14): XINGYAO / LNL => WJ special variant. Case-insensitive.
         The model strings are NOT sent anywhere; they only feed the local judge.
     #>
     param([Parameter(Mandatory=$false)][AllowEmptyString()][string[]]$Models)
@@ -98,7 +98,7 @@ function Get-MachineModelString {
 function Get-XingyaoEvidence {
     <#
     .SYNOPSIS
-        One log line describing why WJXY was or was not chosen. Contains the machine string;
+        One log line describing why WJ was or was not chosen. Contains the machine string;
         that is already present in the diagnostics log (never uploaded).
     #>
     param([string]$Model, [bool]$Wjxy)
@@ -113,7 +113,7 @@ function Get-XingyaoEvidence {
         Variant = $(if ($Wjxy) { "WJ" } else { "" })
         Model   = $Model
         Key     = $key
-        Reason  = $(if ($Wjxy) { "machine string contains '$key' -> WJXY special variant" } else { "machine string has no WJXY keyword -> legacy judge" })
+        Reason  = $(if ($Wjxy) { "machine string contains '$key' -> WJ special variant" } else { "machine string has no WJ keyword -> legacy judge" })
     }
 }
 
@@ -124,7 +124,7 @@ function Resolve-GcuVariant {
         30/40/50/legacy judge, then the safety floor.
     .DESCRIPTION
         Forced values '1020' / '30' / '40' / '50' / 'WJXY' bypass hardware detection.
-        Auto never returns '40B' - that variant is gone; 40-series is '40' only.
+        Auto never returns '40B' - that variant is gone; 40-series is '40' only. XINGYAO/LNL auto returns WJ (WJXY is only a forced alias).
     #>
     param(
         [string]$Variant = "auto",
@@ -362,8 +362,8 @@ function Select-GcuPayload {
 # ---------------------------------------------------------------------------
 function Invoke-SelfTest {
     $cases = @(
-        @{ Name = 'XINGYAO -> WJXY';              Args = @{ MachineModel = @('MECHREVO XINGYAO Series') };                          Expect = 'WJXY' },
-        @{ Name = 'LNL -> WJXY';                  Args = @{ MachineModel = @('EM_LNL326_V1.0.23') };                               Expect = 'WJXY' },
+        @{ Name = 'XINGYAO -> WJ';               Args = @{ MachineModel = @('MECHREVO XINGYAO Series') };                          Expect = 'WJ' },
+        @{ Name = 'LNL -> WJ';                   Args = @{ MachineModel = @('EM_LNL326_V1.0.23') };                               Expect = 'WJ' },
         @{ Name = 'DEV_2C19 -> 50 (Blackwell)';   Args = @{ MachineModel = @(''); GpuDeviceId = @('PCI\VEN_10DE&DEV_2C19') };       Expect = '50' },
         @{ Name = 'DEV_2820 -> 40 (Ada)';         Args = @{ MachineModel = @(''); GpuDeviceId = @('PCI\VEN_10DE&DEV_2820') };       Expect = '40' },
         @{ Name = 'DEV_2860 -> 40 (Ada)';         Args = @{ MachineModel = @(''); GpuDeviceId = @('PCI\VEN_10DE&DEV_2860') };       Expect = '40' },
@@ -375,7 +375,7 @@ function Invoke-SelfTest {
         @{ Name = 'forced 40B -> 40 (retired)';   Args = @{ Variant = '40B' };                                                     Expect = '40' },
         @{ Name = 'forced 30';                    Args = @{ Variant = '30' };                                                      Expect = '30' },
         @{ Name = 'forced 1020';                  Args = @{ Variant = '1020' };                                                    Expect = '1020' },
-        @{ Name = 'forced WJXY';                  Args = @{ Variant = 'WJXY' };                                                    Expect = 'WJXY' },
+        @{ Name = 'forced WJXY alias -> WJ';      Args = @{ Variant = 'WJXY' };                                                    Expect = 'WJ' },
         @{ Name = 'unknown -Variant -> judge';    Args = @{ Variant = '99'; MachineModel = @('') };                                 Expect = '50' }
     )
     $failed = 0
