@@ -24,6 +24,7 @@ public partial class HidKeyboardWindow : Window
             .Concat(HidStreamerEffects.Extra)
             .ToArray();
         PowerCheck.IsChecked = _rgb.KbPowerOn;
+        InputSourceCombo.SelectedIndex = _rgb.UseGlobalInput ? 0 : 1;
         BrightnessSlider.Value = Math.Clamp(_rgb.Brightness, 0, 100);
         BrightnessText.Text = ((int)BrightnessSlider.Value) + "%";
         BrightnessSlider.ValueChanged += (_, e) => BrightnessText.Text = ((int)e.NewValue) + "%";
@@ -359,6 +360,14 @@ public partial class HidKeyboardWindow : Window
         if (AngleText != null)
         {
             AngleText.Text = ((int)e.NewValue) + "°";
+        }
+    }
+
+    private void InputSource_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (InputSourceCombo.SelectedItem is ComboBoxItem item && item.Tag is string text && int.TryParse(text, out int global))
+        {
+            _rgb.UseGlobalInput = global != 0;
         }
     }
 

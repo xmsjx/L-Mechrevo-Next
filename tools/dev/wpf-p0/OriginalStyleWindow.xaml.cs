@@ -437,6 +437,11 @@ public partial class OriginalStyleWindow : Window
         {
             try
             {
+                if (PresentationSource.FromVisual(this) is HwndSource inputSource)
+                {
+                    BuiltInKeyboardInput.Initialize(inputSource);
+                    KeyboardRgb.BuiltInKeyDownProvider = BuiltInKeyboardInput.IsKeyDown;
+                }
                 _hotkeyService = new HotkeyService(this);
                 _hotkeyService.ModeRequested += RequestMode;
                 _hotkeyService.OverlayRequested += ToggleTrayOverlay;

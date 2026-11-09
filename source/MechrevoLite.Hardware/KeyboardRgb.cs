@@ -251,6 +251,12 @@ public class KeyboardRgb : IDisposable
 
 	public int KbHidMode = 1;
 
+	/// <summary>true=允许外接键盘触发按键类效果；false=只认内置键盘。</summary>
+	public volatile bool UseGlobalInput = true;
+
+	/// <summary>内置键盘按键状态提供者；由 UI 层原始输入监听注入。</summary>
+	public static Func<int, bool>? BuiltInKeyDownProvider;
+
 	private bool _kbPowerOn = true;
 
 	/// <summary>
@@ -1397,7 +1403,10 @@ public class KeyboardRgb : IDisposable
 				int num = VkToKeymapIndex(vkList[k]);
 				if (num >= 0)
 				{
-					if ((GetAsyncKeyState(vkList[k]) & 0x8000) != 0)
+					bool keyDown = UseGlobalInput || BuiltInKeyDownProvider == null
+						? (GetAsyncKeyState(vkList[k]) & 0x8000) != 0
+						: BuiltInKeyDownProvider(vkList[k]);
+					if (keyDown)
 					{
 						if (!wasDown[num])
 						{
@@ -2240,6 +2249,12 @@ public class KeyboardRgb : IDisposable
 		handler.AppendLiteral("kbPower=");
 		handler.AppendFormatted(KbPowerOn ? 1 : 0);
 		stringBuilder38.AppendLine(ref handler);
+		stringBuilder2 = stringBuilder;
+		StringBuilder stringBuilder39 = stringBuilder2;
+		handler = new StringBuilder.AppendInterpolatedStringHandler(14, 1, stringBuilder2);
+		handler.AppendLiteral("inputGlobal=");
+		handler.AppendFormatted(UseGlobalInput ? 1 : 0);
+		stringBuilder39.AppendLine(ref handler);
 		return stringBuilder.ToString();
 		static string Colors(IEnumerable<Color> values)
 		{
@@ -2438,6 +2453,9 @@ public class KeyboardRgb : IDisposable
 					break;
 				case "kbHidMode":
 					KbHidMode = Math.Clamp(result, 0, 9);
+					break;
+				case "inputGlobal":
+					UseGlobalInput = result != 0;
 					break;
 				case "kbPower":
 					KbPowerOn = result != 0;

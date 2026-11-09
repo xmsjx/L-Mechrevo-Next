@@ -66,6 +66,14 @@
                     <ComboBoxItem Content="从下到上" Tag="270" />
                 </ComboBox>
             </Grid>
+            <Grid x:Name="InputSourceRow" Margin="0,0,0,8">
+                <Grid.ColumnDefinitions><ColumnDefinition Width="90" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                <TextBlock Text="输入来源" VerticalAlignment="Center" />
+                <ComboBox x:Name="InputSourceCombo" Grid.Column="1" Style="{StaticResource RoundCombo}" SelectionChanged="InputSource_Changed">
+                    <ComboBoxItem Content="全局输入（含外接键盘）" Tag="1" />
+                    <ComboBoxItem Content="仅内置键盘" Tag="0" />
+                </ComboBox>
+            </Grid>
             <Grid x:Name="FpsRow" Margin="0,0,0,8">
                 <Grid.ColumnDefinitions><ColumnDefinition Width="90" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                 <TextBlock Text="{x:Static loc:WpfStrings.HidKeyboardWindow_Text}" VerticalAlignment="Center" />
