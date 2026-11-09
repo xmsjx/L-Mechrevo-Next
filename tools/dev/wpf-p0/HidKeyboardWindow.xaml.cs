@@ -65,7 +65,7 @@ public partial class HidKeyboardWindow : Window
         SpeedRow.Visibility = HidStreamerEffects.HasSpeed(mode) ? Visibility.Visible : Visibility.Collapsed;
         bool wave = mode == 1;
         DirectionRow.Visibility = wave ? Visibility.Visible : Visibility.Collapsed;
-        AngleRow.Visibility = Visibility.Collapsed;
+        AngleRow.Visibility = wave ? Visibility.Visible : Visibility.Collapsed;
         if (wave)
         {
             int directionIndex = Math.Abs(_rgb.WaveAngle - 180) < 45 ? 1
