@@ -7,15 +7,13 @@ namespace MechrevoLite.Hardware;
 /// <summary>GCU 控制模式 / EC 控制模式切换（设置页使用）。</summary>
 public static class GcuEcMode
 {
-    private const string ExperimentKey = "gcu_ec_experiment";
     private const string DirectKey = "gcu_ec_direct";
     private static int _active;
 
     /// <summary>EC 控制模式是否生效：运行时已进入 EC，或用户明确选择 EC。</summary>
     public static bool IsEcMode =>
         System.Threading.Volatile.Read(ref _active) != 0
-        || MechrevoLite.AppConfig.Get(DirectKey, 0) != 0
-        || MechrevoLite.AppConfig.Get(ExperimentKey, 0) != 0;
+        || MechrevoLite.AppConfig.Get(DirectKey, 0) != 0;
 
     /// <summary>进入 EC 后端时标记，供灯光/校准/风扇等本地通道判断。</summary>
     public static void MarkActive() => System.Threading.Volatile.Write(ref _active, 1);
@@ -33,14 +31,14 @@ public static class GcuEcMode
                 Run("net", "stop GCUService");
                 Run("taskkill", "/IM GCUService.exe /F");
                 MarkActive();
-                MechrevoLite.AppConfig.Set(ExperimentKey, 0);
+                MechrevoLite.AppConfig.Remove("gcu_ec_experiment");
                 MechrevoLite.AppConfig.Set(DirectKey, 1);
                 MechrevoLite.AppConfig.Flush();
                 return (true, "已切换 EC 控制模式：GCUService/GCUBridge 已停止");
             }
 
             ClearActive();
-            MechrevoLite.AppConfig.Set(ExperimentKey, 0);
+            MechrevoLite.AppConfig.Remove("gcu_ec_experiment");
             MechrevoLite.AppConfig.Set(DirectKey, 0);
             MechrevoLite.AppConfig.Flush();
             // EC 模式曾停止/结束 GCUService；回 GCU 必须先拉起服务端，再拉起 Bridge。
