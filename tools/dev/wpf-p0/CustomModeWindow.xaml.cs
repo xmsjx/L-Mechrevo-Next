@@ -821,8 +821,15 @@ public partial class CustomModeWindow : Window
         // 没有独显（无界办公本等）不显示 GPU 超频/动态加速卡片。
         TempGpuCard.Visibility = (apuOrNoDgpu || intelXingyaoMsr)
             ? Visibility.Collapsed : Visibility.Visible;
-        Pl4UnitRow.Visibility = (gcuTongfangIntel || MechrevoLite.Hardware.EcPl4Unit.IsSupported)
-            ? Visibility.Visible : Visibility.Collapsed;
+        // PL4 口径属于同方模具的 EC 通道，EC 模式也要能显示；不再要求 GCU 服务在位。
+        bool tongfangMoldIntel = hwForRows != null
+            && !hwForRows.UsesBaolongda
+            && !hwForRows.IsIntelNucMachine
+            && !hwForRows.IsUmiMachine
+            && MechrevoLite.Hardware.CpuVendor.IsIntel
+            && (hwForRows.IsTongfangFamily
+                || MechrevoLite.Hardware.MachineIdentity.Collect().TongfangFamily);
+        Pl4UnitRow.Visibility = tongfangMoldIntel ? Visibility.Visible : Visibility.Collapsed;
         _syncingPl4Unit = true;
         try
         {
@@ -834,7 +841,7 @@ public partial class CustomModeWindow : Window
             {
                 _pl4Unit = pl4Double ? 2 : 1;
                 Pl4UnitSwitch.IsChecked = pl4Double;
-                Pl4UnitSwitch.IsEnabled = MechrevoLite.Hardware.EcPl4Unit.IsSupported;
+                Pl4UnitSwitch.IsEnabled = true;
                 CurrentHw?.SetPl4UnitDouble(pl4Double);
                 Pl4UnitStatus.Text = "0x0727=0x" + pl4Raw.ToString("X2") + " · " + (pl4Double ? "2W/LSB" : "1W/LSB");
                 RefreshPl4Readback("");
