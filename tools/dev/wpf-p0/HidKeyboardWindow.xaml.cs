@@ -60,7 +60,7 @@ public partial class HidKeyboardWindow : Window
 
     private void RefreshParams()
     {
-        int mode = HidStreamerEffects.ToLocalMode(SelectedMode);
+        int mode = HidStreamerEffects.ToLocalModeFromSelection(SelectedMode);
         ColorRow.Visibility = HidStreamerEffects.HasColor(mode) ? Visibility.Visible : Visibility.Collapsed;
         SpeedRow.Visibility = HidStreamerEffects.HasSpeed(mode) ? Visibility.Visible : Visibility.Collapsed;
         bool wave = mode == 1;
@@ -490,7 +490,7 @@ public partial class HidKeyboardWindow : Window
                 StatusText.Text = WpfStrings.HidKeyboardWindow_xaml_Text_9 + _rgb.LastError;
                 return;
             }
-            int localMode = HidStreamerEffects.ToLocalMode(SelectedMode);
+            int localMode = HidStreamerEffects.ToLocalModeFromSelection(SelectedMode);
             ApplyEffectParams(localMode);
             if (FpsCombo.SelectedItem is ComboBoxItem fpsItem
                 && fpsItem.Tag is string fpsText

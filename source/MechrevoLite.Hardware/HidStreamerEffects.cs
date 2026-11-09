@@ -27,6 +27,10 @@ internal static class HidStreamerEffects
         (113, "单色常亮 Streamer")
     };
 
+    /// <summary>UI 选项编号转本地模式：基础列表已经是 0..9，只有 100+ Streamer 需要翻译。</summary>
+    internal static int ToLocalModeFromSelection(int effect)
+        => effect >= 100 ? ToLocalMode(effect) : effect;
+
     /// <summary>把 OpenRevo/硬件效果编号转成 KeyboardRgb 的 0..9 本地模式。</summary>
     internal static int ToLocalMode(int effect)
     {

@@ -352,7 +352,7 @@
                             <TextBlock Text="按钮功能" VerticalAlignment="Center" />
                             <ComboBox x:Name="CustomButtonActionCombo" Grid.Column="1" Style="{DynamicResource RoundCombo}"
                                       SelectionChanged="CustomButtonAction_Changed">
-                                <ComboBoxItem Content="默认：切换自定义性能档" Tag="mode" />
+                                <ComboBoxItem Content="默认：切换性能模式" Tag="mode" />
                                 <ComboBoxItem Content="快捷开关" Tag="quick" />
                                 <ComboBoxItem Content="启动应用" Tag="app" />
                                 <ComboBoxItem Content="轮换自定义配置" Tag="cycle" />
