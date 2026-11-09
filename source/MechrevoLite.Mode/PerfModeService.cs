@@ -1254,7 +1254,11 @@ internal sealed class PerfModeService
 		PerfModeStore.ActiveModeId = mode.Id;
 		PerfModeStore.SetActiveFor(PowerSourceKey(), mode.Id);
 		PerfModeStore.LastCustomId = mode.Id;
-		string backendName = ((_hw != null && _hw.SmuCustomApu) ? (_hw.WujieSmuApu ? "无界 APU" : "星耀 AMD") : "宝龙达");
+		string backendName = _hw == null
+			? "未知后端"
+			: _hw.SmuCustomApu
+				? (_hw.WujieSmuApu ? "无界 APU" : "星耀 AMD")
+				: (_hw.UsesBaolongda ? "宝龙达" : "同方 GCU");
 		string activateLog = "[perfmode] " + backendName + "：选自定义档 ⇒ 本机配置激活（ActiveModeId=" + previousActive + " → " + mode.Id + "（已落盘 perf_active）· 不发固件档命令）";
 		if (Logger.TryMarkChanged("wujie-local-profile-active", activateLog))
 		{
@@ -1292,7 +1296,7 @@ internal sealed class PerfModeService
 		bool isGcu = !isWujie && !isBaolongda;
 		if (isBaolongda)
 		{
-			string stateLog = "[perfmode] 宝龙达启动：PerfModeStore.ActiveModeId=" + PerfModeStore.ActiveModeId
+			string stateLog = "[perfmode] " + (hw.UsesBaolongda ? "宝龙达" : "同方 GCU") + "启动：PerfModeStore.ActiveModeId=" + PerfModeStore.ActiveModeId
 				+ "（HasStoredActive=" + PerfModeStore.HasStoredActive + "）· 固件回读=" + hw.OperatingMode;
 			if (Logger.TryMarkChanged("baolongda-startup-state", stateLog))
 			{
@@ -1348,7 +1352,7 @@ internal sealed class PerfModeService
 		string backendLabel = isWujie ? (hw.WujieSmuApu ? "无界 APU" : "星耀 AMD") : (isBaolongda ? "宝龙达" : "同方 GCU");
 		string modeLog = isWujie
 			? "[perfmode] 无界 APU 启动恢复（晚于 GCU 各项）：ActiveModeId=" + mode.Id + " ⇒ 重放 SMU"
-			: "[perfmode] 宝龙达启动恢复：ActiveModeId=" + mode.Id + " ⇒ 模式=自定义";
+			: "[perfmode] " + backendLabel + "启动恢复：ActiveModeId=" + mode.Id + " ⇒ 模式=自定义";
 		if (Logger.TryMarkChanged("local-startup-mode-" + backendLabel, modeLog))
 		{
 			Logger.WriteError(modeLog);
@@ -2055,7 +2059,7 @@ internal sealed class PerfModeService
 				PerfModeDefinition persisted = Find(ActiveModeId);
 				if ((object)persisted != null && persisted.IsCustom)
 				{
-					string keepMsg = "[perfmode] " + (hw.SmuCustomApu ? (hw.WujieSmuApu ? "无界 APU" : "星耀 AMD") : "宝龙达") + "：固件模式回读 ⇒ 保持本机自定义档（ActiveModeId=" + persisted.Id + "，⛔ 不覆盖）";
+					string keepMsg = "[perfmode] " + (hw.SmuCustomApu ? (hw.WujieSmuApu ? "无界 APU" : "星耀 AMD") : (hw.UsesBaolongda ? "宝龙达" : "同方 GCU")) + "：固件模式回读 ⇒ 保持本机自定义档（ActiveModeId=" + persisted.Id + "，⛔ 不覆盖）";
 					if (Logger.TryMarkChanged("wujie-external-mode-change", keepMsg))
 					{
 						Logger.WriteError(keepMsg);
