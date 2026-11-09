@@ -19,6 +19,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
                             <UniformGrid x:Name="SensorBlocksGrid" Grid.Row="0" Columns="2" />

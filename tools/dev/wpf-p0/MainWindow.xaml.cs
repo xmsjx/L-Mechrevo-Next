@@ -2443,9 +2443,19 @@ public partial class MainWindow : Window
         {
             return;
         }
-        if (HomePage.Content is not StackPanel root)
+        Grid? root = HomePage.Content as Grid;
+        if (root == null)
         {
             return;
+        }
+        Grid? homeStack = root.Children.OfType<Grid>().FirstOrDefault(child => child.Name == "HomeStack");
+        if (homeStack == null)
+        {
+            return;
+        }
+        if (homeStack.RowDefinitions.Count < 4)
+        {
+            homeStack.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         }
         Border card = new()
         {
@@ -2453,6 +2463,7 @@ public partial class MainWindow : Window
             Margin = new Thickness(0, 12, 0, 0),
             Visibility = _owner.WideLiquidVisible ? Visibility.Visible : Visibility.Collapsed
         };
+        Grid.SetRow(card, 3);
         StackPanel panel = new();
         Grid header = new();
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -2631,7 +2642,7 @@ public partial class MainWindow : Window
         panel.Children.Add(lightRow);
         _liquidLightRow = lightRow;
         card.Child = panel;
-        root.Children.Add(card);
+        homeStack.Children.Add(card);
         _liquidCard = card;
         RefreshLiquidCooling();
     }
