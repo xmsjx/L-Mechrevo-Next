@@ -11,20 +11,20 @@ internal static class HidStreamerEffects
     /// <summary>100+ 的 streamer 效果列表，追加在原有 HID 效果之后。</summary>
     internal static readonly (int Mode, string Name)[] Extra =
     {
-        (100, "呼吸 (Streamer)"),
-        (101, "波浪 (Streamer)"),
-        (102, "涟漪 (Streamer)"),
-        (103, "流沙 (Streamer)"),
-        (104, "电流 (Streamer)"),
-        (105, "色轮 (Streamer)"),
-        (106, "彩虹 (Streamer)"),
-        (107, "矩阵 (Streamer)"),
-        (108, "闪电 (Streamer)"),
-        (109, "火焰 (Streamer)"),
-        (110, "雨滴 (Streamer)"),
-        (111, "星光 (Streamer)"),
-        (112, "双向电流 (Streamer)"),
-        (113, "单色常亮 (Streamer)")
+        (100, "呼吸 Streamer"),
+        (101, "波浪 Streamer"),
+        (102, "涟漪 Streamer"),
+        (103, "流沙 Streamer"),
+        (104, "电流 Streamer"),
+        (105, "色轮 Streamer"),
+        (106, "彩虹 Streamer"),
+        (107, "矩阵 Streamer"),
+        (108, "闪电 Streamer"),
+        (109, "火焰 Streamer"),
+        (110, "雨滴 Streamer"),
+        (111, "星光 Streamer"),
+        (112, "双向电流 Streamer"),
+        (113, "单色常亮 Streamer")
     };
 
     /// <summary>把 OpenRevo/硬件效果编号转成 KeyboardRgb 的 0..9 本地模式。</summary>
