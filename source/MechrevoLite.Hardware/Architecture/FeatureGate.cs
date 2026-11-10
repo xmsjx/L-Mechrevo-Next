@@ -92,6 +92,12 @@ internal static class FeatureGate
 		Check(lines, "ec-lightbar-usb", Facts(BackendKind.TongfangEc),
 			new FeatureProbe(false, false, false, null, null, false, false, true),
 			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
+		Check(lines, "nuc-lightbar-evidence", Facts(BackendKind.NucUmiLocal),
+			new FeatureProbe(false, false, false, null, false, LightbarCapability: true),
+			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
+		Check(lines, "nuc-lightbar-unprobed", Facts(BackendKind.NucUmiLocal),
+			new FeatureProbe(false, false, false, null, false),
+			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
 		Check(lines, "baolongda-no-lightbar", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
@@ -120,7 +126,7 @@ internal static class FeatureGate
 		Check(lines, "ec-unprobed", Facts(BackendKind.TongfangEc), new FeatureProbe(false, false, false, null, null),
 			FeatureAvailability.Unknown, BackendChannel.None);
 		Check(lines, "undeclared-feature", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
-			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
+			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.KeyboardLight);
 		return string.Join(Environment.NewLine, lines);
 	}
 

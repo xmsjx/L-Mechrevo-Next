@@ -358,22 +358,30 @@ internal sealed class LightingService : ILightingService
         {
             return ServiceResult.Fail(WpfStrings.L("键盘灯意图走键盘通道", "keyboard intent handled separately"));
         }
-        FeatureId feature = FeatureForLightTopic(intent.Topic);
-        bool legacySupport = intent.Topic switch
-        {
-            LightingTopics.Lightbar => probe.SupportsLightbar,
-            LightingTopics.Logo => probe.Hw?.SupportsLogoLight == true
-                || (GcuEcExperimental.Enabled && IteLightingLocal.HasUsbLogo),
-            LightingTopics.Hinge => probe.SupportsHingeLight,
-            LightingTopics.Sync => probe.SupportsSyncLight,
-            _ => false
-        };
-        if (!FeatureGate.ResolveSupportOrLegacy(feature, probe.Hw, legacySupport))
+        FeatureId? feature = FeatureForLightTopic(intent.Topic);
+        if (feature == null)
         {
             return ServiceResult.Fail(WpfStrings.LightPowerFailed);
         }
         try
         {
+            bool legacySupport = intent.Topic switch
+            {
+                LightingTopics.Lightbar => probe.SupportsLightbar,
+                LightingTopics.Logo => probe.Hw?.SupportsLogoLight == true
+                    || (GcuEcExperimental.Enabled && IteLightingLocal.HasUsbLogo),
+                LightingTopics.Hinge => probe.SupportsHingeLight,
+                LightingTopics.Sync => probe.SupportsSyncLight,
+                _ => false
+            };
+            if (feature == FeatureId.LogoLight)
+            {
+                FeatureGateShadow.LogLogoLight(probe.Hw, legacySupport, "app-intent", "dispatch");
+            }
+            if (!FeatureGate.ResolveSupportOrLegacy(feature.Value, probe.Hw, legacySupport))
+            {
+                return ServiceResult.Fail(WpfStrings.LightPowerFailed);
+            }
             if (!intent.On)
             {
                 bool off = await probe.SetLightPowerAsync(intent.Topic, false).ConfigureAwait(false);
@@ -409,7 +417,7 @@ internal sealed class LightingService : ILightingService
         }
     }
 
-    private static FeatureId FeatureForLightTopic(string topic)
+    private static FeatureId? FeatureForLightTopic(string topic)
     {
         return topic switch
         {
@@ -417,7 +425,7 @@ internal sealed class LightingService : ILightingService
             LightingTopics.Lightbar => FeatureId.Lightbar,
             LightingTopics.Hinge => FeatureId.HingeLight,
             LightingTopics.Sync => FeatureId.SyncLight,
-            _ => FeatureId.LogoLight
+            _ => null
         };
     }
 

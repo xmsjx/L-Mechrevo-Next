@@ -63,7 +63,7 @@ internal sealed class AppServices
 
     internal ILightingService Lighting { get; }
 
-    /// <summary>UI 意图入口；窗口不再直接持有硬件命令。</summary>
+    /// <summary>UI 意图入口；灯光非键盘路径已走这里，键盘/HID 仍为阶段遗留。</summary>
     internal IIntentDispatcher Intents { get; }
 
     internal ITrayMenuService TrayMenu { get; }
