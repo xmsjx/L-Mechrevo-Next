@@ -1085,8 +1085,8 @@ public class MechrevoHw : IDisposable
 {
     get
     {
-        return Capabilities.LogoLight || LogoLightStatusSeen
-;
+        // GCU 的 MBlogoSupport 也是实体 logo 灯证据；耀世等机型只回这个字段，不一定有 Logo/Status。
+        return Capabilities.LogoLight || LogoLightStatusSeen || LightbarMbLogoSupport == true;
     }
 }
 
