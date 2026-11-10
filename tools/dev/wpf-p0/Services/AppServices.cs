@@ -38,6 +38,7 @@ internal sealed class AppServices
         Battery = new BatteryService(_backendAccessor);
         ChargeLimit = new ChargeLimitService(_backendAccessor);
         Lighting = new LightingService(_backendAccessor);
+        Intents = new IntentDispatcher(Lighting);
         TrayMenu = new TrayMenuService();
     }
 
@@ -61,6 +62,9 @@ internal sealed class AppServices
     internal IChargeLimitService ChargeLimit { get; }
 
     internal ILightingService Lighting { get; }
+
+    /// <summary>UI 意图入口；窗口不再直接持有硬件命令。</summary>
+    internal IIntentDispatcher Intents { get; }
 
     internal ITrayMenuService TrayMenu { get; }
 

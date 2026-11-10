@@ -967,8 +967,7 @@ public partial class OriginalStyleWindow : Window
         return Math.Clamp(light * 25, 0, 100) + "%";
     }
 
-    internal async Task<bool> WideApplyLightAsync(string topic, string effect, int light, int speed, int colorArgb, bool on, bool channelPowerOsd = false)
-    {
+    internal async Task<bool> WideApplyLightAsync(string topic, string effect, int light, int speed, int colorArgb, bool on, bool channelPowerOsd = false)    {
         MechrevoHw? hw = _backendProbe?.Hw;
         BackendProbe? probe = _backendProbe;
         if (probe == null)
@@ -1070,9 +1069,9 @@ public partial class OriginalStyleWindow : Window
             }
             if (!on)
             {
-                return await probe.SetLightPowerAsync(topic, false);
+                return await SetLightPowerServiceAsync(topic, false);
             }
-            await probe.SetLightPowerAsync(topic, true);
+            await SetLightPowerServiceAsync(topic, true);
             MechrevoService? lightService = probe.Service;
             if (lightService == null)
             {
@@ -3385,7 +3384,9 @@ public partial class OriginalStyleWindow : Window
     {
         if (_services != null)
         {
-            return (await _services.Lighting.SetLightPowerAsync(topic, on)).Ok;
+            L_Mechrevo.WpfP0.Services.IntentResult result =
+                await _services.Intents.DispatchAsync(new L_Mechrevo.WpfP0.Services.SetLightPowerIntent(topic, on));
+            return result.Ok;
         }
         return _backendProbe != null && await _backendProbe.SetLightPowerAsync(topic, on);
     }
