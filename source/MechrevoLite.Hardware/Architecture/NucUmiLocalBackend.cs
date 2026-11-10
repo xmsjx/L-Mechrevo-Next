@@ -11,7 +11,7 @@ internal sealed class NucUmiLocalBackend : IBackendModule
 
 	public BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe)
 	{
-		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Unsupported,
+		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Unknown,
 			BackendChannel.None, "NUC/UMI 没有独立 Logo 灯通道", new string[0]);
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration> { [FeatureId.LogoLight] = logo });

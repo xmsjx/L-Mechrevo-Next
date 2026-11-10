@@ -7,19 +7,21 @@ internal sealed record FeatureProbe(
 	bool GcuConnected,
 	bool LogoLightCapability,
 	bool LogoLightSeen,
-	bool? LightbarMbLogoSupport)
+	bool? LightbarMbLogoSupport,
+	bool EcLogoEvidence)
 {
 	internal static FeatureProbe From(MechrevoHw? hw)
 	{
 		if (hw == null)
 		{
-			return new FeatureProbe(false, false, false, null);
+			return new FeatureProbe(false, false, false, null, false);
 		}
 		MechrevoDeviceCapabilities caps = hw.Capabilities;
 		return new FeatureProbe(
 			hw.IsGcuConnected,
 			caps != null && caps.LogoLight,
 			hw.LogoLightStatusSeen,
-			hw.LightbarMbLogoSupport);
+			hw.LightbarMbLogoSupport,
+			hw.EcLogoEvidence);
 	}
 }

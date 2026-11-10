@@ -1,38 +1,18 @@
 namespace MechrevoLite.Hardware.Architecture;
 
 /// <summary>
-/// 门控只读事实快照。只描述机器是什么，不描述功能是否可用。
-/// 组合现有身份记录，不复制字段、不重新采集。
+/// 门控只读事实快照。直接组合现有身份记录，不复制字段、不重新采集。
 /// </summary>
 internal sealed record MachineFacts(
-	MachineIdentity Identity,
+	MachineIdentity? Identity,
 	BackendKind Backend,
 	BackendKind DeclaredBackend)
 {
-	internal string Board => Identity.Board;
-
-	internal string Model => Identity.Model;
-
-	internal bool BaolongdaWhitelisted => Identity.BaolongdaWhitelisted;
-
-	internal bool GcuServiceInstalled => Identity.GcuServiceInstalled;
-
-	internal bool TongfangFamily => Identity.TongfangFamily;
-
-	internal bool IsUmi => Identity.IsUmi;
-
-	internal bool IsIntelNuc => Identity.IsIntelNuc;
-
-	internal bool WujieApu => Identity.WujieApu;
-
-	internal string GpuGeneration => Identity.GpuGeneration;
-
 	/// <summary>从当前路由结果与实际硬件状态生成；不触发机型采集。</summary>
 	internal static MachineFacts From(MechrevoHw? hw)
 	{
 		BackendRouteDecision? decision = BackendRouter.LastDecision;
-		MachineIdentity identity = decision?.Identity ?? MachineIdentity.ForTest();
-		return new MachineFacts(identity, ResolveActualBackend(hw), ResolveDeclaredBackend(decision));
+		return new MachineFacts(decision?.Identity, ResolveActualBackend(hw), ResolveDeclaredBackend(decision));
 	}
 
 	private static BackendKind ResolveActualBackend(MechrevoHw? hw)

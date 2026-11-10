@@ -3812,7 +3812,7 @@ public partial class MainWindow : Window
         };
         if (string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
         {
-            MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, supported, "mini-dispatch");
+            MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, supported, "mini-dispatch", "dispatch");
         }
         return supported;
     }

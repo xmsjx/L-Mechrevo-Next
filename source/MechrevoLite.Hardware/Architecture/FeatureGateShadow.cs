@@ -8,21 +8,23 @@ namespace MechrevoLite.Hardware.Architecture;
 /// </summary>
 internal static class FeatureGateShadow
 {
-	internal static void LogLogoLight(MechrevoHw? hw, bool oldVisible, string origin)
+	internal static void LogLogoLight(MechrevoHw? hw, bool oldValue, string origin, string kind = "visibility")
 	{
 		try
 		{
-			FeatureDecision decision = FeatureGate.Get(FeatureId.LogoLight, hw);
-			string oldSupport = oldVisible ? "yes" : "no";
+			MachineFacts facts = MachineFacts.From(hw);
+			FeatureDecision decision = FeatureGate.Get(FeatureId.LogoLight, facts, FeatureProbe.From(hw));
 			string agree = decision.State == FeatureAvailability.Unknown
 				? "na"
-				: (decision.IsSupported == oldVisible ? "yes" : "no");
+				: (decision.IsSupported == oldValue ? "yes" : "no");
 			string line = "[gate-shadow] feature=LogoLight"
 				+ " origin=" + origin
-				+ " old=" + (oldVisible ? "visible" : "hidden")
-				+ " oldSupport=" + oldSupport
+				+ " kind=" + kind
+				+ " old=" + (oldValue ? "yes" : "no")
 				+ " state=" + decision.State
 				+ " backend=" + decision.Backend
+				+ " declared=" + facts.DeclaredBackend
+				+ " declaredMatches=" + (facts.Backend == facts.DeclaredBackend ? "yes" : "no")
 				+ " channel=" + decision.Channel
 				+ " agree=" + agree
 				+ " reason=" + decision.Reason

@@ -31,13 +31,13 @@ internal sealed class TongfangGcuBackend : IBackendModule
 			{
 				sources.Add("live:LightbarMbLogoSupport");
 			}
-			state = sources.Count > 0 ? FeatureAvailability.Supported : FeatureAvailability.Unsupported;
+			state = sources.Count > 0 ? FeatureAvailability.Supported : FeatureAvailability.Unknown;
 		}
 		string reason = state switch
 		{
 			FeatureAvailability.Supported => "GCU 上报 Logo 证据",
-			FeatureAvailability.Unsupported => "GCU 未上报 Logo 证据",
-			_ => "GCU 未连接"
+			FeatureAvailability.Unknown => probe.GcuConnected ? "GCU 已连接但未上报 Logo 证据" : "GCU 未连接",
+			_ => "GCU 未上报 Logo 证据"
 		};
 		FeatureDeclaration logo = new FeatureDeclaration(
 			state,

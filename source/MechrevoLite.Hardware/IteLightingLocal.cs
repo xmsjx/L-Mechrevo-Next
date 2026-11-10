@@ -29,11 +29,19 @@ internal static class IteLightingLocal
     private static readonly object Gate = new();
     private static bool? _hasLightbar;
     private static bool? _hasHinge;
+    private static bool? _hasUsbLogo;
 
     internal static bool HasUsbLightbar => HasUsbDevice(LightbarPid, LightbarUsage);
-    internal static bool HasUsbLogo => HasUsbLightbar || HasUsbDevice(HingePid, 0);
+    internal static bool HasUsbLogo => _hasUsbLogo ??= HasUsbLightbar || HasUsbDevice(HingePid, 0);
     internal static bool HasLightbar => _hasLightbar ??= HasUsbLightbar || EcDirectLightbarSupported;
     internal static bool HasHinge => _hasHinge ??= HasUsbDevice(HingePid, 0);
+
+    /// <summary>读取已缓存的 USB Logo 证据；未采集过返回 false，不触发 HID 枚举。</summary>
+    internal static bool TryGetUsbLogoCached(out bool value)
+    {
+        value = _hasUsbLogo == true;
+        return _hasUsbLogo.HasValue;
+    }
 
     /// <summary>无 USB 灯带时，按 OpenRevo 回退到主板 EC 灯带（支持位 1893 bit6 / 1934 bit4）。</summary>
     internal static bool EcDirectLightbarSupported
@@ -59,6 +67,7 @@ internal static class IteLightingLocal
         {
             _hasLightbar = null;
             _hasHinge = null;
+            _hasUsbLogo = null;
         }
     }
 

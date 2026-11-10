@@ -1090,6 +1090,10 @@ public class MechrevoHw : IDisposable
     }
 }
 
+/// <summary>EC 本地的 USB Logo 证据（只读已缓存结果，不触发 HID 枚举）。</summary>
+internal bool EcLogoEvidence =>
+    GcuEcExperimental.Enabled && IteLightingLocal.TryGetUsbLogoCached(out bool value) && value;
+
 /// <summary>铰链灯：灯条为 Lighbar4 代际 + BIOS 属 IDA/IDB/IDX/IDZ + GCU 上报 HingeSupport。</summary>
 public bool SupportsHingeLight => IsLighbar4Lightbar && IsZoneProbedBios && LightbarHingeSupport == true;
 

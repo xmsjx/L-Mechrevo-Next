@@ -46,19 +46,19 @@ internal static class FeatureGate
 	internal static string RunSelfTest()
 	{
 		List<string> lines = new List<string>();
-		Check(lines, "gcu-supported", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null),
+		Check(lines, "gcu-supported", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Gcu);
-		Check(lines, "gcu-no-evidence", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, false, false, null),
-			FeatureAvailability.Unsupported, BackendChannel.None);
-		Check(lines, "gcu-disconnected", Facts(BackendKind.TongfangGcu), new FeatureProbe(false, true, false, null),
+		Check(lines, "gcu-no-evidence", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, false, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None);
-		Check(lines, "ec-supported", Facts(BackendKind.TongfangEc), new FeatureProbe(false, true, false, null),
+		Check(lines, "gcu-disconnected", Facts(BackendKind.TongfangGcu), new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Unknown, BackendChannel.None);
+		Check(lines, "ec-supported", Facts(BackendKind.TongfangEc), new FeatureProbe(false, false, false, null, true),
 			FeatureAvailability.Supported, BackendChannel.Ec);
-		Check(lines, "baolongda-unsupported", Facts(BackendKind.BaolongdaWmi), new FeatureProbe(false, true, false, null),
+		Check(lines, "baolongda-unsupported", Facts(BackendKind.BaolongdaWmi), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unsupported, BackendChannel.None);
-		Check(lines, "no-backend", Facts(BackendKind.None), new FeatureProbe(false, true, false, null),
+		Check(lines, "no-backend", Facts(BackendKind.None), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.LogoLight);
-		Check(lines, "undeclared-feature", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null),
+		Check(lines, "undeclared-feature", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
 		return string.Join(Environment.NewLine, lines);
 	}

@@ -6140,7 +6140,7 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 		};
 		if (key == "logolight")
 		{
-			MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(_hw, supported, "service-dispatch");
+			MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(_hw, supported, "service-dispatch", "dispatch");
 		}
 		return supported;
 	}

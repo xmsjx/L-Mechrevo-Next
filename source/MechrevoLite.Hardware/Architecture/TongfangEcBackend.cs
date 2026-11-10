@@ -17,27 +17,20 @@ internal sealed class TongfangEcBackend : IBackendModule
 		{
 			state = FeatureAvailability.Unknown;
 		}
+		else if (probe.EcLogoEvidence)
+		{
+			sources.Add("ec:IteLightingLocal.HasUsbLogo");
+			state = FeatureAvailability.Supported;
+		}
 		else
 		{
-			if (probe.LogoLightCapability)
-			{
-				sources.Add("profile:Capabilities.LogoLight");
-			}
-			if (probe.LogoLightSeen)
-			{
-				sources.Add("live:LogoLightStatusSeen");
-			}
-			if (probe.LightbarMbLogoSupport == true)
-			{
-				sources.Add("profile:LightbarMbLogoSupport");
-			}
-			state = sources.Count > 0 ? FeatureAvailability.Supported : FeatureAvailability.Unsupported;
+			state = FeatureAvailability.Unknown;
 		}
 		string reason = state switch
 		{
-			FeatureAvailability.Supported => "本地通道有 Logo 声明",
-			FeatureAvailability.Unsupported => "本地通道无 Logo 声明",
-			_ => "GCU 已连接，EC 路未接管"
+			FeatureAvailability.Supported => "本地 EC 有 Logo 证据",
+			FeatureAvailability.Unknown => probe.GcuConnected ? "GCU 已连接，EC 路未接管" : "本地 EC 证据未采集或无证据",
+			_ => "本地 EC 无 Logo 证据"
 		};
 		FeatureDeclaration logo = new FeatureDeclaration(
 			state,

@@ -1062,7 +1062,7 @@ public partial class OriginalStyleWindow : Window
             };
             if (string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
             {
-                MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, supported, "wide-dispatch");
+                MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, supported, "wide-dispatch", "dispatch");
             }
             if (!supported)
             {
@@ -10430,7 +10430,7 @@ public partial class OriginalStyleWindow : Window
             if (string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
             {
                 MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(
-                    _backendProbe.Hw, supported, "wide-welcome");
+                    _backendProbe.Hw, supported, "wide-welcome", "dispatch");
             }
             if (!supported) return;
 
