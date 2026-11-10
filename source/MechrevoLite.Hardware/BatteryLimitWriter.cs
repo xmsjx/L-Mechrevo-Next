@@ -495,33 +495,26 @@ internal static class BatteryLimitWriter
 		string acpiNote = note;
 		if (EcLpcIo.TryReadEcIdentity(out _, out _, out note))
 		{
-			// LPC 读 0x8xxx XRAM 前需要先置 0x1060 bit7；否则状态可能读成 0。
-			bool unlocked = EcLpcIo.TryUnlockEcRam(out _, out _, out string unlockNote);
-			note = "LPC：" + note + " · 解锁：" + (unlocked ? "已确认" : "未确认") + "（" + unlockNote + "）";
+			// 0x8xxx XRAM 需要先置 0x1060 bit7；LPC 写不可靠，解锁改走 ACPI/inpoutx64。
+			bool unlocked = EcPortIo.TryUnlockEcRamInpOut(out int after);
+			note = "LPC：" + note + " · 解锁：" + (unlocked ? "已确认" : "未确认")
+				+ "（0x1060=0x" + (after < 0 ? "读不到" : after.ToString("X2")) + "）";
 			return true;
 		}
 		note = "ACPI：" + acpiNote + " · LPC：" + note;
 		return false;
 	}
 
-	/// <summary>充电阈值写：ACPI 优先，失败后走 LPC 同一地址。</summary>
+	/// <summary>充电阈值写：ACPI 优先，失败后由 EcPortIo 回退 inpoutx64。</summary>
 	private static bool TryWriteBatteryAny(int address, byte value, out int readBack)
 	{
-		if (EcPortIo.TryWriteBatteryByte(address, value, out readBack))
-		{
-			return true;
-		}
-		return EcLpcIo.TryWriteByte(address, value, out readBack);
+		return EcPortIo.TryWriteBatteryByte(address, value, out readBack);
 	}
 
-	/// <summary>触发写入：ACPI 优先，失败后走 LPC。</summary>
+	/// <summary>触发写入：ACPI 优先，失败后由 EcPortIo 回退 inpoutx64。</summary>
 	private static bool TryTriggerBattery(out int readBack)
 	{
-		if (EcPortIo.TryWriteBatteryTriggerPulse(out readBack))
-		{
-			return true;
-		}
-		return EcLpcIo.TryWriteBatteryTriggerPulse(out readBack);
+		return EcPortIo.TryWriteBatteryTriggerPulse(out readBack);
 	}
 
 	/// <summary>2026-10-22：触发后等待 0x83A1/0x83A2 落到目标值（固件异步更新），最多 timeoutMs。</summary>

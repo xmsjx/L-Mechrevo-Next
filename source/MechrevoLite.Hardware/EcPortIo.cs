@@ -786,8 +786,13 @@ internal static class EcPortIo
 			return false;
 		}
 		bool writeOk = TryWriteByte(address, value);
+		if (!writeOk)
+		{
+			// PawnIO/ACPI 互斥体不可用时，直接走 inpoutx64 端口写。
+			return TryWriteByteInpOutAcpi(address, value, out readBack);
+		}
 		bool readOk = TryReadByteStable(address, out readBack, out _);
-		return writeOk && readOk && readBack == value;
+		return readOk && readBack == value;
 	}
 
 	/// <summary>
@@ -798,13 +803,113 @@ internal static class EcPortIo
 	internal static bool TryWriteBatteryTriggerPulse(out int readBack)
 	{
 		readBack = -1;
-		if (!TryWriteByte(BatteryTriggerRegister, 0x10))
+		if (TryWriteByte(BatteryTriggerRegister, 0x10))
+		{
+			// 自清零寄存器：只要求写入成功，不按回读判失败。
+			TryReadByteStable(BatteryTriggerRegister, out readBack, out _);
+			return true;
+		}
+		return TryWriteByteInpOutAcpi(BatteryTriggerRegister, 0x10, out readBack, verifyReadback: false);
+	}
+
+	/// <summary>ACPI EC 写：PawnIO/互斥体不可用时，直接用 inpoutx64 写 0x62/0x66。</summary>
+	internal static bool TryWriteByteInpOutAcpi(int address, byte value, out int readBack, bool verifyReadback = true)
+	{
+		readBack = -1;
+		if (!I2ecInpOut.CanUsePortIo(out string detail))
+		{
+			Logger.WriteLine("[ec-inpout] 不可用：" + detail);
+			return false;
+		}
+		if (!WaitIbfClearInpOut() || !I2ecInpOut.TryWritePort(0x66, 0x93)
+			|| !WaitIbfClearInpOut() || !I2ecInpOut.TryWritePort(0x62, (byte)((address >> 8) & 0xFF))
+			|| !WaitIbfClearInpOut() || !I2ecInpOut.TryWritePort(0x62, (byte)(address & 0xFF))
+			|| !WaitIbfClearInpOut() || !I2ecInpOut.TryWritePort(0x62, value))
+		{
+			Logger.WriteLine("[ec-inpout] 写 0x" + address.ToString("X4") + "=0x" + value.ToString("X2") + " 失败");
+			return false;
+		}
+		if (!verifyReadback)
+		{
+			return true;
+		}
+		if (!TryReadByteInpOutAcpi(address, out readBack))
 		{
 			return false;
 		}
-		// ⭐ 仅诊断回读：自清零寄存器，写完立刻读通常就是 0x00（⛔ 不据此判失败）✅
-		TryReadByteStable(BatteryTriggerRegister, out readBack, out _);
+		bool ok = readBack == value;
+		Logger.WriteLine("[ec-inpout] 写 0x" + address.ToString("X4") + "=0x" + value.ToString("X2")
+			+ " 回读=0x" + readBack.ToString("X2") + " ⇒ " + ok);
+		return ok;
+	}
+
+	/// <summary>ACPI EC 读：inpoutx64 直写 0x66/0x62（0x92 命令）。</summary>
+	internal static bool TryReadByteInpOutAcpi(int address, out int value)
+	{
+		value = -1;
+		if (!I2ecInpOut.CanUsePortIo(out _))
+		{
+			return false;
+		}
+		if (!WaitIbfClearInpOut() || !I2ecInpOut.TryWritePort(0x66, 0x92)
+			|| !WaitIbfClearInpOut() || !I2ecInpOut.TryWritePort(0x62, (byte)((address >> 8) & 0xFF))
+			|| !WaitIbfClearInpOut() || !I2ecInpOut.TryWritePort(0x62, (byte)(address & 0xFF)))
+		{
+			return false;
+		}
+		if (!WaitObfSetInpOut() || !I2ecInpOut.TryReadPort(0x62, out byte data))
+		{
+			return false;
+		}
+		value = data;
 		return true;
+	}
+
+	/// <summary>ACPI 解锁 0x1060 bit7；ACPI 正常路径失败后走 inpoutx64。</summary>
+	internal static bool TryUnlockEcRamInpOut(out int after)
+	{
+		after = -1;
+		int before = 0;
+		if (TryReadByteInpOutAcpi(AcpiEcUnlockAddress, out before) && (before & AcpiUnlockBit) != 0)
+		{
+			after = before;
+			return true;
+		}
+		return TryWriteByteInpOutAcpi(AcpiEcUnlockAddress, (byte)(before | AcpiUnlockBit), out after);
+	}
+
+	private static bool WaitIbfClearInpOut(int timeoutMs = TimeoutMs)
+	{
+		long deadline = Environment.TickCount64 + timeoutMs;
+		while (true)
+		{
+			if (I2ecInpOut.TryReadPort(0x66, out byte status) && (status & StatusIbf) == 0)
+			{
+				return true;
+			}
+			if (Environment.TickCount64 >= deadline)
+			{
+				return false;
+			}
+			Thread.Sleep(1);
+		}
+	}
+
+	private static bool WaitObfSetInpOut(int timeoutMs = TimeoutMs)
+	{
+		long deadline = Environment.TickCount64 + timeoutMs;
+		while (true)
+		{
+			if (I2ecInpOut.TryReadPort(0x66, out byte status) && (status & StatusObf) != 0)
+			{
+				return true;
+			}
+			if (Environment.TickCount64 >= deadline)
+			{
+				return false;
+			}
+			Thread.Sleep(1);
+		}
 	}
 
 	/// <summary>

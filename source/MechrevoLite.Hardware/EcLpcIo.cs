@@ -465,35 +465,13 @@ internal static class EcLpcIo
 				return false;
 			}
 		}
-		else if (IsBatteryWriteAddress(address))
-		{
-			bool valueOk = address switch
-			{
-				0x8153 or 0x8154 => value is >= 1 and <= 100,
-				0x8151 => value is 0x0D or 0x0E or 0x0F,
-				0x8150 => value == 0x10,
-				_ => false
-			};
-			if (!valueOk)
-			{
-				_lastReadFailure = "0x" + address.ToString("X4") + " 不允许写 0x" + value.ToString("X2");
-				return false;
-			}
-		}
 		else if (!IsFanWriteAddress(address))
 		{
-			Poison("EC 写被拒：地址 0x" + address.ToString("X4") + " 不在白名单（只允许 0xC83C/0xC83D/0xB20、0x1807 的 4 个亮度值、0x8150/0x8151/0x8153/0x8154）");
+			Poison("EC 写被拒：地址 0x" + address.ToString("X4") + " 不在白名单（只允许 0xC83C/0xC83D/0xB20 及 0x1807 的 4 个亮度值）");
 			_lastReadFailure = "写地址不在白名单";
 			return false;
 		}
 		return TryWriteByteOperation(address, value, out readBack);
-	}
-
-	/// <summary>充电触发 0x8150=0x10：自清零，只要求写入成功，不校验回读值。</summary>
-	internal static bool TryWriteBatteryTriggerPulse(out int readBack)
-	{
-		readBack = -1;
-		return TryWriteByteOperation(0x8150, 0x10, out readBack, verifyReadback: false);
 	}
 
 	/// <summary>⭐ 底层白名单写操作（**调用方必须自行校验地址/值域**）+ 立刻回读比对 ✅。</summary>
