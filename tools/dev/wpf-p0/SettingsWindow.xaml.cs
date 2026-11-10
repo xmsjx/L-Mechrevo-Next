@@ -289,6 +289,7 @@ public partial class SettingsWindow : Window
         DisplayCard.Visibility = _owner.SupportsLcdOverdrive || _owner.SupportsMiniled || _owner.SupportsFhd || _owner.SupportsHdrControl
             ? Visibility.Visible
             : Visibility.Collapsed;
+        OverdriveCheck.Visibility = _owner.SupportsLcdOverdrive ? Visibility.Visible : Visibility.Collapsed;
         OverdriveCheck.IsChecked = _owner.LcdOverdrive;
         MiniledRow.Visibility = _owner.SupportsMiniled ? Visibility.Visible : Visibility.Collapsed;
         MiniledCheck.IsChecked = _owner.MiniledOn;

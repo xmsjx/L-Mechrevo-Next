@@ -1965,7 +1965,8 @@ public partial class OriginalStyleWindow : Window
     /// <summary>GCU 机型的 EC 限充传输开关（与宝龙达阈值面板是两套）。</summary>
     internal bool WideEcTransportSupported => EcTransportHardwareAvailable();
 
-    internal bool SupportsMiniled => _backendProbe?.Hw?.SupportsLocalDimming == true;
+    internal bool SupportsMiniled => _backendProbe?.Hw?.SupportsLocalDimming == true
+        || _backendProbe?.Capabilities?.LocalDimming == true;
 
     internal bool MiniledOn => _backendProbe?.Hw?.LocalDimming == true;
 
