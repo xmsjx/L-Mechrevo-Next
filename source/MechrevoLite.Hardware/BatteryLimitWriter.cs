@@ -86,7 +86,7 @@ internal static class BatteryLimitWriter
 			}
 			log.AppendLine("参数：low=" + low + "% · high=" + high + "%");
 
-			if (!EcPortIo.TryReadEcIdentityAcpi(out _, out _, out string idNote))
+			if (!TryReadEcIdentityAny(out string idNote))
 			{
 				detail = log + "⛔ EC 身份未通过：" + idNote;
 				return false;
@@ -221,7 +221,7 @@ internal static class BatteryLimitWriter
 				detail = "非宝龙达机型 ⇒ 不执行限充写入（0 读 0 写）";
 				return false;
 			}
-			if (!EcPortIo.TryReadEcIdentityAcpi(out _, out _, out string idNote))
+			if (!TryReadEcIdentityAny(out string idNote))
 			{
 				detail = "⛔ EC 身份未通过：" + idNote;
 				return false;
@@ -472,16 +472,54 @@ internal static class BatteryLimitWriter
 
 	private static bool WriteParam(int address, int value, string label, StringBuilder log)
 	{
-		bool ok = EcPortIo.TryWriteBatteryByte(address, (byte)value, out int readBack);
+		bool ok = TryWriteBatteryAny(address, (byte)value, out int readBack);
 		log.AppendLine(label + " ⇒ " + (ok ? "回读 0x" + readBack.ToString("X2") : "失败"));
 		return ok;
 	}
 
 	private static bool WriteCommand(int value, string label, StringBuilder log)
 	{
-		bool ok = EcPortIo.TryWriteBatteryByte(EcPortIo.BatteryCommandRegister, (byte)value, out int readBack);
+		bool ok = TryWriteBatteryAny(EcPortIo.BatteryCommandRegister, (byte)value, out int readBack);
 		log.AppendLine(label + " ⇒ " + (ok ? "回读 0x" + readBack.ToString("X2") : "失败"));
 		return ok;
+	}
+
+	/// <summary>身份：ACPI 通道优先，失败后走 LPC 通道。</summary>
+	private static bool TryReadEcIdentityAny(out string note)
+	{
+		if (EcPortIo.TryReadEcIdentityAcpi(out _, out _, out note))
+		{
+			note = "ACPI：" + note;
+			return true;
+		}
+		string acpiNote = note;
+		if (EcLpcIo.TryReadEcIdentity(out _, out _, out note))
+		{
+			note = "LPC：" + note;
+			return true;
+		}
+		note = "ACPI：" + acpiNote + " · LPC：" + note;
+		return false;
+	}
+
+	/// <summary>充电阈值写：ACPI 优先，失败后走 LPC 同一地址。</summary>
+	private static bool TryWriteBatteryAny(int address, byte value, out int readBack)
+	{
+		if (EcPortIo.TryWriteBatteryByte(address, value, out readBack))
+		{
+			return true;
+		}
+		return EcLpcIo.TryWriteByte(address, value, out readBack);
+	}
+
+	/// <summary>触发写入：ACPI 优先，失败后走 LPC。</summary>
+	private static bool TryTriggerBattery(out int readBack)
+	{
+		if (EcPortIo.TryWriteBatteryTriggerPulse(out readBack))
+		{
+			return true;
+		}
+		return EcLpcIo.TryWriteBatteryTriggerPulse(out readBack);
 	}
 
 	/// <summary>2026-10-22：触发后等待 0x83A1/0x83A2 落到目标值（固件异步更新），最多 timeoutMs。</summary>
@@ -503,7 +541,11 @@ internal static class BatteryLimitWriter
 
 	private static bool ReadEc(int address, out int value)
 	{
-		return EcPortIo.TryReadByteStable(address, out value, out _, attempts: 3);
+		if (EcPortIo.TryReadByteStable(address, out value, out _, attempts: 3))
+		{
+			return true;
+		}
+		return EcLpcIo.TryReadByteStable(address, out value, out _, attempts: 3);
 	}
 
 	private static Snapshot ReadSnapshot()

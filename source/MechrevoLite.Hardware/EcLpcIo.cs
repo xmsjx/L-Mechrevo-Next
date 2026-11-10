@@ -352,6 +352,12 @@ internal static class EcLpcIo
 	{
 		return address == Fan1TargetAddress || address == Fan2TargetAddress || address == FanManualMaskAddress;
 	}
+
+	/// <summary>宝龙达充电阈值白名单地址（0x8150/0x8151/0x8153/0x8154）。</summary>
+	internal static bool IsBatteryWriteAddress(int address)
+	{
+		return address == 0x8150 || address == 0x8151 || address == 0x8153 || address == 0x8154;
+	}
 	// <summary> （30 系键盘背光亮度）：EC 亮度寄存器 0x1807（值 = PWM：0x00/0x66/0xB3/0xFF）。</summary>
 	internal const int KeyboardBrightnessAddress = 0x1807;
 
@@ -459,17 +465,44 @@ internal static class EcLpcIo
 				return false;
 			}
 		}
+		else if (IsBatteryWriteAddress(address))
+		{
+			bool valueOk = address switch
+			{
+				0x8153 or 0x8154 => value is >= 1 and <= 100,
+				0x8151 => value is 0x0D or 0x0E or 0x0F,
+				0x8150 => value == 0x10,
+				_ => false
+			};
+			if (!valueOk)
+			{
+				_lastReadFailure = "0x" + address.ToString("X4") + " 不允许写 0x" + value.ToString("X2");
+				return false;
+			}
+		}
 		else if (!IsFanWriteAddress(address))
 		{
-			Poison("EC 写被拒：地址 0x" + address.ToString("X4") + " 不在白名单（只允许 0xC83C/0xC83D/0xB20，及 0x1807 的 4 个亮度值）");
+			Poison("EC 写被拒：地址 0x" + address.ToString("X4") + " 不在白名单（只允许 0xC83C/0xC83D/0xB20、0x1807 的 4 个亮度值、0x8150/0x8151/0x8153/0x8154）");
 			_lastReadFailure = "写地址不在白名单";
 			return false;
 		}
 		return TryWriteByteOperation(address, value, out readBack);
 	}
 
+	/// <summary>充电触发 0x8150=0x10：自清零，只要求写入成功，不校验回读值。</summary>
+	internal static bool TryWriteBatteryTriggerPulse(out int readBack)
+	{
+		readBack = -1;
+		return TryWriteByteOperation(0x8150, 0x10, out readBack, verifyReadback: false);
+	}
+
 	/// <summary>⭐ 底层白名单写操作（**调用方必须自行校验地址/值域**）+ 立刻回读比对 ✅。</summary>
 	private static bool TryWriteByteOperation(int address, byte value, out int readBack)
+	{
+		return TryWriteByteOperation(address, value, out readBack, verifyReadback: true);
+	}
+
+	private static bool TryWriteByteOperation(int address, byte value, out int readBack, bool verifyReadback)
 	{
 		readBack = -1;
 		lock (Gate)
@@ -504,7 +537,7 @@ internal static class EcLpcIo
 				int check = -1;
 				bool readOk = wrote && ReadByteCore(DefaultSlot, address, out check);
 				readBack = check;
-				bool ok = wrote && readOk && check == value;
+				bool ok = wrote && (verifyReadback ? (readOk && check == value) : true);
 				if (!ok)
 				{
 					ReportSoftFailure("EC 写 0x" + address.ToString("X4") + "=" + value
