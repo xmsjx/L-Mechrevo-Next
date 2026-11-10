@@ -3037,7 +3037,8 @@ public partial class MainWindow : Window
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
         bool hasLogo = (hw?.SupportsLogoLight ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, hasLogo, "mini");
+        bool logoVisible = ResolveWideLightVisible("light_logo_ui", hasLogo);
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, logoVisible, "mini");
         bool hasHinge = (hw?.SupportsHingeLight ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasHinge);
         bool hasSync = hw?.SupportsSyncLight ?? false;
@@ -3047,7 +3048,7 @@ public partial class MainWindow : Window
             {
                 "Keyboard/Ctrl" => hasKeyboard,
                 "HidLightbar/Ctrl" => ResolveWideLightVisible("light_strip_ui", hasLightbar),
-                "HidLightbar_Logo/Ctrl" => ResolveWideLightVisible("light_logo_ui", hasLogo),
+                "HidLightbar_Logo/Ctrl" => logoVisible,
                 "HidLightbar_Hinge/Ctrl" => hasHinge,
                 _ => hasSync
             };

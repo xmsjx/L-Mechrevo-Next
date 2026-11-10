@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 ﻿using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -7876,7 +7876,6 @@ public partial class OriginalStyleWindow : Window
             LightingSection.Visibility = (hasKeyboard || hasLightbar || hasLogo || hasHinge || hasSync || xingyaoLightIdle) ? Visibility.Visible : Visibility.Collapsed;
             KeyboardLightRow.Visibility = hasKeyboard ? Visibility.Visible : Visibility.Collapsed;
             LogoLightRow.Visibility = hasLogo ? Visibility.Visible : Visibility.Collapsed;
-            MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, hasLogo, "wide");
             LightHingeRow.Visibility = hasHinge ? Visibility.Visible : Visibility.Collapsed;
             LightSyncRow.Visibility = hasSync ? Visibility.Visible : Visibility.Collapsed;
             FillKeyboardEffects();
@@ -7996,6 +7995,7 @@ public partial class OriginalStyleWindow : Window
         KeyboardLightRow.Visibility = keyboard ? Visibility.Visible : Visibility.Collapsed;
         LightStripRow.Visibility = ResolveRowVisibility(AppConfig.GetString("light_strip_ui") ?? "auto", hasStrip);
         LogoLightRow.Visibility = ResolveRowVisibility(AppConfig.GetString("light_logo_ui") ?? "auto", hasLogo);
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, LogoLightRow.Visibility == Visibility.Visible, "wide");
         LightHingeRow.Visibility = hasHinge ? Visibility.Visible : Visibility.Collapsed;
         LightSyncRow.Visibility = hasSync ? Visibility.Visible : Visibility.Collapsed;
         InitPerfConfigRow();

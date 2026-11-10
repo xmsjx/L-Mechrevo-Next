@@ -7,7 +7,5 @@ internal interface IBackendModule
 
 	string DisplayName { get; }
 
-	bool Probe(MachineFacts facts);
-
-	BackendDeclaration Declare(MachineFacts facts, FeatureProbe probe);
+	BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe);
 }

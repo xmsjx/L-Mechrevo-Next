@@ -2033,6 +2033,12 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		_xingyaoLocalReady = true;
 	}
 
+	/// <summary>NUC/UMI 本地通道是否已接管（GCU 未连接时的本地键盘/灯带/开关）。</summary>
+	internal bool NucLocalReady => _nucLocalReady;
+
+	/// <summary>星耀本地通道是否已接管。</summary>
+	internal bool XingyaoLocalReady => _xingyaoLocalReady;
+
 	/// <summary>
 	/// 2026-10-15（C-1 第 2 步）：本会话是否在用**老机型 WMI 后端**（<c>root\WMI:MICommonInterface</c>）。
 	/// 判据是「探测到过该对象」（<c>_legacyMifs != null</c>）。

@@ -9,16 +9,11 @@ internal sealed class TongfangMifsBackend : IBackendModule
 
 	public string DisplayName => "TongfangMIFS";
 
-	public bool Probe(MachineFacts facts)
+	public BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe)
 	{
-		return facts.Backend == Kind;
-	}
-
-	public BackendDeclaration Declare(MachineFacts facts, FeatureProbe probe)
-	{
-		FeatureDeclaration logo = new FeatureDeclaration(FeatureState.Unsupported,
-			BackendChannel.None, "老 MIFS 后端没有 Logo 下发路径", new[] { "BackendDeclaration" });
-		return new BackendDeclaration(Kind,
+		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Unsupported,
+			BackendChannel.None, "老 MIFS 后端没有 Logo 下发路径", new string[0]);
+		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration> { [FeatureId.LogoLight] = logo });
 	}
 }

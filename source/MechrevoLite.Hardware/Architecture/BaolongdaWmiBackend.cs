@@ -9,16 +9,11 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
 
 	public string DisplayName => "BaolongdaWMI";
 
-	public bool Probe(MachineFacts facts)
+	public BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe)
 	{
-		return facts.Backend == Kind || facts.BaolongdaWhitelisted;
-	}
-
-	public BackendDeclaration Declare(MachineFacts facts, FeatureProbe probe)
-	{
-		FeatureDeclaration logo = new FeatureDeclaration(FeatureState.Unsupported,
-			BackendChannel.None, "宝龙达后端没有 Logo 灯通道", new[] { "BackendDeclaration" });
-		return new BackendDeclaration(Kind,
+		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Unsupported,
+			BackendChannel.None, "宝龙达后端没有 Logo 灯通道", new string[0]);
+		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration> { [FeatureId.LogoLight] = logo });
 	}
 }

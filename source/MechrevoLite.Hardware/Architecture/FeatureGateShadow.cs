@@ -13,12 +13,18 @@ internal static class FeatureGateShadow
 		try
 		{
 			FeatureDecision decision = FeatureGate.Get(FeatureId.LogoLight, hw);
+			string oldSupport = oldVisible ? "yes" : "no";
+			string agree = decision.State == FeatureAvailability.Unknown
+				? "na"
+				: (decision.IsSupported == oldVisible ? "yes" : "no");
 			string line = "[gate-shadow] feature=LogoLight"
 				+ " origin=" + origin
 				+ " old=" + (oldVisible ? "visible" : "hidden")
+				+ " oldSupport=" + oldSupport
 				+ " state=" + decision.State
 				+ " backend=" + decision.Backend
 				+ " channel=" + decision.Channel
+				+ " agree=" + agree
 				+ " reason=" + decision.Reason
 				+ " sources=" + string.Join(",", decision.Sources);
 			global::Logger.WriteLineIfChanged("gate-shadow-logo-" + origin, line);

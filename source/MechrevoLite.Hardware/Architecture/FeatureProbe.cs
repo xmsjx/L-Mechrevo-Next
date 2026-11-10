@@ -1,30 +1,25 @@
 namespace MechrevoLite.Hardware.Architecture;
 
 /// <summary>
-/// 门控使用的实时探测快照。只保留功能判定需要的最小字段。
+/// 门控使用的实时探测快照。只读已缓存的硬件字段，不触发 HID/EC/WMI 访问。
 /// </summary>
 internal sealed record FeatureProbe(
 	bool GcuConnected,
 	bool LogoLightCapability,
 	bool LogoLightSeen,
-	bool? LightbarMbLogoSupport,
-	bool EcUsbLogo,
-	bool EcLightbar)
+	bool? LightbarMbLogoSupport)
 {
 	internal static FeatureProbe From(MechrevoHw? hw)
 	{
 		if (hw == null)
 		{
-			return new FeatureProbe(false, false, false, null, false, false);
+			return new FeatureProbe(false, false, false, null);
 		}
-		bool ec = GcuEcExperimental.Enabled;
 		MechrevoDeviceCapabilities caps = hw.Capabilities;
 		return new FeatureProbe(
 			hw.IsGcuConnected,
 			caps != null && caps.LogoLight,
 			hw.LogoLightStatusSeen,
-			hw.LightbarMbLogoSupport,
-			ec && IteLightingLocal.HasUsbLogo,
-			ec && IteLightingLocal.HasLightbar);
+			hw.LightbarMbLogoSupport);
 	}
 }

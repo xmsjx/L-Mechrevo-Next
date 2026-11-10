@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 namespace MechrevoLite.Hardware.Architecture;
 
@@ -15,28 +14,30 @@ internal static class FeatureGate
 	{
 		if (facts.Backend == BackendKind.None)
 		{
-			return new FeatureDecision(feature, FeatureState.Unknown, BackendKind.None,
-				BackendChannel.None, "尚未选定后端", Array.Empty<string>());
+			return new FeatureDecision(feature, FeatureAvailability.Unknown, BackendKind.None,
+				BackendChannel.None, "尚未选定实际后端", Array.Empty<string>());
 		}
 		IBackendModule? module = BackendModuleRegistry.Resolve(facts.Backend);
-		if (module == null || !module.Probe(facts))
+		if (module == null)
 		{
-			return new FeatureDecision(feature, FeatureState.Unknown, facts.Backend,
-				BackendChannel.None, "后端模块未就绪", Array.Empty<string>());
+			return new FeatureDecision(feature, FeatureAvailability.Unknown, facts.Backend,
+				BackendChannel.None, "后端模块未登记", Array.Empty<string>());
 		}
-		BackendDeclaration declaration = module.Declare(facts, probe);
-		if (!declaration.Features.TryGetValue(feature, out FeatureDeclaration featureDeclaration))
+		try
 		{
-			return new FeatureDecision(feature, FeatureState.Unsupported, facts.Backend,
-				BackendChannel.None, "后端未声明该功能", Array.Empty<string>());
+			BackendFeatureDeclaration declaration = module.Declare(facts, probe);
+			if (!declaration.Features.TryGetValue(feature, out FeatureDeclaration featureDeclaration))
+			{
+				return new FeatureDecision(feature, FeatureAvailability.Unknown, facts.Backend,
+					BackendChannel.None, "该功能尚未纳入后端声明", Array.Empty<string>());
+			}
+			return new FeatureDecision(feature, featureDeclaration.State, facts.Backend,
+				featureDeclaration.Channel, featureDeclaration.Reason, featureDeclaration.Sources);
 		}
-		return new FeatureDecision(feature, featureDeclaration.State, facts.Backend,
-			featureDeclaration.Channel, featureDeclaration.Reason, featureDeclaration.Sources);
-	}
-
-	internal static Dictionary<FeatureId, FeatureDeclaration> One(
-		FeatureId feature, FeatureDeclaration declaration)
-	{
-		return new Dictionary<FeatureId, FeatureDeclaration> { [feature] = declaration };
+		catch (Exception ex)
+		{
+			return new FeatureDecision(feature, FeatureAvailability.Unknown, facts.Backend,
+				BackendChannel.None, "后端声明异常: " + ex.Message, Array.Empty<string>());
+		}
 	}
 }

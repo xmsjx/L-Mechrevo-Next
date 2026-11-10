@@ -9,16 +9,11 @@ internal sealed class XingyaoPmcBackend : IBackendModule
 
 	public string DisplayName => "XingyaoPMC";
 
-	public bool Probe(MachineFacts facts)
+	public BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe)
 	{
-		return facts.Backend == Kind;
-	}
-
-	public BackendDeclaration Declare(MachineFacts facts, FeatureProbe probe)
-	{
-		FeatureDeclaration logo = new FeatureDeclaration(FeatureState.Unsupported,
-			BackendChannel.None, "星耀后端没有独立 Logo 灯通道", new[] { "BackendDeclaration" });
-		return new BackendDeclaration(Kind,
+		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Unsupported,
+			BackendChannel.None, "星耀后端没有独立 Logo 灯通道", new string[0]);
+		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration> { [FeatureId.LogoLight] = logo });
 	}
 }

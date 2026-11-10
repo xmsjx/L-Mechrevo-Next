@@ -9,36 +9,42 @@ internal sealed class TongfangEcBackend : IBackendModule
 
 	public string DisplayName => "TongfangEC";
 
-	public bool Probe(MachineFacts facts)
-	{
-		return facts.Backend == Kind;
-	}
-
-	public BackendDeclaration Declare(MachineFacts facts, FeatureProbe probe)
+	public BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe)
 	{
 		List<string> sources = new List<string>();
-		FeatureState state;
-		string reason;
+		FeatureAvailability state;
 		if (probe.GcuConnected)
 		{
-			state = FeatureState.Unknown;
-			reason = "GCU 已连接，EC 路未接管";
+			state = FeatureAvailability.Unknown;
 		}
 		else
 		{
 			if (probe.LogoLightCapability)
 			{
-				sources.Add("Capabilities.LogoLight");
+				sources.Add("profile:Capabilities.LogoLight");
 			}
-			if (probe.EcUsbLogo)
+			if (probe.LogoLightSeen)
 			{
-				sources.Add("IteLightingLocal.HasUsbLogo");
+				sources.Add("live:LogoLightStatusSeen");
 			}
-			state = sources.Count > 0 ? FeatureState.Supported : FeatureState.Unsupported;
-			reason = sources.Count > 0 ? "本地 EC 提供 Logo 证据" : "本地 EC 无 Logo 证据";
+			if (probe.LightbarMbLogoSupport == true)
+			{
+				sources.Add("profile:LightbarMbLogoSupport");
+			}
+			state = sources.Count > 0 ? FeatureAvailability.Supported : FeatureAvailability.Unsupported;
 		}
-		FeatureDeclaration logo = new FeatureDeclaration(state, BackendChannel.Ec, reason, sources.ToArray());
-		return new BackendDeclaration(Kind,
+		string reason = state switch
+		{
+			FeatureAvailability.Supported => "本地通道有 Logo 声明",
+			FeatureAvailability.Unsupported => "本地通道无 Logo 声明",
+			_ => "GCU 已连接，EC 路未接管"
+		};
+		FeatureDeclaration logo = new FeatureDeclaration(
+			state,
+			state == FeatureAvailability.Supported ? BackendChannel.Ec : BackendChannel.None,
+			reason,
+			sources.ToArray());
+		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration> { [FeatureId.LogoLight] = logo });
 	}
 }
