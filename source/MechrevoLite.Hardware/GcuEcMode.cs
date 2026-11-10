@@ -34,6 +34,7 @@ public static class GcuEcMode
                 MechrevoLite.AppConfig.Remove("gcu_ec_experiment");
                 MechrevoLite.AppConfig.Set(DirectKey, 1);
                 MechrevoLite.AppConfig.Flush();
+                IteLightingLocal.Invalidate();
                 return (true, "已切换 EC 控制模式：GCUService/GCUBridge 已停止");
             }
 
@@ -44,6 +45,7 @@ public static class GcuEcMode
             // EC 模式曾停止/结束 GCUService；回 GCU 必须先拉起服务端，再拉起 Bridge。
             Run("net", "start GCUService");
             Run("net", "start GCUBridge");
+            IteLightingLocal.Invalidate();
             return (true, "已切换 GCU 模式：已请求启动 GCUService / GCUBridge");
         }
         catch (Exception ex)

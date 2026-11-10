@@ -14,17 +14,27 @@ internal static class FeatureGateShadow
 		{
 			MachineFacts facts = MachineFacts.From(hw);
 			FeatureDecision decision = FeatureGate.Get(FeatureId.LogoLight, facts, FeatureProbe.From(hw));
-			string agree = decision.State == FeatureAvailability.Unknown
-				? "na"
-				: (decision.IsSupported == oldValue ? "yes" : "no");
+			string agree;
+			if (decision.State == FeatureAvailability.Unknown)
+			{
+				agree = oldValue ? "no" : "na";
+			}
+			else
+			{
+				agree = decision.IsSupported == oldValue ? "yes" : "no";
+			}
+			string declaredMatches = facts.Backend == BackendKind.None && facts.DeclaredBackend == BackendKind.None
+				? "n/a"
+				: (facts.Backend == facts.DeclaredBackend ? "yes" : "no");
 			string line = "[gate-shadow] feature=LogoLight"
 				+ " origin=" + origin
 				+ " kind=" + kind
 				+ " old=" + (oldValue ? "yes" : "no")
 				+ " state=" + decision.State
+				+ " supported=" + (decision.IsSupported ? "yes" : "no")
 				+ " backend=" + decision.Backend
 				+ " declared=" + facts.DeclaredBackend
-				+ " declaredMatches=" + (facts.Backend == facts.DeclaredBackend ? "yes" : "no")
+				+ " declaredMatches=" + declaredMatches
 				+ " channel=" + decision.Channel
 				+ " agree=" + agree
 				+ " reason=" + decision.Reason

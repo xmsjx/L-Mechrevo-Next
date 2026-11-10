@@ -21,15 +21,15 @@ internal sealed class TongfangGcuBackend : IBackendModule
 		{
 			if (probe.LogoLightCapability)
 			{
-				sources.Add("profile:Capabilities.LogoLight");
+				sources.Add("registry:Capabilities.LogoLight");
 			}
 			if (probe.LogoLightSeen)
 			{
-				sources.Add("live:LogoLightStatusSeen");
+				sources.Add("gcu:LogoLightStatusSeen");
 			}
 			if (probe.LightbarMbLogoSupport == true)
 			{
-				sources.Add("live:LightbarMbLogoSupport");
+				sources.Add("gcu:LightbarMbLogoSupport");
 			}
 			state = sources.Count > 0 ? FeatureAvailability.Supported : FeatureAvailability.Unknown;
 		}

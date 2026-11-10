@@ -6,6 +6,7 @@ internal enum BackendChannel
 	None = 0,
 	Gcu,
 	Ec,
+	LocalHid,
 	AcpiWmi,
 	WmiMailbox,
 	Local

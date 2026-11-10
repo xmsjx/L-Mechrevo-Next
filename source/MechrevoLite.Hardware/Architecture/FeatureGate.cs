@@ -53,7 +53,13 @@ internal static class FeatureGate
 		Check(lines, "gcu-disconnected", Facts(BackendKind.TongfangGcu), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None);
 		Check(lines, "ec-supported", Facts(BackendKind.TongfangEc), new FeatureProbe(false, false, false, null, true),
-			FeatureAvailability.Supported, BackendChannel.Ec);
+			FeatureAvailability.Supported, BackendChannel.LocalHid);
+		Check(lines, "ec-registry-only", Facts(BackendKind.TongfangEc), new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Supported, BackendChannel.None);
+		Check(lines, "nuc-unknown", Facts(BackendKind.NucUmiLocal), new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Unknown, BackendChannel.None);
+		Check(lines, "xingyao-unknown", Facts(BackendKind.XingyaoPmc), new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Unknown, BackendChannel.None);
 		Check(lines, "baolongda-unsupported", Facts(BackendKind.BaolongdaWmi), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unsupported, BackendChannel.None);
 		Check(lines, "no-backend", Facts(BackendKind.None), new FeatureProbe(false, true, false, null, false),

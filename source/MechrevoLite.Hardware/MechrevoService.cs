@@ -316,6 +316,7 @@ public class MechrevoService
 	internal MechrevoService(MechrevoHw hw, Func<bool> readColorCalibrationOn, Func<int> readColorCalibrationMode, Func<bool> readHdrEnabled, Func<bool, int, bool>? syncHighPerformancePowerMode = null)
 	{
 		_hw = hw;
+		IteLightingLocal.Invalidate();
 		_readColorCalibrationOn = readColorCalibrationOn;
 		_readColorCalibrationMode = readColorCalibrationMode;
 		_readHdrEnabled = readHdrEnabled;
