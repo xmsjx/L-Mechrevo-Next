@@ -798,11 +798,17 @@ internal static class EcLpcIo
 			bool ok = _pawn.Execute("ioctl_pio_outb", new ulong[2] { port, value }, null);
 			LastIoctlOk = ok;
 			LastIoctlError = ok ? 0 : _pawn.LastError;
+			if (!ok && I2ecInpOut.TryWritePort((short)port, value))
+			{
+				ok = true;
+				LastIoctlOk = true;
+				LastIoctlError = 0;
+			}
 			Trace("pio_outb", port, value, null, ok, LastIoctlError, what);
 			if (!ok)
 			{
 				ReportSoftFailure("ioctl_pio_outb(0x" + port.ToString("X2") + ",0x" + value.ToString("X2") + " · " + what
-					+ ") 失败（Win32=" + LastIoctlError + "）");
+					+ ") 失败（PawnIO/inpoutx64 都不可用，Win32=" + LastIoctlError + "）");
 				return false;
 			}
 			_ioCount++;
@@ -907,10 +913,16 @@ internal static class EcLpcIo
 			LastIoctlOk = ok;
 			LastIoctlError = ok ? 0 : _pawn.LastError;
 			byte read = ok ? (byte)(output[0] & 0xFF) : (byte)0;
+			if (!ok && I2ecInpOut.TryReadPort((short)port, out read))
+			{
+				ok = true;
+				LastIoctlOk = true;
+				LastIoctlError = 0;
+			}
 			Trace("pio_inb", port, null, ok ? (int?)read : null, ok, LastIoctlError, "读回");
 			if (!ok)
 			{
-				ReportSoftFailure("ioctl_pio_inb(0x" + port.ToString("X2") + ") 失败（Win32=" + LastIoctlError + "）");
+				ReportSoftFailure("ioctl_pio_inb(0x" + port.ToString("X2") + ") 失败（PawnIO/inpoutx64 都不可用，Win32=" + LastIoctlError + "）");
 				return false;
 			}
 			_ioCount++;
