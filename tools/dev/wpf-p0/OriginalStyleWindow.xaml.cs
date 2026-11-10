@@ -7965,24 +7965,8 @@ public partial class OriginalStyleWindow : Window
     /// <summary>Logo 行支持：门控明确时收敛，Unknown 时回退旧判据。</summary>
     private bool ResolveLogoSupport(MechrevoHw? hw, bool legacySupport)
     {
-        try
-        {
-            MechrevoLite.Hardware.Architecture.FeatureDecision decision =
-                MechrevoLite.Hardware.Architecture.FeatureGate.Get(
-                    MechrevoLite.Hardware.Architecture.FeatureId.LogoLight, hw);
-            if (decision.State == MechrevoLite.Hardware.FeatureAvailability.Supported)
-            {
-                return true;
-            }
-            if (decision.State == MechrevoLite.Hardware.FeatureAvailability.Unsupported)
-            {
-                return false;
-            }
-        }
-        catch
-        {
-        }
-        return legacySupport;
+        return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+            MechrevoLite.Hardware.Architecture.FeatureId.LogoLight, hw, legacySupport);
     }
 
     internal void ApplyUiVisibilityFromConfig()

@@ -11,6 +11,27 @@ internal static class FeatureGate
 		return Get(feature, MachineFacts.From(hw), FeatureProbe.From(hw));
 	}
 
+	/// <summary>明确支持/不支持时收敛，Unknown 时回退旧判据。</summary>
+	internal static bool ResolveSupportOrLegacy(FeatureId feature, MechrevoHw? hw, bool legacySupport)
+	{
+		try
+		{
+			FeatureDecision decision = Get(feature, hw);
+			if (decision.State == FeatureAvailability.Supported)
+			{
+				return true;
+			}
+			if (decision.State == FeatureAvailability.Unsupported)
+			{
+				return false;
+			}
+		}
+		catch
+		{
+		}
+		return legacySupport;
+	}
+
 	internal static FeatureDecision Get(FeatureId feature, MachineFacts facts, FeatureProbe probe)
 	{
 		BackendKind backend = facts.Backend == BackendKind.None && facts.DeclaredBackend != BackendKind.None
