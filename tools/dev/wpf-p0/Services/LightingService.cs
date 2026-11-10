@@ -1,7 +1,9 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
+using System.Drawing;
 using System.Threading.Tasks;
 using MechrevoLite;
 using MechrevoLite.Hardware;
+using MechrevoLite.Hardware.Architecture;
 using L_Mechrevo.WpfP0.Services;
 
 using L_Mechrevo.WpfP0.Resources;
@@ -88,6 +90,9 @@ internal interface ILightingService
 
     /// <summary>指定灯光通道电源（topic 见 <see cref="LightingTopics" />）。</summary>
     Task<ServiceResult> SetLightPowerAsync(string topic, bool on);
+
+    /// <summary>灯光完整意图：能力判定 + 电源 + 效果下发。</summary>
+    Task<ServiceResult> ApplyLightIntentAsync(SetLightIntent intent);
 }
 
 /// <inheritdoc />
@@ -340,6 +345,80 @@ internal sealed class LightingService : ILightingService
         {
             return ServiceResult.Fail(WpfStrings.LightPowerExceptionPrefix + ex.GetType().Name);
         }
+    }
+
+    public async Task<ServiceResult> ApplyLightIntentAsync(SetLightIntent intent)
+    {
+        BackendProbe? probe = _backend.Probe;
+        if (probe == null)
+        {
+            return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
+        }
+        if (string.Equals(intent.Topic, LightingTopics.Keyboard, StringComparison.Ordinal))
+        {
+            return ServiceResult.Fail(WpfStrings.L("键盘灯意图走键盘通道", "keyboard intent handled separately"));
+        }
+        FeatureId feature = FeatureForLightTopic(intent.Topic);
+        bool legacySupport = intent.Topic switch
+        {
+            LightingTopics.Lightbar => probe.SupportsLightbar,
+            LightingTopics.Logo => probe.Hw?.SupportsLogoLight == true
+                || (GcuEcExperimental.Enabled && IteLightingLocal.HasUsbLogo),
+            LightingTopics.Hinge => probe.SupportsHingeLight,
+            LightingTopics.Sync => probe.SupportsSyncLight,
+            _ => false
+        };
+        if (!FeatureGate.ResolveSupportOrLegacy(feature, probe.Hw, legacySupport))
+        {
+            return ServiceResult.Fail(WpfStrings.LightPowerFailed);
+        }
+        try
+        {
+            if (!intent.On)
+            {
+                bool off = await probe.SetLightPowerAsync(intent.Topic, false).ConfigureAwait(false);
+                return off ? ServiceResult.Success(WpfStrings.LightPowerOff) : ServiceResult.Fail(WpfStrings.LightPowerFailed);
+            }
+            await probe.SetLightPowerAsync(intent.Topic, true).ConfigureAwait(false);
+            MechrevoService? service = probe.Service;
+            if (service == null)
+            {
+                return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
+            }
+            Color? color = KeyboardFirmwareEffects.IsSingleColorEffect(intent.Effect)
+                ? Color.FromArgb(intent.ColorArgb)
+                : null;
+            if (string.Equals(intent.Topic, LightingTopics.Lightbar, StringComparison.Ordinal)
+                && probe.Hw?.IsIntelNucMachine == true)
+            {
+                if (intent.Effect is not "Off" and not "None" and not "")
+                {
+                    color = Color.FromArgb(intent.ColorArgb);
+                }
+                bool rawOk = probe.ApplyIntelNucLightbar(intent.Effect, intent.Light, color);
+                Logger.WriteError("[umi-lightbar] apply topic=" + intent.Topic + " effect=" + intent.Effect + " light=" + intent.Light + " raw=" + rawOk);
+                return rawOk ? ServiceResult.Success(WpfStrings.SentSuffix) : ServiceResult.Fail(WpfStrings.ApplyFailedSuffix);
+            }
+            bool ok = await service.SetLightEffect(intent.Topic, intent.Effect, intent.Light,
+                intent.Speed, "None", color, true).ConfigureAwait(false);
+            return ok ? ServiceResult.Success(WpfStrings.SentSuffix) : ServiceResult.Fail(WpfStrings.ApplyFailedSuffix);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult.Fail(WpfStrings.ExceptionPrefix + ex.GetType().Name);
+        }
+    }
+
+    private static FeatureId FeatureForLightTopic(string topic)
+    {
+        return topic switch
+        {
+            LightingTopics.Logo => FeatureId.LogoLight,
+            LightingTopics.Lightbar => FeatureId.Lightbar,
+            LightingTopics.Hinge => FeatureId.HingeLight,
+            LightingTopics.Sync => FeatureId.SyncLight,
+            _ => FeatureId.LogoLight
+        };
     }
 
     private async Task<ServiceResult> RunProbeAsync(

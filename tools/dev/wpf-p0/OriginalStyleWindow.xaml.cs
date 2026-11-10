@@ -1050,50 +1050,13 @@ public partial class OriginalStyleWindow : Window
                 return effectOk;
             }
 
-            bool supported = topic switch
-            {
-                "HidLightbar/Ctrl" => probe.SupportsLightbar,
-                "HidLightbar_Logo/Ctrl" => hw?.SupportsLogoLight == true
-                    || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo),
-                "HidLightbar_Hinge/Ctrl" => probe.SupportsHingeLight,
-                "HidLightbar_Sync/Ctrl" => probe.SupportsSyncLight,
-                _ => false
-            };
-            if (string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
-            {
-                MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, supported, "wide-dispatch", "dispatch");
-            }
-            if (!supported)
+            if (_services == null)
             {
                 return false;
             }
-            if (!on)
-            {
-                return await SetLightPowerServiceAsync(topic, false);
-            }
-            await SetLightPowerServiceAsync(topic, true);
-            MechrevoService? lightService = probe.Service;
-            if (lightService == null)
-            {
-                return false;
-            }
-            System.Drawing.Color? lightColor = MechrevoLite.Hardware.KeyboardFirmwareEffects.IsSingleColorEffect(effect)
-                ? System.Drawing.Color.FromArgb(colorArgb)
-                : null;
-            if (string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
-                && hw?.IsIntelNucMachine == true)
-            {
-                // NUC ApplySetting 对 Monocolor / Rainbow 都会写 R/G/B；
-                // 彩虹/混色的亮度、混色也必须把当前颜色带下去。
-                if (effect is not "Off" and not "None" and not "")
-                {
-                    lightColor = System.Drawing.Color.FromArgb(colorArgb);
-                }
-                bool rawOk = probe.ApplyIntelNucLightbar(effect, light, lightColor);
-                Logger.WriteError("[umi-lightbar] apply topic=" + topic + " effect=" + effect + " light=" + light + " raw=" + rawOk);
-                return rawOk;
-            }
-            return await lightService.SetLightEffect(topic, effect, light, speed, "None", lightColor, true);
+            IntentResult lightResult = await _services.Intents.DispatchAsync(
+                new SetLightIntent(topic, effect, light, speed, colorArgb, on));
+            return lightResult.Ok;
         }
         catch
         {

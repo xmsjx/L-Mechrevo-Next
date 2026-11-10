@@ -15,6 +15,8 @@ internal readonly record struct IntentResult(bool Ok, string Detail = "")
 internal interface IIntentDispatcher
 {
 	Task<IntentResult> DispatchAsync(SetLightPowerIntent intent);
+
+	Task<IntentResult> DispatchAsync(SetLightIntent intent);
 }
 
 /// <inheritdoc />
@@ -30,6 +32,12 @@ internal sealed class IntentDispatcher : IIntentDispatcher
 	public async Task<IntentResult> DispatchAsync(SetLightPowerIntent intent)
 	{
 		ServiceResult result = await _lighting.SetLightPowerAsync(intent.Topic, intent.On).ConfigureAwait(false);
+		return new IntentResult(result.Ok, result.Detail);
+	}
+
+	public async Task<IntentResult> DispatchAsync(SetLightIntent intent)
+	{
+		ServiceResult result = await _lighting.ApplyLightIntentAsync(intent).ConfigureAwait(false);
 		return new IntentResult(result.Ok, result.Detail);
 	}
 }
