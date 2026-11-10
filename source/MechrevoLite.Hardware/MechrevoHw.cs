@@ -1760,6 +1760,18 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 
 	public bool LocalDimming { get; private set; }
 
+	internal void ApplyLocalDimmingState(bool on)
+	{
+		LocalDimming = on;
+		LocalDimmingSeen = true;
+	}
+
+	internal void ApplyLcdOverdriveState(bool on)
+	{
+		LcdOverdrive = on;
+		LcdOverdriveSeen = true;
+	}
+
 	public bool LocalDimmingSeen { get; private set; }
 
 	public bool? LocalDimmingSupport { get; private set; }
