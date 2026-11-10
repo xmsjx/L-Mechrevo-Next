@@ -29,6 +29,10 @@ internal sealed record MachineFacts(
 		{
 			return BackendKind.BaolongdaWmi;
 		}
+		if (GcuEcMode.IsEcMode)
+		{
+			return BackendKind.TongfangEc;
+		}
 		if (hw.UsesLegacyMifs)
 		{
 			return BackendKind.TongfangMifs;
@@ -41,7 +45,7 @@ internal sealed record MachineFacts(
 		{
 			return BackendKind.XingyaoPmc;
 		}
-		return GcuEcMode.IsEcMode ? BackendKind.TongfangEc : BackendKind.None;
+		return BackendKind.None;
 	}
 
 	private static BackendKind ResolveDeclaredBackend(BackendRouteDecision? decision)
