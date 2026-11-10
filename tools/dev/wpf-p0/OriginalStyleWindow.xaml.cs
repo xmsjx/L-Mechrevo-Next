@@ -4889,6 +4889,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             MechrevoLite.Hardware.GcuEcMode.MarkActive();
+            _ = System.Threading.Tasks.Task.Run(() => MechrevoLite.Hardware.IteLightingLocal.RefreshFromHid());
             MechrevoHw offlineHw = new();
             BackendProbe probe = new(offlineHw, null);
             _backendProbe = probe;
@@ -7879,7 +7880,7 @@ public partial class OriginalStyleWindow : Window
             bool xingyaoLightIdle = MechrevoLite.Hardware.XingyaoQuickSwitch.IsApplicable(hw);
             LightingSection.Visibility = (hasKeyboard || hasLightbar || hasLogo || hasHinge || hasSync || xingyaoLightIdle) ? Visibility.Visible : Visibility.Collapsed;
             KeyboardLightRow.Visibility = hasKeyboard ? Visibility.Visible : Visibility.Collapsed;
-            LogoLightRow.Visibility = hasLogo ? Visibility.Visible : Visibility.Collapsed;
+            LogoLightRow.Visibility = ResolveLogoSupport(hw, hasLogo) ? Visibility.Visible : Visibility.Collapsed;
             LightHingeRow.Visibility = hasHinge ? Visibility.Visible : Visibility.Collapsed;
             LightSyncRow.Visibility = hasSync ? Visibility.Visible : Visibility.Collapsed;
             FillKeyboardEffects();
@@ -7961,6 +7962,29 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    /// <summary>Logo 行支持：门控明确时收敛，Unknown 时回退旧判据。</summary>
+    private bool ResolveLogoSupport(MechrevoHw? hw, bool legacySupport)
+    {
+        try
+        {
+            MechrevoLite.Hardware.Architecture.FeatureDecision decision =
+                MechrevoLite.Hardware.Architecture.FeatureGate.Get(
+                    MechrevoLite.Hardware.Architecture.FeatureId.LogoLight, hw);
+            if (decision.State == MechrevoLite.Hardware.FeatureAvailability.Supported)
+            {
+                return true;
+            }
+            if (decision.State == MechrevoLite.Hardware.FeatureAvailability.Unsupported)
+            {
+                return false;
+            }
+        }
+        catch
+        {
+        }
+        return legacySupport;
+    }
+
     internal void ApplyUiVisibilityFromConfig()
     {
         if (_backendProbe == null)
@@ -7994,12 +8018,14 @@ public partial class OriginalStyleWindow : Window
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
         bool hasLogo = (caps?.LogoLight ?? false) || (hw?.SupportsLogoLight ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo);
+        bool legacyLogo = hasLogo;
+        hasLogo = ResolveLogoSupport(hw, hasLogo);
         bool hasHinge = _backendProbe?.SupportsHingeLight == true;
         bool hasSync = _backendProbe?.SupportsSyncLight == true;
         KeyboardLightRow.Visibility = keyboard ? Visibility.Visible : Visibility.Collapsed;
         LightStripRow.Visibility = ResolveRowVisibility(AppConfig.GetString("light_strip_ui") ?? "auto", hasStrip);
         LogoLightRow.Visibility = ResolveRowVisibility(AppConfig.GetString("light_logo_ui") ?? "auto", hasLogo);
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, LogoLightRow.Visibility == Visibility.Visible, "wide");
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, legacyLogo, "wide");
         LightHingeRow.Visibility = hasHinge ? Visibility.Visible : Visibility.Collapsed;
         LightSyncRow.Visibility = hasSync ? Visibility.Visible : Visibility.Collapsed;
         InitPerfConfigRow();
