@@ -3036,7 +3036,7 @@ public partial class MainWindow : Window
         bool hasLightbar = (hw?.SupportsLightbar ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
         bool hasLogo = (hw?.SupportsLogoLight ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
+            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo);
         bool logoVisible = ResolveWideLightVisible("light_logo_ui", hasLogo);
         MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, logoVisible, "mini");
         bool hasHinge = (hw?.SupportsHingeLight ?? false)
