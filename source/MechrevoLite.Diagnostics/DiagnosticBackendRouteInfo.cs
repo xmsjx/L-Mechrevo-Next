@@ -1,6 +1,7 @@
 using System;
 using System.Text;
 using MechrevoLite.Hardware;
+using MechrevoLite.Hardware.Architecture;
 
 namespace MechrevoLite.Diagnostics;
 
@@ -72,6 +73,8 @@ internal static class DiagnosticBackendRouteInfo
 			sb.AppendLine("  说明：路由只读机型事实、首条命中；不做“探测失败换后端”。");
 			sb.AppendLine("  机型分流自测（纯函数矩阵，只读）：");
 			sb.AppendLine(Indent(BackendRouter.RunSelfTest(), "    "));
+			sb.AppendLine("  功能门控自测（纯函数矩阵，只读）：");
+			sb.AppendLine(Indent(FeatureGate.RunSelfTest(), "    "));
 		}
 		catch (Exception ex)
 		{

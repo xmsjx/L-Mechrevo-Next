@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace MechrevoLite.Hardware.Architecture;
 
@@ -39,5 +40,44 @@ internal static class FeatureGate
 			return new FeatureDecision(feature, FeatureAvailability.Unknown, facts.Backend,
 				BackendChannel.None, "后端声明异常: " + ex.Message, Array.Empty<string>());
 		}
+	}
+
+	/// <summary>离线矩阵自测：只使用合成事实和探测快照，不触碰硬件。</summary>
+	internal static string RunSelfTest()
+	{
+		List<string> lines = new List<string>();
+		Check(lines, "gcu-supported", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null),
+			FeatureAvailability.Supported, BackendChannel.Gcu);
+		Check(lines, "gcu-no-evidence", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, false, false, null),
+			FeatureAvailability.Unsupported, BackendChannel.None);
+		Check(lines, "gcu-disconnected", Facts(BackendKind.TongfangGcu), new FeatureProbe(false, true, false, null),
+			FeatureAvailability.Unknown, BackendChannel.None);
+		Check(lines, "ec-supported", Facts(BackendKind.TongfangEc), new FeatureProbe(false, true, false, null),
+			FeatureAvailability.Supported, BackendChannel.Ec);
+		Check(lines, "baolongda-unsupported", Facts(BackendKind.BaolongdaWmi), new FeatureProbe(false, true, false, null),
+			FeatureAvailability.Unsupported, BackendChannel.None);
+		Check(lines, "no-backend", Facts(BackendKind.None), new FeatureProbe(false, true, false, null),
+			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.LogoLight);
+		Check(lines, "undeclared-feature", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null),
+			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
+		return string.Join(Environment.NewLine, lines);
+	}
+
+	private static MachineFacts Facts(BackendKind backend)
+	{
+		MachineIdentity identity = MachineIdentity.ForTest(board: "TEST", generation: "Gen40",
+			gcuInstalled: backend == BackendKind.TongfangGcu, whitelisted: backend == BackendKind.BaolongdaWmi);
+		return new MachineFacts(identity, backend, backend);
+	}
+
+	private static void Check(List<string> lines, string scenario, MachineFacts facts,
+		FeatureProbe probe, FeatureAvailability expectedState, BackendChannel expectedChannel,
+		FeatureId feature = FeatureId.LogoLight)
+	{
+		FeatureDecision decision = Get(feature, facts, probe);
+		bool ok = decision.State == expectedState && decision.Channel == expectedChannel;
+		lines.Add((ok ? "PASS " : "FAIL ") + scenario
+			+ " ⇒ state=" + decision.State + " channel=" + decision.Channel
+			+ " backend=" + decision.Backend + " reason=" + decision.Reason);
 	}
 }

@@ -3798,7 +3798,7 @@ public partial class MainWindow : Window
     {
         MechrevoHw? hw = _probe?.Hw ?? WpfBackend.Hw;
         BackendProbe? probe = _probe;
-        return topic switch
+        bool supported = topic switch
         {
             "Keyboard/Ctrl" => GcuEcKeyboard.Active
                 ? GcuEcKeyboard.HasControllableKeyboard
@@ -3810,6 +3810,11 @@ public partial class MainWindow : Window
             "HidLightbar_Sync/Ctrl" => probe?.SupportsSyncLight ?? false,
             _ => false
         };
+        if (string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
+        {
+            MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, supported, "mini-dispatch");
+        }
+        return supported;
     }
 
     /// <summary>⭐ task-17：灯光卡「编辑 / HID 编辑」入口；不支持该通道时不创建（⛔ 不做可点但无通路控件）✅。</summary>

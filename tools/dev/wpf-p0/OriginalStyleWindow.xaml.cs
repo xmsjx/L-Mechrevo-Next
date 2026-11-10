@@ -1060,6 +1060,10 @@ public partial class OriginalStyleWindow : Window
                 "HidLightbar_Sync/Ctrl" => probe.SupportsSyncLight,
                 _ => false
             };
+            if (string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
+            {
+                MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, supported, "wide-dispatch");
+            }
             if (!supported)
             {
                 return false;
@@ -10423,6 +10427,11 @@ public partial class OriginalStyleWindow : Window
                 "HidLightbar_Hinge/Ctrl" => _backendProbe.SupportsHingeLight,
                 _ => false
             };
+            if (string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
+            {
+                MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(
+                    _backendProbe.Hw, supported, "wide-welcome");
+            }
             if (!supported) return;
 
             if (_backendProbe.Service == null && MechrevoLite.Hardware.GcuEcExperimental.Enabled)
