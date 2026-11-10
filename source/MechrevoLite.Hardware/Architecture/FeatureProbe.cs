@@ -8,13 +8,13 @@ internal sealed record FeatureProbe(
 	bool LogoLightCapability,
 	bool LogoLightSeen,
 	bool? LightbarMbLogoSupport,
-	bool EcLogoEvidence)
+	bool? EcLogoEvidence)
 {
 	internal static FeatureProbe From(MechrevoHw? hw)
 	{
 		if (hw == null)
 		{
-			return new FeatureProbe(false, false, false, null, false);
+			return new FeatureProbe(false, false, false, null, null);
 		}
 		MechrevoDeviceCapabilities caps = hw.Capabilities;
 		return new FeatureProbe(

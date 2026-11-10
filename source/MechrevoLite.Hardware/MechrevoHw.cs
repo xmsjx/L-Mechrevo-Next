@@ -1090,8 +1090,9 @@ public class MechrevoHw : IDisposable
     }
 }
 
-/// <summary>EC 本地的 USB Logo 证据（只读已缓存结果，不触发 HID 枚举）。</summary>
-internal bool EcLogoEvidence => IteLightingLocal.TryGetUsbLogoCached(out bool value) && value;
+/// <summary>EC 本地的 USB Logo 证据（只读已缓存结果，不触发 HID 枚举；null=尚未采集）。</summary>
+internal bool? EcLogoEvidence =>
+    IteLightingLocal.TryGetUsbLogoCached(out bool value) ? value : (bool?)null;
 
 /// <summary>铰链灯：灯条为 Lighbar4 代际 + BIOS 属 IDA/IDB/IDX/IDZ + GCU 上报 HingeSupport。</summary>
 public bool SupportsHingeLight => IsLighbar4Lightbar && IsZoneProbedBios && LightbarHingeSupport == true;
@@ -7966,8 +7967,6 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			{
 				return true;
 			}
-			// 重连时重新枚举一次本地灯带/Logo 设备，避免休眠唤醒后的陈旧缓存。
-			IteLightingLocal.Invalidate();
 			// ⭐⭐ 2026-10-15（C-1 第 2 步「后端化」）：先按**有序候选表**探后端（**装了 GCU 服务 ⇒ GCU 优先**，见
 			// MechrevoBackendOrder.Candidates 的注释：原来是"老接口优先"，而 MICommonInterface 是**同方通用接口**、
 			// 新机型（含 50 系）也可能带 ⇒ 会被误判成老机型、**根本不去连 GCU**）。

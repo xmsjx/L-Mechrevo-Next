@@ -19,7 +19,7 @@ internal sealed class TongfangEcBackend : IBackendModule
 			state = FeatureAvailability.Unknown;
 			channel = BackendChannel.None;
 		}
-		else if (probe.EcLogoEvidence)
+		else if (probe.EcLogoEvidence == true)
 		{
 			sources.Add("usb:IteLightingLocal.HasUsbLogo");
 			state = FeatureAvailability.Supported;
