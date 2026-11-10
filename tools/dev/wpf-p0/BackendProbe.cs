@@ -252,14 +252,18 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            // GCU 本身就是通过 AcpiTest_MULong GetSetULong 写这两个状态；
-            // 服务未连接时 LM 直接走同一 ACPI 命令，避免“开关在但点了没反应”。
-            if (MechrevoLite.Hardware.AcpiDisplaySwitch.TrySetLcdOverdrive(on))
+            // GCU 和 EC 两条路分开：GCU 只走 MQTT 服务，EC 才走本地 ACPI 命令。
+            if (_service != null && _hw?.IsGcuConnected == true)
+            {
+                return await _service.SwitchLcdOverdrive(on).ConfigureAwait(false);
+            }
+            if (MechrevoLite.Hardware.GcuEcMode.IsEcMode
+                && MechrevoLite.Hardware.AcpiDisplaySwitch.TrySetLcdOverdrive(on))
             {
                 _hw?.ApplyLcdOverdriveState(on);
                 return true;
             }
-            return _service != null && await _service.SwitchLcdOverdrive(on).ConfigureAwait(false);
+            return false;
         }
         catch
         {
@@ -583,12 +587,17 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            if (MechrevoLite.Hardware.AcpiDisplaySwitch.TrySetLocalDimming(on))
+            if (_service != null && _hw?.IsGcuConnected == true)
+            {
+                return await _service.SwitchLocalDimming(on).ConfigureAwait(false);
+            }
+            if (MechrevoLite.Hardware.GcuEcMode.IsEcMode
+                && MechrevoLite.Hardware.AcpiDisplaySwitch.TrySetLocalDimming(on))
             {
                 _hw?.ApplyLocalDimmingState(on);
                 return true;
             }
-            return _service != null && await _service.SwitchLocalDimming(on).ConfigureAwait(false);
+            return false;
         }
         catch
         {
