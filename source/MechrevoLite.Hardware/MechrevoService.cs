@@ -6130,7 +6130,7 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 		// 不只是"能开关不能改效果"。现补上 hinge/sync 两个键与能力位。
 		// 回退：删掉下面两行 switch 分支即回到旧行为（Hinge/Sync 再次被拒收）。
 		string? key = LightTopicToQuickSwitchKey(topic);
-		bool supported = key switch
+		bool legacySupported = key switch
 		{
 			"logolight" => _hw.SupportsLogoLight,
 			"lightbar" => _hw.SupportsLightbar,
@@ -6138,9 +6138,27 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 			"synclight" => _hw.SupportsSyncLight,
 			_ => false
 		};
+		MechrevoLite.Hardware.Architecture.FeatureId? feature = key switch
+		{
+			"logolight" => MechrevoLite.Hardware.Architecture.FeatureId.LogoLight,
+			"lightbar" => MechrevoLite.Hardware.Architecture.FeatureId.Lightbar,
+			"hingelight" => MechrevoLite.Hardware.Architecture.FeatureId.HingeLight,
+			"synclight" => MechrevoLite.Hardware.Architecture.FeatureId.SyncLight,
+			_ => null
+		};
+		if (feature == null)
+		{
+			return false;
+		}
+		bool supported = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+			feature.Value, _hw, legacySupported);
 		if (key == "logolight")
 		{
-			MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(_hw, supported, "service-dispatch", "dispatch");
+			MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(_hw, legacySupported, "service-dispatch", "dispatch");
+		}
+		else
+		{
+			MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(feature.Value, _hw, legacySupported, "service-dispatch", "dispatch");
 		}
 		return supported;
 	}

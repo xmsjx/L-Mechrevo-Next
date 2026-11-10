@@ -65,12 +65,12 @@ internal sealed class TongfangGcuBackend : IBackendModule
 
 		FeatureDeclaration hinge = probe.GcuConnected && probe.HingeCapability
 			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
-				"GCU 上报铰链灯能力", new[] { "gcu:SupportsHingeLight" })
+				"GCU 上报铰链灯能力", new[] { "gcu:HingeSupport", "gcu:LightbarStatusType", "bios:ProjectId" })
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				probe.GcuConnected ? "GCU 未上报铰链灯能力" : "GCU 未连接", new string[0]);
 		FeatureDeclaration sync = probe.GcuConnected && probe.SyncCapability
 			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
-				"GCU 上报同步灯带能力", new[] { "gcu:SupportsSyncLight" })
+				"GCU 上报同步灯带能力", new[] { "gcu:SyncStatusType", "gcu:LightbarStatusType", "bios:ProjectId" })
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				probe.GcuConnected ? "GCU 未上报同步灯带能力" : "GCU 未连接", new string[0]);
 

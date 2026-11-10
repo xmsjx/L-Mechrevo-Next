@@ -98,6 +98,9 @@ internal static class FeatureGate
 		Check(lines, "nuc-lightbar-unprobed", Facts(BackendKind.NucUmiLocal),
 			new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
+		Check(lines, "umi-lightbar-unprobed", Facts(BackendKind.NucUmiLocal, model: "Umi 30"),
+			new FeatureProbe(false, false, false, null, false),
+			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
 		Check(lines, "gcu-hinge-supported", Facts(BackendKind.TongfangGcu),
 			new FeatureProbe(true, false, false, null, false, HingeCapability: true),
 			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.HingeLight);
@@ -139,10 +142,11 @@ internal static class FeatureGate
 		return string.Join(Environment.NewLine, lines);
 	}
 
-	private static MachineFacts Facts(BackendKind backend)
+	private static MachineFacts Facts(BackendKind backend, string model = "")
 	{
 		MachineIdentity identity = MachineIdentity.ForTest(board: "TEST", generation: "Gen40",
-			gcuInstalled: backend == BackendKind.TongfangGcu, whitelisted: backend == BackendKind.BaolongdaWmi);
+			gcuInstalled: backend == BackendKind.TongfangGcu, whitelisted: backend == BackendKind.BaolongdaWmi,
+			model: model);
 		return new MachineFacts(identity, backend, backend);
 	}
 

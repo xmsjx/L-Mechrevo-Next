@@ -3025,7 +3025,7 @@ public partial class MainWindow : Window
         bool hasKeyboard = hw?.SupportsKeyboard ?? false;
         if (hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true)
         {
-            // NUC/UMI：HID 单键 RGB 优先；没有 HID 时看 EC 单区支持位（OpenRevo 0x766 bit2）。
+            // NUC/UMI：HID 单键 RGB 优先；没有 HID 时看 EC 单区支持位（0x766 bit2）。
             hasKeyboard = WpfBackend.rgb?.IsConnected == true
                 || MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone();
         }
@@ -3807,69 +3807,6 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>⭐ task-17：通道能力判据与 <c>OriginalStyleWindow.WideApplyLightAsync</c> 同一套（不硬编码）✅。</summary>
-    private bool WideLightTopicSupported(string topic)
-    {
-        MechrevoHw? hw = _probe?.Hw ?? WpfBackend.Hw;
-        BackendProbe? probe = _probe;
-        bool supported = topic switch
-        {
-            "Keyboard/Ctrl" => GcuEcKeyboard.Active
-                ? GcuEcKeyboard.HasControllableKeyboard
-                : hw?.SupportsKeyboard ?? false,
-            "HidLightbar/Ctrl" => probe?.SupportsLightbar ?? false,
-            "HidLightbar_Logo/Ctrl" => hw?.SupportsLogoLight == true
-                || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo),
-            "HidLightbar_Hinge/Ctrl" => probe?.SupportsHingeLight ?? false,
-            "HidLightbar_Sync/Ctrl" => probe?.SupportsSyncLight ?? false,
-            _ => false
-        };
-        if (string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
-        {
-            MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, supported, "mini-dispatch", "dispatch");
-        }
-        return supported;
-    }
-
-    /// <summary>⭐ task-17：灯光卡「编辑 / HID 编辑」入口；不支持该通道时不创建（⛔ 不做可点但无通路控件）✅。</summary>
-    private Button? BuildLightEditorButton(string topic, string title, (string Effect, string Name)[] effects, bool hidKeyboard, bool whiteKeyboard)
-    {
-        if (!WideLightTopicSupported(topic))
-        {
-            return null;
-        }
-        MechrevoHw? hw = _probe?.Hw ?? WpfBackend.Hw;
-        if (hw?.UsesBaolongda == true && !string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal))
-        {
-            // ⭐ task-17：与迷你窗等价 —— 宝龙达下非键盘通道只有开/关（效果列/编辑入口本来就不给）✅
-            return null;
-        }
-        Button button = new()
-        {
-            Content = hidKeyboard ? WpfStrings.L("HID 编辑", "HID editor") : WpfStrings.LightSyncEditButton_Content,
-            Style = (Style)FindResource("GhostButton"),
-            Padding = new Thickness(8, 4, 8, 4),
-            FontSize = 11,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        button.Click += (_, _) =>
-        {
-            if (hidKeyboard)
-            {
-                OpenWideHidKeyboardEditor(title);
-            }
-            else if (whiteKeyboard)
-            {
-                OpenWideLightEditor(topic, title, Array.Empty<(string, string)>(), whiteBacklightOnly: true);
-            }
-            else
-            {
-                OpenWideLightEditor(topic, title, effects);
-            }
-        };
-        return button;
-    }
-
     /// <summary>⭐ task-17：打开与迷你窗等价的完整灯光编辑器（颜色/亮度/速度/电源/七色/单分区四色全部保留）✅。</summary>
     private void OpenWideLightEditor(string topic, string title, (string Effect, string Name)[] effects, bool whiteBacklightOnly = false)
     {
@@ -3877,45 +3814,16 @@ public partial class MainWindow : Window
         {
             Logger.WriteLine("[wide-light] 内联完整灯光编辑器：" + topic + " white=" + whiteBacklightOnly);
             WpfBackend.Attach(_probe?.Hw, _probe?.Service);
-            MountInlineLightEditor(new LightEditorWindow(topic, title, effects, whiteBacklightOnly));
+            MountInlineLightEditor(new LightEditorWindow(topic, title, effects, whiteBacklightOnly,
+                (applyTopic, applyEffect, applyLight, applySpeed, applyColor, applyOn) =>
+                    _owner != null
+                        ? _owner.WideApplyLightAsync(applyTopic, applyEffect, applyLight, applySpeed, applyColor, applyOn)
+                        : Task.FromResult(false)));
         }
         catch (Exception ex)
         {
             Logger.WriteError("[wide-light] 打开完整灯光编辑器失败：" + ex);
             StatusText.Text = string.Format(WpfStrings.StatusLightEditorOpenFailed, ex.Message);
-        }
-    }
-
-    /// <summary>⭐ task-17：打开与迷你窗共用的 HID 键盘编辑器（模式/亮度/速度/颜色，按 HID 支持范围）✅。</summary>
-    private void OpenWideHidKeyboardEditor(string title)
-    {
-        // task-26：无设备/后端未连接 ⇒ 只提示不打开（⛔ 不伪造能力；HidKeyboardWindow 需要真实 KeyboardRgb）
-        // EC 实验模式下 GCU 离线，但 HID 键盘不依赖 GCU，照常打开。
-        if ((!IsWideBackendConnected && !GcuEcKeyboard.IsHid) || (_probe?.Hw ?? WpfBackend.Hw) is null)
-        {
-            Logger.WriteLineIfChanged("wide-light-hid-no-device",
-                $"[wide-light] HID 编辑入口：无设备或后端未连接（connected={IsWideBackendConnected} hw={((_probe?.Hw ?? WpfBackend.Hw) == null ? "null" : "ok")}）⇒ 只提示，不打开 ✅");
-            StatusText.Text = WpfStrings.StatusHidEditorNeedsBackend;
-            return;
-        }
-        try
-        {
-            Logger.WriteLine("[wide-light] 打开 HID 键盘编辑器");
-            WpfBackend.Attach(_probe?.Hw, _probe?.Service);
-            KeyboardRgb? rgb = WpfBackend.rgb;
-            if (rgb == null)
-            {
-                rgb = new KeyboardRgb();
-                rgb.LoadConfig();
-                WpfBackend.rgb = rgb;
-            }
-            MountInlineLightEditor(new HidKeyboardWindow(rgb));
-            Logger.WriteLineIfChanged("wide-light-hid-editor", $"[wide-light] HID 键盘编辑器已内联：{title}");
-        }
-        catch (Exception ex)
-        {
-            Logger.WriteError("[wide-light] 打开 HID 键盘编辑器失败：" + ex);
-            StatusText.Text = string.Format(WpfStrings.StatusHidEditorOpenFailed, ex.Message);
         }
     }
 

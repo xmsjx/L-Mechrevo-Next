@@ -378,6 +378,10 @@ internal sealed class LightingService : ILightingService
             {
                 FeatureGateShadow.LogLogoLight(probe.Hw, legacySupport, "app-intent", "dispatch");
             }
+            else
+            {
+                FeatureGateShadow.LogFeature(feature.Value, probe.Hw, legacySupport, "app-intent", "dispatch");
+            }
             if (!FeatureGate.ResolveSupportOrLegacy(feature.Value, probe.Hw, legacySupport))
             {
                 return ServiceResult.Fail(WpfStrings.LightPowerFailed);

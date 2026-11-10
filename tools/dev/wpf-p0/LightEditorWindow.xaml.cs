@@ -35,6 +35,7 @@ public partial class LightEditorWindow : Window
     private readonly bool _nucSingleZone;
     /// <summary>EC 实验模式（GCU 离线）下的键盘编辑器：不走 GCU 服务，直接写 EC。</summary>
     private readonly bool _ecExperimentKeyboard;
+    private readonly Func<string, string, int, int, int, bool, Task<bool>>? _applyIntent;
 
     /// <summary>NUC/UMI 原厂灯带没有速度寄存器，编辑器隐藏速度行；其它机型不受影响。</summary>
     private readonly bool _hideSpeedForNucLightbar;
@@ -45,13 +46,15 @@ public partial class LightEditorWindow : Window
     private bool _inline;
     private bool _pendingAutoApply;
 
-    public LightEditorWindow(string topic, string title, (string Effect, string Name)[] effects, bool whiteBacklightOnly = false)
+    public LightEditorWindow(string topic, string title, (string Effect, string Name)[] effects, bool whiteBacklightOnly = false,
+        Func<string, string, int, int, int, bool, Task<bool>>? applyIntent = null)
     {
         InitializeComponent();
         WelcomeAutoCheck.IsChecked = MechrevoLite.AppConfig.Is("welcome_auto");
         ManualResetButton.Content = WpfStrings.L("恢复默认六色", "Restore default six colors");
         _topic = topic;
         _effects = effects;
+        _applyIntent = applyIntent;
         _whiteBacklightOnly = whiteBacklightOnly && string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
         _keyboard = string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
         MechrevoHw? keyboardHw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
@@ -779,6 +782,16 @@ public partial class LightEditorWindow : Window
                 LightingSettingsStore.SavePower(_topic, power, "用户编辑灯光电源");
             }
             _settings = next;
+            bool ok = true;
+            if (!_keyboard && _applyIntent != null)
+            {
+                bool applied = await _applyIntent(_topic, effect, _light, applySpeed, _colorArgb, power);
+                if (!fromAuto || !applied)
+                {
+                    StatusText.Text = applied ? WpfStrings.LightSavedApplied : WpfStrings.LightSavedUnconfirmed;
+                }
+                return applied;
+            }
             if (L_Mechrevo.WpfP0.Services.WpfBackend.Service == null && !_ecExperimentKeyboard)
             {
                 if (!fromAuto)
@@ -787,7 +800,6 @@ public partial class LightEditorWindow : Window
                 }
                 return false;
             }
-            bool ok = true;
             if (string.Equals(_topic, "Keyboard/Ctrl", StringComparison.Ordinal))
             {
                 if (_ecExperimentKeyboard && GcuEcKeyboard.IsEcWhite)

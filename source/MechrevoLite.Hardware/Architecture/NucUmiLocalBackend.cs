@@ -13,10 +13,23 @@ internal sealed class NucUmiLocalBackend : IBackendModule
 	{
 		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Unknown,
 			BackendChannel.None, "NUC/UMI 没有独立 Logo 灯通道", new string[0]);
-		FeatureDeclaration lightbar = (probe.LightbarCapability || probe.LightbarSeen
-			|| facts.Identity?.IsIntelNuc == true)
-			? new FeatureDeclaration(FeatureAvailability.Supported,
-				BackendChannel.LocalHid, "NUC/UMI 灯带走本地 HID", new[] { "usb:IteLightingLocal.HasLightbar" })
+		List<string> sources = new List<string>();
+		if (probe.LightbarCapability)
+		{
+			sources.Add("registry:Capabilities.Lightbar");
+		}
+		if (probe.LightbarSeen)
+		{
+			sources.Add("gcu:LightbarStatusSeen");
+		}
+		bool knownNuc = facts.Identity?.IsIntelNuc == true && facts.Identity?.IsUmi != true;
+		if (knownNuc)
+		{
+			sources.Add("identity:IntelNuc");
+		}
+		FeatureDeclaration lightbar = sources.Count > 0
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+				"NUC/UMI 灯带走本地 HID", sources.ToArray())
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				"NUC/UMI 灯带证据未采集，回退旧判据", new string[0]);
 		return new BackendFeatureDeclaration(Kind,

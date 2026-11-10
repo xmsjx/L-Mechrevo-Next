@@ -2024,7 +2024,10 @@ public partial class OriginalStyleWindow : Window
         try
         {
             _ = L_Mechrevo.WpfP0.Services.WpfBackend.Service?.RequestLightStatus(topic);
-            new LightEditorWindow(topic, title, effects) { Owner = this }.ShowDialog();
+            new LightEditorWindow(topic, title, effects, false,
+                (applyTopic, applyEffect, applyLight, applySpeed, applyColor, applyOn) =>
+                    WideApplyLightAsync(applyTopic, applyEffect, applyLight, applySpeed, applyColor, applyOn))
+            { Owner = this }.ShowDialog();
         }
         catch (Exception ex)
         {

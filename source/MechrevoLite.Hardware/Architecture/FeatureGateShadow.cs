@@ -28,6 +28,11 @@ internal static class FeatureGateShadow
 		Log(FeatureId.SyncLight, hw, oldValue, origin, kind);
 	}
 
+	internal static void LogFeature(FeatureId feature, MechrevoHw? hw, bool oldValue, string origin, string kind = "visibility")
+	{
+		Log(feature, hw, oldValue, origin, kind);
+	}
+
 	private static void Log(FeatureId feature, MechrevoHw? hw, bool oldValue, string origin, string kind)
 	{
 		try
@@ -37,7 +42,7 @@ internal static class FeatureGateShadow
 			string agree;
 			if (decision.State == FeatureAvailability.Unknown)
 			{
-				agree = oldValue ? "no" : "na";
+				agree = "na";
 			}
 			else
 			{
