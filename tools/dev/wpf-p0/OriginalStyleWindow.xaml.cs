@@ -7933,6 +7933,13 @@ public partial class OriginalStyleWindow : Window
             MechrevoLite.Hardware.Architecture.FeatureId.LogoLight, hw, legacySupport);
     }
 
+    /// <summary>灯带行支持：门控明确时收敛，Unknown 时回退旧判据。</summary>
+    private bool ResolveLightbarSupport(MechrevoHw? hw, bool legacySupport)
+    {
+        return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+            MechrevoLite.Hardware.Architecture.FeatureId.Lightbar, hw, legacySupport);
+    }
+
     internal void ApplyUiVisibilityFromConfig()
     {
         if (_backendProbe == null)
@@ -7964,6 +7971,8 @@ public partial class OriginalStyleWindow : Window
                 || hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
         bool hasStrip = (caps?.Lightbar ?? false) || (hw?.SupportsLightbar ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
+        bool legacyStrip = hasStrip;
+        hasStrip = ResolveLightbarSupport(hw, hasStrip);
         bool hasLogo = (caps?.LogoLight ?? false) || (hw?.SupportsLogoLight ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo);
         bool legacyLogo = hasLogo;
@@ -7974,6 +7983,7 @@ public partial class OriginalStyleWindow : Window
         LightStripRow.Visibility = ResolveRowVisibility(AppConfig.GetString("light_strip_ui") ?? "auto", hasStrip);
         LogoLightRow.Visibility = ResolveRowVisibility(AppConfig.GetString("light_logo_ui") ?? "auto", hasLogo);
         MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, legacyLogo, "wide");
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLightbar(hw, legacyStrip, "wide");
         LightHingeRow.Visibility = hasHinge ? Visibility.Visible : Visibility.Collapsed;
         LightSyncRow.Visibility = hasSync ? Visibility.Visible : Visibility.Collapsed;
         InitPerfConfigRow();

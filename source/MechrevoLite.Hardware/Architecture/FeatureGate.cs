@@ -83,6 +83,18 @@ internal static class FeatureGate
 		CheckBackend(lines, "gcu-wins-over-ec",
 			MachineFacts.ResolveActualBackend(gcu: true, baolongda: false, nuc: false, xingyao: false, ecMode: true, mifs: true),
 			BackendKind.TongfangGcu);
+		Check(lines, "gcu-lightbar-supported", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false, LightbarCapability: true),
+			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.Lightbar);
+		Check(lines, "gcu-lightbar-no-evidence", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false),
+			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
+		Check(lines, "ec-lightbar-usb", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, null, false, false, true),
+			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
+		Check(lines, "baolongda-no-lightbar", Facts(BackendKind.BaolongdaWmi),
+			new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.Lightbar);
 		Check(lines, "gcu-supported", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Gcu);
 		Check(lines, "gcu-no-evidence", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, false, false, null, false),

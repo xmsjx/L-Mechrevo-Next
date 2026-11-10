@@ -10,10 +10,20 @@ internal static class FeatureGateShadow
 {
 	internal static void LogLogoLight(MechrevoHw? hw, bool oldValue, string origin, string kind = "visibility")
 	{
+		Log(FeatureId.LogoLight, hw, oldValue, origin, kind);
+	}
+
+	internal static void LogLightbar(MechrevoHw? hw, bool oldValue, string origin, string kind = "visibility")
+	{
+		Log(FeatureId.Lightbar, hw, oldValue, origin, kind);
+	}
+
+	private static void Log(FeatureId feature, MechrevoHw? hw, bool oldValue, string origin, string kind)
+	{
 		try
 		{
 			MachineFacts facts = MachineFacts.From(hw);
-			FeatureDecision decision = FeatureGate.Get(FeatureId.LogoLight, facts, FeatureProbe.From(hw));
+			FeatureDecision decision = FeatureGate.Get(feature, facts, FeatureProbe.From(hw));
 			string agree;
 			if (decision.State == FeatureAvailability.Unknown)
 			{
@@ -26,7 +36,7 @@ internal static class FeatureGateShadow
 			string declaredMatches = facts.Backend == BackendKind.None && facts.DeclaredBackend == BackendKind.None
 				? "n/a"
 				: (facts.Backend == facts.DeclaredBackend ? "yes" : "no");
-			string line = "[gate-shadow] feature=LogoLight"
+			string line = "[gate-shadow] feature=" + feature
 				+ " origin=" + origin
 				+ " kind=" + kind
 				+ " old=" + (oldValue ? "yes" : "no")
@@ -39,11 +49,11 @@ internal static class FeatureGateShadow
 				+ " agree=" + agree
 				+ " reason=" + decision.Reason
 				+ " sources=" + string.Join(",", decision.Sources);
-			global::Logger.WriteLineIfChanged("gate-shadow-logo-" + origin, line);
+			global::Logger.WriteLineIfChanged("gate-shadow-" + feature + "-" + origin, line);
 		}
 		catch (Exception ex)
 		{
-			global::Logger.WriteLine("[gate-shadow] feature=LogoLight origin=" + origin
+			global::Logger.WriteLine("[gate-shadow] feature=" + feature + " origin=" + origin
 				+ " failed: " + ex.Message);
 		}
 	}

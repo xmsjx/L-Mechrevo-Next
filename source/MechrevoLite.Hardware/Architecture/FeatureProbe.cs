@@ -8,7 +8,10 @@ internal sealed record FeatureProbe(
 	bool LogoLightCapability,
 	bool LogoLightSeen,
 	bool? LightbarMbLogoSupport,
-	bool? EcLogoEvidence)
+	bool? EcLogoEvidence,
+	bool LightbarCapability = false,
+	bool LightbarSeen = false,
+	bool? EcLightbarEvidence = null)
 {
 	internal static FeatureProbe From(MechrevoHw? hw)
 	{
@@ -22,6 +25,9 @@ internal sealed record FeatureProbe(
 			caps != null && caps.LogoLight,
 			hw.LogoLightStatusSeen,
 			hw.LightbarMbLogoSupport,
-			hw.EcLogoEvidence);
+			hw.EcLogoEvidence,
+			caps != null && (caps.Lightbar || caps.RgbLightbar),
+			hw.LightbarStatusSeen,
+			IteLightingLocal.TryGetLightbarCached(out bool lightbarCached) ? lightbarCached : (bool?)null);
 	}
 }

@@ -3035,6 +3035,10 @@ public partial class MainWindow : Window
         }
         bool hasLightbar = (hw?.SupportsLightbar ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
+        bool legacyLightbar = hasLightbar;
+        hasLightbar = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+            MechrevoLite.Hardware.Architecture.FeatureId.Lightbar, hw, hasLightbar);
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLightbar(hw, legacyLightbar, "mini");
         bool hasLogo = (hw?.SupportsLogoLight ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo);
         bool logoSupport = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(

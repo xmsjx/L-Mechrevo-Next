@@ -11,53 +11,73 @@ internal sealed class TongfangEcBackend : IBackendModule
 
 	public BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe)
 	{
-		List<string> sources = new List<string>();
-		FeatureAvailability state;
-		BackendChannel channel;
+		FeatureDeclaration logo;
 		if (probe.GcuConnected)
 		{
-			state = FeatureAvailability.Unknown;
-			channel = BackendChannel.None;
+			logo = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"GCU 已连接，EC 路未接管", new string[0]);
 		}
 		else if (probe.EcLogoEvidence == true)
 		{
-			sources.Add("usb:IteLightingLocal.HasUsbLogo");
-			state = FeatureAvailability.Supported;
-			channel = BackendChannel.LocalHid;
-		}
-		else if (probe.LogoLightSeen)
-		{
-			sources.Add("gcu:LogoLightStatusSeen");
-			state = FeatureAvailability.Supported;
-			channel = BackendChannel.None;
-		}
-		else if (probe.LightbarMbLogoSupport == true)
-		{
-			sources.Add("gcu:LightbarMbLogoSupport");
-			state = FeatureAvailability.Supported;
-			channel = BackendChannel.None;
-		}
-		else if (probe.LogoLightCapability)
-		{
-			sources.Add("registry:Capabilities.LogoLight");
-			state = FeatureAvailability.Supported;
-			channel = BackendChannel.None;
+			logo = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+				"本地 EC 有 Logo 证据", new[] { "usb:IteLightingLocal.HasUsbLogo" });
 		}
 		else
 		{
-			state = FeatureAvailability.Unknown;
-			channel = BackendChannel.None;
+			List<string> sources = new List<string>();
+			if (probe.LogoLightSeen)
+			{
+				sources.Add("gcu:LogoLightStatusSeen");
+			}
+			if (probe.LightbarMbLogoSupport == true)
+			{
+				sources.Add("gcu:LightbarMbLogoSupport");
+			}
+			if (probe.LogoLightCapability)
+			{
+				sources.Add("registry:Capabilities.LogoLight");
+			}
+			logo = sources.Count > 0
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.None,
+					"仅有能力位/GCU 报文，未本地确认", sources.ToArray())
+				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+					"本地 EC 证据未采集或无证据", new string[0]);
 		}
-		string reason = state switch
+
+		FeatureDeclaration lightbar;
+		if (probe.GcuConnected)
 		{
-			FeatureAvailability.Supported => channel == BackendChannel.None
-				? "仅有能力位/GCU 报文，未本地确认"
-				: "本地 EC 有 Logo 证据",
-			FeatureAvailability.Unknown => probe.GcuConnected ? "GCU 已连接，EC 路未接管" : "本地 EC 证据未采集或无证据",
-			_ => "本地 EC 无 Logo 证据"
-		};
-		FeatureDeclaration logo = new FeatureDeclaration(state, channel, reason, sources.ToArray());
+			lightbar = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"GCU 已连接，EC 路未接管", new string[0]);
+		}
+		else if (probe.EcLightbarEvidence == true)
+		{
+			lightbar = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+				"本地 EC 有灯带证据", new[] { "usb:IteLightingLocal.HasLightbar" });
+		}
+		else
+		{
+			List<string> sources = new List<string>();
+			if (probe.LightbarSeen)
+			{
+				sources.Add("gcu:LightbarStatusSeen");
+			}
+			if (probe.LightbarCapability)
+			{
+				sources.Add("registry:Capabilities.Lightbar");
+			}
+			lightbar = sources.Count > 0
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.None,
+					"仅有能力位/GCU 报文，未本地确认", sources.ToArray())
+				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+					"本地 EC 灯带证据未采集或无证据", new string[0]);
+		}
+
 		return new BackendFeatureDeclaration(Kind,
-			new Dictionary<FeatureId, FeatureDeclaration> { [FeatureId.LogoLight] = logo });
+			new Dictionary<FeatureId, FeatureDeclaration>
+			{
+				[FeatureId.LogoLight] = logo,
+				[FeatureId.Lightbar] = lightbar
+			});
 	}
 }

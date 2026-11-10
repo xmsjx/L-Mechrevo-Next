@@ -53,6 +53,14 @@ internal static class IteLightingLocal
         return cached.HasValue;
     }
 
+    /// <summary>读取已缓存的灯带证据；未采集过返回 false，不触发 HID/EC 访问。</summary>
+    internal static bool TryGetLightbarCached(out bool value)
+    {
+        bool? cached = _hasLightbar;
+        value = cached == true;
+        return cached.HasValue;
+    }
+
     /// <summary>重新枚举 USB Logo 设备并写入缓存。</summary>
     internal static bool RefreshFromHid()
     {
