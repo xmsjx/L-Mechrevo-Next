@@ -6129,7 +6129,8 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 		// 整条拒收（SetLightPower/SetLightEffect 都返回 false）＝这两行**开关和效果都发不出去**，
 		// 不只是"能开关不能改效果"。现补上 hinge/sync 两个键与能力位。
 		// 回退：删掉下面两行 switch 分支即回到旧行为（Hinge/Sync 再次被拒收）。
-		return LightTopicToQuickSwitchKey(topic) switch
+		string? key = LightTopicToQuickSwitchKey(topic);
+		bool supported = key switch
 		{
 			"logolight" => _hw.SupportsLogoLight,
 			"lightbar" => _hw.SupportsLightbar,
@@ -6137,6 +6138,11 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 			"synclight" => _hw.SupportsSyncLight,
 			_ => false
 		};
+		if (key == "logolight")
+		{
+			MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(_hw, supported, "service-dispatch");
+		}
+		return supported;
 	}
 
 	internal static string? LightTopicToQuickSwitchKey(string topic)
