@@ -7940,6 +7940,20 @@ public partial class OriginalStyleWindow : Window
             MechrevoLite.Hardware.Architecture.FeatureId.Lightbar, hw, legacySupport);
     }
 
+    /// <summary>铰链灯支持：门控明确时收敛，Unknown 时回退旧判据。</summary>
+    private bool ResolveHingeSupport(MechrevoHw? hw, bool legacySupport)
+    {
+        return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+            MechrevoLite.Hardware.Architecture.FeatureId.HingeLight, hw, legacySupport);
+    }
+
+    /// <summary>同步灯带支持：门控明确时收敛，Unknown 时回退旧判据。</summary>
+    private bool ResolveSyncSupport(MechrevoHw? hw, bool legacySupport)
+    {
+        return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+            MechrevoLite.Hardware.Architecture.FeatureId.SyncLight, hw, legacySupport);
+    }
+
     internal void ApplyUiVisibilityFromConfig()
     {
         if (_backendProbe == null)
@@ -7979,6 +7993,10 @@ public partial class OriginalStyleWindow : Window
         hasLogo = ResolveLogoSupport(hw, hasLogo);
         bool hasHinge = _backendProbe?.SupportsHingeLight == true;
         bool hasSync = _backendProbe?.SupportsSyncLight == true;
+        bool legacyHinge = hasHinge;
+        bool legacySync = hasSync;
+        hasHinge = ResolveHingeSupport(hw, hasHinge);
+        hasSync = ResolveSyncSupport(hw, hasSync);
         KeyboardLightRow.Visibility = keyboard ? Visibility.Visible : Visibility.Collapsed;
         LightStripRow.Visibility = ResolveRowVisibility(AppConfig.GetString("light_strip_ui") ?? "auto", hasStrip);
         LogoLightRow.Visibility = ResolveRowVisibility(AppConfig.GetString("light_logo_ui") ?? "auto", hasLogo);
@@ -7986,6 +8004,8 @@ public partial class OriginalStyleWindow : Window
         MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLightbar(hw, legacyStrip, "wide");
         LightHingeRow.Visibility = hasHinge ? Visibility.Visible : Visibility.Collapsed;
         LightSyncRow.Visibility = hasSync ? Visibility.Visible : Visibility.Collapsed;
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogHingeLight(hw, legacyHinge, "wide");
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogSyncLight(hw, legacySync, "wide");
         InitPerfConfigRow();
         RefreshPerfConfigVisibility(_services?.Performance.CurrentMode ?? _backendProbe?.CurrentMode ?? -1);
         // ⭐⭐ 2026-10-26（task-18）：实验行/EC 直写按**能力位**显隐（Gen30 / 宝龙达 / 无界 / GCU），

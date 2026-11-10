@@ -63,11 +63,24 @@ internal sealed class TongfangGcuBackend : IBackendModule
 					"GCU 已连接但未上报灯带证据", new string[0]);
 		}
 
+		FeatureDeclaration hinge = probe.GcuConnected && probe.HingeCapability
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+				"GCU 上报铰链灯能力", new[] { "gcu:SupportsHingeLight" })
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				probe.GcuConnected ? "GCU 未上报铰链灯能力" : "GCU 未连接", new string[0]);
+		FeatureDeclaration sync = probe.GcuConnected && probe.SyncCapability
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+				"GCU 上报同步灯带能力", new[] { "gcu:SupportsSyncLight" })
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				probe.GcuConnected ? "GCU 未上报同步灯带能力" : "GCU 未连接", new string[0]);
+
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
 				[FeatureId.LogoLight] = logo,
-				[FeatureId.Lightbar] = lightbar
+				[FeatureId.Lightbar] = lightbar,
+				[FeatureId.HingeLight] = hinge,
+				[FeatureId.SyncLight] = sync
 			});
 	}
 }

@@ -3048,6 +3048,14 @@ public partial class MainWindow : Window
         bool hasHinge = (hw?.SupportsHingeLight ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasHinge);
         bool hasSync = hw?.SupportsSyncLight ?? false;
+        bool legacyHinge = hasHinge;
+        bool legacySync = hasSync;
+        hasHinge = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+            MechrevoLite.Hardware.Architecture.FeatureId.HingeLight, hw, hasHinge);
+        hasSync = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+            MechrevoLite.Hardware.Architecture.FeatureId.SyncLight, hw, hasSync);
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogHingeLight(hw, legacyHinge, "mini");
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogSyncLight(hw, legacySync, "mini");
         foreach ((string topic, string title, (string Effect, string Name)[] effects) in channels)
         {
             bool supported = topic switch

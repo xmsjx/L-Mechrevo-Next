@@ -98,6 +98,15 @@ internal static class FeatureGate
 		Check(lines, "nuc-lightbar-unprobed", Facts(BackendKind.NucUmiLocal),
 			new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
+		Check(lines, "gcu-hinge-supported", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false, HingeCapability: true),
+			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.HingeLight);
+		Check(lines, "gcu-hinge-no-evidence", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false),
+			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.HingeLight);
+		Check(lines, "gcu-sync-supported", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false, SyncCapability: true),
+			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.SyncLight);
 		Check(lines, "baolongda-no-lightbar", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);

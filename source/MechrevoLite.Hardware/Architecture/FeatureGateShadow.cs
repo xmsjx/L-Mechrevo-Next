@@ -18,6 +18,16 @@ internal static class FeatureGateShadow
 		Log(FeatureId.Lightbar, hw, oldValue, origin, kind);
 	}
 
+	internal static void LogHingeLight(MechrevoHw? hw, bool oldValue, string origin, string kind = "visibility")
+	{
+		Log(FeatureId.HingeLight, hw, oldValue, origin, kind);
+	}
+
+	internal static void LogSyncLight(MechrevoHw? hw, bool oldValue, string origin, string kind = "visibility")
+	{
+		Log(FeatureId.SyncLight, hw, oldValue, origin, kind);
+	}
+
 	private static void Log(FeatureId feature, MechrevoHw? hw, bool oldValue, string origin, string kind)
 	{
 		try
