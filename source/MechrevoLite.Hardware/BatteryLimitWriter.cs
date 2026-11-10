@@ -60,6 +60,45 @@ internal static class BatteryLimitWriter
 	}
 
 	/// <summary>启用限充（默认要求 SOC &lt; high）。</summary>
+	private static readonly object RetryGate = new object();
+	private static long _lastAttemptTick;
+	private static int _failureStreak;
+
+	/// <summary>连续重试保护：失败后 3s/15s/60s 递增，成功清零。</summary>
+	private static bool TryBeginAttempt(string action, out string detail)
+	{
+		lock (RetryGate)
+		{
+			long now = Environment.TickCount64;
+			int cooldown = _failureStreak >= 3 ? 60000 : (_failureStreak == 2 ? 15000 : (_failureStreak == 1 ? 3000 : 1000));
+			long elapsed = now - _lastAttemptTick;
+			if (_lastAttemptTick != 0 && elapsed < cooldown)
+			{
+				int remain = (int)Math.Ceiling((cooldown - elapsed) / 1000.0);
+				detail = "⛔ 连续重试保护：上次" + action + "失败，请 " + remain + " 秒后再试（失败次数 " + _failureStreak + "）";
+				return false;
+			}
+			_lastAttemptTick = now;
+			detail = "";
+			return true;
+		}
+	}
+
+	private static void NoteAttemptResult(bool ok)
+	{
+		lock (RetryGate)
+		{
+			if (ok)
+			{
+				_failureStreak = 0;
+			}
+			else if (_failureStreak < 10)
+			{
+				_failureStreak++;
+			}
+		}
+	}
+
 	internal static bool TryEnable(int low, int high, out string detail)
 	{
 		return TryEnable(low, high, allowInitialDischarge: false, out detail);
@@ -70,6 +109,17 @@ internal static class BatteryLimitWriter
 	/// （初始化会先放电到阈值附近）。
 	/// </summary>
 	internal static bool TryEnable(int low, int high, bool allowInitialDischarge, out string detail)
+	{
+		if (!TryBeginAttempt("启用", out detail))
+		{
+			return false;
+		}
+		bool ok = TryEnableCore(low, high, allowInitialDischarge, out detail);
+		NoteAttemptResult(ok);
+		return ok;
+	}
+
+	private static bool TryEnableCore(int low, int high, bool allowInitialDischarge, out string detail)
 	{
 		StringBuilder log = new StringBuilder();
 		try
@@ -212,6 +262,17 @@ internal static class BatteryLimitWriter
 
 	/// <summary>关闭限充（恢复默认充电）；失败不重试。</summary>
 	internal static bool TryDisable(out string detail)
+	{
+		if (!TryBeginAttempt("关闭", out detail))
+		{
+			return false;
+		}
+		bool ok = TryDisableCore(out detail);
+		NoteAttemptResult(ok);
+		return ok;
+	}
+
+	private static bool TryDisableCore(out string detail)
 	{
 		StringBuilder log = new StringBuilder();
 		try
