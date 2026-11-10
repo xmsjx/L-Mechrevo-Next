@@ -26,8 +26,9 @@ internal static class FeatureGate
 				return false;
 			}
 		}
-		catch
+		catch (Exception ex)
 		{
+			global::Logger.WriteLine("[gate] ResolveSupportOrLegacy failed: " + ex.Message);
 		}
 		return legacySupport;
 	}
@@ -70,6 +71,18 @@ internal static class FeatureGate
 	internal static string RunSelfTest()
 	{
 		List<string> lines = new List<string>();
+		CheckBackend(lines, "ec-wins-over-mifs",
+			MachineFacts.ResolveActualBackend(gcu: false, baolongda: false, nuc: false, xingyao: false, ecMode: true, mifs: true),
+			BackendKind.TongfangEc);
+		CheckBackend(lines, "nuc-wins-over-ec",
+			MachineFacts.ResolveActualBackend(gcu: false, baolongda: false, nuc: true, xingyao: false, ecMode: true, mifs: true),
+			BackendKind.NucUmiLocal);
+		CheckBackend(lines, "mifs-only",
+			MachineFacts.ResolveActualBackend(gcu: false, baolongda: false, nuc: false, xingyao: false, ecMode: false, mifs: true),
+			BackendKind.TongfangMifs);
+		CheckBackend(lines, "gcu-wins-over-ec",
+			MachineFacts.ResolveActualBackend(gcu: true, baolongda: false, nuc: false, xingyao: false, ecMode: true, mifs: true),
+			BackendKind.TongfangGcu);
 		Check(lines, "gcu-supported", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Gcu);
 		Check(lines, "gcu-no-evidence", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, false, false, null, false),
@@ -104,6 +117,12 @@ internal static class FeatureGate
 		MachineIdentity identity = MachineIdentity.ForTest(board: "TEST", generation: "Gen40",
 			gcuInstalled: backend == BackendKind.TongfangGcu, whitelisted: backend == BackendKind.BaolongdaWmi);
 		return new MachineFacts(identity, backend, backend);
+	}
+
+	private static void CheckBackend(List<string> lines, string scenario, BackendKind actual, BackendKind expected)
+	{
+		bool ok = actual == expected;
+		lines.Add((ok ? "PASS " : "FAIL ") + scenario + " ⇒ actual=" + actual + " expected=" + expected);
 	}
 
 	private static void Check(List<string> lines, string scenario, MachineFacts facts,

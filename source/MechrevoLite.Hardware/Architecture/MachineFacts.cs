@@ -21,29 +21,37 @@ internal sealed record MachineFacts(
 		{
 			return BackendKind.None;
 		}
-		if (hw.IsGcuConnected)
+		return ResolveActualBackend(hw.IsGcuConnected, hw.UsesBaolongda,
+			hw.NucLocalReady, hw.XingyaoLocalReady, GcuEcMode.IsEcMode, hw.UsesLegacyMifs);
+	}
+
+	/// <summary>实际后端优先级：GCU → 宝龙达 → NUC/UMI → 星耀 → EC → 老 MIFS。</summary>
+	internal static BackendKind ResolveActualBackend(bool gcu, bool baolongda,
+		bool nuc, bool xingyao, bool ecMode, bool mifs)
+	{
+		if (gcu)
 		{
 			return BackendKind.TongfangGcu;
 		}
-		if (hw.UsesBaolongda)
+		if (baolongda)
 		{
 			return BackendKind.BaolongdaWmi;
 		}
-		if (GcuEcMode.IsEcMode)
-		{
-			return BackendKind.TongfangEc;
-		}
-		if (hw.UsesLegacyMifs)
-		{
-			return BackendKind.TongfangMifs;
-		}
-		if (hw.NucLocalReady)
+		if (nuc)
 		{
 			return BackendKind.NucUmiLocal;
 		}
-		if (hw.XingyaoLocalReady)
+		if (xingyao)
 		{
 			return BackendKind.XingyaoPmc;
+		}
+		if (ecMode)
+		{
+			return BackendKind.TongfangEc;
+		}
+		if (mifs)
+		{
+			return BackendKind.TongfangMifs;
 		}
 		return BackendKind.None;
 	}
