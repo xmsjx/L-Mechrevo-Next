@@ -1173,6 +1173,10 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		get
 		{
+			if (GcuEcMode.IsEcMode && !IsGcuConnected)
+			{
+				return AcpiDisplaySwitch.QueryLocalDimmingSupport();
+			}
 			bool registryFallback = Capabilities.LocalDimming;
 			bool resolved;
 			string source;
@@ -1221,6 +1225,10 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		get
 		{
+			if (GcuEcMode.IsEcMode && !IsGcuConnected)
+			{
+				return AcpiDisplaySwitch.QueryLcdOverdriveSupport();
+			}
 			if (LcdOverdriveSupport != false)
 			{
 				if (!Capabilities.LcdOverdrive)
