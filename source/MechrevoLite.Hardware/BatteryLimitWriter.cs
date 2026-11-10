@@ -495,7 +495,9 @@ internal static class BatteryLimitWriter
 		string acpiNote = note;
 		if (EcLpcIo.TryReadEcIdentity(out _, out _, out note))
 		{
-			note = "LPC：" + note;
+			// LPC 读 0x8xxx XRAM 前需要先置 0x1060 bit7；否则状态可能读成 0。
+			bool unlocked = EcLpcIo.TryUnlockEcRam(out _, out _, out string unlockNote);
+			note = "LPC：" + note + " · 解锁：" + (unlocked ? "已确认" : "未确认") + "（" + unlockNote + "）";
 			return true;
 		}
 		note = "ACPI：" + acpiNote + " · LPC：" + note;
