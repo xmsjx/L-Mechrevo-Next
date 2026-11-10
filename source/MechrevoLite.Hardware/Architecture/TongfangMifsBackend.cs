@@ -13,8 +13,8 @@ internal sealed class TongfangMifsBackend : IBackendModule
 	{
 		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "老 MIFS 后端没有 Logo 下发路径", new string[0]);
-		FeatureDeclaration lightbar = new FeatureDeclaration(FeatureAvailability.Unsupported,
-			BackendChannel.None, "老 MIFS 后端没有灯带下发路径", new string[0]);
+		FeatureDeclaration lightbar = new FeatureDeclaration(FeatureAvailability.Unknown,
+			BackendChannel.None, "老 MIFS 未声明灯带通道，回退旧判据", new string[0]);
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{

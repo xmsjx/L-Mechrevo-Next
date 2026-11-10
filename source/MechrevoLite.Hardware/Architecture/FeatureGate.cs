@@ -94,7 +94,7 @@ internal static class FeatureGate
 			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
 		Check(lines, "baolongda-no-lightbar", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, true, false, null, false),
-			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.Lightbar);
+			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
 		Check(lines, "gcu-supported", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Gcu);
 		Check(lines, "gcu-no-evidence", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, false, false, null, false),
