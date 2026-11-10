@@ -115,7 +115,6 @@ public partial class OriginalStyleWindow : Window
     private bool _welcomeSentForWake;
     private readonly System.Threading.SemaphoreSlim _keyboardLightApplyLock = new(1, 1);
     private readonly System.Threading.SemaphoreSlim _hidApplyLock = new(1, 1);
-    private int _hidRetryGeneration;
     private int _lightingReassertGeneration;
     private int _capabilityWarmupGeneration;
     private int _hidApplyGeneration;
@@ -126,9 +125,6 @@ public partial class OriginalStyleWindow : Window
     private bool _syncingPerfConfig;
     private int _pendingMode = -1;
     private int _lastNucEcMode = -2;
-    // GCU 性能键：每次按键递增，旧的取样循环（还在等后端回读）看到序号变了就退出，
-    // 避免连按时多条 OSD 叠着弹。
-    private int _perfKeyWatchSeq;
     private int _lastObservedGcuMode = -2;
     private int _lastObservedGcuRawMode = -2;
     private long _lastPerfKeyOsdTick;
