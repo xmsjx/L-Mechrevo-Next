@@ -1902,6 +1902,10 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    /// <summary>自动刷新率至少要有两档 Windows 刷新率才可用。</summary>
+    internal bool SupportsAutoRefresh =>
+        MechrevoLite.ScreenGateProbe.Win32MaxRefreshRate() > MechrevoLite.Display.ScreenControl.MIN_RATE;
+
     internal bool MiniledOn => _backendProbe?.Hw?.LocalDimming == true;
 
     internal bool SupportsFhd => L_Mechrevo.WpfP0.Services.WpfBackend.acpi?.DeviceGet(327708u) >= 0;
@@ -7810,6 +7814,7 @@ public partial class OriginalStyleWindow : Window
                 : WpfStrings.L("显卡", "Graphics");
             bool localIccAvailable = IccHelper.ListCustomIccFiles().Count > 0;
             ScreenSection.Visibility = (caps.DisplayRefresh || _backendProbe?.Hw?.SupportsDisplayRefresh == true || caps.ColorCalibration || caps.LcdOverdrive || caps.LocalDimming || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
+            AutoRefreshSwitch.Visibility = SupportsAutoRefresh ? Visibility.Visible : Visibility.Collapsed;
             bool hasKeyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
                 ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
                 : caps.Keyboard || (hw?.SupportsKeyboard ?? false)

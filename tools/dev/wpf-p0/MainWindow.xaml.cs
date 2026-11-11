@@ -1635,17 +1635,21 @@ public partial class MainWindow : Window
         _displayBrightnessText = new TextBlock { Text = brightness + "%", Style = (Style)FindResource("MutedText"), Width = 46, TextAlignment = TextAlignment.Right };
         brightnessRow.Children.Add(_displayBrightness);
         brightnessRow.Children.Add(_displayBrightnessText);
-        _autoRefresh = new CheckBox
+        _autoRefresh = null;
+        if (_owner.SupportsAutoRefresh)
         {
-            Content = WpfStrings.MainWindow_xaml_Content_5,
-            Style = (Style)FindResource("HeaderSwitch"),
-            IsChecked = auto,
-            Margin = new Thickness(0),
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        Grid.SetColumn(_autoRefresh, 1);
-        DisplayInfoRow.Children.Add(_autoRefresh);
-        _autoRefresh.Click += (_, _) => _owner?.WideSetAutoRefresh(_autoRefresh.IsChecked == true);
+            _autoRefresh = new CheckBox
+            {
+                Content = WpfStrings.MainWindow_xaml_Content_5,
+                Style = (Style)FindResource("HeaderSwitch"),
+                IsChecked = auto,
+                Margin = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(_autoRefresh, 1);
+            DisplayInfoRow.Children.Add(_autoRefresh);
+            _autoRefresh.Click += (_, _) => _owner?.WideSetAutoRefresh(_autoRefresh.IsChecked == true);
+        }
         DisplayDetailsPanel.Children.Add(brightnessRow);
         if (_owner.SupportsMiniled)
         {
