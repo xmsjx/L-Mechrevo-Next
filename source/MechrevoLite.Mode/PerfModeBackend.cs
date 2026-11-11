@@ -294,6 +294,10 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 	{
 		bool ok = NvmlHelper.TrySetPowerLimitWatts(watts, out int applied);
 		Logger.WriteLine($"[gpu-power] 设功耗上限 {watts}W ⇒ ok={ok} · 回读={applied}W");
+		if (ok && Math.Abs(applied - watts) > 1)
+		{
+			Logger.WriteError("[gpu-power] 请求 " + watts + "W 被驱动钳制为 " + applied + "W（如实记录实际值）");
+		}
 		return Task.FromResult(ok);
 	}
 
@@ -519,9 +523,15 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			{
 				return Task.FromResult(result: true);
 			}
-			ScreenControl.SetScreen(hz);
+			bool sent = ScreenControl.SetScreen(hz);
 			int readback = ScreenNative.GetRefreshRate(screen);
-			return Task.FromResult(readback > 0 && Math.Abs(readback - hz) <= 2);
+			if (readback > 0)
+			{
+				return Task.FromResult(Math.Abs(readback - hz) <= 2);
+			}
+			// 回读不可用：以 ChangeDisplaySettings 的返回码为准，交给 Verify=null 走 Sent。
+			Logger.WriteLine("[display] 刷新率回读不可用 ⇒ 以设置返回码为准 hz=" + hz + " ok=" + sent);
+			return Task.FromResult(sent);
 		}
 		catch (Exception ex)
 		{
