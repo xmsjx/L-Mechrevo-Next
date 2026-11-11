@@ -3028,7 +3028,7 @@ public partial class MainWindow : Window
             // NUC/UMI：HID 单键 RGB 优先；没有 HID 时看 EC 单区支持位（0x766 bit2）。
             hasKeyboard = (hw?.SupportsKeyboard ?? false)
                 || WpfBackend.rgb?.IsConnected == true
-                || MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone();
+                || (hw?.IsUmiMachine != true && MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone());
         }
         if (GcuEcKeyboard.Active)
         {

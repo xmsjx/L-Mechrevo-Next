@@ -25,12 +25,31 @@ internal static class FeatureGate
 			{
 				return false;
 			}
+			if (decision.State == FeatureAvailability.Unknown && decision.Channel == BackendChannel.None
+				&& decision.Sources.Length > 0 && IsReportedOnly(decision.Sources))
+			{
+				return false;
+			}
 		}
 		catch (Exception ex)
 		{
 			global::Logger.WriteLine("[gate] ResolveSupportOrLegacy failed: " + ex.Message);
 		}
 		return legacySupport;
+	}
+
+	private static bool IsReportedOnly(string[] sources)
+	{
+		foreach (string source in sources)
+		{
+			if (!source.StartsWith("registry:", StringComparison.Ordinal)
+				&& !source.StartsWith("gcu:", StringComparison.Ordinal)
+				&& !source.StartsWith("bios:", StringComparison.Ordinal))
+			{
+				return false;
+			}
+		}
+		return true;
 	}
 
 	internal static FeatureDecision Get(FeatureId feature, MachineFacts facts, FeatureProbe probe)
