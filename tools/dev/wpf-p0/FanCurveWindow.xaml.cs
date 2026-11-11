@@ -385,7 +385,13 @@ public partial class FanCurveWindow : Window
                         MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId) with { FanCurveOn = pushCurve });
                 }
                 _dirty = false;
-                StatusText.Text = ok ? WpfStrings.L("宝龙达风扇曲线已保存并应用", "Baolongda fan curve saved and applied") : WpfStrings.L("宝龙达风扇曲线保存失败", "Failed to save Baolongda fan curve");
+                bool activeMode = string.Equals(PerfModeService.Instance?.ActiveModeId, _modeId, StringComparison.Ordinal);
+                string okText = !pushCurve
+                    ? WpfStrings.L("宝龙达风扇曲线已保存（未随档位下发）", "Baolongda fan curve saved (not pushed with profile)")
+                    : (activeMode
+                        ? WpfStrings.L("宝龙达风扇曲线已保存并应用", "Baolongda fan curve saved and applied")
+                        : WpfStrings.L("宝龙达风扇曲线已保存，切到该档后应用", "Baolongda fan curve saved; applies when this profile is active"));
+                StatusText.Text = ok ? okText : WpfStrings.L("宝龙达风扇曲线保存失败", "Failed to save Baolongda fan curve");
             }
             catch (Exception ex)
             {

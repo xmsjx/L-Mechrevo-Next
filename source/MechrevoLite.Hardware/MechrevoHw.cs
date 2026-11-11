@@ -6864,16 +6864,11 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		if (activeMode)
 		{
 			_fanCurveArmed = settings.Enabled;
-		}
-		// ⭐ 曲线被保存（含只改开关）⇒ 决策器清零 ⇒ 下一个 tick **必定重写**
-		//   （⛔ 否则会拿旧回差状态压住新曲线，用户会以为"保存了没反应" ⚠️）
-		_baolongdaCurveDecider0.Reset();
-		_baolongdaCurveDecider1.Reset();
-		if (settings.Enabled)
-		{
-			// ⭐⭐ 2026-10-18（高优先级 · 失败熔断）：⭐ **用户手动重新启用** ⇒ 重置熔断，允许再试一次
-			//   （⭐ 仍会重新计数：连续 3 次未生效 ⇒ 再次停用 ✅）
-			if (_fanCurveUnsupported)
+			// 只有活动档保存才影响当前闭环；非活动档不能重置活动档的决策器/熔断状态。
+			// 曲线被保存（含只改开关）⇒ 决策器清零 ⇒ 下一个 tick **必定重写**。
+			_baolongdaCurveDecider0.Reset();
+			_baolongdaCurveDecider1.Reset();
+			if (settings.Enabled && _fanCurveUnsupported)
 			{
 				_fanCurveUnsupported = false;
 				_fanCurveManualRejectStreak = 0;
