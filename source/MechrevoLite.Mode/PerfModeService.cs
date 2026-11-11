@@ -896,6 +896,7 @@ internal sealed class PerfModeService
 					Signature = null
 				}).ToArray());
 			}
+			RollbackBaolongdaCurveAfterFailedActivation(mode, hw, curveBefore, curveFileExisted, fanCurveStepGenerated, "激活取消");
 			throw;
 		}
 		Logger.WriteLine("PerfModes: " + mode.Id + " -> " + outcome.Describe());
@@ -908,54 +909,8 @@ internal sealed class PerfModeService
 			// 会**重试自定义档**，不会再拿老键里的内置档（静音/平衡）把它顶掉。
 			Logger.WriteLine($"PerfModes: {mode.Id} 未切换成功（reason={reason} route={mode.Route}）→ ActiveModeId 仍为 {ActiveModeId}；档位意图保持用户选择，等下一次重试。失败/未确认项：{outcome.Describe()}");
 			// 激活失败时回滚“稍后接管”写入的曲线存档，避免留下 enabled=true 但没人接管的状态。
-			// 强冷期间曲线被临时暂停，快照优先；激活失败不要用回滚覆盖强冷快照。
-			if (MechrevoHw.FanBoostActive)
-			{
-				Logger.WriteLine("[fan] 激活失败：强冷进行中 ⇒ 跳过曲线回滚，保留强冷快照（档位=" + mode.Id + "）");
-			}
-			else if (!fanCurveStepGenerated)
-			{
-				Logger.WriteLine("[fan] 激活失败：本次没有生成曲线步，曲线存档保持不变（档位=" + mode.Id + "）");
-			}
-			else if (curveBefore != null && !curveBefore.IsUnreadableArchive)
-			{
-				bool rollbackWritten = curveFileExisted
-					? hw.SaveBaolongdaFanCurveOnly(mode.Id, curveBefore)
-					: BaolongdaFanCurveStore.DeleteForMode(mode.Id);
-				if (rollbackWritten)
-				{
-					Logger.WriteLine("[fan] 激活失败 ⇒ 曲线存档已回滚（档位=" + mode.Id
-						+ " · 原文件存在=" + curveFileExisted + "）");
-				}
-				else
-				{
-					Logger.WriteError("[fan] 激活失败 ⇒ 曲线存档回滚失败（档位=" + mode.Id
-						+ " · 原文件存在=" + curveFileExisted + "）"
-						+ (string.Equals(ActiveModeId, mode.Id, StringComparison.Ordinal)
-							? "⇒ 尝试交回固件"
-							: "⇒ 非活动档，不动当前接管"));
-				}
-				// 本次激活可能已把 EC 切到手动接管；活动档失败时必须把武装/EC 一并回滚。
-				if (string.Equals(ActiveModeId, mode.Id, StringComparison.Ordinal))
-				{
-					if (rollbackWritten && curveFileExisted && curveBefore.Enabled)
-					{
-						hw.EngageBaolongdaFanCurve(mode.Id);
-					}
-					else
-					{
-						hw.RestoreBaolongdaFanFirmwareControl();
-					}
-				}
-			}
-			else if (curveBefore != null)
-			{
-				Logger.WriteLine("[fan] 激活失败 ⇒ 原曲线存档读不懂，保持原样不回滚（档位=" + mode.Id + "）");
-				if (string.Equals(ActiveModeId, mode.Id, StringComparison.Ordinal))
-				{
-					hw.RestoreBaolongdaFanFirmwareControl();
-				}
-			}		}
+			RollbackBaolongdaCurveAfterFailedActivation(mode, hw, curveBefore, curveFileExisted, fanCurveStepGenerated, "激活失败");
+		}
 		// （机主：Wujie 规划器误生成固件字段步/ActiveModeId 回退）：本机 SMU 应用成功的判据日志
 		if (caps.WujieSmuLocalOnly && mode.IsCustom)
 		{
@@ -1244,6 +1199,66 @@ internal sealed class PerfModeService
 		if (Logger.TryMarkChanged("gpu-oc-plan", message))
 		{
 			Logger.WriteError(message);
+		}
+	}
+
+	private void RollbackBaolongdaCurveAfterFailedActivation(
+		PerfModeDefinition mode,
+		MechrevoHw hw,
+		BaolongdaFanCurveSettings? curveBefore,
+		bool curveFileExisted,
+		bool fanCurveStepGenerated,
+		string reason)
+	{
+		if (MechrevoHw.FanBoostActive)
+		{
+			Logger.WriteLine("[fan] " + reason + "：强冷进行中 ⇒ 跳过曲线回滚，保留强冷快照（档位=" + mode.Id + "）");
+			return;
+		}
+		if (!fanCurveStepGenerated)
+		{
+			Logger.WriteLine("[fan] " + reason + "：本次没有生成曲线步，曲线存档保持不变（档位=" + mode.Id + "）");
+			return;
+		}
+		if (curveBefore == null)
+		{
+			return;
+		}
+		bool isActive = string.Equals(ActiveModeId, mode.Id, StringComparison.Ordinal);
+		if (curveBefore.IsUnreadableArchive)
+		{
+			Logger.WriteLine("[fan] " + reason + " ⇒ 原曲线存档读不懂，保持原样不回滚（档位=" + mode.Id + "）");
+			if (isActive)
+			{
+				hw.RestoreBaolongdaFanFirmwareControl();
+			}
+			return;
+		}
+		bool rollbackWritten = curveFileExisted
+			? hw.SaveBaolongdaFanCurveOnly(mode.Id, curveBefore)
+			: BaolongdaFanCurveStore.DeleteForMode(mode.Id);
+		if (rollbackWritten)
+		{
+			Logger.WriteLine("[fan] " + reason + " ⇒ 曲线存档已回滚（档位=" + mode.Id
+				+ " · 原文件存在=" + curveFileExisted + "）");
+		}
+		else
+		{
+			Logger.WriteError("[fan] " + reason + " ⇒ 曲线存档回滚失败（档位=" + mode.Id
+				+ " · 原文件存在=" + curveFileExisted + "）"
+				+ (isActive ? "⇒ 尝试交回固件" : "⇒ 非活动档，不动当前接管"));
+		}
+		if (!isActive)
+		{
+			return;
+		}
+		if (rollbackWritten && curveFileExisted && curveBefore.Enabled)
+		{
+			hw.EngageBaolongdaFanCurve(mode.Id);
+		}
+		else
+		{
+			hw.RestoreBaolongdaFanFirmwareControl();
 		}
 	}
 

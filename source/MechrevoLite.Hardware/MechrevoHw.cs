@@ -6798,6 +6798,15 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 
 	internal bool SaveBaolongdaFanCurve(string modeId, BaolongdaFanCurveSettings settings)
 	{
+		// 与周期 tick / 交回固件共用同一把门，避免编辑保存和回滚互相覆盖。
+		lock (_fanCurveIoGate)
+		{
+			return SaveBaolongdaFanCurveLocked(modeId, settings);
+		}
+	}
+
+	private bool SaveBaolongdaFanCurveLocked(string modeId, BaolongdaFanCurveSettings settings)
+	{
 		if (settings == null)
 		{
 			return false;
