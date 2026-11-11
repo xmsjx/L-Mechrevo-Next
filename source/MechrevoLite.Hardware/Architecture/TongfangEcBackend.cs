@@ -113,6 +113,11 @@ internal sealed class TongfangEcBackend : IBackendModule
 				"EC LCD Overdrive 证据未采集", new string[0]);
 		}
 
+		FeatureDeclaration displayEffect = new FeatureDeclaration(FeatureAvailability.Unknown,
+			BackendChannel.None, "EC 未声明色彩增强通道", new string[0]);
+		FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Unknown,
+			BackendChannel.None, "EC 未声明 OEM 校色通道", new string[0]);
+
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
@@ -120,7 +125,9 @@ internal sealed class TongfangEcBackend : IBackendModule
 				[FeatureId.Lightbar] = lightbar,
 				[FeatureId.KeyboardLight] = keyboard,
 				[FeatureId.LocalDimming] = localDimming,
-				[FeatureId.LcdOverdrive] = lcdOverdrive
+				[FeatureId.LcdOverdrive] = lcdOverdrive,
+				[FeatureId.DisplayEffect] = displayEffect,
+				[FeatureId.ColorCalibration] = colorCalibration
 			});
 	}
 }
