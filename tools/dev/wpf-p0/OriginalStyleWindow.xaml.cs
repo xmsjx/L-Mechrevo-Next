@@ -226,6 +226,7 @@ public partial class OriginalStyleWindow : Window
     public OriginalStyleWindow()
     {
         InitializeComponent();
+        AutoRefreshSwitch.Visibility = SupportsAutoRefresh ? Visibility.Visible : Visibility.Collapsed;
         _ = Task.Run(MachineProbeReadOnly.LogOnce);
         MainScroll.PreviewMouseWheel += MainScroll_PreviewMouseWheel;
         L_Mechrevo.WpfP0.Services.WindowWorkAreaPolicy.ClampOnLoaded(this);
@@ -1902,9 +1903,15 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    /// <summary>自动刷新率至少要有两档 Windows 刷新率才可用。</summary>
-    internal bool SupportsAutoRefresh =>
-        MechrevoLite.ScreenGateProbe.Win32MaxRefreshRate() > MechrevoLite.Display.ScreenControl.MIN_RATE;
+    /// <summary>自动刷新率至少要有两档 Windows 刷新率才可用；探测失败时保留旧可见状态。</summary>
+    internal bool SupportsAutoRefresh
+    {
+        get
+        {
+            int max = MechrevoLite.ScreenGateProbe.Win32MaxRefreshRate();
+            return max <= 0 || max > MechrevoLite.Display.ScreenControl.MIN_RATE;
+        }
+    }
 
     internal bool MiniledOn => _backendProbe?.Hw?.LocalDimming == true;
 
@@ -5905,14 +5912,26 @@ public partial class OriginalStyleWindow : Window
 
     private async void AutoRefresh_Click(object sender, RoutedEventArgs e)
     {
-        if (_backendProbe == null)
-        {
-            return;
-        }
         bool on = AutoRefreshSwitch.IsChecked == true;
-        bool ok = _services != null
-            ? (await DashboardCommands.SetAutoRefreshAsync(on)).Ok
-            : await _backendProbe.SwitchAutoRefreshAsync(on);
+        bool ok;
+        if (_services != null)
+        {
+            ok = (await DashboardCommands.SetAutoRefreshAsync(on)).Ok;
+        }
+        else
+        {
+            try
+            {
+                MechrevoLite.Display.ScreenControl.SetAutoRefresh(on ? 1 : 0);
+                MechrevoLite.Display.ScreenControl.AutoScreen();
+                ok = true;
+            }
+            catch (Exception ex)
+            {
+                ok = false;
+                Logger.WriteLine("[auto-refresh] Windows 路径失败：" + ex.Message);
+            }
+        }
         AppConfig.Set("screen_auto", on ? 1 : 0);
         AppConfig.Flush();
         SyncRefreshRateState();

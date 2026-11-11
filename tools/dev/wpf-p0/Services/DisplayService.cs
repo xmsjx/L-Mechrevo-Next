@@ -165,19 +165,15 @@ internal sealed class DisplayService : IDisplayService
     public async Task<ServiceResult> SetAutoRefreshAsync(bool on)
     {
         BackendProbe? probe = _backend.Probe;
-        if (probe == null)
-        {
-            return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
-        }
         try
         {
             // 自动刷新率优先走 Windows 显示路径；GCU 只做镜像。
             ScreenControl.SetAutoRefresh(on ? 1 : 0);
             ScreenControl.AutoScreen();
-            bool mirrored = true;
+            bool? mirrored = null;
             try
             {
-                if (probe.Service != null)
+                if (probe?.Service != null)
                 {
                     mirrored = await probe.SwitchAutoRefreshAsync(on).ConfigureAwait(false);
                 }
@@ -189,7 +185,7 @@ internal sealed class DisplayService : IDisplayService
             AppConfig.Set("screen_auto", on ? 1 : 0);
             AppConfig.Flush();
             Logger.WriteLineIfChanged("display-auto-refresh",
-                $"[display] 自动刷新率={on} Windows=ok GCU镜像={mirrored}");
+                $"[display] 自动刷新率={on} Windows=ok GCU镜像={(mirrored.HasValue ? mirrored.Value.ToString() : "n/a")}");
             return ServiceResult.Success(WpfStrings.DisplayAutoRefreshSent);
         }
         catch (Exception ex)

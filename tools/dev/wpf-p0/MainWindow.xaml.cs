@@ -717,6 +717,7 @@ public partial class MainWindow : Window
                 && ((_chargeLimitText == null && _owner.WideChargeLimitVisible)
                     || (_chargeSlider == null && _owner.WideChargeExperimentSupported)
                     || (_ecDirect == null && _owner.WideEcDirectSupported)
+                    || (_autoRefresh == null && _owner.SupportsAutoRefresh)
                     || (!_miniledRowAdded && _owner.SupportsMiniled)))
             {
                 BuildHomeExtras();
