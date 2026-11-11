@@ -1943,10 +1943,18 @@ public partial class MainWindow : Window
         if (selected >= 0) CalibrationIccCombo.SelectedIndex = selected;
     }
 
-    private void ScreenCalibrationToggle_Click(object sender, RoutedEventArgs e)
+    private async void ScreenCalibrationToggle_Click(object sender, RoutedEventArgs e)
     {
         if (!IsWideBackendConnected)
         {
+            bool localIcc = MechrevoLite.Display.IccHelper.HasFactoryIccFile()
+                || MechrevoLite.Display.IccHelper.ListCustomIccFiles().Count > 0;
+            if (localIcc && _owner != null)
+            {
+                await _owner.SetLocalCalibrationEnabledAsync(ScreenCalibrationToggle.IsChecked == true);
+                BuildCalibrationOptions();
+                return;
+            }
             // task-26：未连接时点了也不下发（开关已禁用，这里是键盘/并发路径的兜底）
             ScreenCalibrationToggle.IsChecked = !(ScreenCalibrationToggle.IsChecked == true);
             StatusText.Text = WpfStrings.StatusCalibrationNeedsBackend;

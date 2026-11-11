@@ -9010,7 +9010,8 @@ public partial class OriginalStyleWindow : Window
             bool calibrationOn = AppConfig.Exists("calib_enabled") && AppConfig.Is("calib_enabled");
             if (calibrationOn
                 && probe?.Hw?.IsGcuConnected != true
-                && !IccHelper.HasFactoryIccFile())
+                && !IccHelper.HasFactoryIccFile()
+                && IccHelper.ListCustomIccFiles().Count == 0)
             {
                 // ICC 目录为空/文件丢失时，不能沿用旧的已校色状态。
                 calibrationOn = false;
@@ -9116,6 +9117,12 @@ public partial class OriginalStyleWindow : Window
         }
         // 不在获取成功时重建界面：此时 calib_enabled 还是旧值，会把用户刚打开的开关刷回关闭。
         return true;
+    }
+
+    internal async Task SetLocalCalibrationEnabledAsync(bool enabled)
+    {
+        CalibrationSwitch.IsChecked = enabled;
+        await ApplyLocalCalibrationAsync();
     }
 
     private async Task ApplyLocalCalibrationAsync()
@@ -9316,8 +9323,13 @@ public partial class OriginalStyleWindow : Window
 
     private async void CalibrationCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (_syncingCalibration || _backendProbe == null || CalibrationSwitch.IsChecked != true)
+        if (_syncingCalibration || CalibrationSwitch.IsChecked != true)
         {
+            return;
+        }
+        if (_backendProbe == null)
+        {
+            await ApplyLocalCalibrationAsync();
             return;
         }
         int mode = SelectedCalibrationMode();
