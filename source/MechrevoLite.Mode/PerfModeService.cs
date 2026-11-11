@@ -909,20 +909,31 @@ internal sealed class PerfModeService
 			// 激活失败时回滚“稍后接管”写入的曲线存档，避免留下 enabled=true 但没人接管的状态。
 			if (curveBefore != null && !curveBefore.IsUnreadableArchive)
 			{
-				if (curveFileExisted)
-				{
-					hw.SaveBaolongdaFanCurveOnly(mode.Id, curveBefore);
-				}
-				else
-				{
-					BaolongdaFanCurveStore.DeleteForMode(mode.Id);
-				}
+				bool rollbackWritten = curveFileExisted
+					? hw.SaveBaolongdaFanCurveOnly(mode.Id, curveBefore)
+					: BaolongdaFanCurveStore.DeleteForMode(mode.Id);
 				Logger.WriteLine("[fan] 激活失败 ⇒ 曲线存档已回滚（档位=" + mode.Id
-					+ " · 原文件存在=" + curveFileExisted + "）");
+					+ " · 原文件存在=" + curveFileExisted + " · 写回=" + rollbackWritten + "）");
+				// 本次激活可能已把 EC 切到手动接管；活动档失败时必须把武装/EC 一并回滚。
+				if (string.Equals(ActiveModeId, mode.Id, StringComparison.Ordinal))
+				{
+					if (rollbackWritten && curveFileExisted && curveBefore.Enabled)
+					{
+						hw.EngageBaolongdaFanCurve(mode.Id);
+					}
+					else
+					{
+						hw.RestoreBaolongdaFanFirmwareControl();
+					}
+				}
 			}
 			else if (curveBefore != null)
 			{
 				Logger.WriteLine("[fan] 激活失败 ⇒ 原曲线存档读不懂，保持原样不回滚（档位=" + mode.Id + "）");
+				if (string.Equals(ActiveModeId, mode.Id, StringComparison.Ordinal))
+				{
+					hw.RestoreBaolongdaFanFirmwareControl();
+				}
 			}
 		}
 		// （机主：Wujie 规划器误生成固件字段步/ActiveModeId 回退）：本机 SMU 应用成功的判据日志

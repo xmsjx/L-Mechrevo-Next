@@ -371,6 +371,12 @@ public partial class FanCurveWindow : Window
                     Channel0Rpms = PercentToRpms(gpu, maxRpm)
                 };
                 bool ok = _hw.SaveBaolongdaFanCurve(_modeId, curve);
+                if (ok)
+                {
+                    PerfModeService.Instance?.RecordFanCurves(_modeId, cpu, gpu);
+                    MechrevoLite.Mode.PerfModeStore.SaveSettings(_modeId,
+                        MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId) with { FanCurveOn = pushCurve });
+                }
                 _dirty = false;
                 StatusText.Text = ok ? WpfStrings.L("宝龙达风扇曲线已保存并应用", "Baolongda fan curve saved and applied") : WpfStrings.L("宝龙达风扇曲线保存失败", "Failed to save Baolongda fan curve");
             }
