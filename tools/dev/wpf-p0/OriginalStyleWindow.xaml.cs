@@ -7953,6 +7953,13 @@ public partial class OriginalStyleWindow : Window
             MechrevoLite.Hardware.Architecture.FeatureId.SyncLight, hw, legacySupport);
     }
 
+    /// <summary>键盘灯支持：门控明确时收敛，Unknown 时回退旧判据。</summary>
+    private bool ResolveKeyboardSupport(MechrevoHw? hw, bool legacySupport)
+    {
+        return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+            MechrevoLite.Hardware.Architecture.FeatureId.KeyboardLight, hw, legacySupport);
+    }
+
     internal void ApplyUiVisibilityFromConfig()
     {
         if (_backendProbe == null)
@@ -7982,7 +7989,9 @@ public partial class OriginalStyleWindow : Window
             ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
             : (caps?.Keyboard ?? false) || (hw?.SupportsKeyboard ?? false)
                 || hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogKeyboardLight(hw, keyboard, "wide");
+        bool legacyKeyboard = keyboard;
+        keyboard = ResolveKeyboardSupport(hw, keyboard);
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogKeyboardLight(hw, legacyKeyboard, "wide");
         bool hasStrip = (caps?.Lightbar ?? false) || (hw?.SupportsLightbar ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
         bool legacyStrip = hasStrip;
