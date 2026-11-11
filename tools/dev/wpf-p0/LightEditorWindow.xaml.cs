@@ -60,10 +60,10 @@ public partial class LightEditorWindow : Window
         MechrevoHw? keyboardHw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
         _ecExperimentKeyboard = _keyboard && GcuEcKeyboard.Active;
         _nucSingleZone = _keyboard
-            && (((keyboardHw?.IsIntelNucMachine == true || keyboardHw?.IsUmiMachine == true)
+            && (((keyboardHw?.IsIntelNucMachine == true && keyboardHw?.IsUmiMachine != true)
                     && L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.IsConnected != true
                     && NucKeyboardLighting.IsSingleZone())
-                // EC 实验模式的同方单区键盘与 NUC/UMI 单区同一套 EC 写法。
+                // EC 实验模式的同方单区键盘与 NUC 单区同一套 EC 写法。
                 || GcuEcKeyboard.IsEcSingleZone);
         _hideSpeedForNucLightbar = string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
             && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } lightbarHw
@@ -837,6 +837,15 @@ public partial class LightEditorWindow : Window
                         : _colorArgb;
                     NucKeyboardLighting.Apply(effect, power, _light, nucSpeed, nucColor, cycleColors);
                     return true;
+                }
+                if (_applyIntent != null && !_wujieWhite && !_whiteBacklightOnly)
+                {
+                    bool applied = await _applyIntent("Keyboard/Ctrl", effect, _light, applySpeed, _colorArgb, power);
+                    if (!fromAuto || !applied)
+                    {
+                        StatusText.Text = applied ? WpfStrings.LightSavedApplied : WpfStrings.LightSavedUnconfirmed;
+                    }
+                    return applied;
                 }
                 if (power)
                 {

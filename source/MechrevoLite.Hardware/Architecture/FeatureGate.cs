@@ -17,7 +17,7 @@ internal static class FeatureGate
 		try
 		{
 			FeatureDecision decision = Get(feature, hw);
-			if (decision.State == FeatureAvailability.Supported)
+			if (decision.State == FeatureAvailability.Supported && decision.Channel != BackendChannel.None)
 			{
 				return true;
 			}
@@ -131,7 +131,7 @@ internal static class FeatureGate
 		Check(lines, "ec-supported", Facts(BackendKind.TongfangEc), new FeatureProbe(false, false, false, null, true),
 			FeatureAvailability.Supported, BackendChannel.LocalHid);
 		Check(lines, "ec-registry-only", Facts(BackendKind.TongfangEc), new FeatureProbe(false, true, false, null, false),
-			FeatureAvailability.Supported, BackendChannel.None);
+			FeatureAvailability.Unknown, BackendChannel.None);
 		Check(lines, "nuc-unknown", Facts(BackendKind.NucUmiLocal), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None);
 		Check(lines, "xingyao-unknown", Facts(BackendKind.XingyaoPmc), new FeatureProbe(false, true, false, null, false),

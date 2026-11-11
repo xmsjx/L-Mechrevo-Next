@@ -38,7 +38,7 @@ internal sealed class TongfangEcBackend : IBackendModule
 				sources.Add("registry:Capabilities.LogoLight");
 			}
 			logo = sources.Count > 0
-				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.None,
+				? new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 					"仅有能力位/GCU 报文，未本地确认", sources.ToArray())
 				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 					"本地 EC 证据未采集或无证据", new string[0]);
@@ -67,7 +67,7 @@ internal sealed class TongfangEcBackend : IBackendModule
 				sources.Add("registry:Capabilities.Lightbar");
 			}
 			lightbar = sources.Count > 0
-				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.None,
+				? new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 					"仅有能力位/GCU 报文，未本地确认", sources.ToArray())
 				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 					"本地 EC 灯带证据未采集或无证据", new string[0]);

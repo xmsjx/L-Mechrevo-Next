@@ -96,6 +96,9 @@ internal interface ILightingService
 
     /// <summary>键盘灯意图：EC 单区/白光、GCU/服务、NUC 本地键盘统一入口。</summary>
     Task<ServiceResult> ApplyKeyboardIntentAsync(SetKeyboardIntent intent);
+
+    /// <summary>灯光电源意图：能力判定 + 单通道开关。</summary>
+    Task<ServiceResult> ApplyLightPowerIntentAsync(SetLightPowerIntent intent);
 }
 
 /// <inheritdoc />
@@ -348,6 +351,39 @@ internal sealed class LightingService : ILightingService
         {
             return ServiceResult.Fail(WpfStrings.LightPowerExceptionPrefix + ex.GetType().Name);
         }
+    }
+
+    public async Task<ServiceResult> ApplyLightPowerIntentAsync(SetLightPowerIntent intent)
+    {
+        BackendProbe? probe = _backend.Probe;
+        if (probe == null)
+        {
+            return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
+        }
+        if (string.Equals(intent.Topic, LightingTopics.Keyboard, StringComparison.Ordinal))
+        {
+            return await SetKeyboardPowerAsync(intent.On).ConfigureAwait(false);
+        }
+        FeatureId? feature = FeatureForLightTopic(intent.Topic);
+        if (feature == null)
+        {
+            return ServiceResult.Fail(WpfStrings.LightPowerFailed);
+        }
+        bool legacySupport = intent.Topic switch
+        {
+            LightingTopics.Lightbar => probe.SupportsLightbar,
+            LightingTopics.Logo => probe.Hw?.SupportsLogoLight == true
+                || (GcuEcExperimental.Enabled && IteLightingLocal.HasUsbLogo),
+            LightingTopics.Hinge => probe.SupportsHingeLight,
+            LightingTopics.Sync => probe.SupportsSyncLight,
+            _ => false
+        };
+        FeatureGateShadow.LogFeature(feature.Value, probe.Hw, legacySupport, "app-intent-power", "dispatch");
+        if (!FeatureGate.ResolveSupportOrLegacy(feature.Value, probe.Hw, legacySupport))
+        {
+            return ServiceResult.Fail(WpfStrings.LightPowerFailed);
+        }
+        return await SetLightPowerAsync(intent.Topic, intent.On).ConfigureAwait(false);
     }
 
     public async Task<ServiceResult> ApplyLightIntentAsync(SetLightIntent intent)

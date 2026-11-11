@@ -951,7 +951,7 @@ internal sealed class BackendProbe : IDisposable
                 // EC 实验模式：按探测到的键盘类型分流；HID 由 KeyboardRgb 路径处理，这里不碰 EC。
                 return GcuEcKeyboard.ApplyFromSettings(null, on);
             }
-            if (NucKeyboardLighting.IsSingleZone())
+            if (_hw?.IsUmiMachine != true && NucKeyboardLighting.IsSingleZone())
             {
                 int level = NucKeyboardLighting.TryReadBrightness(out int current) && current > 0 ? current : 3;
                 NucKeyboardLighting.Apply("Single", on, on ? level : 0, 1, unchecked((int)0xFFFFFFFF), Array.Empty<int>());
@@ -1023,7 +1023,7 @@ internal sealed class BackendProbe : IDisposable
             {
                 return GcuEcKeyboard.ApplyFromSettings(effect, true, light);
             }
-            if (NucKeyboardLighting.IsSingleZone())
+            if (_hw?.IsUmiMachine != true && NucKeyboardLighting.IsSingleZone())
             {
                 int argb = color?.ToArgb() ?? unchecked((int)0xFFFFFFFF);
                 NucKeyboardLighting.Apply(effect, true, light, speed, argb, Array.Empty<int>());

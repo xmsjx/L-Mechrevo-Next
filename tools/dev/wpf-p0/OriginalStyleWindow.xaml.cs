@@ -831,11 +831,11 @@ public partial class OriginalStyleWindow : Window
             {
                 return EcKeyboardEffects();
             }
-            if (hw != null && (hw.IsIntelNucMachine || hw.IsUmiMachine)
+            if (hw != null && hw.IsIntelNucMachine && hw.IsUmiMachine != true
                 && WpfBackend.rgb?.IsConnected != true
                 && MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone())
             {
-                // OpenRevo 单区常量：1 常亮 / 2 硬件彩虹 / 3 硬件呼吸 / 4 软件六色轮播。
+                // 单区常量：1 常亮 / 2 硬件彩虹 / 3 硬件呼吸 / 4 软件六色轮播。
                 return MechrevoLite.Hardware.KeyboardFirmwareEffects.SingleZone
                     .Select(item => (item.Id, item.Label))
                     .ToArray();
@@ -9839,7 +9839,10 @@ public partial class OriginalStyleWindow : Window
             try
             {
                 new LightEditorWindow("Keyboard/Ctrl", WpfStrings.HidKeyboardWindow_Text_9, EcKeyboardEffects(),
-                    whiteBacklightOnly: MechrevoLite.Hardware.GcuEcKeyboard.IsEcWhite) { Owner = this }.ShowDialog();
+                    whiteBacklightOnly: MechrevoLite.Hardware.GcuEcKeyboard.IsEcWhite,
+                    applyIntent: (applyTopic, applyEffect, applyLight, applySpeed, applyColor, applyOn) =>
+                        WideApplyLightAsync(applyTopic, applyEffect, applyLight, applySpeed, applyColor, applyOn))
+                { Owner = this }.ShowDialog();
             }
             catch (Exception ex)
             {

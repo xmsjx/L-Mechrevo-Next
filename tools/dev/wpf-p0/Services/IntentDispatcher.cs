@@ -33,7 +33,7 @@ internal sealed class IntentDispatcher : IIntentDispatcher
 
 	public async Task<IntentResult> DispatchAsync(SetLightPowerIntent intent)
 	{
-		ServiceResult result = await _lighting.SetLightPowerAsync(intent.Topic, intent.On).ConfigureAwait(false);
+		ServiceResult result = await _lighting.ApplyLightPowerIntentAsync(intent).ConfigureAwait(false);
 		return new IntentResult(result.Ok, result.Detail);
 	}
 

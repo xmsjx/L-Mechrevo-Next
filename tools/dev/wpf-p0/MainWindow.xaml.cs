@@ -3026,7 +3026,8 @@ public partial class MainWindow : Window
         if (hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true)
         {
             // NUC/UMI：HID 单键 RGB 优先；没有 HID 时看 EC 单区支持位（0x766 bit2）。
-            hasKeyboard = WpfBackend.rgb?.IsConnected == true
+            hasKeyboard = (hw?.SupportsKeyboard ?? false)
+                || WpfBackend.rgb?.IsConnected == true
                 || MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone();
         }
         if (GcuEcKeyboard.Active)
@@ -3159,7 +3160,7 @@ public partial class MainWindow : Window
 
     private Border BuildInlineEditorCard(string topic, string title, (string Effect, string Name)[] effects, bool whiteBacklightOnly)
     {
-        LightEditorWindow editor = new(topic, title, effects, whiteBacklightOnly);
+        LightEditorWindow editor = new(topic, title, effects, whiteBacklightOnly, ApplyWideLightIntentAsync);
         editor.PrepareWideInline();
         UIElement? editorContent = editor.Content as UIElement;
         editor.Content = null;
@@ -3297,6 +3298,20 @@ public partial class MainWindow : Window
         StackPanel header = new() { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         header.Children.Add(new TextBlock { Text = title, Style = (Style)FindResource("CardTitle"), VerticalAlignment = VerticalAlignment.Center });
         header.Children.Add(power);
+        if (hidKeyboard)
+        {
+            Button hidEdit = new()
+            {
+                Content = WpfStrings.L("HID 编辑", "HID editor"),
+                Style = (Style)FindResource("GhostButton"),
+                Padding = new Thickness(8, 4, 8, 4),
+                Margin = new Thickness(8, 0, 0, 0),
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            hidEdit.Click += (_, _) => OpenWideHidKeyboardEditor(title);
+            header.Children.Add(hidEdit);
+        }
         powerRef = power;
         left.Children.Add(header);
         TextBlock hint = new()
@@ -3811,6 +3826,13 @@ public partial class MainWindow : Window
         }
     }
 
+    private Task<bool> ApplyWideLightIntentAsync(string topic, string effect, int light, int speed, int color, bool on)
+    {
+        return _owner != null
+            ? _owner.WideApplyLightAsync(topic, effect, light, speed, color, on)
+            : Task.FromResult(false);
+    }
+
     /// <summary>⭐ task-17：打开与迷你窗等价的完整灯光编辑器（颜色/亮度/速度/电源/七色/单分区四色全部保留）✅。</summary>
     private void OpenWideLightEditor(string topic, string title, (string Effect, string Name)[] effects, bool whiteBacklightOnly = false)
     {
@@ -3818,16 +3840,40 @@ public partial class MainWindow : Window
         {
             Logger.WriteLine("[wide-light] 内联完整灯光编辑器：" + topic + " white=" + whiteBacklightOnly);
             WpfBackend.Attach(_probe?.Hw, _probe?.Service);
-            MountInlineLightEditor(new LightEditorWindow(topic, title, effects, whiteBacklightOnly,
-                (applyTopic, applyEffect, applyLight, applySpeed, applyColor, applyOn) =>
-                    _owner != null
-                        ? _owner.WideApplyLightAsync(applyTopic, applyEffect, applyLight, applySpeed, applyColor, applyOn)
-                        : Task.FromResult(false)));
+            MountInlineLightEditor(new LightEditorWindow(topic, title, effects, whiteBacklightOnly, ApplyWideLightIntentAsync));
         }
         catch (Exception ex)
         {
             Logger.WriteError("[wide-light] 打开完整灯光编辑器失败：" + ex);
             StatusText.Text = string.Format(WpfStrings.StatusLightEditorOpenFailed, ex.Message);
+        }
+    }
+
+    /// <summary>打开与迷你窗共用的 HID 键盘编辑器。</summary>
+    private void OpenWideHidKeyboardEditor(string title)
+    {
+        if ((!IsWideBackendConnected && !GcuEcKeyboard.IsHid) || (_probe?.Hw ?? WpfBackend.Hw) is null)
+        {
+            StatusText.Text = WpfStrings.StatusHidEditorNeedsBackend;
+            return;
+        }
+        try
+        {
+            WpfBackend.Attach(_probe?.Hw, _probe?.Service);
+            KeyboardRgb? rgb = WpfBackend.rgb;
+            if (rgb == null)
+            {
+                rgb = new KeyboardRgb();
+                rgb.LoadConfig();
+                WpfBackend.rgb = rgb;
+            }
+            MountInlineLightEditor(new HidKeyboardWindow(rgb));
+            Logger.WriteLineIfChanged("wide-light-hid-editor", $"[wide-light] HID 键盘编辑器已内联：{title}");
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteError("[wide-light] 打开 HID 键盘编辑器失败：" + ex);
+            StatusText.Text = string.Format(WpfStrings.StatusHidEditorOpenFailed, ex.Message);
         }
     }
 
