@@ -918,6 +918,19 @@ internal sealed class PerfModeService
 			{
 				PerfModeStore.LastCustomId = mode.Id;
 			}
+			// 切到内置档/未配曲线的自定义档时，主动交回固件，避免上一档的软件曲线继续接管风扇。
+			if (_hw != null && _hw.UsesBaolongda)
+			{
+				bool hasCurve = mode.IsCustom
+					&& mode.Settings.FanCurveOn != false
+					&& (mode.Settings.CpuFanDuty != null
+						|| mode.Settings.GpuFanDuty != null
+						|| _hw.LoadBaolongdaFanCurve(mode.Id).Enabled);
+				if (!hasCurve)
+				{
+					_hw.RestoreBaolongdaFanFirmwareControl();
+				}
+			}
 			if ((object)plan != null)
 			{
 				await CaptureSlotAsync(mode, plan.SlotIndex, ct).ConfigureAwait(continueOnCapturedContext: false);

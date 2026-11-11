@@ -7690,6 +7690,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		{
 			_ = RefreshLegacyModeAsync();
 			RefreshBaolongdaSensors(); RefreshBaolongdaSwitchStates();
+			// 宝龙达软件闭环的周期 tick：传感器刷新后再按曲线写 20/21。
+			ApplyBaolongdaFanCurveStep();
 		}, null, LegacyRefreshIntervalMs, LegacyRefreshIntervalMs);
 		await RefreshLegacyModeAsync().ConfigureAwait(continueOnCapturedContext: false);
 		// ⭐ 立刻先读一次传感器（⭐ 免得界面上风扇/温度空着等 3 秒 ✅）
