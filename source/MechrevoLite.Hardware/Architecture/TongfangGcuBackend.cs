@@ -80,26 +80,95 @@ internal sealed class TongfangGcuBackend : IBackendModule
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				probe.GcuConnected ? "GCU 未上报键盘能力" : "GCU 未连接", new string[0]);
 
-		FeatureDeclaration localDimming = probe.GcuConnected && (probe.LocalDimmingCapability || probe.LocalDimmingSeen)
-			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
-				"GCU 上报分区背光能力", Source("registry:Capabilities.LocalDimming", "gcu:LocalDimmingStatusSeen"))
-			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-				probe.GcuConnected ? "GCU 未上报分区背光能力" : "GCU 未连接", new string[0]);
-		FeatureDeclaration lcdOverdrive = probe.GcuConnected && (probe.LcdOverdriveCapability || probe.LcdOverdriveSeen)
-			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
-				"GCU 上报 LCD Overdrive 能力", Source("registry:Capabilities.LcdOverdrive", "gcu:LcdOverdriveStatusSeen"))
-			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-				probe.GcuConnected ? "GCU 未上报 LCD Overdrive 能力" : "GCU 未连接", new string[0]);
+		FeatureDeclaration localDimming;
+		if (!probe.GcuConnected)
+		{
+			localDimming = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"GCU 未连接", new string[0]);
+		}
+		else if (probe.LocalDimmingSupport == false && !probe.LocalDimmingCapability)
+		{
+			localDimming = new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+				"GCU 明确不支持分区背光", new string[0]);
+		}
+		else
+		{
+			List<string> sources = new List<string>();
+			if (probe.LocalDimmingSupport == true)
+			{
+				sources.Add("gcu:LocalDimmingSupport");
+			}
+			if (probe.LocalDimmingCapability && probe.LocalDimmingSupport != false)
+			{
+				sources.Add("registry:Capabilities.LocalDimming");
+			}
+			localDimming = sources.Count > 0
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+					"GCU 上报分区背光能力", sources.ToArray())
+				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+					"GCU 未上报分区背光能力", new string[0]);
+		}
+
+		FeatureDeclaration lcdOverdrive;
+		if (!probe.GcuConnected)
+		{
+			lcdOverdrive = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"GCU 未连接", new string[0]);
+		}
+		else if (probe.LcdOverdriveSupport == false)
+		{
+			lcdOverdrive = new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+				"GCU 明确不支持 LCD Overdrive", new string[0]);
+		}
+		else
+		{
+			List<string> sources = new List<string>();
+			if (probe.LcdOverdriveSupport == true)
+			{
+				sources.Add("gcu:LcdOverdriveSupport");
+			}
+			if (probe.LcdOverdriveCapability)
+			{
+				sources.Add("registry:Capabilities.LcdOverdrive");
+			}
+			if (probe.LcdOverdriveSeen)
+			{
+				sources.Add("gcu:LcdOverdriveStatusSeen");
+			}
+			lcdOverdrive = sources.Count > 0
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+					"GCU 上报 LCD Overdrive 能力", sources.ToArray())
+				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+					"GCU 未上报 LCD Overdrive 能力", new string[0]);
+		}
 		FeatureDeclaration displayEffect = probe.GcuConnected && probe.DisplayEffectProfile
 			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
 				"GCU 提供显示效果 Profile", new[] { "gcu:DisplayEffectProfiles" })
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				probe.GcuConnected ? "GCU 未提供显示效果 Profile" : "GCU 未连接", new string[0]);
-		FeatureDeclaration colorCalibration = probe.GcuConnected && (probe.ColorCalibrationCapability || probe.ColorCalibrationSeen)
-			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
-				"GCU 上报校色能力", Source("registry:Capabilities.ColorCalibration", "gcu:ColorCalibrationSeen"))
-			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-				probe.GcuConnected ? "GCU 未上报校色能力" : "GCU 未连接", new string[0]);
+		FeatureDeclaration colorCalibration;
+		if (!probe.GcuConnected)
+		{
+			colorCalibration = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"GCU 未连接", new string[0]);
+		}
+		else
+		{
+			List<string> sources = new List<string>();
+			if (probe.ColorCalibrationCapability)
+			{
+				sources.Add("registry:Capabilities.ColorCalibration");
+			}
+			if (probe.ColorCalibrationSeen)
+			{
+				sources.Add("gcu:ColorCalibrationSeen");
+			}
+			colorCalibration = sources.Count > 0
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+					"GCU 上报校色能力", sources.ToArray())
+				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+					"GCU 未上报校色能力", new string[0]);
+		}
 
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
@@ -114,10 +183,5 @@ internal sealed class TongfangGcuBackend : IBackendModule
 				[FeatureId.DisplayEffect] = displayEffect,
 				[FeatureId.ColorCalibration] = colorCalibration
 			});
-	}
-
-	private static string[] Source(string registry, string gcu)
-	{
-		return new[] { registry, gcu };
 	}
 }

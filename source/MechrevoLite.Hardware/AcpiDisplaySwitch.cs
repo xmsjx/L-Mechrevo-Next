@@ -16,6 +16,9 @@ internal static class AcpiDisplaySwitch
     private static bool? _localDimmingSupport;
     private static bool? _lcdOverdriveSupport;
 
+    internal static bool? LocalDimmingSupportCached => _localDimmingSupport;
+    internal static bool? LcdOverdriveSupportCached => _lcdOverdriveSupport;
+
     /// <summary>EC 路能力：读 0x0D4F bit0，结果写入软件配置。</summary>
     internal static bool QueryLocalDimmingSupport()
     {

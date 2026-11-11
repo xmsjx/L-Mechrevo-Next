@@ -142,8 +142,14 @@ internal static class FeatureGate
 			new FeatureProbe(true, false, false, null, false, LocalDimmingCapability: true),
 			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.LocalDimming);
 		Check(lines, "ec-localdimming-supported", Facts(BackendKind.TongfangEc),
-			new FeatureProbe(false, false, false, null, false, LocalDimmingCapability: true),
+			new FeatureProbe(false, false, false, null, false, EcLocalDimmingSupport: true),
 			FeatureAvailability.Supported, BackendChannel.AcpiWmi, FeatureId.LocalDimming);
+		Check(lines, "ec-localdimming-disabled", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false, EcLocalDimmingSupport: false),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.LocalDimming);
+		Check(lines, "gcu-lcd-overdrive-disabled", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false, LcdOverdriveCapability: true, LcdOverdriveSupport: false),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.LcdOverdrive);
 		Check(lines, "gcu-lcd-overdrive-supported", Facts(BackendKind.TongfangGcu),
 			new FeatureProbe(true, false, false, null, false, LcdOverdriveCapability: true),
 			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.LcdOverdrive);

@@ -21,7 +21,11 @@ internal sealed record FeatureProbe(
 	bool LcdOverdriveSeen = false,
 	bool DisplayEffectProfile = false,
 	bool ColorCalibrationCapability = false,
-	bool ColorCalibrationSeen = false)
+	bool ColorCalibrationSeen = false,
+	bool? LocalDimmingSupport = null,
+	bool? LcdOverdriveSupport = null,
+	bool? EcLocalDimmingSupport = null,
+	bool? EcLcdOverdriveSupport = null)
 {
 	internal static FeatureProbe From(MechrevoHw? hw)
 	{
@@ -48,6 +52,10 @@ internal sealed record FeatureProbe(
 			hw.LcdOverdriveSeen,
 			hw.DisplayEffectProfiles.Count > 0,
 			caps != null && caps.ColorCalibration,
-			hw.ColorCalibrationSeen);
+			hw.ColorCalibrationSeen,
+			hw.LocalDimmingSupport,
+			hw.LcdOverdriveSupport,
+			AcpiDisplaySwitch.LocalDimmingSupportCached,
+			AcpiDisplaySwitch.LcdOverdriveSupportCached);
 	}
 }

@@ -79,16 +79,39 @@ internal sealed class TongfangEcBackend : IBackendModule
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				"EC 未上报键盘能力", new string[0]);
 
-		FeatureDeclaration localDimming = (probe.LocalDimmingCapability || probe.LocalDimmingSeen)
-			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.AcpiWmi,
-				"EC 本地分区背光通道可用", new[] { "registry:Capabilities.LocalDimming", "ec:LocalDimming" })
-			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-				"EC 未上报分区背光能力", new string[0]);
-		FeatureDeclaration lcdOverdrive = (probe.LcdOverdriveCapability || probe.LcdOverdriveSeen)
-			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.AcpiWmi,
-				"EC 本地 LCD Overdrive 通道可用", new[] { "registry:Capabilities.LcdOverdrive", "ec:LcdOverdrive" })
-			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-				"EC 未上报 LCD Overdrive 能力", new string[0]);
+		FeatureDeclaration localDimming;
+		if (probe.EcLocalDimmingSupport == true)
+		{
+			localDimming = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.AcpiWmi,
+				"EC 本地分区背光通道可用", new[] { "ec:LocalDimmingSupport" });
+		}
+		else if (probe.EcLocalDimmingSupport == false)
+		{
+			localDimming = new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+				"EC 明确不支持分区背光", new string[0]);
+		}
+		else
+		{
+			localDimming = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"EC 分区背光证据未采集", new string[0]);
+		}
+
+		FeatureDeclaration lcdOverdrive;
+		if (probe.EcLcdOverdriveSupport == true)
+		{
+			lcdOverdrive = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.AcpiWmi,
+				"EC 本地 LCD Overdrive 通道可用", new[] { "ec:LcdOverdriveSupport" });
+		}
+		else if (probe.EcLcdOverdriveSupport == false)
+		{
+			lcdOverdrive = new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+				"EC 明确不支持 LCD Overdrive", new string[0]);
+		}
+		else
+		{
+			lcdOverdrive = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"EC LCD Overdrive 证据未采集", new string[0]);
+		}
 
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
