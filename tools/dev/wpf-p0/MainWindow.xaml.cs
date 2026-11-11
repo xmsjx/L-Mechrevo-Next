@@ -2442,7 +2442,11 @@ public partial class MainWindow : Window
         HomeMidColumn.Width = gpuSupported ? new GridLength(12) : new GridLength(0);
         Grid.SetColumn(HomePerfCard, 0);
         Grid.SetColumnSpan(HomePerfCard, gpuSupported ? 1 : 3);
-        bool displaySupported = caps.DisplayRefresh || _probe?.Hw?.SupportsDisplayRefresh == true || caps.ColorCalibration || caps.LcdOverdrive || caps.LocalDimming;
+        bool localIccAvailable = MechrevoLite.Display.IccHelper.HasFactoryIccFile()
+            || MechrevoLite.Display.IccHelper.ListCustomIccFiles().Count > 0;
+        bool calibrationVisible = _owner?.SupportsOemCalibration == true || localIccAvailable;
+        bool displaySupported = caps.DisplayRefresh || _probe?.Hw?.SupportsDisplayRefresh == true
+            || calibrationVisible || caps.LcdOverdrive || caps.LocalDimming;
         HomeDisplayCard.Visibility = displaySupported ? Visibility.Visible : Visibility.Collapsed;
         HomeDisplayColumn.Width = displaySupported ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         HomeDisplayGap.Width = displaySupported ? new GridLength(10) : new GridLength(0);
@@ -2460,9 +2464,7 @@ public partial class MainWindow : Window
         NavScreen.Visibility = displaySupported ? Visibility.Visible : Visibility.Collapsed;
         if (ScreenCalibrationCard != null)
         {
-            ScreenCalibrationCard.Visibility = caps.ColorCalibration
-                || (ecLocal && (MechrevoLite.Display.IccHelper.HasFactoryIccFile()
-                    || MechrevoLite.Display.IccHelper.ListCustomIccFiles().Count > 0))
+            ScreenCalibrationCard.Visibility = calibrationVisible
                 ? Visibility.Visible : Visibility.Collapsed;
         }
         if (ScreenEffectCard != null)
