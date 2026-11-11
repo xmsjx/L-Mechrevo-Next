@@ -500,6 +500,12 @@ internal sealed class LightingService : ILightingService
         {
             return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
         }
+        bool legacySupport = probe.Hw?.SupportsKeyboard == true;
+        FeatureGateShadow.LogKeyboardLight(probe.Hw, legacySupport, "app-intent", "dispatch");
+        if (!FeatureGate.ResolveSupportOrLegacy(FeatureId.KeyboardLight, probe.Hw, legacySupport))
+        {
+            return ServiceResult.Fail(WpfStrings.LightKeyboardPowerFailed);
+        }
         try
         {
             if (GcuEcKeyboard.Active)

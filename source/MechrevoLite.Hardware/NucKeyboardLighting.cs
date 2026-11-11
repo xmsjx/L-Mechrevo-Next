@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 namespace MechrevoLite.Hardware;
 
 /// <summary>
-/// NUC/UMI EC 单区 RGB 键盘：识别方法与单区效果常量按 OpenRevo 实现。
+/// NUC/UMI EC 单区 RGB 键盘：识别方法与单区效果常量按单区协议实现。
 /// EC 地址：0x766 支持位、0x78C 电源/亮度、0x767 锁存、0x769~0x76B RGB、0x7C5 呼吸色码。
 /// </summary>
 internal static class NucKeyboardLighting
