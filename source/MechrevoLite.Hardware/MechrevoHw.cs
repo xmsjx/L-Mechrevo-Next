@@ -5592,6 +5592,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 
 	/// <summary>⭐ 强冷前的曲线快照（关闭时原样恢复）✅</summary>
 	private static BaolongdaFanCurveSettings _fanBoostSavedCurve;
+	// 快照对应的档位；关强冷必须写回原档，不能按当前游标覆盖别的档。
+	private static string _fanBoostSavedCurveModeId;
 
 	/// <summary>⭐ 曲线闭环的"上次已写档位"（x100RPM）—— 用于差异比较，避免同值反复写 ✅</summary>
 	private static int _fanCurveLastCh0 = -1;
@@ -5873,11 +5875,12 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			// ⭐⭐ 2026-10-18（机主：30/40 系均已实测可用 ⇒ 删除闸门）：⭐ 强冷直接走 `FanWriter`（无需 cfg 验证）✅
 			//   ⚠️ 仍保留：EC 写失败回滚、单次写、13 轮询确认、交回固件安全顺序 ✅
 			_fanBoostSavedCurve = LoadBaolongdaFanCurve();
+			_fanBoostSavedCurveModeId = _fanCurveModeId;
 			_fanBoostActive = true;
 			ResetBaolongdaFanCurveSmoothing();
 			if (_fanBoostSavedCurve != null && _fanBoostSavedCurve.Enabled)
 			{
-				SaveBaolongdaFanCurve(CloneCurve(_fanBoostSavedCurve, enabled: false));
+				SaveBaolongdaFanCurve(_fanBoostSavedCurveModeId, CloneCurve(_fanBoostSavedCurve, enabled: false));
 			}
 			int baselineRpm = 0;
 			if (TryReadFanSpeedsViaBackend(out int preFirst, out int preSecond))
@@ -5944,10 +5947,12 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 				Logger.WriteError("[fan] ⚠️ 强冷：EC 写入失败 ⇒ 已回滚（交回固件）· " + releaseDetail);
 				// 开强冷前若临时关掉了软件曲线，这里必须恢复快照；否则一次失败会把用户的曲线永久停用。
 				BaolongdaFanCurveSettings rollbackCurve = _fanBoostSavedCurve;
+				string rollbackModeId = _fanBoostSavedCurveModeId;
 				_fanBoostSavedCurve = null;
+				_fanBoostSavedCurveModeId = null;
 				if (rollbackCurve != null && rollbackCurve.Enabled && !rollbackCurve.IsUnreadableArchive)
 				{
-					bool curveRestored = SaveBaolongdaFanCurve(rollbackCurve);
+					bool curveRestored = SaveBaolongdaFanCurve(rollbackModeId, rollbackCurve);
 					Logger.WriteError("[fan] 强冷：失败回滚 ⇒ 恢复强冷前曲线"
 						+ $"（enabled={rollbackCurve.Enabled} · 联动={rollbackCurve.SyncEnabled}）ok={curveRestored}");
 				}
@@ -5962,10 +5967,12 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		// ⭐ 强冷结束 ⇒ 平滑状态清零（⭐ 让恢复后的闭环从真实温度重新收敛，⛔ 不沿用强冷前的旧平滑值）
 		ResetBaolongdaFanCurveSmoothing();
 		BaolongdaFanCurveSettings saved = _fanBoostSavedCurve;
+		string savedModeId = _fanBoostSavedCurveModeId;
 		_fanBoostSavedCurve = null;
+		_fanBoostSavedCurveModeId = null;
 		if (saved != null && !saved.IsUnreadableArchive)
 		{
-			bool restored = SaveBaolongdaFanCurve(saved);
+			bool restored = SaveBaolongdaFanCurve(savedModeId, saved);
 			Logger.WriteLine($"[fan] 强冷：关 ⇒ 交回固件（{releaseOnOff}）⇒ 已恢复强冷前曲线（enabled={saved.Enabled} · 联动={saved.SyncEnabled}）ok={restored}");
 			confirmed = restored;
 			return released && restored;
@@ -6793,8 +6800,11 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			return false;
 		}
 		string id = string.IsNullOrWhiteSpace(modeId) ? "default" : modeId;
-		_fanCurveModeId = id;
 		bool activeMode = IsFanCurveModeActive(id);
+		if (activeMode)
+		{
+			_fanCurveModeId = id;
+		}
 		_fanCurveArmed = settings.Enabled && activeMode;
 		bool ok = BaolongdaFanCurveStore.SaveForMode(id, settings, out string path);
 		Logger.WriteLine("[fan] 曲线：已保存到档位 " + id + "（path=" + path + "）");
@@ -7000,6 +7010,16 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		{
 			Logger.WriteLineIfChanged("baolongda-fancurve-disarmed",
 				"[fan] 曲线：当前档位未武装软件闭环 ⇒ 本轮不写（交回固件后不会被 tick 自动接管）");
+			return false;
+		}
+		string activeModeId = MechrevoLite.Mode.PerfModeService.Instance?.ActiveModeId;
+		if (!string.IsNullOrWhiteSpace(activeModeId)
+			&& !string.Equals(activeModeId, _fanCurveModeId, StringComparison.Ordinal))
+		{
+			// 外部按键/EC 切档不会经过 PerfModeService：这里发现档位已变就立即交回固件。
+			_fanCurveArmed = false;
+			Logger.WriteError("[fan] 曲线：活动档=" + activeModeId + " 与曲线档=" + _fanCurveModeId
+				+ " 不一致 ⇒ 自动交回固件（停止软件接管）");
 			return false;
 		}
 		// ⚠️⚠️ 硬闸：⭐ 通道归属没确认 ⇒ ⭐ **绝不写** ⚠️（⭐ 写错会让 CPU 风扇按 GPU 温度转 ❌）
@@ -7237,6 +7257,14 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 
 	internal void RestoreBaolongdaFanFirmwareControl()
 	{
+		// 切到无曲线档/交回固件时，强冷状态也必须结束；否则 UI 仍显示强冷开、tick 被永久挡住。
+		if (_fanBoostActive)
+		{
+			_fanBoostActive = false;
+			_fanBoostSavedCurve = null;
+			_fanBoostSavedCurveModeId = null;
+			Logger.WriteLine("[fan] 交回固件：同时结束强冷状态（避免强冷标记粘滞）");
+		}
 		_fanCurveArmed = false;
 		_fanCurveLastAttemptTick = 0;
 		BaolongdaWmi wmi = _baolongda?.Wmi;
