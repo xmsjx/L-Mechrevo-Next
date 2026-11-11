@@ -24,4 +24,11 @@ internal readonly record struct DisplayPlatformFacts(
 
     /// <summary>探测失败时保留显示，只有明确单档才隐藏自动刷新。</summary>
     internal bool AutoRefreshVisible => MaxHz <= 0 || MaxHz > ScreenControl.MIN_RATE;
+
+    /// <summary>轻量读取：只需要刷新率，用于可见性判断。</summary>
+    internal static bool IsAutoRefreshVisible()
+    {
+        int max = MechrevoLite.ScreenGateProbe.Win32MaxRefreshRate();
+        return max <= 0 || max > ScreenControl.MIN_RATE;
+    }
 }

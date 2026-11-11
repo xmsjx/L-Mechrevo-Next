@@ -1918,7 +1918,7 @@ public partial class OriginalStyleWindow : Window
     internal bool SupportsOemCalibration => _backendProbe?.SupportsColorCalibration == true;
 
     /// <summary>自动刷新率至少要有两档 Windows 刷新率才可用；探测失败时显示，只有明确单档才隐藏。</summary>
-    internal bool SupportsAutoRefresh => L_Mechrevo.WpfP0.Services.DisplayPlatformFacts.Read().AutoRefreshVisible;
+    internal bool SupportsAutoRefresh => L_Mechrevo.WpfP0.Services.DisplayPlatformFacts.IsAutoRefreshVisible();
 
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
@@ -7833,9 +7833,10 @@ public partial class OriginalStyleWindow : Window
                 ? WpfStrings.OriginalStyleWindow_Text_15
                 : WpfStrings.L("显卡", "Graphics");
             bool localIccAvailable = IccHelper.HasFactoryIccFile() || IccHelper.ListCustomIccFiles().Count > 0;
-            bool hasWindowsRefresh = L_Mechrevo.WpfP0.Services.DisplayPlatformFacts.Read().WindowsRefreshAvailable;
+            L_Mechrevo.WpfP0.Services.DisplayPlatformFacts platform = L_Mechrevo.WpfP0.Services.DisplayPlatformFacts.Read();
+            bool hasWindowsRefresh = platform.WindowsRefreshAvailable;
             ScreenSection.Visibility = (hasWindowsRefresh || caps.DisplayRefresh || _backendProbe?.Hw?.SupportsDisplayRefresh == true || SupportsOemCalibration || SupportsLcdOverdrive || SupportsMiniled || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
-            AutoRefreshSwitch.Visibility = SupportsAutoRefresh ? Visibility.Visible : Visibility.Collapsed;
+            AutoRefreshSwitch.Visibility = platform.AutoRefreshVisible ? Visibility.Visible : Visibility.Collapsed;
             bool hasKeyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
                 ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
                 : caps.Keyboard || (hw?.SupportsKeyboard ?? false)
