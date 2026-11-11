@@ -115,8 +115,8 @@ internal sealed class TongfangEcBackend : IBackendModule
 
 		FeatureDeclaration displayEffect = new FeatureDeclaration(FeatureAvailability.Unknown,
 			BackendChannel.None, "EC 未声明色彩增强通道", new string[0]);
-		FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Unknown,
-			BackendChannel.None, "EC 未声明 OEM 校色通道", new string[0]);
+		FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Unsupported,
+			BackendChannel.None, "EC 没有 OEM 校色通道", new string[0]);
 
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
