@@ -97,14 +97,14 @@ internal sealed class DisplayService : IDisplayService
         {
         }
         string? laptopScreen = SafeString(static () => ScreenNative.FindLaptopScreen(false));
-        int currentHz = SafeCount(() => ScreenNative.GetRefreshRate(laptopScreen));
+        DisplayPlatformFacts platform = DisplayPlatformFacts.Read(laptopScreen);
+        int currentHz = platform.CurrentHz;
         if (currentHz < 0)
         {
             currentHz = SafeCount(static () => ScreenNative.GetRefreshRate(null));
         }
-        int maxHz = SafeCount(() => ScreenControl.GetMaxRate(laptopScreen));
+        int maxHz = platform.MaxHz >= 0 ? platform.MaxHz : SafeCount(() => ScreenControl.GetMaxRate(laptopScreen));
         int brightness = ScreenBrightness.TryGet(out int value) ? value : 100;
-        DisplayPlatformFacts platform = DisplayPlatformFacts.Read();
         return new DisplaySnapshot(
             ScreenWidth: width,
             ScreenHeight: height,

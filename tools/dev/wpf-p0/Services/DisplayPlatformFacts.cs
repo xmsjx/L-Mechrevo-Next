@@ -10,10 +10,10 @@ internal readonly record struct DisplayPlatformFacts(
     int MaxHz,
     bool WmiBrightnessAvailable)
 {
-    internal static DisplayPlatformFacts Read()
+    internal static DisplayPlatformFacts Read(string? screen = null)
     {
         int max = MechrevoLite.ScreenGateProbe.Win32MaxRefreshRate();
-        int current = ScreenNative.GetRefreshRate(null);
+        int current = ScreenNative.GetRefreshRate(screen);
         bool brightness = MechrevoLite.ScreenGateProbe.WmiBrightnessReadable();
         return new DisplayPlatformFacts(
             WindowsRefreshAvailable: max > 0,
