@@ -523,9 +523,15 @@ internal static class BaolongdaFanCurveStore
 			sb.Append("ch0rpm=").AppendLine(Join(settings.Channel0Rpms));
 			sb.Append("ch1temp=").AppendLine(Join(settings.Channel1Temperatures));
 			sb.Append("ch1rpm=").AppendLine(Join(settings.Channel1Rpms));
-			string tempPath = path + ".tmp";
+			string tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
 			temp = tempPath;
-			File.WriteAllText(tempPath, sb.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+			using (FileStream stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+			{
+				using StreamWriter writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+				writer.Write(sb.ToString());
+				writer.Flush();
+				stream.Flush(flushToDisk: true);
+			}
 			File.Move(tempPath, path, overwrite: true);
 			Logger.WriteLine($"宝龙达风扇曲线：⭐ 已保存（⭐ format={BaolongdaFanCurveSettings.CurrentFormatVersion} · ⭐ enabled={settings.Enabled}"
 				+ $" · ⭐ 双风扇联动={settings.SyncEnabled} · ⭐ ch0={Join(settings.Channel0Rpms)} · ⭐ ch1={Join(settings.Channel1Rpms)}）");

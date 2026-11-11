@@ -6779,6 +6779,23 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// <summary>只保存到指定档位，不立即接管风扇（用于编辑非活动档）。</summary>
 	internal bool SaveBaolongdaFanCurveOnly(string modeId, BaolongdaFanCurveSettings settings)
 	{
+		if (!Monitor.TryEnter(_fanCurveIoGate, 2000))
+		{
+			Logger.WriteError("[fan] 曲线：仅保存等待 I/O 锁超时（档位=" + modeId + "）");
+			return false;
+		}
+		try
+		{
+			return SaveBaolongdaFanCurveOnlyLocked(modeId, settings);
+		}
+		finally
+		{
+			Monitor.Exit(_fanCurveIoGate);
+		}
+	}
+
+	private bool SaveBaolongdaFanCurveOnlyLocked(string modeId, BaolongdaFanCurveSettings settings)
+	{
 		if (settings == null)
 		{
 			return false;
@@ -6798,10 +6815,19 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 
 	internal bool SaveBaolongdaFanCurve(string modeId, BaolongdaFanCurveSettings settings)
 	{
-		// 与周期 tick / 交回固件共用同一把门，避免编辑保存和回滚互相覆盖。
-		lock (_fanCurveIoGate)
+		// 与周期 tick / 交回固件共用同一把门；最多等 2 秒，避免 UI 线程被 EC 校验拖死。
+		if (!Monitor.TryEnter(_fanCurveIoGate, 2000))
+		{
+			Logger.WriteError("[fan] 曲线：保存等待 I/O 锁超时（档位=" + modeId + "）");
+			return false;
+		}
+		try
 		{
 			return SaveBaolongdaFanCurveLocked(modeId, settings);
+		}
+		finally
+		{
+			Monitor.Exit(_fanCurveIoGate);
 		}
 	}
 

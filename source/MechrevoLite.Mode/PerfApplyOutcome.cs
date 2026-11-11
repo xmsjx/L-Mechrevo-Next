@@ -31,7 +31,7 @@ public sealed record PerfApplyOutcome(string ModeId, IReadOnlyList<PerfApplyStep
 				return Steps.Where((PerfApplyStepOutcome s) => IsSwitch(s.Step)).All((PerfApplyStepOutcome s) => s.Result == PerfApplyResult.Confirmed);
 			}
 			// ⭐ 宝龙达（无固件槽）：没有切换步骤是**预期**的 ⇒ 只要有下发步骤且都没失败，就算已生效 ✅
-			// 本地化后端没有固件槽：没有步骤就是没有可失败项，同档重放应视为已生效。
+			// 本地化后端没有固件槽：没有失败步骤即视为已生效（含零步骤重放）。
 			return LocalApply && !AnyFailed;
 		}
 	}
