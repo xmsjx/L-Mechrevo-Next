@@ -277,7 +277,12 @@ internal sealed class BackendProbe : IDisposable
         {
             try
             {
-                return _hw?.SupportsColorCalibration ?? false;
+                bool legacy = _hw?.SupportsColorCalibration ?? false;
+                bool value = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+                    MechrevoLite.Hardware.Architecture.FeatureId.ColorCalibration, _hw, legacy);
+                MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(
+                    MechrevoLite.Hardware.Architecture.FeatureId.ColorCalibration, _hw, legacy, "probe-calibration");
+                return value;
             }
             catch
             {
