@@ -908,7 +908,12 @@ internal sealed class PerfModeService
 			// 会**重试自定义档**，不会再拿老键里的内置档（静音/平衡）把它顶掉。
 			Logger.WriteLine($"PerfModes: {mode.Id} 未切换成功（reason={reason} route={mode.Route}）→ ActiveModeId 仍为 {ActiveModeId}；档位意图保持用户选择，等下一次重试。失败/未确认项：{outcome.Describe()}");
 			// 激活失败时回滚“稍后接管”写入的曲线存档，避免留下 enabled=true 但没人接管的状态。
-			if (!fanCurveStepGenerated)
+			// 强冷期间曲线被临时暂停，快照优先；激活失败不要用回滚覆盖强冷快照。
+			if (MechrevoHw.FanBoostActive)
+			{
+				Logger.WriteLine("[fan] 激活失败：强冷进行中 ⇒ 跳过曲线回滚，保留强冷快照（档位=" + mode.Id + "）");
+			}
+			else if (!fanCurveStepGenerated)
 			{
 				Logger.WriteLine("[fan] 激活失败：本次没有生成曲线步，曲线存档保持不变（档位=" + mode.Id + "）");
 			}

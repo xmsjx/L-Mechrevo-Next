@@ -7271,6 +7271,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		if (_baolongda?.Wmi == null)
 		{
+			Logger.WriteLine("[fan] 曲线接管跳过：宝龙达 WMI 不可用（档位=" + modeId + "）");
 			return;
 		}
 		string id = string.IsNullOrWhiteSpace(modeId) ? "default" : modeId;
