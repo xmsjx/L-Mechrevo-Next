@@ -855,7 +855,7 @@ internal sealed class PerfModeService
 		IReadOnlyList<PerfApplyStep> readOnlyList = PerfModeApplyPlanner.Build(mode, plan, caps);
 		// （机主：「显卡超频设置了但频率没变化」· 可观测性①）
 		LogGpuOverclockPlan(mode, plan, caps, readOnlyList);
-		LogFanAndRefreshPlan(mode, caps, readOnlyList);
+		LogFanAndRefreshPlan(mode, plan, caps, readOnlyList);
 		Logger.WriteLine($"PerfModes: activate {mode.Id} ({reason}) route={mode.Route} slot={plan?.SlotIndex.ToString() ?? "-"} write={plan?.NeedsParameterWrite.ToString() ?? "-"} steps={readOnlyList.Count}");
 		// 2026-10-21（机主）：无界目标功耗 ≥ 60W 时，先切狂暴模式再下发 SMU（已在狂暴不重复发）。
 		if (caps.WujieSmuLocalOnly && mode.IsCustom)
@@ -1216,7 +1216,7 @@ internal sealed class PerfModeService
 		}
 	}
 
-	private static void LogFanAndRefreshPlan(PerfModeDefinition mode, PerfModeCapabilities caps, IReadOnlyList<PerfApplyStep> steps)
+	private static void LogFanAndRefreshPlan(PerfModeDefinition mode, FirmwareSlotPlan? plan, PerfModeCapabilities caps, IReadOnlyList<PerfApplyStep> steps)
 	{
 		PerfModeSettings settings = mode.Settings;
 		bool hasFanStep = steps.Any((PerfApplyStep s) => s.Kind == PerfApplyStepKind.WriteFanCurve);
@@ -1226,7 +1226,9 @@ internal sealed class PerfModeService
 		{
 			string reason = settings.FanCurveOn == false
 				? "FanCurveOn=false"
-				: (!caps.SupportsFanCurve ? "后端不支持" : "没有可写的 16 点曲线");
+				: (plan != null && !plan.NeedsParameterWrite
+					? "本次不需要写参数"
+					: (!caps.SupportsFanCurve ? "后端不支持" : "没有可写的 16 点曲线"));
 			string message = "[fan-plan] 曲线未生成：原因=" + reason + " · mode=" + mode.Id;
 			if (Logger.TryMarkChanged("fan-plan-" + mode.Id, message))
 			{
@@ -1679,7 +1681,7 @@ internal sealed class PerfModeService
 					LogFanAndRefreshPlan(perfModeDefinition with
 					{
 						Settings = settings2
-					}, Capabilities(), steps);
+					}, plan, Capabilities(), steps);
 					PerfApplyOutcome perfApplyOutcome;
 					try
 					{

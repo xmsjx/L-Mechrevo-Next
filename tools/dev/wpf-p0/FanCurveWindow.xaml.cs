@@ -352,9 +352,13 @@ public partial class FanCurveWindow : Window
                 int[] cpu = CpuCurve.Duties;
                 int[] gpu = GpuCurve.Duties;
                 int maxRpm = Math.Max(1, _hw.FanRpmMaxForPercent);
+                bool pushCurve = PushFanCurveCheck?.IsChecked != false;
+                bool loopOn = BaolongdaLoopCheck.IsChecked == true;
+                bool previousEnabled = _hw.LoadBaolongdaFanCurve(_modeId).Enabled;
                 BaolongdaFanCurveSettings curve = new()
                 {
-                    Enabled = BaolongdaLoopCheck.IsChecked == true,
+                    // 关闭“随档位下发”时只保存点位，不破坏已有闭环启用状态。
+                    Enabled = pushCurve ? loopOn : previousEnabled,
                     FormatVersion = BaolongdaFanCurveSettings.CurrentFormatVersion,
                     SyncEnabled = BaolongdaSyncCheck.IsChecked == true,
                     HysteresisC = FanCurveEngine.DefaultHysteresisC,
