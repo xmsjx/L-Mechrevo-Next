@@ -4247,14 +4247,15 @@ public class MechrevoService
 		//      ⛔ 不拿编造值去凑满三项 ✅（⭐ 这正是斗战者的做法：⭐ 只写用户覆盖过的 ✅）
 		//   ⭐ 全部未设置时 ⭐ 一个子命令都不发（⭐ 见 `TryApplyCpuPowerLimitViaBackend` ✅）
 		_ = hw.TryApplyCpuPowerLimitViaBackend(enable: true, pl1, pl2, tempWallC, out bool confirmed);
-		// ⭐⭐ 2026-10-16：⭐ 这条是**真机验证功耗墙下发**的主要证据 ⚠️ ⇒ ⭐ 必须用 `WriteError` ✅
+		// ⭐ 写失败必须如实返回 false，不能把失败的功耗墙当成功。
+		//   这条是**真机验证功耗墙下发**的主要证据 ⚠️ ⇒ ⭐ 必须用 `WriteError` ✅
 		//   （⭐ `Logger.WriteLine` 的级别由**消息内容**判定 ⇒ ⭐ 默认「仅错误」级别下**可能不落盘** ❌）
 		//   ⭐ 每次"应用"最多 3 行（⭐ PL1 / PL2 / 温度墙各一次 ✅）⇒ ⭐ 不需要额外去重 ✅
 		//   ⚠️ 措辞如实：⭐ 打印的是"⭐ 写成功"（⭐ = WMI 没报错 ⚠️），⛔ **不写"已确认生效"** ✅
 		Logger.WriteError($"宝龙达 功耗墙（⭐ 非 GCU 后端路径）：⭐ key={key}"
 			+ $" · ⭐ 下发 PL1={ShowPowerValue(pl1)} PL2={ShowPowerValue(pl2)} 温度墙={ShowTempValue(tempWallC)}"
 			+ $" · ⭐ 写成功={confirmed}（⚠️ ⛔ 非「数值已生效」）⇒ ⭐ 该项未发 MQTT ✅");
-		return true;
+		return confirmed;
 	}
 	// **单键写入路径的 PL1/PL2 联动兜底**（ WMI 23 与 SMU 两条路径共用）。
 	private static void LinkPowerLimitPair(MechrevoHw hw, bool isPl1, bool isPl2, ref int pl1, ref int pl2)
@@ -6076,14 +6077,15 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 					return (ok, confirmedLocal);
 				}).ConfigureAwait(continueOnCapturedContext: false);
 				Logger.WriteLine($"SwitchFanBoost({enable}) 宝龙达本机通道 ⇒ handled={handled} confirmed={confirmed}");
-				return handled && confirmed;
+				// 写入成功即算已下发；RPM 确认只作诊断，不把整档判成失败。
+				return handled;
 			}
 			// NUC/UMI 的强冷是本地 EC 0x751 bit6，不走 GCU。
 			if (_hw.IsIntelNucMachine || _hw.IsUmiMachine)
 			{
 				bool ok = NucQuickSwitches.TrySetFanBoost(enable, out bool confirmed);
 				Logger.WriteLine($"SwitchFanBoost({enable}) NUC/UMI EC ⇒ ok={ok} confirmed={confirmed}");
-				return ok && confirmed;
+				return ok;
 			}
 			// ⭐⭐ 无界（GCU 后端）恢复强冷入口：能力位刷新前也允许走 GCU 话题；GCU 未连接则如实失败 ✅
 			if (!_hw.SupportsFanBoost && !_hw.WujieSmuApu)

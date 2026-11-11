@@ -53,11 +53,7 @@ public sealed record PerfApplyOutcome(string ModeId, IReadOnlyList<PerfApplyStep
 	internal static bool IsSwitch(PerfApplyStep step)
 	{
 		PerfApplyStepKind kind = step.Kind;
-		if ((uint)kind <= 2u)
-		{
-			return true;
-		}
-		return false;
+		return kind == PerfApplyStepKind.SwitchBuiltIn || kind == PerfApplyStepKind.SwitchFirmwareSlot;
 	}
 
 	public string Describe()

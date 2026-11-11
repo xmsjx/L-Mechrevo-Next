@@ -5510,6 +5510,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 				//   ⚠️ 返回 true = "⭐ 已接管、⛔ 不走 GCU" ✅（⭐ 与既有约定一致 ✅）
 				Logger.WriteError("宝龙达 功耗墙：⚠️ PL1／PL2／温度墙**三项都未设置**"
 					+ " ⇒ ⭐ 本次**不下发任何子命令**（⛔ 不编造默认值）✅ —— ⭐ 这是如实行为、⛔ 不是失败 ✅");
+				confirmed = true;
 				return true;
 			}
 			// ⭐ 顺序照蛟龙 UI：⭐ PL1 → ⭐ PL2 → ⭐ 温度墙 ✅；⛔ **不再"最后 enable"** ✅
@@ -5558,7 +5559,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		catch (Exception ex)
 		{
 			Logger.WriteLine("宝龙达 功耗墙：⭐ 操作异常（已吞掉）：" + ex.Message);
-			return true;
+			return false;
 		}
 	}
 
@@ -5932,6 +5933,15 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 				_fanBoostActive = false;
 				confirmed = false;
 				Logger.WriteError("[fan] ⚠️ 强冷：EC 写入失败 ⇒ 已回滚（交回固件）· " + releaseDetail);
+				// 开强冷前若临时关掉了软件曲线，这里必须恢复快照；否则一次失败会把用户的曲线永久停用。
+				BaolongdaFanCurveSettings rollbackCurve = _fanBoostSavedCurve;
+				_fanBoostSavedCurve = null;
+				if (rollbackCurve != null)
+				{
+					bool curveRestored = SaveBaolongdaFanCurve(rollbackCurve);
+					Logger.WriteError("[fan] 强冷：失败回滚 ⇒ 恢复强冷前曲线"
+						+ $"（enabled={rollbackCurve.Enabled} · 联动={rollbackCurve.SyncEnabled}）ok={curveRestored}");
+				}
 			}
 			return true;
 		}

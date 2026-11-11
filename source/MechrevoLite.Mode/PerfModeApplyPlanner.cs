@@ -92,22 +92,6 @@ public static class PerfModeApplyPlanner
 				list.Add(Field("PL4", settings.Pl4.Value, PerfApplyVerify.CpuPackagePower));
 			}
 			// 2026-10-21：慢速功率/时间窗是独立字段（无界可能没有 PL4）⇒ 不能嵌在 PL4 块里，否则切档重放整段被跳过
-			// 2026-10-21：无界固件 sPPT 固定 45W、时间窗回读无效 ⇒ 这些字段在无界不生成下发步骤（其它机型不变）
-			if (!caps.WujieSmuLocalOnly)
-			{
-				if (settings.SmuSlowLimit.HasValue)
-				{
-				list.Add(Field("SmuSlowLimit", settings.SmuSlowLimit.Value, PerfApplyVerify.CpuPackagePower));
-				}
-			}
-			if (settings.SmuSlowTimeSeconds.HasValue)
-			{
-			list.Add(Field("SmuSlowTimeSeconds", settings.SmuSlowTimeSeconds.Value));
-			}
-			if (settings.SmuFastTimeSeconds.HasValue)
-			{
-			list.Add(Field("SmuFastTimeSeconds", settings.SmuFastTimeSeconds.Value));
-			}
 			if (!caps.SupportsWmiPowerFields && caps.SupportsTcc && settings.TccTarget.HasValue)
 			{
 				list.Add(Field("CpuTccOffset", settings.TccTarget.Value));
@@ -140,12 +124,12 @@ public static class PerfModeApplyPlanner
 				cpuFanDuty = null;
 				gpuFanDutyPre = null;
 			}
-			if (caps.SupportsFanCurve && cpuFanDuty != null && cpuFanDuty.Length == 16)
+			if ((caps.SupportsFanCurve || settings.CpuFanDuty != null) && cpuFanDuty != null && cpuFanDuty.Length == 16)
 			{
 				list.Add(new PerfApplyStep(PerfApplyStepKind.WriteFanCurve, null, null, 0, IsCpuCurve: true, settings.CpuFanDuty, PerfApplyVerify.FanDuty));
 			}
 			int[] gpuFanDuty = gpuFanDutyPre;
-			if (caps.SupportsFanCurve && gpuFanDuty != null && gpuFanDuty.Length == 16)
+			if ((caps.SupportsFanCurve || settings.GpuFanDuty != null) && gpuFanDuty != null && gpuFanDuty.Length == 16)
 			{
 				list.Add(new PerfApplyStep(PerfApplyStepKind.WriteFanCurve, null, null, 0, IsCpuCurve: false, settings.GpuFanDuty, PerfApplyVerify.FanDuty));
 			}
@@ -199,6 +183,21 @@ public static class PerfModeApplyPlanner
 			{
 				list.Add(Field("SmuStapmTimeSeconds", settings.StapmTimeSeconds.Value));
 			}
+			if (caps.SupportsSmuPowerControls)
+			{
+				if (settings.SmuSlowLimit.HasValue)
+				{
+					list.Add(Field("SmuSlowLimit", settings.SmuSlowLimit.Value, PerfApplyVerify.CpuPackagePower));
+				}
+				if (settings.SmuSlowTimeSeconds.HasValue)
+				{
+					list.Add(Field("SmuSlowTimeSeconds", settings.SmuSlowTimeSeconds.Value));
+				}
+				if (settings.SmuFastTimeSeconds.HasValue)
+				{
+					list.Add(Field("SmuFastTimeSeconds", settings.SmuFastTimeSeconds.Value));
+				}
+			}
 			if (caps.SupportsTcc && settings.TccTarget.HasValue)
 			{
 				list.Add(Field("CpuTccOffset", settings.TccTarget.Value));
@@ -212,11 +211,11 @@ public static class PerfModeApplyPlanner
 		if (!caps.WujieSmuLocalOnly && caps.SupportsWmiPowerFields && perfModeRoute == PerfModeRoute.FirmwareSlot && slotPlan != null && slotPlan.NeedsParameterWrite)
 		{
 			bool fanCurveOn = settings.FanCurveOn != false;
-			if (fanCurveOn && caps.SupportsFanCurve && settings.CpuFanDuty != null && settings.CpuFanDuty.Length == 16)
+			if (fanCurveOn && (caps.SupportsFanCurve || settings.CpuFanDuty != null) && settings.CpuFanDuty != null && settings.CpuFanDuty.Length == 16)
 			{
 				list.Add(new PerfApplyStep(PerfApplyStepKind.WriteFanCurve, null, null, 0, IsCpuCurve: true, settings.CpuFanDuty, PerfApplyVerify.FanDuty));
 			}
-			if (fanCurveOn && caps.SupportsFanCurve && settings.GpuFanDuty != null && settings.GpuFanDuty.Length == 16)
+			if (fanCurveOn && (caps.SupportsFanCurve || settings.GpuFanDuty != null) && settings.GpuFanDuty != null && settings.GpuFanDuty.Length == 16)
 			{
 				list.Add(new PerfApplyStep(PerfApplyStepKind.WriteFanCurve, null, null, 0, IsCpuCurve: false, settings.GpuFanDuty, PerfApplyVerify.FanDuty));
 			}

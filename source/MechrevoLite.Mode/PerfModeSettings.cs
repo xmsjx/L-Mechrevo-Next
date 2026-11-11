@@ -128,6 +128,11 @@ public sealed record PerfModeSettings
 		N(GpuMemoryOffset);
 		B(FanSwitchSpeedOn);
 		N(FanSwitchSpeedMs);
+		N(GpuPowerLimitW);
+		B(FanCurveOn);
+		N(SmuSlowLimit);
+		N(SmuSlowTimeSeconds);
+		N(SmuFastTimeSeconds);
 		return sb.ToString();
 		void A(int[]? v)
 		{

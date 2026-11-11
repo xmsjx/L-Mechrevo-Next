@@ -20,6 +20,9 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 	// ⭐ 实验（GCU 字段负偏移）：上一次是否由 GCU 厂商字段接管（切回时 GCU/NVAPI 都写 0）
 	private bool _gcuNegativeFieldActive;
 
+	// 本进程是否已用 NVAPI P0 接管超出 GCU 字段范围的偏移；切回 GCU/关闭前必须先清 NVAPI。
+	private bool _gcuNvapiActive;
+
 	public PerfModeBackend(MechrevoService service, MechrevoHw hw)
 	{
 		_service = service ?? throw new ArgumentNullException("service");
@@ -76,7 +79,8 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			// ⇒ 非 GCU 机型（老接口 / 将来宝龙达）永远拿不到这一步。
 			// 现在判据 = **Win32 侧到底有没有可切的档位**（内屏实测最大档 > MIN_RATE ⇒ 至少两档），
 			// 并保留"自动刷新率开着时不做固定档"这条语义 —— 但改读**我们自己的**配置键 `screen_auto`。
-			SupportsRefreshRate = (ScreenGateProbe.Win32MaxRefreshRate() > ScreenControl.MIN_RATE) && !AppConfig.Is("screen_auto"),
+			SupportsRefreshRate = (ScreenGateProbe.Win32MaxRefreshRate() <= 0
+				|| ScreenGateProbe.Win32MaxRefreshRate() > ScreenControl.MIN_RATE) && !AppConfig.Is("screen_auto"),
 			SupportsTurboSubMode = (hw.Capabilities.SilentTurboAvailability == FeatureAvailability.Supported),
 			// ⭐⭐ 2026-10-16（宝龙达 · 自定义档诚实性）：⭐ 固件自定义档【只有 GCU 后端能写】✅。
 			//   ⭐ 依据：⭐ 档位步 `SwitchFirmwareSlot` ⇒ `MechrevoService.SwitchCustomProfileWithResend`（⭐ `:768`/`:801`
@@ -395,6 +399,7 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 				{
 					// 清掉 GCU 字段/开关，避免两套叠加。
 					await _service.ApplyGcuGpuOverclock(false, 0, 0).ConfigureAwait(continueOnCapturedContext: false);
+					_gcuNvapiActive = true;
 					AppConfig.Set("gpu_oc_nvapi_active", 1);
 					return true;
 				}
@@ -414,6 +419,18 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 					+ " mem " + reqMem + "→" + memory + "（范围 core=" + _hw.GpuCoreOffsetMinimum + ".." + _hw.GpuCoreOffsetMaximum
 					+ " mem=" + _hw.GpuMemoryOffsetMinimum + ".." + _hw.GpuMemoryOffsetMaximum + "）");
 			}
+		}
+		if (_gcuNvapiActive)
+		{
+			bool cleared = NvapiPStates.TrySetP0Offsets(0, 0, out int clearedCore, out int clearedMemory);
+			Logger.WriteError("[gpu-oc] 从 NVAPI P0 切回 GCU/关闭 ⇒ 清 NVAPI 偏移 core=0 mem=0"
+				+ " ⇒ ok=" + cleared + " 回读=" + clearedCore + "/" + clearedMemory);
+			if (!cleared)
+			{
+				return false;
+			}
+			_gcuNvapiActive = false;
+			AppConfig.Set("gpu_oc_nvapi_active", 0);
 		}
 		return await _service.ApplyGcuGpuOverclock(on, core, memory).ConfigureAwait(continueOnCapturedContext: false);
 	}

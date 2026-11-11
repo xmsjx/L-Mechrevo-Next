@@ -1675,6 +1675,15 @@ internal sealed class PerfModeService
 		}
 		PerfModeSettings settings = PerfModeStore.LoadSettings(mode.Id) with { FanCurveOn = enabled };
 		PerfModeStore.SaveSettings(mode.Id, settings);
+		// 关闭下发开关时同时停掉该档已启用的软件闭环，避免 3 s 定时器继续按旧曲线写 EC。
+		if (!enabled && _hw != null && _hw.UsesBaolongda)
+		{
+			BaolongdaFanCurveSettings curve = _hw.LoadBaolongdaFanCurve(mode.Id);
+			if (curve != null && curve.Enabled)
+			{
+				_hw.SaveBaolongdaFanCurve(mode.Id, curve.WithEnabled(false));
+			}
+		}
 		Invalidate();
 		Logger.WriteLine("[fan] 曲线下发开关：" + (enabled ? "开" : "关") + "（档位=" + mode.Id + "）");
 	}
