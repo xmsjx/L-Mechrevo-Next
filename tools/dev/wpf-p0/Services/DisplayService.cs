@@ -104,6 +104,7 @@ internal sealed class DisplayService : IDisplayService
         }
         int maxHz = SafeCount(() => ScreenControl.GetMaxRate(laptopScreen));
         int brightness = ScreenBrightness.TryGet(out int value) ? value : 100;
+        DisplayPlatformFacts platform = DisplayPlatformFacts.Read();
         return new DisplaySnapshot(
             ScreenWidth: width,
             ScreenHeight: height,
@@ -112,15 +113,15 @@ internal sealed class DisplayService : IDisplayService
             MinRefreshHz: ScreenControl.MIN_RATE,
             AutoRefresh: AppConfig.Is("screen_auto"),
             Brightness: brightness,
-            BrightnessSupported: ScreenBrightness.TryGet(out _),
+            BrightnessSupported: platform.WmiBrightnessAvailable,
             LcdOverdriveSupported: hw?.SupportsLcdOverdrive == true,
             LcdOverdrive: hw?.LcdOverdrive == true,
             LocalDimmingSupported: hw?.SupportsLocalDimming == true,
             LocalDimming: hw?.LocalDimming == true,
-            FhdSupported: L_Mechrevo.WpfP0.Services.WpfBackend.acpi?.DeviceGet(327708u) >= 0,
-            FhdOn: L_Mechrevo.WpfP0.Services.WpfBackend.acpi?.DeviceGet(327708u) > 0,
-            HdrSupported: L_Mechrevo.WpfP0.Services.WpfBackend.acpi?.DeviceGet(327793u) >= 0,
-            HdrOn: L_Mechrevo.WpfP0.Services.WpfBackend.acpi?.DeviceGet(327793u) > 0,
+            FhdSupported: false,
+            FhdOn: false,
+            HdrSupported: false,
+            HdrOn: false,
             ColorCalibrationLevel: probe?.ColorCalibrationLevel ?? 1,
             ColorCalibrationSupported: probe?.SupportsColorCalibration == true);
     }
