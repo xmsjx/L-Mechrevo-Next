@@ -266,12 +266,26 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		string modeId = !string.IsNullOrWhiteSpace(FanCurveTargetModeId)
 			? FanCurveTargetModeId
 			: (PerfModeService.Instance?.ActiveModeId ?? "default");
-		bool activeTarget = FanCurveTargetWillActivate
-			|| string.Equals(modeId, PerfModeService.Instance?.ActiveModeId, StringComparison.Ordinal);
-		bool ok = activeTarget
-			? _hw.SaveBaolongdaFanCurve(modeId, next)
-			: _hw.SaveBaolongdaFanCurveOnly(modeId, next);
-		Logger.WriteLine($"[fan] 宝龙达本地曲线已保存（档位={modeId} · {(activeTarget ? "活动档·立即接管" : "非活动档·仅保存")}"
+		bool activeNow = string.Equals(modeId, PerfModeService.Instance?.ActiveModeId, StringComparison.Ordinal);
+		bool activationPending = FanCurveTargetWillActivate && !activeNow;
+		bool ok;
+		string state;
+		if (activationPending)
+		{
+			ok = _hw.SaveBaolongdaFanCurveOnly(modeId, next);
+			state = "激活目标档·稍后接管";
+		}
+		else if (activeNow)
+		{
+			ok = _hw.SaveBaolongdaFanCurve(modeId, next);
+			state = "活动档·立即接管";
+		}
+		else
+		{
+			ok = _hw.SaveBaolongdaFanCurveOnly(modeId, next);
+			state = "非活动档·仅保存";
+		}
+		Logger.WriteLine($"[fan] 宝龙达本地曲线已保存（档位={modeId} · {state}"
 			+ $" · {(cpu ? "CPU/ch1" : "GPU/ch0")} · {min}~{max} RPM · enabled=true）⇒ ok={ok}");
 		return ok;
 	}

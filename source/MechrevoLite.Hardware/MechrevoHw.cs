@@ -7251,6 +7251,13 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			return;
 		}
 		string id = string.IsNullOrWhiteSpace(modeId) ? "default" : modeId;
+		BaolongdaFanCurveSettings curve = LoadBaolongdaFanCurve(id);
+		if (curve.IsUnreadableArchive || !curve.Enabled)
+		{
+			Logger.WriteLine("[fan] 曲线目标档 " + id + " 没有可用的启用曲线（"
+				+ (curve.IsUnreadableArchive ? "存档读不懂" : "Enabled=false") + "）⇒ 不武装、不接管");
+			return;
+		}
 		_fanCurveModeId = id;
 		_fanCurveArmed = true;
 		_baolongdaCurveDecider0.Reset();

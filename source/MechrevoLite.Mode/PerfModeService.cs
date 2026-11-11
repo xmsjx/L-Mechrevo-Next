@@ -1697,8 +1697,9 @@ internal sealed class PerfModeService
 		}
 		PerfModeSettings settings = PerfModeStore.LoadSettings(mode.Id) with { FanCurveOn = enabled };
 		PerfModeStore.SaveSettings(mode.Id, settings);
-		// 关闭下发开关时同时停掉该档已启用的软件闭环，避免 3 s 定时器继续按旧曲线写 EC。
-		if (!enabled && _hw != null && _hw.UsesBaolongda)
+		// 只有关闭“当前活动档”的开关才停闭环；非活动档只改保存标志，不能影响正在跑的曲线。
+		if (!enabled && _hw != null && _hw.UsesBaolongda
+			&& string.Equals(mode.Id, ActiveModeId, StringComparison.Ordinal))
 		{
 			BaolongdaFanCurveSettings curve = _hw.LoadBaolongdaFanCurve(mode.Id);
 			if (curve != null && curve.Enabled)
