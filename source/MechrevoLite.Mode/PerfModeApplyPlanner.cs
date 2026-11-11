@@ -54,11 +54,11 @@ public static class PerfModeApplyPlanner
 		}
 		if (canWriteFirmwareSlot && perfModeRoute == PerfModeRoute.FirmwareSlot && (object)slotPlan != null && slotPlan.NeedsParameterWrite)
 		{
-			if (settings.TccOn.HasValue)
+			if (caps.SupportsTcc && settings.TccOn.HasValue)
 			{
 				list.Add(Field("CpuTccOffsetSwitch", settings.TccOn.Value ? 1 : 0));
 			}
-			if (settings.GpuDynamicBoostOn.HasValue)
+			if (caps.SupportsDynamicBoost && settings.GpuDynamicBoostOn.HasValue)
 			{
 				list.Add(Field("GpuDynamicBoostSwitch", settings.GpuDynamicBoostOn.Value ? 1 : 0));
 			}
@@ -70,7 +70,7 @@ public static class PerfModeApplyPlanner
 			{
 				list.Add(Field("OverClockingSwitch", settings.GpuOverclockOn.Value ? 1 : 0));
 			}
-			if (settings.FanSwitchSpeedOn.HasValue)
+			if (caps.SupportsFanSwitchSpeed && settings.FanSwitchSpeedOn.HasValue)
 			{
 				list.Add(Field("FanSwitchSpeedEnabled", settings.FanSwitchSpeedOn.Value ? 1 : 0));
 			}
@@ -79,15 +79,15 @@ public static class PerfModeApplyPlanner
 			//   ⭐ 原因：⭐ 它们在宝龙达上**不走固件槽**、而是走 WMI 功能号 23 ✅
 			//      ⇒ ⭐ 所以这里加反向条件、避免与那一支重复生成 ✅
 			//   ⚠️ `SupportsWmiPowerFields` 默认 false ⇒ ⭐ 所有既有后端【逐位不变】✅
-			if (!caps.SupportsWmiPowerFields && settings.Pl1.HasValue)
+			if (!caps.SupportsWmiPowerFields && caps.SupportsPl1 && settings.Pl1.HasValue)
 			{
 				list.Add(Field("PL1", settings.Pl1.Value, PerfApplyVerify.CpuPackagePower));
 			}
-			if (!caps.SupportsWmiPowerFields && settings.Pl2.HasValue)
+			if (!caps.SupportsWmiPowerFields && caps.SupportsPl2 && settings.Pl2.HasValue)
 			{
 				list.Add(Field("PL2", settings.Pl2.Value, PerfApplyVerify.CpuPackagePower));
 			}
-			if (settings.Pl4.HasValue)
+			if (caps.SupportsPl4 && settings.Pl4.HasValue)
 			{
 				list.Add(Field("PL4", settings.Pl4.Value, PerfApplyVerify.CpuPackagePower));
 			}
@@ -108,7 +108,7 @@ public static class PerfModeApplyPlanner
 			{
 			list.Add(Field("SmuFastTimeSeconds", settings.SmuFastTimeSeconds.Value));
 			}
-			if (!caps.SupportsWmiPowerFields && settings.TccTarget.HasValue)
+			if (!caps.SupportsWmiPowerFields && caps.SupportsTcc && settings.TccTarget.HasValue)
 			{
 				list.Add(Field("CpuTccOffset", settings.TccTarget.Value));
 			}
@@ -116,7 +116,7 @@ public static class PerfModeApplyPlanner
 			{
 				list.Add(Field("GpuConfigurableTGPTarget", settings.GpuTgp.Value, PerfApplyVerify.GpuPowerLimit));
 			}
-			if (settings.GpuDynamicBoost.HasValue)
+			if (caps.SupportsDynamicBoost && settings.GpuDynamicBoost.HasValue)
 			{
 				list.Add(Field("GpuDynamicBoost", settings.GpuDynamicBoost.Value, PerfApplyVerify.GpuPowerLimit));
 			}
@@ -128,7 +128,7 @@ public static class PerfModeApplyPlanner
 			{
 				list.Add(Field("GpuMemoryClockOffsetOC", settings.GpuMemoryOffset.Value, PerfApplyVerify.GpuClockOffset));
 			}
-			if (settings.FanSwitchSpeedMs.HasValue)
+			if (caps.SupportsFanSwitchSpeed && settings.FanSwitchSpeedMs.HasValue)
 			{
 				list.Add(Field("FanSwitchSpeed", settings.FanSwitchSpeedMs.Value));
 			}
@@ -186,11 +186,11 @@ public static class PerfModeApplyPlanner
 		//   ⚠️ `SupportsWmiPowerFields` 默认 false ⇒ ⭐ 所有既有后端【逐位不变】✅
 		if (caps.SupportsWmiPowerFields && perfModeRoute == PerfModeRoute.FirmwareSlot && slotPlan != null && slotPlan.NeedsParameterWrite)
 		{
-			if (settings.Pl1.HasValue)
+			if (caps.SupportsPl1 && settings.Pl1.HasValue)
 			{
 				list.Add(Field("PL1", settings.Pl1.Value, PerfApplyVerify.CpuPackagePower));
 			}
-			if (settings.Pl2.HasValue)
+			if (caps.SupportsPl2 && settings.Pl2.HasValue)
 			{
 				list.Add(Field("PL2", settings.Pl2.Value, PerfApplyVerify.CpuPackagePower));
 			}
@@ -199,7 +199,7 @@ public static class PerfModeApplyPlanner
 			{
 				list.Add(Field("SmuStapmTimeSeconds", settings.StapmTimeSeconds.Value));
 			}
-			if (settings.TccTarget.HasValue)
+			if (caps.SupportsTcc && settings.TccTarget.HasValue)
 			{
 				list.Add(Field("CpuTccOffset", settings.TccTarget.Value));
 			}
