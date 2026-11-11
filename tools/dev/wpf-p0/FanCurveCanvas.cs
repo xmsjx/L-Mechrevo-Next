@@ -34,13 +34,24 @@ public sealed class FanCurveCanvas : FrameworkElement
 
     internal void Load(byte[] temps, byte[] duties)
     {
+        // 跳过开头的空温度点（0/255），避免界面出现一个没有温度标签的点。
+        int start = 0;
+        while (start < temps.Length && (temps[start] == 0 || temps[start] == byte.MaxValue))
+        {
+            start++;
+        }
+        if (start >= temps.Length)
+        {
+            start = 0;
+        }
         int valid = PointCount;
         for (int i = 0; i < PointCount; i++)
         {
-            _temps[i] = i < temps.Length ? temps[i] : (byte)0;
-            int duty = i < duties.Length ? duties[i] : 0;
+            int source = i + start;
+            _temps[i] = source < temps.Length ? temps[source] : (byte)0;
+            int duty = source < duties.Length ? duties[source] : 0;
             _duties[i] = duty == 255 ? 0 : Math.Clamp(duty, 0, 100);
-            if (i > 0 && valid == PointCount && _temps[i] == byte.MaxValue)
+            if (i > 0 && valid == PointCount && (_temps[i] == byte.MaxValue || _temps[i] == 0))
             {
                 valid = i;
             }
