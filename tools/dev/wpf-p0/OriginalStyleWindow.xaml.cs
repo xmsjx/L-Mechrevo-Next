@@ -821,6 +821,10 @@ public partial class OriginalStyleWindow : Window
         StatusText.Text = ok
             ? (autoOn ? WpfStrings.DisplayRefreshSentPrefix + hertz + " Hz · " + WpfStrings.DisplayRefreshAutoWarn : WpfStrings.DisplayRefreshSentPrefix + hertz + " Hz")
             : WpfStrings.DisplayRefreshFailedPrefix + hertz + " Hz";
+        if (ok && rc == 1)
+        {
+            StatusText.Text += " · " + WpfStrings.L("需要重启后生效", "Restart required");
+        }
         SyncRefreshRateState();
     }
 
@@ -7837,7 +7841,7 @@ public partial class OriginalStyleWindow : Window
                 ? WpfStrings.OriginalStyleWindow_Text_15
                 : WpfStrings.L("显卡", "Graphics");
             bool localIccAvailable = IccHelper.HasFactoryIccFile() || IccHelper.ListCustomIccFiles().Count > 0;
-            ScreenSection.Visibility = (caps.DisplayRefresh || _backendProbe?.Hw?.SupportsDisplayRefresh == true || SupportsOemCalibration || caps.LcdOverdrive || caps.LocalDimming || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
+            ScreenSection.Visibility = (caps.DisplayRefresh || _backendProbe?.Hw?.SupportsDisplayRefresh == true || SupportsOemCalibration || SupportsLcdOverdrive || SupportsMiniled || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
             AutoRefreshSwitch.Visibility = SupportsAutoRefresh ? Visibility.Visible : Visibility.Collapsed;
             bool hasKeyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
                 ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
@@ -9023,7 +9027,8 @@ public partial class OriginalStyleWindow : Window
             CalibrationSwitch.IsChecked = calibrationOn;
             CalibrationCombo.IsEnabled = calibrationOn;
             CalibrationSettingsButton.IsEnabled = true;
-            CalibrationSwitch.IsEnabled = probe.IsGcuConnected || !probe.IsNonGcuBackend
+            CalibrationSwitch.IsEnabled = SupportsOemCalibration
+                || IccHelper.HasFactoryIccFile()
                 || IccHelper.ListCustomIccFiles().Count > 0;
         }
         finally

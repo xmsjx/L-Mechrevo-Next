@@ -156,7 +156,8 @@ internal sealed class DisplayService : IDisplayService
                 }
             }
             return Task.FromResult(ok
-                ? ServiceResult.Success(WpfStrings.DisplayRefreshSent)
+                ? ServiceResult.Success(WpfStrings.DisplayRefreshSent
+                    + (rc == 1 ? " · " + WpfStrings.L("需要重启后生效", "Restart required") : ""))
                 : ServiceResult.Fail(WpfStrings.DisplayRefreshFailedPrefix + " rc=" + rc));
         }
         catch (Exception ex)
@@ -172,7 +173,7 @@ internal sealed class DisplayService : IDisplayService
         {
             // 自动刷新率优先走 Windows 显示路径；GCU 只做镜像。
             ScreenControl.SetAutoRefresh(on ? 1 : 0);
-            ScreenControl.AutoScreen();
+            bool screenOk = ScreenControl.AutoScreen();
             bool? mirrored = null;
             try
             {
@@ -188,8 +189,10 @@ internal sealed class DisplayService : IDisplayService
             AppConfig.Set("screen_auto", on ? 1 : 0);
             AppConfig.Flush();
             Logger.WriteLineIfChanged("display-auto-refresh",
-                $"[display] 自动刷新率={on} Windows=ok GCU镜像={(mirrored.HasValue ? mirrored.Value.ToString() : "n/a")}");
-            return ServiceResult.Success(WpfStrings.DisplayAutoRefreshSent);
+                $"[display] 自动刷新率={on} Windows={(screenOk ? "ok" : "failed")} GCU镜像={(mirrored.HasValue ? mirrored.Value.ToString() : "n/a")}");
+            return screenOk
+                ? ServiceResult.Success(WpfStrings.DisplayAutoRefreshSent)
+                : ServiceResult.Fail(WpfStrings.DisplayAutoRefreshFailed);
         }
         catch (Exception ex)
         {

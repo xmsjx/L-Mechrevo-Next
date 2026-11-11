@@ -36,23 +36,17 @@ public static class ScreenControl
 	/// 会因屏幕不同而变化的是**最高档**（那是 <see cref="GetMaxRate"/>，取自 <c>max_rate</c> 配置或
 	/// <see cref="ScreenNative.GetMaxRefreshRate"/> 的**面板实测值**，本来就没有写死）。
 	/// <para>⚠️ 曾短暂改成"按面板可用档推导离电档"，已按用户口径回退 —— 不要再改回去。</para></summary>
-	public static void AutoScreen(bool force = false)
+	public static bool AutoScreen(bool force = false)
 	{
 		if (force || AppConfig.Is("screen_auto"))
 		{
 			if (SystemInformation.PowerStatus.PowerLineStatus == PowerLineStatus.Online)
 			{
-				SetScreen(1000);
+				return SetScreen(1000);
 			}
-			else
-			{
-				SetScreen(MIN_RATE);
-			}
+			return SetScreen(MIN_RATE);
 		}
-		else
-		{
-			SetScreen();
-		}
+		return SetScreen();
 	}
 
 	public static void SetAutoRefresh(int auto)
@@ -81,24 +75,28 @@ public static class ScreenControl
 		}
 	}
 
-	public static void SetScreen(int frequency = -1)
+	public static bool SetScreen(int frequency = -1)
 	{
 		string laptopScreen = ScreenNative.FindLaptopScreen(log: true);
 		int refreshRate = ScreenNative.GetRefreshRate(laptopScreen);
-		if (refreshRate >= 0)
+		if (refreshRate < 0)
 		{
-			if (frequency >= 1000)
-			{
-				frequency = GetMaxRate(laptopScreen);
-			}
-			if (frequency > 0 && frequency != refreshRate)
-			{
-				ScreenNative.SetRefreshRate(laptopScreen, frequency);
-				// ⭐ 2026-10-15：记下"我们下发的时刻" —— SettingsForm 的周期回读用它区分"外部改档"（见字段注释）。
-				LastApplyTick = Environment.TickCount64;
-			}
-			InitScreen();
+			return false;
 		}
+		if (frequency >= 1000)
+		{
+			frequency = GetMaxRate(laptopScreen);
+		}
+		bool ok = true;
+		if (frequency > 0 && frequency != refreshRate)
+		{
+			int rc = ScreenNative.SetRefreshRate(laptopScreen, frequency);
+			ok = ScreenNative.IsDisplayChangeSuccess(rc);
+			// ⭐ 2026-10-15：记下"我们下发的时刻" —— SettingsForm 的周期回读用它区分"外部改档"（见字段注释）。
+			LastApplyTick = Environment.TickCount64;
+		}
+		InitScreen();
+		return ok;
 	}
 
 	public static void InitOptimalBrightness()

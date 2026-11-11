@@ -2221,9 +2221,12 @@ public partial class MainWindow : Window
             ScreenEffectToggle.IsEnabled = connected;
             ScreenEffectToggle.ToolTip = tip;
             ScreenEffectOptionsPanel.IsEnabled = connected;
-            ScreenCalibrationToggle.IsEnabled = connected;
-            ScreenCalibrationToggle.ToolTip = tip;
-            ScreenCalibrationOptionsPanel.IsEnabled = connected;
+            bool localIcc = MechrevoLite.Display.IccHelper.HasFactoryIccFile()
+                || MechrevoLite.Display.IccHelper.ListCustomIccFiles().Count > 0;
+            bool calibrationEditable = connected || localIcc;
+            ScreenCalibrationToggle.IsEnabled = calibrationEditable;
+            ScreenCalibrationToggle.ToolTip = calibrationEditable ? null : tip;
+            ScreenCalibrationOptionsPanel.IsEnabled = calibrationEditable;
             ScreenFeaturesPanel.IsEnabled = connected;
             if (ScreenCalibrationSettingsButton is not null)
             {
@@ -2446,7 +2449,7 @@ public partial class MainWindow : Window
             || MechrevoLite.Display.IccHelper.ListCustomIccFiles().Count > 0;
         bool calibrationVisible = _owner?.SupportsOemCalibration == true || localIccAvailable;
         bool displaySupported = caps.DisplayRefresh || _probe?.Hw?.SupportsDisplayRefresh == true
-            || calibrationVisible || caps.LcdOverdrive || caps.LocalDimming;
+            || calibrationVisible || _owner?.SupportsLcdOverdrive == true || _owner?.SupportsMiniled == true;
         HomeDisplayCard.Visibility = displaySupported ? Visibility.Visible : Visibility.Collapsed;
         HomeDisplayColumn.Width = displaySupported ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         HomeDisplayGap.Width = displaySupported ? new GridLength(10) : new GridLength(0);
