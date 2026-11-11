@@ -6644,6 +6644,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 
 	// 软件闭环是否已被当前目标档“武装”；交回固件后必须 disarm，否则 3 s tick 会重新接管。
 	private volatile bool _fanCurveArmed;
+	private volatile bool _fanCurveRestorePending;
 	private readonly object _fanCurveIoGate = new object();
 
 	private const int BaolongdaCurveReassertMs = 30000;
@@ -7029,6 +7030,13 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 		try
 		{
+			if (_fanCurveRestorePending && !_fanBoostActive)
+			{
+				_fanCurveRestorePending = false;
+				Logger.WriteLine("[fan] 曲线：重试上次未完成的交回固件");
+				RestoreBaolongdaFanFirmwareControl();
+				return false;
+			}
 			return ApplyBaolongdaFanCurveStepLocked();
 		}
 		finally
@@ -7333,8 +7341,10 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		if (!Monitor.TryEnter(_fanCurveIoGate, 5000))
 		{
-			// 保留武装状态，让后续 tick 的档位不一致检查再次触发交回；这里只如实记录。
-			Logger.WriteError("[fan] 交回固件：曲线步长时间占用 I/O 锁 ⇒ 本次跳过，等待下一次 tick 重试（避免与 tick 并发写 EC）");
+			// 先停掉闭环，避免交回后 tick 继续写旧目标；再由下一轮 tick 重试交回。
+			_fanCurveArmed = false;
+			_fanCurveRestorePending = true;
+			Logger.WriteError("[fan] 交回固件：曲线步长时间占用 I/O 锁 ⇒ 本次跳过，下一轮 tick 重试（避免与 tick 并发写 EC）");
 			return;
 		}
 		try
