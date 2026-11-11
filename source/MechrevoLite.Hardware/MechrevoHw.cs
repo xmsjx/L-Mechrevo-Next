@@ -5848,6 +5848,12 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		{
 			return false;
 		}
+		// 重复开强冷：保留第一次的快照，避免用“已停用曲线”覆盖快照。
+		if (on && _fanBoostActive)
+		{
+			confirmed = true;
+			return true;
+		}
 		if (on)
 		{
 			// ⭐⭐ 2026-10-18（回归修复 · 机主「宝龙达强冷点不了，点一下闪一下」）：
@@ -5957,7 +5963,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		ResetBaolongdaFanCurveSmoothing();
 		BaolongdaFanCurveSettings saved = _fanBoostSavedCurve;
 		_fanBoostSavedCurve = null;
-		if (saved != null)
+		if (saved != null && !saved.IsUnreadableArchive)
 		{
 			bool restored = SaveBaolongdaFanCurve(saved);
 			Logger.WriteLine($"[fan] 强冷：关 ⇒ 交回固件（{releaseOnOff}）⇒ 已恢复强冷前曲线（enabled={saved.Enabled} · 联动={saved.SyncEnabled}）ok={restored}");
@@ -5966,7 +5972,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 		else
 		{
-			Logger.WriteLine("[fan] 强冷：关 ⇒ 交回固件（" + releaseOnOff + "）⇒ 没有快照可恢复（保持手动模式关闭）");
+			Logger.WriteLine("[fan] 强冷：关 ⇒ 交回固件（" + releaseOnOff + "）⇒ 没有可恢复的有效快照（保持手动模式关闭）");
 			confirmed = released;
 			return released;
 		}
@@ -6773,6 +6779,13 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		return ok;
 	}
 
+	/// <summary>曲线目标档是否为当前活动档；只有活动档才允许武装软件闭环。</summary>
+	private static bool IsFanCurveModeActive(string modeId)
+	{
+		string active = MechrevoLite.Mode.PerfModeService.Instance?.ActiveModeId;
+		return string.IsNullOrWhiteSpace(active) || string.Equals(active, modeId, StringComparison.Ordinal);
+	}
+
 	internal bool SaveBaolongdaFanCurve(string modeId, BaolongdaFanCurveSettings settings)
 	{
 		if (settings == null)
@@ -6781,7 +6794,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 		string id = string.IsNullOrWhiteSpace(modeId) ? "default" : modeId;
 		_fanCurveModeId = id;
-		_fanCurveArmed = settings.Enabled;
+		bool activeMode = IsFanCurveModeActive(id);
+		_fanCurveArmed = settings.Enabled && activeMode;
 		bool ok = BaolongdaFanCurveStore.SaveForMode(id, settings, out string path);
 		Logger.WriteLine("[fan] 曲线：已保存到档位 " + id + "（path=" + path + "）");
 		// ⭐ 曲线被保存（含只改开关）⇒ 决策器清零 ⇒ 下一个 tick **必定重写**
@@ -6804,9 +6818,13 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		{
 			RestoreBaolongdaFanFirmwareControl();
 		}
-		else
+		else if (activeMode)
 		{
 			ApplyBaolongdaFanCurveStep();
+		}
+		else
+		{
+			Logger.WriteLine("[fan] 曲线：非活动档 " + id + " 已保存，但不武装、不接管当前风扇");
 		}
 		return ok;
 	}
