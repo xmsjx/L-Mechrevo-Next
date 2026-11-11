@@ -402,6 +402,19 @@ internal static class BaolongdaFanCurveStore
 		}
 	}
 
+	/// <summary>指定档位是否已有独立的曲线文件（不含全局兜底）。</summary>
+	internal static bool ExistsForMode(string modeId)
+	{
+		try
+		{
+			return File.Exists(GetModePath(modeId));
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
 	/// <summary>
 	/// ⭐ 读一次设置（⭐ 读不到/坏掉 ⇒ ⭐ 返回**默认**（⭐ `Enabled=false` ✅），⭐ 不外抛 ✅）。
 	/// <para>⭐⭐ 参数 <paramref name="fullRpm" /> = ⭐ **本机风扇满转**（40 系 6000 / 30 系 4900）✅

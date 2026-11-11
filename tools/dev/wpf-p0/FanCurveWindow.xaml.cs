@@ -233,7 +233,8 @@ public partial class FanCurveWindow : Window
         if (_hw.UsesBaolongda)
         {
             BaolongdaFanCurveSettings curve = _hw.LoadBaolongdaFanCurve(_modeId);
-            BaolongdaLoopCheck.IsChecked = curve.Enabled;
+            bool pushCurveOn = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId).FanCurveOn ?? true;
+            BaolongdaLoopCheck.IsChecked = curve.Enabled && pushCurveOn;
             BaolongdaSyncCheck.IsChecked = curve.SyncEnabled;
             CpuCurve.Load(TempsToBytes(curve.Channel1Temperatures),
                 RpmsToPercent(curve.Channel1Rpms, curve.MaxRpm));

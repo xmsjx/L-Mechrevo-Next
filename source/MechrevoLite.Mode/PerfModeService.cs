@@ -855,6 +855,7 @@ internal sealed class PerfModeService
 		IReadOnlyList<PerfApplyStep> readOnlyList = PerfModeApplyPlanner.Build(mode, plan, caps);
 		// （机主：「显卡超频设置了但频率没变化」· 可观测性①）
 		LogGpuOverclockPlan(mode, plan, caps, readOnlyList);
+		LogFanAndRefreshPlan(mode, caps, readOnlyList);
 		Logger.WriteLine($"PerfModes: activate {mode.Id} ({reason}) route={mode.Route} slot={plan?.SlotIndex.ToString() ?? "-"} write={plan?.NeedsParameterWrite.ToString() ?? "-"} steps={readOnlyList.Count}");
 		// 2026-10-21（机主）：无界目标功耗 ≥ 60W 时，先切狂暴模式再下发 SMU（已在狂暴不重复发）。
 		if (caps.WujieSmuLocalOnly && mode.IsCustom)
@@ -874,6 +875,13 @@ internal sealed class PerfModeService
 		}
 		Stopwatch elapsed = Stopwatch.StartNew();
 		PerfApplyOutcome outcome;
+		BaolongdaFanCurveSettings? curveBefore = null;
+		bool curveFileExisted = false;
+		if (hw.UsesBaolongda && mode.IsCustom)
+		{
+			curveBefore = hw.LoadBaolongdaFanCurve(mode.Id);
+			curveFileExisted = BaolongdaFanCurveStore.ExistsForMode(mode.Id);
+		}
 		try
 		{
 			outcome = await RunStepsAsync(mode.Id, readOnlyList, ct, willActivate: true).ConfigureAwait(continueOnCapturedContext: false);
@@ -898,6 +906,24 @@ internal sealed class PerfModeService
 			// MechrevoService.SwitchCustomProfile 在请求时写进 performance_<电源来源>，所以此后的自动重应用
 			// 会**重试自定义档**，不会再拿老键里的内置档（静音/平衡）把它顶掉。
 			Logger.WriteLine($"PerfModes: {mode.Id} 未切换成功（reason={reason} route={mode.Route}）→ ActiveModeId 仍为 {ActiveModeId}；档位意图保持用户选择，等下一次重试。失败/未确认项：{outcome.Describe()}");
+			// 激活失败时回滚“稍后接管”写入的曲线存档，避免留下 enabled=true 但没人接管的状态。
+			if (curveBefore != null && !curveBefore.IsUnreadableArchive)
+			{
+				if (curveFileExisted)
+				{
+					hw.SaveBaolongdaFanCurveOnly(mode.Id, curveBefore);
+				}
+				else
+				{
+					BaolongdaFanCurveStore.DeleteForMode(mode.Id);
+				}
+				Logger.WriteLine("[fan] 激活失败 ⇒ 曲线存档已回滚（档位=" + mode.Id
+					+ " · 原文件存在=" + curveFileExisted + "）");
+			}
+			else if (curveBefore != null)
+			{
+				Logger.WriteLine("[fan] 激活失败 ⇒ 原曲线存档读不懂，保持原样不回滚（档位=" + mode.Id + "）");
+			}
 		}
 		// （机主：Wujie 规划器误生成固件字段步/ActiveModeId 回退）：本机 SMU 应用成功的判据日志
 		if (caps.WujieSmuLocalOnly && mode.IsCustom)
@@ -1187,6 +1213,37 @@ internal sealed class PerfModeService
 		if (Logger.TryMarkChanged("gpu-oc-plan", message))
 		{
 			Logger.WriteError(message);
+		}
+	}
+
+	private static void LogFanAndRefreshPlan(PerfModeDefinition mode, PerfModeCapabilities caps, IReadOnlyList<PerfApplyStep> steps)
+	{
+		PerfModeSettings settings = mode.Settings;
+		bool hasFanStep = steps.Any((PerfApplyStep s) => s.Kind == PerfApplyStepKind.WriteFanCurve);
+		bool wantsFan = settings.FanCurveOn == false
+			|| settings.CpuFanDuty != null || settings.GpuFanDuty != null;
+		if (!hasFanStep && wantsFan)
+		{
+			string reason = settings.FanCurveOn == false
+				? "FanCurveOn=false"
+				: (!caps.SupportsFanCurve ? "后端不支持" : "没有可写的 16 点曲线");
+			string message = "[fan-plan] 曲线未生成：原因=" + reason + " · mode=" + mode.Id;
+			if (Logger.TryMarkChanged("fan-plan-" + mode.Id, message))
+			{
+				Logger.WriteError(message);
+			}
+		}
+		bool hasRefreshStep = steps.Any((PerfApplyStep s) => s.Kind == PerfApplyStepKind.ApplyRefreshRate);
+		if (!hasRefreshStep && settings.RefreshHz.HasValue)
+		{
+			string reason = AppConfig.Is("screen_auto")
+				? "自动刷新开启"
+				: (!caps.SupportsRefreshRate ? "探测不可用或只有单档" : "无需下发");
+			string message = "[display-plan] 刷新率未生成：原因=" + reason + " · mode=" + mode.Id + " · target=" + settings.RefreshHz.Value;
+			if (Logger.TryMarkChanged("display-plan-" + mode.Id, message))
+			{
+				Logger.WriteError(message);
+			}
 		}
 	}
 
@@ -1619,6 +1676,10 @@ internal sealed class PerfModeService
 					{
 						Settings = settings2
 					}, plan, Capabilities(), steps);
+					LogFanAndRefreshPlan(perfModeDefinition with
+					{
+						Settings = settings2
+					}, Capabilities(), steps);
 					PerfApplyOutcome perfApplyOutcome;
 					try
 					{
