@@ -1941,6 +1941,7 @@ public partial class OriginalStyleWindow : Window
 
     internal bool MiniledOn => _backendProbe?.Hw?.LocalDimming == true;
 
+    // FHD/HDR 当前没有真实写入通道，只保留只读探测；未补齐前不得声明为支持。
     internal bool SupportsFhd => L_Mechrevo.WpfP0.Services.WpfBackend.acpi?.DeviceGet(327708u) >= 0;
 
     internal bool FhdOn => L_Mechrevo.WpfP0.Services.WpfBackend.acpi?.DeviceGet(327708u) > 0;
@@ -1973,6 +1974,10 @@ public partial class OriginalStyleWindow : Window
 
     internal void ToggleHdrControl()
     {
+        if (!SupportsHdrControl)
+        {
+            return;
+        }
         try
         {
             if (L_Mechrevo.WpfP0.Services.WpfBackend.acpi == null)
@@ -1993,6 +1998,10 @@ public partial class OriginalStyleWindow : Window
 
     internal void ToggleFhd()
     {
+        if (!SupportsFhd)
+        {
+            return;
+        }
         try
         {
             MechrevoLite.Display.ScreenControl.ToogleFHD();
