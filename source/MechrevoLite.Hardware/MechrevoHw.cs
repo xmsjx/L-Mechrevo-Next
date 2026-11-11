@@ -6775,7 +6775,6 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		return SaveBaolongdaFanCurve(_fanCurveModeId, settings);
 	}
 
-	/// <summary>
 	/// <summary>只保存到指定档位，不立即接管风扇（用于编辑非活动档）。</summary>
 	internal bool SaveBaolongdaFanCurveOnly(string modeId, BaolongdaFanCurveSettings settings)
 	{
@@ -6808,14 +6807,17 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		{
 			_fanCurveModeId = id;
 		}
-		_fanCurveArmed = settings.Enabled && activeMode;
 		bool ok = BaolongdaFanCurveStore.SaveForMode(id, settings, out string path);
 		Logger.WriteLine("[fan] 曲线：保存到档位 " + id + "（path=" + path + "）⇒ ok=" + ok);
 		if (!ok)
 		{
-			Logger.WriteError("[fan] 曲线：写入档位 " + id + " 失败，本次不武装/不接管");
+			// 落盘失败也必须交回固件：尤其关闭曲线时，不能把风扇停在旧的手动目标上。
+			_fanCurveArmed = false;
+			Logger.WriteError("[fan] 曲线：写入档位 " + id + " 失败 ⇒ 已停用软件闭环并交回固件");
+			RestoreBaolongdaFanFirmwareControl();
 			return false;
 		}
+		_fanCurveArmed = settings.Enabled && activeMode;
 		// ⭐ 曲线被保存（含只改开关）⇒ 决策器清零 ⇒ 下一个 tick **必定重写**
 		//   （⛔ 否则会拿旧回差状态压住新曲线，用户会以为"保存了没反应" ⚠️）
 		_baolongdaCurveDecider0.Reset();

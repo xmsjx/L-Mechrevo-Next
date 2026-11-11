@@ -285,7 +285,7 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			ok = _hw.SaveBaolongdaFanCurveOnly(modeId, next);
 			state = "非活动档·仅保存";
 		}
-		Logger.WriteLine($"[fan] 宝龙达本地曲线已保存（档位={modeId} · {state}"
+		Logger.WriteLine($"[fan] 宝龙达本地曲线：档位={modeId} · {state}"
 			+ $" · {(cpu ? "CPU/ch1" : "GPU/ch0")} · {min}~{max} RPM · enabled=true）⇒ ok={ok}");
 		return ok;
 	}
