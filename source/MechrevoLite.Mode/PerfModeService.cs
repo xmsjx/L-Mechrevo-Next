@@ -203,6 +203,10 @@ internal sealed class PerfModeService
 	/// </summary>
 	private async Task<PerfApplyOutcome> RunStepsAsync(string modeId, IReadOnlyList<PerfApplyStep> steps, CancellationToken ct = default(CancellationToken))
 	{
+		if (_backend is PerfModeBackend perfBackend)
+		{
+			perfBackend.FanCurveTargetModeId = modeId;
+		}
 		Interlocked.Increment(ref _applyInFlight);
 		PerfApplyOutcome perfApplyOutcome;
 		try

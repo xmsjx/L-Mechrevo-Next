@@ -27,6 +27,7 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 	{
 		_service = service ?? throw new ArgumentNullException("service");
 		_hw = hw ?? throw new ArgumentNullException("hw");
+		_gcuNvapiActive = AppConfig.Get("gpu_oc_nvapi_active", 0) != 0;
 	}
 	// <para> 每次抑制落一行去重日志；宝龙达/GCU/同方（WujieSmuApu=false）不进入 </para>
 	private bool SuppressWujieModeSwitch(string source)
@@ -47,6 +48,13 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		}
 		return true;
 	}
+	/// <summary>Windows 侧至少两档刷新率；探测失败时保留步骤，交给执行层如实判定。</summary>
+	private static bool SupportsWindowsRefreshRate()
+	{
+		int max = ScreenGateProbe.Win32MaxRefreshRate();
+		return max <= 0 || max > ScreenControl.MIN_RATE;
+	}
+
 	public static PerfModeCapabilities CapabilitiesFrom(MechrevoHw hw)
 	{
 		ArgumentNullException.ThrowIfNull(hw, "hw");
@@ -79,8 +87,7 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			// ⇒ 非 GCU 机型（老接口 / 将来宝龙达）永远拿不到这一步。
 			// 现在判据 = **Win32 侧到底有没有可切的档位**（内屏实测最大档 > MIN_RATE ⇒ 至少两档），
 			// 并保留"自动刷新率开着时不做固定档"这条语义 —— 但改读**我们自己的**配置键 `screen_auto`。
-			SupportsRefreshRate = (ScreenGateProbe.Win32MaxRefreshRate() <= 0
-				|| ScreenGateProbe.Win32MaxRefreshRate() > ScreenControl.MIN_RATE) && !AppConfig.Is("screen_auto"),
+			SupportsRefreshRate = SupportsWindowsRefreshRate() && !AppConfig.Is("screen_auto"),
 			SupportsTurboSubMode = (hw.Capabilities.SilentTurboAvailability == FeatureAvailability.Supported),
 			// ⭐⭐ 2026-10-16（宝龙达 · 自定义档诚实性）：⭐ 固件自定义档【只有 GCU 后端能写】✅。
 			//   ⭐ 依据：⭐ 档位步 `SwitchFirmwareSlot` ⇒ `MechrevoService.SwitchCustomProfileWithResend`（⭐ `:768`/`:801`
@@ -213,13 +220,16 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 	/// <para>⚠️ 换算分母用**存档里的** <c>MinRpm/MaxRpm</c>（与曲线窗口同一口径），⛔ 不另编一个分母 ✅</para>
 	/// <para>⚠️ 存档读不懂（旧格式）⇒ 返回 false，⛔ 不拿默认值顶替 ✅</para>
 	/// </summary>
+	// 本次下发所属的档位；风扇曲线必须写到这个档，不能拿当前活动档顶替。
+	internal string? FanCurveTargetModeId { get; set; }
+
 	private bool ApplyBaolongdaFanCurve(bool cpu, int[] dutyPercent)
 	{
 		if (dutyPercent == null || dutyPercent.Length != 16)
 		{
 			return false;
 		}
-		BaolongdaFanCurveSettings current = _hw.LoadBaolongdaFanCurve();
+		BaolongdaFanCurveSettings current = _hw.LoadBaolongdaFanCurve(FanCurveTargetModeId);
 		if (current.IsUnreadableArchive)
 		{
 			Logger.WriteLine("[fan] 宝龙达本地曲线：⚠️ 存档读不懂 ⇒ 本轮不写（⛔ 不拿默认值顶替）");
@@ -249,10 +259,16 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			Channel1Temperatures = current.Channel1Temperatures,
 			Channel1Rpms = cpu ? rpms : current.Channel1Rpms
 		};
-		// ⭐⭐ 2026-10-18（多自定义档各自曲线）：⭐ 写回**当前档位**对应存档（旧全局作为兜底）✅
-		string modeId = PerfModeService.Instance?.ActiveModeId ?? "default";
-		bool ok = _hw.SaveBaolongdaFanCurve(modeId, next);
-		Logger.WriteLine($"[fan] 宝龙达本地曲线已保存（档位={modeId} · {(cpu ? "CPU/ch1" : "GPU/ch0")} · {min}~{max} RPM · enabled=true）⇒ ok={ok}");
+		// ⭐⭐ 2026-10-18（多自定义档各自曲线）：⭐ 写回**本次下发目标档**对应存档（旧全局作为兜底）✅
+		string modeId = !string.IsNullOrWhiteSpace(FanCurveTargetModeId)
+			? FanCurveTargetModeId
+			: (PerfModeService.Instance?.ActiveModeId ?? "default");
+		bool activeTarget = string.Equals(modeId, PerfModeService.Instance?.ActiveModeId, StringComparison.Ordinal);
+		bool ok = activeTarget
+			? _hw.SaveBaolongdaFanCurve(modeId, next)
+			: _hw.SaveBaolongdaFanCurveOnly(modeId, next);
+		Logger.WriteLine($"[fan] 宝龙达本地曲线已保存（档位={modeId} · {(activeTarget ? "活动档·立即接管" : "非活动档·仅保存")}"
+			+ $" · {(cpu ? "CPU/ch1" : "GPU/ch0")} · {min}~{max} RPM · enabled=true）⇒ ok={ok}");
 		return ok;
 	}
 	// （显卡功耗上限）： 走本机 **NVML**（nvmlDeviceSetPowerManagementLimit）

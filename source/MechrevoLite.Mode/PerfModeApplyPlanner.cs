@@ -183,7 +183,7 @@ public static class PerfModeApplyPlanner
 			{
 				list.Add(Field("SmuStapmTimeSeconds", settings.StapmTimeSeconds.Value));
 			}
-			if (caps.SupportsSmuPowerControls)
+			if (caps.SupportsSmuPowerControls && !caps.WujieSmuLocalOnly)
 			{
 				if (settings.SmuSlowLimit.HasValue)
 				{

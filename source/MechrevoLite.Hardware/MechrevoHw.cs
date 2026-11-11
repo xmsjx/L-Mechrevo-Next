@@ -5544,7 +5544,10 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 				TccTarget = wall;
 			}
 			// ⭐ "写成功"就是本方法能给出的**全部**结论 ⚠️ ⇒ ⭐ 如实命名、⛔ 不冒充"数值确认" ✅
-			confirmed = ok1 && ok2 && ok3;
+			// 只统计本次真正要求写的项；未设置的项不参与失败判定。
+			confirmed = (pl1 <= BaolongdaUnset || ok1)
+				&& (pl2 <= BaolongdaUnset || ok2)
+				&& (wall <= BaolongdaUnset || ok3);
 			// ⭐ 顺带**只读**一次"自定义开关"状态 —— ⭐ 仅作**信息**报告，
 			//   ⛔ **不**当作"数值已生效"的依据 ✅（⭐ 我们不写它、⭐ 它也证明不了数值 ⚠️）
 			string switchInfo = (wmi.TryReadCpuCustomEnabled(out bool nowOn) ? (nowOn ? "1" : "0") : "读不到");
@@ -5936,14 +5939,14 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 				// 开强冷前若临时关掉了软件曲线，这里必须恢复快照；否则一次失败会把用户的曲线永久停用。
 				BaolongdaFanCurveSettings rollbackCurve = _fanBoostSavedCurve;
 				_fanBoostSavedCurve = null;
-				if (rollbackCurve != null)
+				if (rollbackCurve != null && rollbackCurve.Enabled && !rollbackCurve.IsUnreadableArchive)
 				{
 					bool curveRestored = SaveBaolongdaFanCurve(rollbackCurve);
 					Logger.WriteError("[fan] 强冷：失败回滚 ⇒ 恢复强冷前曲线"
 						+ $"（enabled={rollbackCurve.Enabled} · 联动={rollbackCurve.SyncEnabled}）ok={curveRestored}");
 				}
 			}
-			return true;
+			return targetsOk && maskOk;
 		}
 		// 关闭：恢复快照（含 Enabled 状态）
 		FanWriter.TryReleaseToFirmware(out string releaseOnOff);
@@ -6753,6 +6756,19 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// ⭐⭐ 2026-10-18（机主：多自定义档各自记录曲线）：⭐ 保存到**指定档位**并立即应用（保存即应用）✅。
 	/// <para>⭐ 只影响该档存档；其它档位曲线不被覆盖 ✅</para>
 	/// </summary>
+	/// <summary>只保存到指定档位，不立即接管风扇（用于编辑非活动档）。</summary>
+	internal bool SaveBaolongdaFanCurveOnly(string modeId, BaolongdaFanCurveSettings settings)
+	{
+		if (settings == null)
+		{
+			return false;
+		}
+		string id = string.IsNullOrWhiteSpace(modeId) ? "default" : modeId;
+		bool ok = BaolongdaFanCurveStore.SaveForMode(id, settings, out string path);
+		Logger.WriteLine("[fan] 曲线：已保存到非活动档位 " + id + "（path=" + path + " · 不立即接管）");
+		return ok;
+	}
+
 	internal bool SaveBaolongdaFanCurve(string modeId, BaolongdaFanCurveSettings settings)
 	{
 		if (settings == null)
