@@ -6003,10 +6003,10 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			IntervalMs = c.IntervalMs,
 			MinRpm = c.MinRpm,
 			MaxRpm = c.MaxRpm,
-			Channel0Temperatures = c.Channel0Temperatures,
-			Channel0Rpms = c.Channel0Rpms,
-			Channel1Temperatures = c.Channel1Temperatures,
-			Channel1Rpms = c.Channel1Rpms
+			Channel0Temperatures = c.Channel0Temperatures.ToArray(),
+			Channel0Rpms = c.Channel0Rpms.ToArray(),
+			Channel1Temperatures = c.Channel1Temperatures.ToArray(),
+			Channel1Rpms = c.Channel1Rpms.ToArray()
 		};
 	}
 
@@ -6643,7 +6643,6 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 
 	// 软件闭环是否已被当前目标档“武装”；交回固件后必须 disarm，否则 3 s tick 会重新接管。
 	private volatile bool _fanCurveArmed;
-	private int _fanCurveTickBusy;
 	private readonly object _fanCurveIoGate = new object();
 
 	private const int BaolongdaCurveReassertMs = 30000;
