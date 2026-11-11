@@ -211,11 +211,12 @@ public static class PerfModeApplyPlanner
 		//   ⚠️ 仅 `SupportsWmiPowerFields`（=宝龙达）且确实要改参数时生成 ⇒ GCU/老接口逐位不变 ✅
 		if (!caps.WujieSmuLocalOnly && caps.SupportsWmiPowerFields && perfModeRoute == PerfModeRoute.FirmwareSlot && slotPlan != null && slotPlan.NeedsParameterWrite)
 		{
-			if (settings.CpuFanDuty != null && settings.CpuFanDuty.Length == 16)
+			bool fanCurveOn = settings.FanCurveOn != false;
+			if (fanCurveOn && settings.CpuFanDuty != null && settings.CpuFanDuty.Length == 16)
 			{
 				list.Add(new PerfApplyStep(PerfApplyStepKind.WriteFanCurve, null, null, 0, IsCpuCurve: true, settings.CpuFanDuty, PerfApplyVerify.FanDuty));
 			}
-			if (settings.GpuFanDuty != null && settings.GpuFanDuty.Length == 16)
+			if (fanCurveOn && settings.GpuFanDuty != null && settings.GpuFanDuty.Length == 16)
 			{
 				list.Add(new PerfApplyStep(PerfApplyStepKind.WriteFanCurve, null, null, 0, IsCpuCurve: false, settings.GpuFanDuty, PerfApplyVerify.FanDuty));
 			}
