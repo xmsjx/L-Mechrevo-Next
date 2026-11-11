@@ -235,8 +235,8 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		BaolongdaFanCurveSettings current = _hw.LoadBaolongdaFanCurve(FanCurveTargetModeId);
 		if (current.IsUnreadableArchive)
 		{
-			Logger.WriteLine("[fan] 宝龙达本地曲线：⚠️ 存档读不懂 ⇒ 本轮不写（⛔ 不拿默认值顶替）");
-			return false;
+			Logger.WriteLine("[fan] 宝龙达本地曲线：⚠️ 存档读不懂 ⇒ 本轮跳过曲线（⛔ 不拿默认值顶替，也不把整档判失败）");
+			return true;
 		}
 		int min = current.MinRpm;
 		int max = current.MaxRpm;

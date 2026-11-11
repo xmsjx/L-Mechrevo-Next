@@ -6776,9 +6776,6 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	}
 
 	/// <summary>
-	/// ⭐⭐ 2026-10-18（机主：多自定义档各自记录曲线）：⭐ 保存到**指定档位**并立即应用（保存即应用）✅。
-	/// <para>⭐ 只影响该档存档；其它档位曲线不被覆盖 ✅</para>
-	/// </summary>
 	/// <summary>只保存到指定档位，不立即接管风扇（用于编辑非活动档）。</summary>
 	internal bool SaveBaolongdaFanCurveOnly(string modeId, BaolongdaFanCurveSettings settings)
 	{
@@ -6788,7 +6785,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 		string id = string.IsNullOrWhiteSpace(modeId) ? "default" : modeId;
 		bool ok = BaolongdaFanCurveStore.SaveForMode(id, settings, out string path);
-		Logger.WriteLine("[fan] 曲线：已保存到非活动档位 " + id + "（path=" + path + " · 不立即接管）");
+		Logger.WriteLine("[fan] 曲线：仅保存到档位 " + id + "（path=" + path + " · 不接管）⇒ ok=" + ok);
 		return ok;
 	}
 
@@ -6813,7 +6810,12 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 		_fanCurveArmed = settings.Enabled && activeMode;
 		bool ok = BaolongdaFanCurveStore.SaveForMode(id, settings, out string path);
-		Logger.WriteLine("[fan] 曲线：已保存到档位 " + id + "（path=" + path + "）");
+		Logger.WriteLine("[fan] 曲线：保存到档位 " + id + "（path=" + path + "）⇒ ok=" + ok);
+		if (!ok)
+		{
+			Logger.WriteError("[fan] 曲线：写入档位 " + id + " 失败，本次不武装/不接管");
+			return false;
+		}
 		// ⭐ 曲线被保存（含只改开关）⇒ 决策器清零 ⇒ 下一个 tick **必定重写**
 		//   （⛔ 否则会拿旧回差状态压住新曲线，用户会以为"保存了没反应" ⚠️）
 		_baolongdaCurveDecider0.Reset();
@@ -7032,6 +7034,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			_fanCurveArmed = false;
 			Logger.WriteError("[fan] 曲线：活动档=" + activeModeId + " 与曲线档=" + _fanCurveModeId
 				+ " 不一致 ⇒ 自动交回固件（停止软件接管）");
+			RestoreBaolongdaFanFirmwareControl();
 			return false;
 		}
 		// ⚠️⚠️ 硬闸：⭐ 通道归属没确认 ⇒ ⭐ **绝不写** ⚠️（⭐ 写错会让 CPU 风扇按 GPU 温度转 ❌）
@@ -7261,7 +7264,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		if (curve.IsUnreadableArchive || !curve.Enabled)
 		{
 			Logger.WriteLine("[fan] 曲线目标档 " + id + " 没有可用的启用曲线（"
-				+ (curve.IsUnreadableArchive ? "存档读不懂" : "Enabled=false") + "）⇒ 不武装、不接管");
+				+ (curve.IsUnreadableArchive ? "存档读不懂" : "Enabled=false") + "）⇒ 不武装、交回固件");
+			RestoreBaolongdaFanFirmwareControl();
 			return;
 		}
 		_fanCurveModeId = id;
