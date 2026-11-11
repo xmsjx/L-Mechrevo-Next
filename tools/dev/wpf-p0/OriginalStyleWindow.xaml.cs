@@ -1201,13 +1201,17 @@ public partial class OriginalStyleWindow : Window
         {
             try
             {
-                return _backendProbe?.Hw?.IsIntelNucMachine == true
+                bool value = _backendProbe?.Hw?.IsIntelNucMachine == true
                     || _backendProbe?.Hw?.IsUmiMachine == true
                     || _backendProbe?.Hw?.DisplayEffectProfiles.Count > 0
                     || _backendProbe?.Capabilities?.ColorCalibration == true
                     || (MechrevoLite.Hardware.GcuEcExperimental.Enabled
                         && _backendProbe?.Hw != null
                         && !_backendProbe.Hw.UsesBaolongda);
+                MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(
+                    MechrevoLite.Hardware.Architecture.FeatureId.DisplayEffect,
+                    _backendProbe?.Hw, value, "wide-display-effect");
+                return value;
             }
             catch
             {
@@ -1882,8 +1886,17 @@ public partial class OriginalStyleWindow : Window
     /// <summary>GCU 机型的 EC 限充传输开关（与宝龙达阈值面板是两套）。</summary>
     internal bool WideEcTransportSupported => EcTransportHardwareAvailable();
 
-    internal bool SupportsMiniled => _backendProbe?.Hw?.SupportsLocalDimming == true
-        || _backendProbe?.Capabilities?.LocalDimming == true;
+    internal bool SupportsMiniled
+    {
+        get
+        {
+            bool value = _backendProbe?.Hw?.SupportsLocalDimming == true
+                || _backendProbe?.Capabilities?.LocalDimming == true;
+            MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(
+                MechrevoLite.Hardware.Architecture.FeatureId.LocalDimming, _backendProbe?.Hw, value, "wide-miniled");
+            return value;
+        }
+    }
 
     internal bool MiniledOn => _backendProbe?.Hw?.LocalDimming == true;
 
@@ -11226,7 +11239,16 @@ public partial class OriginalStyleWindow : Window
         return ok;
     }
 
-    internal bool SupportsLcdOverdrive => _backendProbe?.SupportsLcdOverdrive == true;
+    internal bool SupportsLcdOverdrive
+    {
+        get
+        {
+            bool value = _backendProbe?.SupportsLcdOverdrive == true;
+            MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(
+                MechrevoLite.Hardware.Architecture.FeatureId.LcdOverdrive, _backendProbe?.Hw, value, "wide-overdrive");
+            return value;
+        }
+    }
 
     internal bool LcdOverdrive => _backendProbe?.LcdOverdrive == true;
 

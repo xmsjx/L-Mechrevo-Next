@@ -79,12 +79,25 @@ internal sealed class TongfangEcBackend : IBackendModule
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				"EC 未上报键盘能力", new string[0]);
 
+		FeatureDeclaration localDimming = (probe.LocalDimmingCapability || probe.LocalDimmingSeen)
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.AcpiWmi,
+				"EC 本地分区背光通道可用", new[] { "registry:Capabilities.LocalDimming", "ec:LocalDimming" })
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"EC 未上报分区背光能力", new string[0]);
+		FeatureDeclaration lcdOverdrive = (probe.LcdOverdriveCapability || probe.LcdOverdriveSeen)
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.AcpiWmi,
+				"EC 本地 LCD Overdrive 通道可用", new[] { "registry:Capabilities.LcdOverdrive", "ec:LcdOverdrive" })
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"EC 未上报 LCD Overdrive 能力", new string[0]);
+
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
 				[FeatureId.LogoLight] = logo,
 				[FeatureId.Lightbar] = lightbar,
-				[FeatureId.KeyboardLight] = keyboard
+				[FeatureId.KeyboardLight] = keyboard,
+				[FeatureId.LocalDimming] = localDimming,
+				[FeatureId.LcdOverdrive] = lcdOverdrive
 			});
 	}
 }

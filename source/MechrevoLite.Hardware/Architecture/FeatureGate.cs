@@ -138,6 +138,21 @@ internal static class FeatureGate
 		Check(lines, "ec-keyboard-supported", Facts(BackendKind.TongfangEc),
 			new FeatureProbe(false, false, false, null, false, KeyboardCapability: true),
 			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.KeyboardLight);
+		Check(lines, "gcu-localdimming-supported", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false, LocalDimmingCapability: true),
+			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.LocalDimming);
+		Check(lines, "ec-localdimming-supported", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false, LocalDimmingCapability: true),
+			FeatureAvailability.Supported, BackendChannel.AcpiWmi, FeatureId.LocalDimming);
+		Check(lines, "gcu-lcd-overdrive-supported", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false, LcdOverdriveCapability: true),
+			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.LcdOverdrive);
+		Check(lines, "gcu-display-effect-supported", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false, DisplayEffectProfile: true),
+			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.DisplayEffect);
+		Check(lines, "gcu-color-calibration-supported", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false, ColorCalibrationCapability: true),
+			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.ColorCalibration);
 		Check(lines, "baolongda-no-lightbar", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);

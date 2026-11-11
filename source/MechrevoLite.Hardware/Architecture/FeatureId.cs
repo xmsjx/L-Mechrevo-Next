@@ -7,5 +7,9 @@ internal enum FeatureId
 	Lightbar,
 	KeyboardLight,
 	HingeLight,
-	SyncLight
+	SyncLight,
+	LocalDimming,
+	LcdOverdrive,
+	DisplayEffect,
+	ColorCalibration
 }

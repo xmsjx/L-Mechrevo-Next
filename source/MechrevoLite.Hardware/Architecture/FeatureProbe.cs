@@ -14,7 +14,14 @@ internal sealed record FeatureProbe(
 	bool? EcLightbarEvidence = null,
 	bool HingeCapability = false,
 	bool SyncCapability = false,
-	bool KeyboardCapability = false)
+	bool KeyboardCapability = false,
+	bool LocalDimmingCapability = false,
+	bool LocalDimmingSeen = false,
+	bool LcdOverdriveCapability = false,
+	bool LcdOverdriveSeen = false,
+	bool DisplayEffectProfile = false,
+	bool ColorCalibrationCapability = false,
+	bool ColorCalibrationSeen = false)
 {
 	internal static FeatureProbe From(MechrevoHw? hw)
 	{
@@ -34,6 +41,13 @@ internal sealed record FeatureProbe(
 			IteLightingLocal.TryGetLightbarCached(out bool lightbarCached) ? lightbarCached : (bool?)null,
 			hw.SupportsHingeLight,
 			hw.SupportsSyncLight,
-			hw.SupportsKeyboard);
+			hw.SupportsKeyboard,
+			caps != null && caps.LocalDimming,
+			hw.LocalDimmingSeen,
+			caps != null && caps.LcdOverdrive,
+			hw.LcdOverdriveSeen,
+			hw.DisplayEffectProfiles.Count > 0,
+			caps != null && caps.ColorCalibration,
+			hw.ColorCalibrationSeen);
 	}
 }

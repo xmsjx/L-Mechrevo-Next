@@ -80,6 +80,27 @@ internal sealed class TongfangGcuBackend : IBackendModule
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				probe.GcuConnected ? "GCU 未上报键盘能力" : "GCU 未连接", new string[0]);
 
+		FeatureDeclaration localDimming = probe.GcuConnected && (probe.LocalDimmingCapability || probe.LocalDimmingSeen)
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+				"GCU 上报分区背光能力", Source("registry:Capabilities.LocalDimming", "gcu:LocalDimmingStatusSeen"))
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				probe.GcuConnected ? "GCU 未上报分区背光能力" : "GCU 未连接", new string[0]);
+		FeatureDeclaration lcdOverdrive = probe.GcuConnected && (probe.LcdOverdriveCapability || probe.LcdOverdriveSeen)
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+				"GCU 上报 LCD Overdrive 能力", Source("registry:Capabilities.LcdOverdrive", "gcu:LcdOverdriveStatusSeen"))
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				probe.GcuConnected ? "GCU 未上报 LCD Overdrive 能力" : "GCU 未连接", new string[0]);
+		FeatureDeclaration displayEffect = probe.GcuConnected && probe.DisplayEffectProfile
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+				"GCU 提供显示效果 Profile", new[] { "gcu:DisplayEffectProfiles" })
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				probe.GcuConnected ? "GCU 未提供显示效果 Profile" : "GCU 未连接", new string[0]);
+		FeatureDeclaration colorCalibration = probe.GcuConnected && (probe.ColorCalibrationCapability || probe.ColorCalibrationSeen)
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+				"GCU 上报校色能力", Source("registry:Capabilities.ColorCalibration", "gcu:ColorCalibrationSeen"))
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				probe.GcuConnected ? "GCU 未上报校色能力" : "GCU 未连接", new string[0]);
+
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
@@ -87,7 +108,16 @@ internal sealed class TongfangGcuBackend : IBackendModule
 				[FeatureId.Lightbar] = lightbar,
 				[FeatureId.HingeLight] = hinge,
 				[FeatureId.SyncLight] = sync,
-				[FeatureId.KeyboardLight] = keyboard
+				[FeatureId.KeyboardLight] = keyboard,
+				[FeatureId.LocalDimming] = localDimming,
+				[FeatureId.LcdOverdrive] = lcdOverdrive,
+				[FeatureId.DisplayEffect] = displayEffect,
+				[FeatureId.ColorCalibration] = colorCalibration
 			});
+	}
+
+	private static string[] Source(string registry, string gcu)
+	{
+		return new[] { registry, gcu };
 	}
 }
