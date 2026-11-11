@@ -37,6 +37,7 @@ public partial class MainWindow : Window
     private TextBlock? _chargeLimitText;
     private TextBlock? _displayBrightnessText;
     private Slider? _displayBrightness;
+    private bool _miniledRowAdded;
     private CheckBox? _autoRefresh;
     private readonly List<ToggleButton> _calibrationOptionButtons = new();
     private readonly List<ToggleButton> _effectOptionButtons = new();
@@ -715,7 +716,8 @@ public partial class MainWindow : Window
             if (_owner != null
                 && ((_chargeLimitText == null && _owner.WideChargeLimitVisible)
                     || (_chargeSlider == null && _owner.WideChargeExperimentSupported)
-                    || (_ecDirect == null && _owner.WideEcDirectSupported)))
+                    || (_ecDirect == null && _owner.WideEcDirectSupported)
+                    || (!_miniledRowAdded && _owner.SupportsMiniled)))
             {
                 BuildHomeExtras();
             }
@@ -1609,6 +1611,7 @@ public partial class MainWindow : Window
         DisplayInfoText.Text = displayInfo;
         // BuildHomeExtras 会在后端就绪时重建；先清掉上一次的亮度行/自动刷新，避免出现两排亮度。
         DisplayDetailsPanel.Children.Clear();
+        _miniledRowAdded = false;
         for (int i = DisplayInfoRow.Children.Count - 1; i >= 0; i--)
         {
             if (!ReferenceEquals(DisplayInfoRow.Children[i], DisplayInfoText))
@@ -1665,6 +1668,7 @@ public partial class MainWindow : Window
             miniled.Click += (_, _) => _owner.ToggleMiniled();
             miniledRow.Children.Add(miniled);
             DisplayDetailsPanel.Children.Add(miniledRow);
+            _miniledRowAdded = true;
         }
     }
 
