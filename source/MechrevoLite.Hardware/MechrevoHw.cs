@@ -7333,9 +7333,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		if (!Monitor.TryEnter(_fanCurveIoGate, 5000))
 		{
-			// 锁一直拿不到时至少停掉闭环，避免 tick 在交回后继续写旧目标。
-			_fanCurveArmed = false;
-			Logger.WriteError("[fan] 交回固件：曲线步长时间占用 I/O 锁 ⇒ 本次跳过并停用闭环（避免与 tick 并发写 EC）");
+			// 保留武装状态，让后续 tick 的档位不一致检查再次触发交回；这里只如实记录。
+			Logger.WriteError("[fan] 交回固件：曲线步长时间占用 I/O 锁 ⇒ 本次跳过，等待下一次 tick 重试（避免与 tick 并发写 EC）");
 			return;
 		}
 		try
