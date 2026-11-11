@@ -98,9 +98,9 @@ internal static class FeatureGate
 		Check(lines, "nuc-lightbar-unprobed", Facts(BackendKind.NucUmiLocal),
 			new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
-		Check(lines, "umi-lightbar-unprobed", Facts(BackendKind.NucUmiLocal, model: "Umi 30"),
+		Check(lines, "umi-lightbar-local", Facts(BackendKind.NucUmiLocal, model: "Umi 30"),
 			new FeatureProbe(false, false, false, null, false),
-			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
+			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
 		Check(lines, "gcu-hinge-supported", Facts(BackendKind.TongfangGcu),
 			new FeatureProbe(true, false, false, null, false, HingeCapability: true),
 			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.HingeLight);

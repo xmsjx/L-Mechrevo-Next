@@ -22,10 +22,9 @@ internal sealed class NucUmiLocalBackend : IBackendModule
 		{
 			sources.Add("gcu:LightbarStatusSeen");
 		}
-		bool knownNuc = facts.Identity?.IsIntelNuc == true && facts.Identity?.IsUmi != true;
-		if (knownNuc)
+		if (facts.Identity?.IsIntelNuc == true || facts.Identity?.IsUmi == true)
 		{
-			sources.Add("identity:IntelNuc");
+			sources.Add("identity:NucUmiLocal");
 		}
 		FeatureDeclaration lightbar = sources.Count > 0
 			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
