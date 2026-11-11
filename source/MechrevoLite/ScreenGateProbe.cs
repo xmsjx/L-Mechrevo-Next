@@ -54,6 +54,7 @@ internal static class ScreenGateProbe
 		{
 			_win32MaxValue = -1;
 			_win32MaxAt = 0;
+			_wmiBrightValue = false;
 			_wmiBrightAt = 0;
 		}
 	}

@@ -702,16 +702,27 @@ public partial class MainWindow : Window
         ReloadWideBackground();
     }
 
+    private bool _displayChangePending;
+
     private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
         Dispatcher.BeginInvoke(new Action(() =>
         {
-            if (_owner == null)
+            if (_owner == null || !IsLoaded || _displayChangePending)
             {
                 return;
             }
-            MechrevoLite.ScreenGateProbe.Invalidate();
-            BuildHomeExtras();
+            _displayChangePending = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _displayChangePending = false;
+                if (_owner == null || !IsLoaded)
+                {
+                    return;
+                }
+                MechrevoLite.ScreenGateProbe.Invalidate();
+                BuildHomeExtras();
+            }), System.Windows.Threading.DispatcherPriority.Background);
         }));
     }
 

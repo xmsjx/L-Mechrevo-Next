@@ -1905,7 +1905,7 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    /// <summary>自动刷新率至少要有两档 Windows 刷新率才可用；探测失败时保留旧可见状态。</summary>
+    /// <summary>自动刷新率至少要有两档 Windows 刷新率才可用；探测失败时显示，只有明确单档才隐藏。</summary>
     internal bool SupportsAutoRefresh
     {
         get
@@ -1921,6 +1921,10 @@ public partial class OriginalStyleWindow : Window
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.BeginInvoke(new Action(() => OnDisplaySettingsChanged(sender, e)));
+            return;
+        }
+        if (!IsLoaded)
+        {
             return;
         }
         AutoRefreshSwitch.Visibility = SupportsAutoRefresh ? Visibility.Visible : Visibility.Collapsed;
