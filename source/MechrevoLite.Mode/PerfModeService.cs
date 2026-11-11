@@ -930,6 +930,10 @@ internal sealed class PerfModeService
 				{
 					_hw.RestoreBaolongdaFanFirmwareControl();
 				}
+				else
+				{
+					_hw.EngageBaolongdaFanCurve(mode.Id);
+				}
 			}
 			if ((object)plan != null)
 			{

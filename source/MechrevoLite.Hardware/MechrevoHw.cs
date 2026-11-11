@@ -3109,7 +3109,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			{
 				RefreshBaolongdaSensors();
 				RefreshBaolongdaSwitchStates();
-				ApplyBaolongdaFanCurveStep();
+				RunBaolongdaFanCurveTick();
 			}
 		}, null, LegacyRefreshIntervalMs, LegacyRefreshIntervalMs);
 		await RefreshLegacyModeAsync().ConfigureAwait(continueOnCapturedContext: false);
@@ -6620,8 +6620,11 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	//   ⚠️ 此前 `FanCurveDecider` 写好了却**没人调用** ⚠️ ⇒ 3 s 定时器每 tick 都无条件重写
 	//   ⇒ 现在只在目标变化时写，另每 30 s 重申一次手动控制权（⭐ 防固件自己退回自动 ⚠️）
 	private readonly FanCurveDecider _baolongdaCurveDecider0 = new FanCurveDecider();
-
 	private readonly FanCurveDecider _baolongdaCurveDecider1 = new FanCurveDecider();
+
+	// 软件闭环是否已被当前目标档“武装”；交回固件后必须 disarm，否则 3 s tick 会重新接管。
+	private volatile bool _fanCurveArmed;
+	private int _fanCurveTickBusy;
 
 	private const int BaolongdaCurveReassertMs = 30000;
 
@@ -6778,6 +6781,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 		string id = string.IsNullOrWhiteSpace(modeId) ? "default" : modeId;
 		_fanCurveModeId = id;
+		_fanCurveArmed = settings.Enabled;
 		bool ok = BaolongdaFanCurveStore.SaveForMode(id, settings, out string path);
 		Logger.WriteLine("[fan] 曲线：已保存到档位 " + id + "（path=" + path + "）");
 		// ⭐ 曲线被保存（含只改开关）⇒ 决策器清零 ⇒ 下一个 tick **必定重写**
@@ -6919,6 +6923,23 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// <para>① 已熔断（<see cref="_fanCurveUnsupported" />）⇒ ⭐ **一个字节都不写**，直接 return ✅</para>
 	/// <para>② 单步内任何异常 ⇒ ⭐ 记**默认级别**错误日志 ＋ **停用闭环**（⛔ 不允许异常穿透到定时器 ⇒ 界面卡死）✅</para>
 	/// </summary>
+	/// <summary>定时器单线程 tick：忙则跳过，避免并发修改决策器/斜坡状态。</summary>
+	private void RunBaolongdaFanCurveTick()
+	{
+		if (Interlocked.Exchange(ref _fanCurveTickBusy, 1) != 0)
+		{
+			return;
+		}
+		try
+		{
+			ApplyBaolongdaFanCurveStep();
+		}
+		finally
+		{
+			Volatile.Write(ref _fanCurveTickBusy, 0);
+		}
+	}
+
 	internal bool ApplyBaolongdaFanCurveStep()
 	{
 		if (_fanCurveUnsupported)
@@ -6955,6 +6976,12 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		{
 			Logger.WriteLineIfChanged("baolongda-fancurve-boost",
 				"[fan] 曲线：强冷进行中 ⇒ 跳过软件闭环（⛔ 不覆盖强冷的直接满转）");
+			return false;
+		}
+		if (!_fanCurveArmed)
+		{
+			Logger.WriteLineIfChanged("baolongda-fancurve-disarmed",
+				"[fan] 曲线：当前档位未武装软件闭环 ⇒ 本轮不写（交回固件后不会被 tick 自动接管）");
 			return false;
 		}
 		// ⚠️⚠️ 硬闸：⭐ 通道归属没确认 ⇒ ⭐ **绝不写** ⚠️（⭐ 写错会让 CPU 风扇按 GPU 温度转 ❌）
@@ -7172,8 +7199,28 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// ⭐ ① ⭐ 用户关掉软件曲线 ✅ · ⭐ ② ⭐ 程序退出 ✅ · ⭐ ③ ⭐ **程序启动时**（⭐ 清理上次残留 ✅）。</para>
 	/// ⚠️ 进程被强杀时来不及调用 ⚠️ ⇒ ⭐ 所以 ③ 很重要 ✅。</para>
 	/// </summary>
+	/// <summary>切到指定档位并立即武装软件闭环（不写存档；用于激活已有曲线的目标档）。</summary>
+	internal void EngageBaolongdaFanCurve(string modeId)
+	{
+		if (_baolongda?.Wmi == null)
+		{
+			return;
+		}
+		string id = string.IsNullOrWhiteSpace(modeId) ? "default" : modeId;
+		_fanCurveModeId = id;
+		_fanCurveArmed = true;
+		_baolongdaCurveDecider0.Reset();
+		_baolongdaCurveDecider1.Reset();
+		ResetBaolongdaFanCurveSmoothing();
+		_fanCurveLastAttemptTick = 0;
+		Logger.WriteLine("[fan] 曲线目标档已切到 " + id + "（已武装，立即接管）");
+		ApplyBaolongdaFanCurveStep();
+	}
+
 	internal void RestoreBaolongdaFanFirmwareControl()
 	{
+		_fanCurveArmed = false;
+		_fanCurveLastAttemptTick = 0;
 		BaolongdaWmi wmi = _baolongda?.Wmi;
 		if (wmi == null)
 		{
@@ -7691,7 +7738,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			_ = RefreshLegacyModeAsync();
 			RefreshBaolongdaSensors(); RefreshBaolongdaSwitchStates();
 			// 宝龙达软件闭环的周期 tick：传感器刷新后再按曲线写 20/21。
-			ApplyBaolongdaFanCurveStep();
+			RunBaolongdaFanCurveTick();
 		}, null, LegacyRefreshIntervalMs, LegacyRefreshIntervalMs);
 		await RefreshLegacyModeAsync().ConfigureAwait(continueOnCapturedContext: false);
 		// ⭐ 立刻先读一次传感器（⭐ 免得界面上风扇/温度空着等 3 秒 ✅）
