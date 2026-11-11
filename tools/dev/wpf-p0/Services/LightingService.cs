@@ -93,6 +93,9 @@ internal interface ILightingService
 
     /// <summary>灯光完整意图：能力判定 + 电源 + 效果下发。</summary>
     Task<ServiceResult> ApplyLightIntentAsync(SetLightIntent intent);
+
+    /// <summary>键盘灯意图：EC 单区/白光、GCU/服务、NUC 本地键盘统一入口。</summary>
+    Task<ServiceResult> ApplyKeyboardIntentAsync(SetKeyboardIntent intent);
 }
 
 /// <inheritdoc />
@@ -421,8 +424,50 @@ internal sealed class LightingService : ILightingService
         }
     }
 
-    private static FeatureId? FeatureForLightTopic(string topic)
+    public async Task<ServiceResult> ApplyKeyboardIntentAsync(SetKeyboardIntent intent)
     {
+        BackendProbe? probe = _backend.Probe;
+        if (probe == null)
+        {
+            return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
+        }
+        try
+        {
+            if (GcuEcKeyboard.Active)
+            {
+                bool ecOk = GcuEcKeyboard.ApplyFromSettings(intent.Effect, intent.On, intent.Light);
+                return ecOk ? ServiceResult.Success(WpfStrings.LightSavedApplied) : ServiceResult.Fail(WpfStrings.LightSavedUnconfirmed);
+            }
+            if (!intent.On)
+            {
+                bool off = await probe.SetKeyboardPowerAsync(false).ConfigureAwait(false);
+                return off ? ServiceResult.Success(WpfStrings.LightKeyboardOff) : ServiceResult.Fail(WpfStrings.LightKeyboardPowerFailed);
+            }
+            await probe.SetKeyboardPowerAsync(true).ConfigureAwait(false);
+            MechrevoService? service = probe.Service;
+            if (service == null)
+            {
+                return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
+            }
+            Color? color = (probe.Hw?.UsesBaolongda == true
+                || string.Equals(intent.Effect, "Single", StringComparison.Ordinal))
+                ? Color.FromArgb(intent.ColorArgb)
+                : null;
+            bool effectOk = await service.SetKeyboardEffect(intent.Effect, intent.Light,
+                intent.Speed, "None", color, true).ConfigureAwait(false);
+            if (effectOk && intent.Light > 0)
+            {
+                await service.SetKeyboardBrightnessPreservingEffect(intent.Light).ConfigureAwait(false);
+            }
+            return effectOk ? ServiceResult.Success(WpfStrings.LightSavedApplied) : ServiceResult.Fail(WpfStrings.LightSavedUnconfirmed);
+        }
+        catch (Exception ex)
+        {
+            return ServiceResult.Fail(WpfStrings.LightPowerExceptionPrefix + ex.GetType().Name);
+        }
+    }
+
+    private static FeatureId? FeatureForLightTopic(string topic)    {
         return topic switch
         {
             LightingTopics.Logo => FeatureId.LogoLight,

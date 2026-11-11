@@ -17,6 +17,8 @@ internal interface IIntentDispatcher
 	Task<IntentResult> DispatchAsync(SetLightPowerIntent intent);
 
 	Task<IntentResult> DispatchAsync(SetLightIntent intent);
+
+	Task<IntentResult> DispatchAsync(SetKeyboardIntent intent);
 }
 
 /// <inheritdoc />
@@ -38,6 +40,12 @@ internal sealed class IntentDispatcher : IIntentDispatcher
 	public async Task<IntentResult> DispatchAsync(SetLightIntent intent)
 	{
 		ServiceResult result = await _lighting.ApplyLightIntentAsync(intent).ConfigureAwait(false);
+		return new IntentResult(result.Ok, result.Detail);
+	}
+
+	public async Task<IntentResult> DispatchAsync(SetKeyboardIntent intent)
+	{
+		ServiceResult result = await _lighting.ApplyKeyboardIntentAsync(intent).ConfigureAwait(false);
 		return new IntentResult(result.Ok, result.Detail);
 	}
 }

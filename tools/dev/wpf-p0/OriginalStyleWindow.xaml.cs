@@ -1018,32 +1018,13 @@ public partial class OriginalStyleWindow : Window
                     }
                     return await ApplyHidKeyboardAsync(hidMode, on);
                 }
-                if (MechrevoLite.Hardware.GcuEcKeyboard.Active)
-                {
-                    // EC 实验模式：没有 GCU 服务，单区/白光直接写 EC。
-                    return MechrevoLite.Hardware.GcuEcKeyboard.ApplyFromSettings(effect, on, light);
-                }
-                if (!on)
-                {
-                    return await probe.SetKeyboardPowerAsync(false);
-                }
-                await probe.SetKeyboardPowerAsync(true);
-                System.Drawing.Color? keyboardColor = (hw?.UsesBaolongda == true
-                    || string.Equals(effect, "Single", StringComparison.Ordinal))
-                    ? System.Drawing.Color.FromArgb(colorArgb)
-                    : null;
-                MechrevoService? keyboardService = probe.Service;
-                if (keyboardService == null)
+                if (_services == null)
                 {
                     return false;
                 }
-                bool effectOk = await keyboardService.SetKeyboardEffect(effect, light, speed, "None", keyboardColor, true);
-                // 键盘亮度是独立命令：只发 SetEffectALL 时部分固件/GCU 不更新亮度。
-                if (effectOk && on && light > 0)
-                {
-                    await keyboardService.SetKeyboardBrightnessPreservingEffect(light);
-                }
-                return effectOk;
+                IntentResult keyboardResult = await _services.Intents.DispatchAsync(
+                    new SetKeyboardIntent(effect, light, speed, colorArgb, on));
+                return keyboardResult.Ok;
             }
 
             if (_services == null)
