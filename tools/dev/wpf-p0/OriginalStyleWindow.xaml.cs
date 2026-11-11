@@ -1890,10 +1890,12 @@ public partial class OriginalStyleWindow : Window
     {
         get
         {
-            bool value = _backendProbe?.Hw?.SupportsLocalDimming == true
+            bool legacy = _backendProbe?.Hw?.SupportsLocalDimming == true
                 || _backendProbe?.Capabilities?.LocalDimming == true;
+            bool value = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+                MechrevoLite.Hardware.Architecture.FeatureId.LocalDimming, _backendProbe?.Hw, legacy);
             MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(
-                MechrevoLite.Hardware.Architecture.FeatureId.LocalDimming, _backendProbe?.Hw, value, "wide-miniled");
+                MechrevoLite.Hardware.Architecture.FeatureId.LocalDimming, _backendProbe?.Hw, legacy, "wide-miniled");
             return value;
         }
     }
@@ -11243,9 +11245,11 @@ public partial class OriginalStyleWindow : Window
     {
         get
         {
-            bool value = _backendProbe?.SupportsLcdOverdrive == true;
+            bool legacy = _backendProbe?.SupportsLcdOverdrive == true;
+            bool value = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+                MechrevoLite.Hardware.Architecture.FeatureId.LcdOverdrive, _backendProbe?.Hw, legacy);
             MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(
-                MechrevoLite.Hardware.Architecture.FeatureId.LcdOverdrive, _backendProbe?.Hw, value, "wide-overdrive");
+                MechrevoLite.Hardware.Architecture.FeatureId.LcdOverdrive, _backendProbe?.Hw, legacy, "wide-overdrive");
             return value;
         }
     }
