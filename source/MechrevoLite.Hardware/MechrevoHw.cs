@@ -6951,16 +6951,22 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// <para>① 已熔断（<see cref="_fanCurveUnsupported" />）⇒ ⭐ **一个字节都不写**，直接 return ✅</para>
 	/// <para>② 单步内任何异常 ⇒ ⭐ 记**默认级别**错误日志 ＋ **停用闭环**（⛔ 不允许异常穿透到定时器 ⇒ 界面卡死）✅</para>
 	/// </summary>
-	/// <summary>定时器单线程 tick：忙则跳过，避免并发修改决策器/斜坡状态。</summary>
+	/// <summary>定时器 tick：统一走带互斥的单步入口。</summary>
 	private void RunBaolongdaFanCurveTick()
+	{
+		ApplyBaolongdaFanCurveStep();
+	}
+
+	/// <summary>曲线单步入口：tick 与保存/接管/交回共用一把互斥，避免并发改决策器/斜坡状态。</summary>
+	internal bool ApplyBaolongdaFanCurveStep()
 	{
 		if (Interlocked.Exchange(ref _fanCurveTickBusy, 1) != 0)
 		{
-			return;
+			return false;
 		}
 		try
 		{
-			ApplyBaolongdaFanCurveStep();
+			return ApplyBaolongdaFanCurveStepLocked();
 		}
 		finally
 		{
@@ -6968,7 +6974,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 	}
 
-	internal bool ApplyBaolongdaFanCurveStep()
+	private bool ApplyBaolongdaFanCurveStepLocked()
 	{
 		if (_fanCurveUnsupported)
 		{

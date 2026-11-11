@@ -539,6 +539,26 @@ internal static class BaolongdaFanCurveStore
 		}
 	}
 
+	/// <summary>删除指定档位的曲线文件（删除自定义档时调用）。</summary>
+	internal static bool DeleteForMode(string modeId)
+	{
+		try
+		{
+			string path = GetModePath(modeId);
+			if (File.Exists(path))
+			{
+				File.Delete(path);
+				Logger.WriteLine("宝龙达风扇曲线：已删除档位 " + modeId + " 的曲线文件");
+			}
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("宝龙达风扇曲线：删除档位曲线失败：" + ex.Message);
+			return false;
+		}
+	}
+
 	/// <summary>⭐ 设置文件是否存在（⭐ 诊断用 ✅）。</summary>
 	internal static bool Exists()
 	{

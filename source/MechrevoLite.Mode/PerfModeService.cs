@@ -2018,6 +2018,11 @@ internal sealed class PerfModeService
 		{
 			return false;
 		}
+		// 删除自定义档时同步删掉该档曲线，避免同名重建继承旧曲线。
+		if (_hw != null && _hw.UsesBaolongda)
+		{
+			BaolongdaFanCurveStore.DeleteForMode(id);
+		}
 		if (string.Equals(PerfModeStore.LastCustomId, id, StringComparison.Ordinal))
 		{
 			PerfModeStore.LastCustomId = null;
