@@ -5588,7 +5588,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// ⇒ ⭐ 所以本方法**要求调用方显式传两个通道**（⭐ 而不是替它猜 ✅），⭐ 且日志把两个通道都记全 ✅。</para>
 	/// </summary>
 	/// <summary>⭐ 软件强冷是否处于开启态（⭐ 崩溃/重启后据此恢复曲线）✅</summary>
-	private static bool _fanBoostActive;
+	private static volatile bool _fanBoostActive;
 
 	/// <summary>⭐ 强冷前的曲线快照（关闭时原样恢复）✅</summary>
 	private static BaolongdaFanCurveSettings _fanBoostSavedCurve;
@@ -7333,7 +7333,9 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		if (!Monitor.TryEnter(_fanCurveIoGate, 5000))
 		{
-			Logger.WriteError("[fan] 交回固件：曲线步长时间占用 I/O 锁 ⇒ 本次跳过（避免与 tick 并发写 EC）");
+			// 锁一直拿不到时至少停掉闭环，避免 tick 在交回后继续写旧目标。
+			_fanCurveArmed = false;
+			Logger.WriteError("[fan] 交回固件：曲线步长时间占用 I/O 锁 ⇒ 本次跳过并停用闭环（避免与 tick 并发写 EC）");
 			return;
 		}
 		try
