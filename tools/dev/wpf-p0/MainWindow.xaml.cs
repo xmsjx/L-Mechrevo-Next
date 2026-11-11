@@ -135,6 +135,8 @@ public partial class MainWindow : Window
             _owner.BackendReady += OnBackendReady;
             _owner.WideUiVisibilityChanged += ApplyWideUiVisibilityFromOwner;
         }
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+        Closed += (_, _) => Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         ApplyPage("home");
         _sensorTimer.Tick += (_, _) => RefreshSensors();
         _sensorTimer.Start();
@@ -700,8 +702,20 @@ public partial class MainWindow : Window
         ReloadWideBackground();
     }
 
-    private void OnBackendReady()
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
     {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_owner == null)
+            {
+                return;
+            }
+            MechrevoLite.ScreenGateProbe.Invalidate();
+            BuildHomeExtras();
+        }));
+    }
+
+    private void OnBackendReady()    {
         Dispatcher.BeginInvoke(new Action(() =>
         {
             _probe = _owner?.CurrentBackend;

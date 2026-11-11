@@ -47,6 +47,17 @@ internal static class ScreenGateProbe
 	/// <summary>实测判据的进程内缓存有效期（毫秒）。见类注释的取舍说明。</summary>
 	internal const int CacheTtlMs = 60000;
 
+	/// <summary>显示设置变化后让下一次探测重新实测。</summary>
+	internal static void Invalidate()
+	{
+		lock (Sync)
+		{
+			_win32MaxValue = -1;
+			_win32MaxAt = 0;
+			_wmiBrightAt = 0;
+		}
+	}
+
 	private static readonly object Sync = new object();
 
 	private static long _win32MaxAt;

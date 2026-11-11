@@ -227,6 +227,8 @@ public partial class OriginalStyleWindow : Window
     {
         InitializeComponent();
         AutoRefreshSwitch.Visibility = SupportsAutoRefresh ? Visibility.Visible : Visibility.Collapsed;
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+        Closed += (_, _) => Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _ = Task.Run(MachineProbeReadOnly.LogOnce);
         MainScroll.PreviewMouseWheel += MainScroll_PreviewMouseWheel;
         L_Mechrevo.WpfP0.Services.WindowWorkAreaPolicy.ClampOnLoaded(this);
@@ -1911,6 +1913,18 @@ public partial class OriginalStyleWindow : Window
             int max = MechrevoLite.ScreenGateProbe.Win32MaxRefreshRate();
             return max <= 0 || max > MechrevoLite.Display.ScreenControl.MIN_RATE;
         }
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        MechrevoLite.ScreenGateProbe.Invalidate();
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(() => OnDisplaySettingsChanged(sender, e)));
+            return;
+        }
+        AutoRefreshSwitch.Visibility = SupportsAutoRefresh ? Visibility.Visible : Visibility.Collapsed;
+        SyncRefreshRateState();
     }
 
     internal bool MiniledOn => _backendProbe?.Hw?.LocalDimming == true;
