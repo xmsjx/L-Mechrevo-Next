@@ -15,13 +15,16 @@ public sealed class FanCurveCanvas : FrameworkElement
     private int _dragIndex = -1;
     private bool _dragChanged;
     private int _valid = PointCount;
+    private int _prefix;
+    private byte[] _prefixTemps = Array.Empty<byte>();
+    private int[] _prefixDuties = Array.Empty<int>();
 
     internal event Action? Changed;
 
     internal bool IsDragging => _dragIndex >= 0;
 
-    internal int[] Duties => _duties;
-    internal byte[] Temperatures => _temps;
+    internal int[] Duties => RestoreDuties();
+    internal byte[] Temperatures => RestoreTemperatures();
 
     public FanCurveCanvas()
     {
@@ -44,6 +47,11 @@ public sealed class FanCurveCanvas : FrameworkElement
         {
             start = 0;
         }
+        _prefix = start;
+        _prefixTemps = new byte[start];
+        _prefixDuties = new int[start];
+        Array.Copy(temps, 0, _prefixTemps, 0, start);
+        Array.Copy(duties, 0, _prefixDuties, 0, start);
         int valid = PointCount;
         for (int i = 0; i < PointCount; i++)
         {
@@ -58,6 +66,31 @@ public sealed class FanCurveCanvas : FrameworkElement
         }
         _valid = valid == PointCount ? PointCount : Math.Max(valid, 1);
         InvalidateVisual();
+    }
+
+    // 保存/应用时把显示时跳过的空头点补回，保持其它后端的 16 点表布局不变。
+    private byte[] RestoreTemperatures()
+    {
+        if (_prefix <= 0)
+        {
+            return _temps;
+        }
+        byte[] result = new byte[PointCount];
+        Array.Copy(_prefixTemps, 0, result, 0, _prefix);
+        Array.Copy(_temps, 0, result, _prefix, PointCount - _prefix);
+        return result;
+    }
+
+    private int[] RestoreDuties()
+    {
+        if (_prefix <= 0)
+        {
+            return _duties;
+        }
+        int[] result = new int[PointCount];
+        Array.Copy(_prefixDuties, 0, result, 0, _prefix);
+        Array.Copy(_duties, 0, result, _prefix, PointCount - _prefix);
+        return result;
     }
 
     private (double left, double top, double width, double height) Plot()

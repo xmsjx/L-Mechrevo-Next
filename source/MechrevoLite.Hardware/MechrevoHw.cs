@@ -7305,10 +7305,17 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		// 切到无曲线档/交回固件时，强冷状态也必须结束；否则 UI 仍显示强冷开、tick 被永久挡住。
 		if (_fanBoostActive)
 		{
+			// 强冷会临时把该档标成 enabled=false；交回前先写回快照，避免用户曲线被永久停用。
+			BaolongdaFanCurveSettings boostSaved = _fanBoostSavedCurve;
+			string boostSavedModeId = _fanBoostSavedCurveModeId;
+			if (boostSaved != null && !boostSaved.IsUnreadableArchive)
+			{
+				SaveBaolongdaFanCurveOnly(boostSavedModeId, boostSaved);
+			}
 			_fanBoostActive = false;
 			_fanBoostSavedCurve = null;
 			_fanBoostSavedCurveModeId = null;
-			Logger.WriteLine("[fan] 交回固件：同时结束强冷状态（避免强冷标记粘滞）");
+			Logger.WriteLine("[fan] 交回固件：同时结束强冷状态（已写回强冷前曲线）");
 		}
 		_fanCurveArmed = false;
 		_fanCurveLastAttemptTick = 0;
