@@ -5925,8 +5925,7 @@ public partial class OriginalStyleWindow : Window
             try
             {
                 MechrevoLite.Display.ScreenControl.SetAutoRefresh(on ? 1 : 0);
-                MechrevoLite.Display.ScreenControl.AutoScreen();
-                ok = true;
+                ok = MechrevoLite.Display.ScreenControl.AutoScreen();
             }
             catch (Exception ex)
             {
@@ -8935,7 +8934,9 @@ public partial class OriginalStyleWindow : Window
     private void InitScreenColorControls()
     {
         BackendProbe? probe = _backendProbe;
-        if (probe == null)
+        bool localIccReady = IccHelper.HasFactoryIccFile()
+            || IccHelper.ListCustomIccFiles().Count > 0;
+        if (probe == null && !localIccReady)
         {
             return;
         }
@@ -8943,7 +8944,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             IccHelper.EnsureFactoryIccBound();
-            int level = probe.ColorCalibrationLevel;
+            int level = probe?.ColorCalibrationLevel ?? IccHelper.HighestStandardLevel();
             int selected = AppConfig.Exists("calib_mode") ? AppConfig.Get("calib_mode") : 1;
             CalibrationCombo.Items.Clear();
             CalibrationCombo.Items.Add(new ComboBoxItem { Content = WpfStrings.OriginalStyleWindow_xaml_Content_4, Tag = 1 });
@@ -9008,7 +9009,7 @@ public partial class OriginalStyleWindow : Window
             CalibrationCombo.SelectedIndex = index;
             bool calibrationOn = AppConfig.Exists("calib_enabled") && AppConfig.Is("calib_enabled");
             if (calibrationOn
-                && probe.Hw?.IsGcuConnected != true
+                && probe?.Hw?.IsGcuConnected != true
                 && !IccHelper.HasFactoryIccFile())
             {
                 // ICC 目录为空/文件丢失时，不能沿用旧的已校色状态。
@@ -9117,10 +9118,91 @@ public partial class OriginalStyleWindow : Window
         return true;
     }
 
+    private async Task ApplyLocalCalibrationAsync()
+    {
+        bool on = CalibrationSwitch.IsChecked == true;
+        int mode = SelectedCalibrationMode();
+        CalibrationSwitch.IsEnabled = false;
+        bool ok;
+        try
+        {
+            if (!on)
+            {
+                await Task.Run(IccHelper.ClearAllIcc);
+                ok = true;
+            }
+            else
+            {
+                string path = "";
+                if (mode == 999)
+                {
+                    string name = AppConfig.GetString("calib_custom_icc") ?? "";
+                    path = string.IsNullOrWhiteSpace(name) ? "" : System.IO.Path.Combine(IccHelper.CustomIccDir, name);
+                }
+                else
+                {
+                    string selected = mode <= 1
+                        ? IccHelper.ResolveDefaultIccFile()
+                        : (IccHelper.FindStandardIcc(mode) ?? "");
+                    path = string.IsNullOrWhiteSpace(selected)
+                        ? ""
+                        : System.IO.Path.Combine(IccHelper.OfficialIccDir, selected);
+                }
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                {
+                    ok = await Task.Run(() => IccHelper.ApplyIcc(path));
+                }
+                else if (mode <= 1)
+                {
+                    await Task.Run(IccHelper.ClearAllIcc);
+                    ok = true;
+                }
+                else
+                {
+                    ok = false;
+                }
+            }
+            if (ok)
+            {
+                AppConfig.Set("calib_mode", mode);
+                AppConfig.Set("calib_enabled", on ? 1 : 0);
+                if (mode != 999)
+                {
+                    AppConfig.Set("calib_custom_on", 0);
+                    AppConfig.Remove("calib_custom_icc");
+                }
+                AppConfig.Flush();
+                StatusText.Text = on ? WpfStrings.DisplayCalibrationOn : WpfStrings.DisplayCalibrationOff;
+            }
+            else
+            {
+                _syncingCalibration = true;
+                CalibrationSwitch.IsChecked = !on;
+                _syncingCalibration = false;
+                StatusText.Text = mode == 999 ? WpfStrings.DisplayIccMissing : WpfStrings.DisplayCalibrationFailed;
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = WpfStrings.DisplayCalibrationFailed + " " + ex.GetType().Name;
+        }
+        finally
+        {
+            CalibrationCombo.IsEnabled = CalibrationSwitch.IsChecked == true;
+            CalibrationSettingsButton.IsEnabled = true;
+            CalibrationSwitch.IsEnabled = true;
+        }
+    }
+
     private async void CalibrationSwitch_Click(object sender, RoutedEventArgs e)
     {
-        if (_syncingCalibration || _backendProbe == null)
+        if (_syncingCalibration)
         {
+            return;
+        }
+        if (_backendProbe == null)
+        {
+            await ApplyLocalCalibrationAsync();
             return;
         }
         bool on = CalibrationSwitch.IsChecked == true;
