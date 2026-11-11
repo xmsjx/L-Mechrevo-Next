@@ -1201,16 +1201,18 @@ public partial class OriginalStyleWindow : Window
         {
             try
             {
-                bool value = _backendProbe?.Hw?.IsIntelNucMachine == true
+                bool legacy = _backendProbe?.Hw?.IsIntelNucMachine == true
                     || _backendProbe?.Hw?.IsUmiMachine == true
                     || _backendProbe?.Hw?.DisplayEffectProfiles.Count > 0
                     || _backendProbe?.Capabilities?.ColorCalibration == true
                     || (MechrevoLite.Hardware.GcuEcExperimental.Enabled
                         && _backendProbe?.Hw != null
                         && !_backendProbe.Hw.UsesBaolongda);
+                bool value = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+                    MechrevoLite.Hardware.Architecture.FeatureId.DisplayEffect, _backendProbe?.Hw, legacy);
                 MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(
                     MechrevoLite.Hardware.Architecture.FeatureId.DisplayEffect,
-                    _backendProbe?.Hw, value, "wide-display-effect");
+                    _backendProbe?.Hw, legacy, "wide-display-effect");
                 return value;
             }
             catch
