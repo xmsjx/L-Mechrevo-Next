@@ -7246,12 +7246,6 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 	}
 
-	/// <summary>
-	/// ⭐⭐ 把风扇**交回固件**控制（⭐ 关手动开关 ＝ ⭐ 两通道 20=[fanType,0]，⭐ 确认后再把 21 归零 ✅）。
-	/// <para>⭐⭐ <b>必须在这些时机调用</b>（⭐ 否则风扇会**停在我们上次写的转速上** ⚠️）：
-	/// ⭐ ① ⭐ 用户关掉软件曲线 ✅ · ⭐ ② ⭐ 程序退出 ✅ · ⭐ ③ ⭐ **程序启动时**（⭐ 清理上次残留 ✅）。</para>
-	/// ⚠️ 进程被强杀时来不及调用 ⚠️ ⇒ ⭐ 所以 ③ 很重要 ✅。</para>
-	/// </summary>
 	/// <summary>切到指定档位并立即武装软件闭环（不写存档；用于激活已有曲线的目标档）。</summary>
 	internal void EngageBaolongdaFanCurve(string modeId)
 	{
@@ -7278,6 +7272,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		ApplyBaolongdaFanCurveStep();
 	}
 
+	/// <summary>把风扇交回固件控制（两通道手动开关置 0，确认后再把目标归零）。</summary>
 	internal void RestoreBaolongdaFanFirmwareControl()
 	{
 		if (!Monitor.TryEnter(_fanCurveIoGate, 5000))
