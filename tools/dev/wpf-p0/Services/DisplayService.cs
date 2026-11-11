@@ -171,11 +171,26 @@ internal sealed class DisplayService : IDisplayService
         }
         try
         {
-            bool ok = await probe.SwitchAutoRefreshAsync(on).ConfigureAwait(false);
-            // 与原窗口 AutoRefresh_Click 一致：无论后端回执如何都落盘（下一次启动仍按用户选择）。
+            // 自动刷新率优先走 Windows 显示路径；GCU 只做镜像。
+            ScreenControl.SetAutoRefresh(on ? 1 : 0);
+            ScreenControl.AutoScreen();
+            bool mirrored = true;
+            try
+            {
+                if (probe.Service != null)
+                {
+                    mirrored = await probe.SwitchAutoRefreshAsync(on).ConfigureAwait(false);
+                }
+            }
+            catch
+            {
+                mirrored = false;
+            }
             AppConfig.Set("screen_auto", on ? 1 : 0);
             AppConfig.Flush();
-            return ok ? ServiceResult.Success(WpfStrings.DisplayAutoRefreshSent) : ServiceResult.Fail(WpfStrings.DisplayAutoRefreshFailed);
+            Logger.WriteLineIfChanged("display-auto-refresh",
+                $"[display] 自动刷新率={on} Windows=ok GCU镜像={mirrored}");
+            return ServiceResult.Success(WpfStrings.DisplayAutoRefreshSent);
         }
         catch (Exception ex)
         {
