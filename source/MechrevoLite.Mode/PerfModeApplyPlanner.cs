@@ -140,12 +140,12 @@ public static class PerfModeApplyPlanner
 				cpuFanDuty = null;
 				gpuFanDutyPre = null;
 			}
-			if (cpuFanDuty != null && cpuFanDuty.Length == 16)
+			if (caps.SupportsFanCurve && cpuFanDuty != null && cpuFanDuty.Length == 16)
 			{
 				list.Add(new PerfApplyStep(PerfApplyStepKind.WriteFanCurve, null, null, 0, IsCpuCurve: true, settings.CpuFanDuty, PerfApplyVerify.FanDuty));
 			}
 			int[] gpuFanDuty = gpuFanDutyPre;
-			if (gpuFanDuty != null && gpuFanDuty.Length == 16)
+			if (caps.SupportsFanCurve && gpuFanDuty != null && gpuFanDuty.Length == 16)
 			{
 				list.Add(new PerfApplyStep(PerfApplyStepKind.WriteFanCurve, null, null, 0, IsCpuCurve: false, settings.GpuFanDuty, PerfApplyVerify.FanDuty));
 			}
@@ -212,11 +212,11 @@ public static class PerfModeApplyPlanner
 		if (!caps.WujieSmuLocalOnly && caps.SupportsWmiPowerFields && perfModeRoute == PerfModeRoute.FirmwareSlot && slotPlan != null && slotPlan.NeedsParameterWrite)
 		{
 			bool fanCurveOn = settings.FanCurveOn != false;
-			if (fanCurveOn && settings.CpuFanDuty != null && settings.CpuFanDuty.Length == 16)
+			if (fanCurveOn && caps.SupportsFanCurve && settings.CpuFanDuty != null && settings.CpuFanDuty.Length == 16)
 			{
 				list.Add(new PerfApplyStep(PerfApplyStepKind.WriteFanCurve, null, null, 0, IsCpuCurve: true, settings.CpuFanDuty, PerfApplyVerify.FanDuty));
 			}
-			if (fanCurveOn && settings.GpuFanDuty != null && settings.GpuFanDuty.Length == 16)
+			if (fanCurveOn && caps.SupportsFanCurve && settings.GpuFanDuty != null && settings.GpuFanDuty.Length == 16)
 			{
 				list.Add(new PerfApplyStep(PerfApplyStepKind.WriteFanCurve, null, null, 0, IsCpuCurve: false, settings.GpuFanDuty, PerfApplyVerify.FanDuty));
 			}
@@ -263,7 +263,7 @@ public static class PerfModeApplyPlanner
 					? (settings.GpuCoreOffset.GetValueOrDefault(), settings.GpuMemoryOffset.GetValueOrDefault())
 					: (0, 0)));
 		}
-		if (settings.FanBoost.HasValue)
+		if (caps.SupportsFanBoost && settings.FanBoost.HasValue)
 		{
 			list.Add(new PerfApplyStep(PerfApplyStepKind.ApplyFanBoost, null, null, settings.FanBoost.Value ? 1 : 0));
 		}
@@ -281,7 +281,7 @@ public static class PerfModeApplyPlanner
 			list.Add(new PerfApplyStep(PerfApplyStepKind.ApplyCpuBoost, null, null, settings.CpuBoost.Value, IsCpuCurve: false, null, PerfApplyVerify.CpuBoost));
 		}
 		int? refreshHz = settings.RefreshHz;
-		if (refreshHz.HasValue && refreshHz.GetValueOrDefault() > 0)
+		if (caps.SupportsRefreshRate && refreshHz.HasValue && refreshHz.GetValueOrDefault() > 0)
 		{
 			list.Add(new PerfApplyStep(PerfApplyStepKind.ApplyRefreshRate, null, null, settings.RefreshHz.Value, IsCpuCurve: false, null, PerfApplyVerify.RefreshRate));
 		}
