@@ -146,7 +146,7 @@ internal sealed class DisplayService : IDisplayService
         {
             // 手动刷新率唯一动作走 Windows 显示路径；手选不关闭自动刷新率。
             int rc = ScreenNative.SetRefreshRate(null, hertz);
-            bool ok = rc == 0;
+            bool ok = ScreenNative.IsDisplayChangeSuccess(rc);
             if (ok)
             {
                 BackendProbe? probe = _backend.Probe;

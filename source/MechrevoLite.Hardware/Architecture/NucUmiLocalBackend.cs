@@ -31,11 +31,16 @@ internal sealed class NucUmiLocalBackend : IBackendModule
 				"NUC/UMI 灯带走本地 HID", sources.ToArray())
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				"NUC/UMI 灯带证据未采集，回退旧判据", new string[0]);
+		FeatureDeclaration noOemDisplay = new FeatureDeclaration(FeatureAvailability.Unsupported,
+			BackendChannel.None, "NUC/UMI 没有 OEM 显示能力通道", new string[0]);
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
 				[FeatureId.LogoLight] = logo,
-				[FeatureId.Lightbar] = lightbar
+				[FeatureId.Lightbar] = lightbar,
+				[FeatureId.LocalDimming] = noOemDisplay,
+				[FeatureId.LcdOverdrive] = noOemDisplay,
+				[FeatureId.ColorCalibration] = noOemDisplay
 			});
 	}
 }

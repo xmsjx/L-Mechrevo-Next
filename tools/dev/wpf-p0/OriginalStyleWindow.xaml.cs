@@ -780,7 +780,7 @@ public partial class OriginalStyleWindow : Window
             // 对当前活动显示设备直接调用 Win32 ChangeDisplaySettingsEx；
             // 不再先 FindLaptopScreen 把外接屏场景导到错误目标。
             rc = ScreenNative.SetRefreshRate(null, hertz);
-            ok = rc == 0;
+            ok = ScreenNative.IsDisplayChangeSuccess(rc);
             if (!ok)
             {
                 Logger.WriteLine("[refresh] Win32 切换返回 rc=" + rc);
@@ -1941,14 +1941,14 @@ public partial class OriginalStyleWindow : Window
 
     internal bool MiniledOn => _backendProbe?.Hw?.LocalDimming == true;
 
-    // FHD/HDR 当前没有真实写入通道，只保留只读探测；未补齐前不得声明为支持。
-    internal bool SupportsFhd => L_Mechrevo.WpfP0.Services.WpfBackend.acpi?.DeviceGet(327708u) >= 0;
+    // FHD/HDR 当前没有真实写入通道；在补齐前不声明支持，也不触发配置写/重启。
+    internal bool SupportsFhd => false;
 
-    internal bool FhdOn => L_Mechrevo.WpfP0.Services.WpfBackend.acpi?.DeviceGet(327708u) > 0;
+    internal bool FhdOn => false;
 
-    internal bool SupportsHdrControl => L_Mechrevo.WpfP0.Services.WpfBackend.acpi?.DeviceGet(327793u) >= 0;
+    internal bool SupportsHdrControl => false;
 
-    internal bool HdrControlOn => L_Mechrevo.WpfP0.Services.WpfBackend.acpi?.DeviceGet(327793u) > 0;
+    internal bool HdrControlOn => false;
 
     internal async void ToggleMiniled()
     {
@@ -1974,42 +1974,12 @@ public partial class OriginalStyleWindow : Window
 
     internal void ToggleHdrControl()
     {
-        if (!SupportsHdrControl)
-        {
-            return;
-        }
-        try
-        {
-            if (L_Mechrevo.WpfP0.Services.WpfBackend.acpi == null)
-            {
-                return;
-            }
-            int current = L_Mechrevo.WpfP0.Services.WpfBackend.acpi.DeviceGet(327793u);
-            AppConfig.Set("hdr_control", current == 1 ? 0 : 1);
-            AppConfig.Flush();
-            StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_4;
-            RefreshFromBackend();
-        }
-        catch (Exception ex)
-        {
-            StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_5 + ex.Message;
-        }
+        Logger.WriteLine("[display] HDR 控制未实现，忽略");
     }
 
     internal void ToggleFhd()
     {
-        if (!SupportsFhd)
-        {
-            return;
-        }
-        try
-        {
-            MechrevoLite.Display.ScreenControl.ToogleFHD();
-        }
-        catch (Exception ex)
-        {
-            StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_6 + ex.Message;
-        }
+        Logger.WriteLine("[display] FHD 切换未实现，忽略");
     }
 
     private void ShowFromTray()
@@ -7866,8 +7836,8 @@ public partial class OriginalStyleWindow : Window
             GpuSectionHeader.Text = gpuSwitchSupported
                 ? WpfStrings.OriginalStyleWindow_Text_15
                 : WpfStrings.L("显卡", "Graphics");
-            bool localIccAvailable = IccHelper.ListCustomIccFiles().Count > 0;
-            ScreenSection.Visibility = (caps.DisplayRefresh || _backendProbe?.Hw?.SupportsDisplayRefresh == true || caps.ColorCalibration || caps.LcdOverdrive || caps.LocalDimming || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
+            bool localIccAvailable = IccHelper.HasFactoryIccFile() || IccHelper.ListCustomIccFiles().Count > 0;
+            ScreenSection.Visibility = (caps.DisplayRefresh || _backendProbe?.Hw?.SupportsDisplayRefresh == true || SupportsOemCalibration || caps.LcdOverdrive || caps.LocalDimming || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
             AutoRefreshSwitch.Visibility = SupportsAutoRefresh ? Visibility.Visible : Visibility.Collapsed;
             bool hasKeyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
                 ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard

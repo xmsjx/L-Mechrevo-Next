@@ -470,12 +470,17 @@ internal static class ScreenNative
 		DisplayNative.DEVMODE lpDevMode = CreateDevmode();
 		if (DisplayNative.EnumDisplaySettingsEx(laptopScreen, -1, ref lpDevMode) == 0)
 		{
-			return 0;
+			return -1;
 		}
 		lpDevMode.dmDisplayFrequency = frequency;
 		int num = DisplayNative.ChangeDisplaySettingsEx(laptopScreen, ref lpDevMode, IntPtr.Zero, DisplayNative.DisplaySettingsFlags.CDS_UPDATEREGISTRY, IntPtr.Zero);
 		Logger.WriteLine("Screen = " + frequency + "Hz : " + ((num == 0) ? "OK" : ((object)num)));
 		return num;
+	}
+
+	public static bool IsDisplayChangeSuccess(int rc)
+	{
+		return rc == 0 || rc == 1;
 	}
 
 	public static DisplayNative.DEVMODE CreateDevmode()

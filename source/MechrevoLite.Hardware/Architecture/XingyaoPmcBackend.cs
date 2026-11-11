@@ -15,11 +15,16 @@ internal sealed class XingyaoPmcBackend : IBackendModule
 			BackendChannel.None, "星耀后端没有独立 Logo 灯通道", new string[0]);
 		FeatureDeclaration lightbar = new FeatureDeclaration(FeatureAvailability.Unknown,
 			BackendChannel.None, "星耀后端没有独立灯带通道", new string[0]);
+		FeatureDeclaration noOemDisplay = new FeatureDeclaration(FeatureAvailability.Unsupported,
+			BackendChannel.None, "星耀后端没有 OEM 显示能力通道", new string[0]);
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
 				[FeatureId.LogoLight] = logo,
-				[FeatureId.Lightbar] = lightbar
+				[FeatureId.Lightbar] = lightbar,
+				[FeatureId.LocalDimming] = noOemDisplay,
+				[FeatureId.LcdOverdrive] = noOemDisplay,
+				[FeatureId.ColorCalibration] = noOemDisplay
 			});
 	}
 }
