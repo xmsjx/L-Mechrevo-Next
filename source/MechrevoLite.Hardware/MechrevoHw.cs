@@ -5979,9 +5979,10 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		if (saved != null && !saved.IsUnreadableArchive)
 		{
 			bool restored = SaveBaolongdaFanCurve(savedModeId, saved);
-			Logger.WriteLine($"[fan] 强冷：关 ⇒ 交回固件（{releaseOnOff}）⇒ 已恢复强冷前曲线（enabled={saved.Enabled} · 联动={saved.SyncEnabled}）ok={restored}");
-			confirmed = restored;
-			return released && restored;
+			bool engaged = !saved.Enabled || _fanCurveArmed;
+			Logger.WriteLine($"[fan] 强冷：关 ⇒ 交回固件（{releaseOnOff}）⇒ 已恢复强冷前曲线（enabled={saved.Enabled} · 联动={saved.SyncEnabled} · armed={_fanCurveArmed}）ok={restored}");
+			confirmed = restored && engaged;
+			return released && restored && engaged;
 		}
 		else
 		{
