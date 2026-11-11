@@ -110,6 +110,15 @@ internal static class FeatureGate
 		Check(lines, "gcu-sync-supported", Facts(BackendKind.TongfangGcu),
 			new FeatureProbe(true, false, false, null, false, SyncCapability: true),
 			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.SyncLight);
+		Check(lines, "gcu-keyboard-supported", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false, KeyboardCapability: true),
+			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.KeyboardLight);
+		Check(lines, "gcu-keyboard-no-evidence", Facts(BackendKind.TongfangGcu),
+			new FeatureProbe(true, false, false, null, false),
+			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.KeyboardLight);
+		Check(lines, "ec-keyboard-supported", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false, KeyboardCapability: true),
+			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.KeyboardLight);
 		Check(lines, "baolongda-no-lightbar", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);

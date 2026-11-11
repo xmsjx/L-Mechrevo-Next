@@ -13,7 +13,8 @@ internal sealed record FeatureProbe(
 	bool LightbarSeen = false,
 	bool? EcLightbarEvidence = null,
 	bool HingeCapability = false,
-	bool SyncCapability = false)
+	bool SyncCapability = false,
+	bool KeyboardCapability = false)
 {
 	internal static FeatureProbe From(MechrevoHw? hw)
 	{
@@ -32,6 +33,7 @@ internal sealed record FeatureProbe(
 			hw.LightbarStatusSeen,
 			IteLightingLocal.TryGetLightbarCached(out bool lightbarCached) ? lightbarCached : (bool?)null,
 			hw.SupportsHingeLight,
-			hw.SupportsSyncLight);
+			hw.SupportsSyncLight,
+			hw.SupportsKeyboard);
 	}
 }

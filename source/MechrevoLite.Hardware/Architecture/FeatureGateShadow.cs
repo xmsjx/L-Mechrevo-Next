@@ -28,6 +28,11 @@ internal static class FeatureGateShadow
 		Log(FeatureId.SyncLight, hw, oldValue, origin, kind);
 	}
 
+	internal static void LogKeyboardLight(MechrevoHw? hw, bool oldValue, string origin, string kind = "visibility")
+	{
+		Log(FeatureId.KeyboardLight, hw, oldValue, origin, kind);
+	}
+
 	internal static void LogFeature(FeatureId feature, MechrevoHw? hw, bool oldValue, string origin, string kind = "visibility")
 	{
 		Log(feature, hw, oldValue, origin, kind);

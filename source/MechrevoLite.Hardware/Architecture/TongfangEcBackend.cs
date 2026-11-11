@@ -73,11 +73,18 @@ internal sealed class TongfangEcBackend : IBackendModule
 					"本地 EC 灯带证据未采集或无证据", new string[0]);
 		}
 
+		FeatureDeclaration keyboard = probe.KeyboardCapability
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+				"EC 本地键盘通道可用", new[] { "registry:Capabilities.Keyboard" })
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"EC 未上报键盘能力", new string[0]);
+
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
 				[FeatureId.LogoLight] = logo,
-				[FeatureId.Lightbar] = lightbar
+				[FeatureId.Lightbar] = lightbar,
+				[FeatureId.KeyboardLight] = keyboard
 			});
 	}
 }

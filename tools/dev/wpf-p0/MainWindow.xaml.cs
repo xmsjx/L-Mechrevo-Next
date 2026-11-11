@@ -3033,6 +3033,7 @@ public partial class MainWindow : Window
         {
             hasKeyboard = GcuEcKeyboard.HasControllableKeyboard;
         }
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogKeyboardLight(hw, hasKeyboard, "mini");
         bool hasLightbar = (hw?.SupportsLightbar ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
         bool legacyLightbar = hasLightbar;

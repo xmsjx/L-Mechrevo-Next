@@ -74,13 +74,20 @@ internal sealed class TongfangGcuBackend : IBackendModule
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				probe.GcuConnected ? "GCU 未上报同步灯带能力" : "GCU 未连接", new string[0]);
 
+		FeatureDeclaration keyboard = probe.GcuConnected && probe.KeyboardCapability
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+				"GCU 键盘通道可用", new[] { "registry:Capabilities.Keyboard" })
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				probe.GcuConnected ? "GCU 未上报键盘能力" : "GCU 未连接", new string[0]);
+
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
 				[FeatureId.LogoLight] = logo,
 				[FeatureId.Lightbar] = lightbar,
 				[FeatureId.HingeLight] = hinge,
-				[FeatureId.SyncLight] = sync
+				[FeatureId.SyncLight] = sync,
+				[FeatureId.KeyboardLight] = keyboard
 			});
 	}
 }

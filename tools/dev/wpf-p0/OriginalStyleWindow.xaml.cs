@@ -7982,6 +7982,7 @@ public partial class OriginalStyleWindow : Window
             ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
             : (caps?.Keyboard ?? false) || (hw?.SupportsKeyboard ?? false)
                 || hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
+        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogKeyboardLight(hw, keyboard, "wide");
         bool hasStrip = (caps?.Lightbar ?? false) || (hw?.SupportsLightbar ?? false)
             || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
         bool legacyStrip = hasStrip;
