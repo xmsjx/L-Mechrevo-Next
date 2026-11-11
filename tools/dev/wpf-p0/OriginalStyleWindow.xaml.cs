@@ -9120,14 +9120,21 @@ public partial class OriginalStyleWindow : Window
         return true;
     }
 
-    internal async Task SetLocalCalibrationEnabledAsync(bool enabled)
+    private bool _localCalibrationBusy;
+
+    internal async Task<bool> SetLocalCalibrationEnabledAsync(bool enabled)
     {
         CalibrationSwitch.IsChecked = enabled;
-        await ApplyLocalCalibrationAsync();
+        return await ApplyLocalCalibrationAsync();
     }
 
-    private async Task ApplyLocalCalibrationAsync()
+    private async Task<bool> ApplyLocalCalibrationAsync()
     {
+        if (_localCalibrationBusy)
+        {
+            return false;
+        }
+        _localCalibrationBusy = true;
         bool on = CalibrationSwitch.IsChecked == true;
         int mode = SelectedCalibrationMode();
         CalibrationSwitch.IsEnabled = false;
@@ -9192,14 +9199,17 @@ public partial class OriginalStyleWindow : Window
         }
         catch (Exception ex)
         {
+            ok = false;
             StatusText.Text = WpfStrings.DisplayCalibrationFailed + " " + ex.GetType().Name;
         }
         finally
         {
+            _localCalibrationBusy = false;
             CalibrationCombo.IsEnabled = CalibrationSwitch.IsChecked == true;
             CalibrationSettingsButton.IsEnabled = true;
             CalibrationSwitch.IsEnabled = true;
         }
+        return ok;
     }
 
     private async void CalibrationSwitch_Click(object sender, RoutedEventArgs e)

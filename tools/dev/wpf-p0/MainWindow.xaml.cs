@@ -1951,7 +1951,12 @@ public partial class MainWindow : Window
                 || MechrevoLite.Display.IccHelper.ListCustomIccFiles().Count > 0;
             if (localIcc && _owner != null)
             {
-                await _owner.SetLocalCalibrationEnabledAsync(ScreenCalibrationToggle.IsChecked == true);
+                bool ok = await _owner.SetLocalCalibrationEnabledAsync(ScreenCalibrationToggle.IsChecked == true);
+                if (!ok)
+                {
+                    ScreenCalibrationToggle.IsChecked = !(ScreenCalibrationToggle.IsChecked == true);
+                    StatusText.Text = WpfStrings.DisplayCalibrationFailed;
+                }
                 BuildCalibrationOptions();
                 return;
             }
