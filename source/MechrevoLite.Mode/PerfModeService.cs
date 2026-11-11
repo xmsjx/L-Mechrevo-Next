@@ -336,6 +336,8 @@ internal sealed class PerfModeService
 		PerfModeStore.MigrateLegacy();
 		PerfModeService perfModeService = new PerfModeService(hw, new PerfModeBackend(service, hw));
 		Instance = perfModeService;
+		// 上次异常退出可能把 NVAPI P0 偏移留在驱动里；启动时清一次，失败保留标志供下次重试。
+		(perfModeService._backend as PerfModeBackend)?.TryClearNvapiResidue("启动对账");
 		// 2026-10-09（修 B1「旧键 split-brain」）：托盘切自定义档（SettingsForm）与电源变化重应用
 		// （ModeControl.ReapplyCustomProfileAsync）都走 WinPowerPlan.ApplyProfile(固件档位号)，而旧实现
 		// 读的是已废弃的旧键 customN_plan / customN_boost（从不清除，还会被「当前活动方案」自动播种），
@@ -1807,6 +1809,10 @@ internal sealed class PerfModeService
 					return await RestoreVendorProfileAsync().ConfigureAwait(continueOnCapturedContext: false);
 				}
 				bool restored = await RestoreVendorProfileAsync().ConfigureAwait(continueOnCapturedContext: false);
+				if (restored && !hw.UsesBaolongda && _backend is PerfModeBackend resetBackend)
+				{
+					resetBackend.TryClearNvapiResidue("恢复出厂");
+				}
 				FirmwareSlotState firmwareSlotState = PerfModeStore.LoadSlots(SlotCount).FirstOrDefault((FirmwareSlotState s) => string.Equals(s.OwnerModeId, mode.Id, StringComparison.Ordinal));
 				if (restored && (object)firmwareSlotState != null)
 				{

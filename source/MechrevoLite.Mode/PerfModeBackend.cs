@@ -394,6 +394,11 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			Logger.WriteError("[gpu-oc] 实验：负偏移下发 core=" + core + " mem=" + memory + " ⇒ NVAPI 回读 core=" + rbCore
 				+ " mem=" + rbMem + (nvapiOk ? " ✅" : " ❌（如实报失败）"));
 			_gcuNvapiNegativeActive = nvapiOk;
+			if (nvapiOk)
+			{
+				AppConfig.Set("gpu_oc_nvapi_active", 1);
+				AppConfig.Flush();
+			}
 			return nvapiOk;
 		}
 		if (_gcuNegativeFieldActive && !negativeRequest)
@@ -414,6 +419,8 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			};
 			await _hw.ApplyGpuOverclockAsync(clearFields, ct).ConfigureAwait(continueOnCapturedContext: false);
 			_gcuNvapiNegativeActive = false;
+			AppConfig.Set("gpu_oc_nvapi_active", 0);
+			AppConfig.Flush();
 		}
 		if (on && !_hw.UsesBaolongda)
 		{
@@ -456,17 +463,32 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		}
 		if (_gcuNvapiActive)
 		{
-			bool cleared = NvapiPStates.TrySetP0Offsets(0, 0, out int clearedCore, out int clearedMemory);
-			Logger.WriteError("[gpu-oc] 从 NVAPI P0 切回 GCU/关闭 ⇒ 清 NVAPI 偏移 core=0 mem=0"
-				+ " ⇒ ok=" + cleared + " 回读=" + clearedCore + "/" + clearedMemory);
-			if (!cleared)
+			if (!TryClearNvapiResidue("从 NVAPI P0 切回 GCU/关闭"))
 			{
 				return false;
 			}
-			_gcuNvapiActive = false;
-			AppConfig.Set("gpu_oc_nvapi_active", 0);
 		}
 		return await _service.ApplyGcuGpuOverclock(on, core, memory).ConfigureAwait(continueOnCapturedContext: false);
+	}
+
+	/// <summary>清掉跨进程遗留的 NVAPI P0 偏移；失败保留标志供下次重试。</summary>
+	internal bool TryClearNvapiResidue(string reason)
+	{
+		if (!_gcuNvapiActive && AppConfig.Get("gpu_oc_nvapi_active", 0) == 0)
+		{
+			return true;
+		}
+		bool cleared = NvapiPStates.TrySetP0Offsets(0, 0, out int core, out int memory);
+		Logger.WriteError("[gpu-oc] 清 NVAPI 残留（" + reason + "）⇒ ok=" + cleared + " 回读=" + core + "/" + memory);
+		if (!cleared)
+		{
+			_gcuNvapiActive = true;
+			return false;
+		}
+		_gcuNvapiActive = false;
+		AppConfig.Set("gpu_oc_nvapi_active", 0);
+		AppConfig.Flush();
+		return true;
 	}
 
 	public Task<bool> SetSlotNameAsync(string name, CancellationToken ct)
