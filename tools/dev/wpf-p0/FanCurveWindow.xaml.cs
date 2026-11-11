@@ -385,7 +385,10 @@ public partial class FanCurveWindow : Window
                         MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId) with { FanCurveOn = pushCurve });
                 }
                 _dirty = false;
-                bool activeMode = string.Equals(PerfModeService.Instance?.ActiveModeId, _modeId, StringComparison.Ordinal);
+                string? activeModeId = PerfModeService.Instance?.ActiveModeId;
+                // 与服务侧 IsFanCurveModeActive 一致：启动期 ActiveModeId 为空时按活动档处理。
+                bool activeMode = string.IsNullOrWhiteSpace(activeModeId)
+                    || string.Equals(activeModeId, _modeId, StringComparison.Ordinal);
                 string okText = !pushCurve
                     ? WpfStrings.L("宝龙达风扇曲线已保存（未随档位下发）", "Baolongda fan curve saved (not pushed with profile)")
                     : (activeMode
