@@ -873,12 +873,12 @@ public partial class OriginalStyleWindow : Window
             if (!on)
             {
                 return _backendProbe != null
-                    ? await _backendProbe.SetKeyboardPowerAsync(false)
+                    ? await SetKeyboardPowerServiceAsync(false)
                     : await service.SetKeyboardPower(false);
             }
             if (_backendProbe != null)
             {
-                await _backendProbe.SetKeyboardPowerAsync(true);
+                await SetKeyboardPowerServiceAsync(true);
             }
             int hardwareLevel = level >= 2 ? 4 : 2;
             return await service.SetKeyboardBrightnessPreservingEffect(hardwareLevel);
@@ -2386,7 +2386,7 @@ public partial class OriginalStyleWindow : Window
                 rgb.KbPowerSyncFromHardware(false);
                 return;
             }
-            await _backendProbe.SetKeyboardPowerAsync(false);
+            await SetKeyboardPowerServiceAsync(false);
         }
         catch (Exception ex)
         {
@@ -3295,6 +3295,15 @@ public partial class OriginalStyleWindow : Window
             return (await _services.Lighting.SetSyncEffectAsync(effect)).Ok;
         }
         return _backendProbe != null && await _backendProbe.SetSyncEffectAsync(effect);
+    }
+
+    private async Task<bool> SetKeyboardPowerServiceAsync(bool on)
+    {
+        if (_services != null)
+        {
+            return (await _services.Lighting.SetKeyboardPowerAsync(on)).Ok;
+        }
+        return _backendProbe != null && await _backendProbe.SetKeyboardPowerAsync(on);
     }
 
     private async Task<bool> SetLightPowerServiceAsync(string topic, bool on)
@@ -10139,7 +10148,7 @@ public partial class OriginalStyleWindow : Window
                 }
                 else
                 {
-                    await _backendProbe.SetKeyboardPowerAsync(false);
+                    await SetKeyboardPowerServiceAsync(false);
                 }
             }
             await RestoreSavedChannelAsync("HidLightbar/Ctrl", LightStripSwitch);
@@ -10359,7 +10368,7 @@ public partial class OriginalStyleWindow : Window
             }
             else if (IsHidKeyboard(_backendProbe.Hw))
             {
-                await _backendProbe.SetKeyboardEffectAsync("Rainbow");
+                await SetKeyboardEffectServiceAsync("Rainbow");
             }
             else if (_backendProbe.Service != null)
             {
@@ -10427,9 +10436,9 @@ public partial class OriginalStyleWindow : Window
 
             bool remote = topic switch
             {
-                "HidLightbar/Ctrl" => await _backendProbe.SetLightbarEffectAsync("Rainbow"),
-                "HidLightbar_Logo/Ctrl" => await _backendProbe.SetLogoEffectAsync("ColorMarquee"),
-                "HidLightbar_Hinge/Ctrl" => await _backendProbe.SetHingeEffectAsync("Rainbow"),
+                "HidLightbar/Ctrl" => await SetLightbarEffectServiceAsync("Rainbow"),
+                "HidLightbar_Logo/Ctrl" => await SetLogoEffectServiceAsync("ColorMarquee"),
+                "HidLightbar_Hinge/Ctrl" => await SetHingeEffectServiceAsync("Rainbow"),
                 _ => false
             };
             if (remote)
@@ -10456,7 +10465,7 @@ public partial class OriginalStyleWindow : Window
         }
         else
         {
-            await _backendProbe.SetKeyboardPowerAsync(false);
+            await SetKeyboardPowerServiceAsync(false);
         }
         await SetLightPowerServiceAsync("HidLightbar/Ctrl", false);
         await SetLightPowerServiceAsync("HidLightbar_Logo/Ctrl", false);
@@ -10972,7 +10981,7 @@ public partial class OriginalStyleWindow : Window
                 if (_backendProbe?.Service != null && offHw is { IsConnected: true }
                     && offHw.IsIntelNucMachine != true && offHw.IsUmiMachine != true)
                 {
-                    await _backendProbe.SetKeyboardPowerAsync(false).ConfigureAwait(true);
+                    await SetKeyboardPowerServiceAsync(false).ConfigureAwait(true);
                 }
                 rgb.SaveConfig();
                 if (showStatus) StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_81;
@@ -11000,7 +11009,7 @@ public partial class OriginalStyleWindow : Window
             if (_backendProbe?.Service != null && onHw is { IsConnected: true, KeyboardPower: false }
                 && onHw.IsIntelNucMachine != true && onHw.IsUmiMachine != true)
             {
-                await _backendProbe.SetKeyboardPowerAsync(true).ConfigureAwait(true);
+                await SetKeyboardPowerServiceAsync(true).ConfigureAwait(true);
             }
             rgb.Brightness = Math.Clamp(rgb.Brightness, 1, 100);
             L_Mechrevo.WpfP0.Services.WpfBackend.NotifyLightingUserIntent();
@@ -11090,14 +11099,14 @@ public partial class OriginalStyleWindow : Window
         }
         if (!on)
         {
-            bool offOk = await _backendProbe.SetKeyboardPowerAsync(false);
+            bool offOk = await SetKeyboardPowerServiceAsync(false);
             if (showStatus) StatusText.Text = offOk ? WpfStrings.OriginalStyleWindow_xaml_Text_81 : WpfStrings.LightKeyboardFailed;
             return offOk;
         }
         EnsureKeyboardBrightnessOnPowerOn();
         if (_backendProbe.Hw?.KeyboardPower != true)
         {
-            bool powerOk = await _backendProbe.SetKeyboardPowerAsync(true);
+            bool powerOk = await SetKeyboardPowerServiceAsync(true);
             if (!powerOk)
             {
                 if (showStatus) StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_85;
