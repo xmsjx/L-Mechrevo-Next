@@ -486,8 +486,8 @@ internal static class BaolongdaFanCurveStore
 		}
 		catch (Exception ex)
 		{
-			Logger.WriteLine("宝龙达风扇曲线：⭐ 读取失败（按默认值处理）：" + ex.Message);
-			return BaolongdaFanCurveSettings.CreateDefault(bandMax);
+			Logger.WriteLine("宝龙达风扇曲线：读取异常 ⇒ 按读不懂处理：" + ex.Message);
+			return Unreadable(BaolongdaFanCurveSettings.LegacyDutyFormatVersion, "读取异常：" + ex.Message, bandMax);
 		}
 	}
 
