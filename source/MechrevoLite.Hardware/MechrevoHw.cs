@@ -5949,7 +5949,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			return targetsOk && maskOk;
 		}
 		// 关闭：恢复快照（含 Enabled 状态）
-		FanWriter.TryReleaseToFirmware(out string releaseOnOff);
+		bool released = FanWriter.TryReleaseToFirmware(out string releaseOnOff);
 		// 0.293.5.1 关闭路径只交回固件，不再写 WMI 20/21；
 		// 这两条 WMI 写在部分宝龙达机型会卡住，导致“强冷关不掉”。
 		_fanBoostActive = false;
@@ -5962,13 +5962,14 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			bool restored = SaveBaolongdaFanCurve(saved);
 			Logger.WriteLine($"[fan] 强冷：关 ⇒ 交回固件（{releaseOnOff}）⇒ 已恢复强冷前曲线（enabled={saved.Enabled} · 联动={saved.SyncEnabled}）ok={restored}");
 			confirmed = restored;
+			return released && restored;
 		}
 		else
 		{
 			Logger.WriteLine("[fan] 强冷：关 ⇒ 交回固件（" + releaseOnOff + "）⇒ 没有快照可恢复（保持手动模式关闭）");
-			confirmed = true;
+			confirmed = released;
+			return released;
 		}
-		return true;
 	}
 
 	/// <summary>⭐ 复制一份曲线设置（只改 Enabled），用作"暂停闭环/恢复"的快照 ✅</summary>

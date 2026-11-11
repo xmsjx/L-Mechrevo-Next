@@ -201,11 +201,12 @@ internal sealed class PerfModeService
 	/// ⚠️ _applyInFlight 计数：有下发在飞行中时，reconcile/guard 一律不得并发重应用。
 	/// ⚠️ 下发链本身（PerfModeApplyPlanner → PerfModeRunner → MechrevoService.SetCustomDetail）一字未改。
 	/// </summary>
-	private async Task<PerfApplyOutcome> RunStepsAsync(string modeId, IReadOnlyList<PerfApplyStep> steps, CancellationToken ct = default(CancellationToken))
+	private async Task<PerfApplyOutcome> RunStepsAsync(string modeId, IReadOnlyList<PerfApplyStep> steps, CancellationToken ct = default(CancellationToken), bool willActivate = false)
 	{
 		if (_backend is PerfModeBackend perfBackend)
 		{
 			perfBackend.FanCurveTargetModeId = modeId;
+			perfBackend.FanCurveTargetWillActivate = willActivate;
 		}
 		Interlocked.Increment(ref _applyInFlight);
 		PerfApplyOutcome perfApplyOutcome;
@@ -873,7 +874,7 @@ internal sealed class PerfModeService
 		PerfApplyOutcome outcome;
 		try
 		{
-			outcome = await RunStepsAsync(mode.Id, readOnlyList, ct).ConfigureAwait(continueOnCapturedContext: false);
+			outcome = await RunStepsAsync(mode.Id, readOnlyList, ct, willActivate: true).ConfigureAwait(continueOnCapturedContext: false);
 		}
 		catch (OperationCanceledException)
 		{

@@ -223,6 +223,9 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 	// 本次下发所属的档位；风扇曲线必须写到这个档，不能拿当前活动档顶替。
 	internal string? FanCurveTargetModeId { get; set; }
 
+	// 本次下发是否就是“切到这个档”；激活时 ActiveModeId 还没写，必须用这个标记接管曲线。
+	internal bool FanCurveTargetWillActivate { get; set; }
+
 	private bool ApplyBaolongdaFanCurve(bool cpu, int[] dutyPercent)
 	{
 		if (dutyPercent == null || dutyPercent.Length != 16)
@@ -263,7 +266,8 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		string modeId = !string.IsNullOrWhiteSpace(FanCurveTargetModeId)
 			? FanCurveTargetModeId
 			: (PerfModeService.Instance?.ActiveModeId ?? "default");
-		bool activeTarget = string.Equals(modeId, PerfModeService.Instance?.ActiveModeId, StringComparison.Ordinal);
+		bool activeTarget = FanCurveTargetWillActivate
+			|| string.Equals(modeId, PerfModeService.Instance?.ActiveModeId, StringComparison.Ordinal);
 		bool ok = activeTarget
 			? _hw.SaveBaolongdaFanCurve(modeId, next)
 			: _hw.SaveBaolongdaFanCurveOnly(modeId, next);
