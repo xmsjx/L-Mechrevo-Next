@@ -2019,11 +2019,18 @@ public partial class MainWindow : Window
         BuildCalibrationOptions();
     }
 
-    private void CalibrationIccCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private async void CalibrationIccCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_syncingCalibrationUi || CalibrationIccCombo.SelectedItem is not string name) return;
         AppConfig.Set("calib_custom_icc", name);
         AppConfig.Flush();
+        if (!IsWideBackendConnected && ScreenCalibrationToggle?.IsChecked == true && _owner != null)
+        {
+            if (!await _owner.SetLocalCalibrationEnabledAsync(true))
+            {
+                StatusText.Text = WpfStrings.DisplayCalibrationFailed;
+            }
+        }
     }
 
     private void CalibrationImportIcc_Click(object sender, RoutedEventArgs e)
