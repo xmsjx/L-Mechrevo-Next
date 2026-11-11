@@ -1891,11 +1891,13 @@ internal sealed class PerfModeService
 		// ── ① 强冷复位：开着 ⇒ 先走关闭流程（恢复快照 / FanBoostActive=false / 清临时状态）──
 		bool boostWasActive = MechrevoHw.FanBoostActive;
 		bool boostConfirmed = false;
+		bool boostOk = true;
 		if (boostWasActive)
 		{
-			hw.TrySetFanBoostViaBackend(false, out boostConfirmed);
+			boostOk = hw.TrySetFanBoostViaBackend(false, out boostConfirmed);
 		}
-		bool boostClosed = !MechrevoHw.FanBoostActive;
+		// 不能只看 FanBoostActive：关闭流程即使交回失败也会把它置 false；必须用调用返回值/确认结果。
+		bool boostClosed = !boostWasActive || (boostOk && boostConfirmed);
 		// ── ② 曲线表回默认（按本机代际满转；默认 Enabled=false ⇒ 闭环停用）──
 		//   ⭐ 满转基准：⭐ 40 系 **6000** / 30 系 **4900**（⭐ `BaolongdaFanCurveSettings.FullRpm40Series/FullRpm30Series`
 		//      —— 与曲线默认值同一套现有常量；⛔ 不临时改基准、⛔ 不拿 `FanRpmMaxForPercent`（30 系那只是÷35 的显示分母）✅
@@ -1944,7 +1946,7 @@ internal sealed class PerfModeService
 		Logger.WriteError($"[reset] 风扇：已交回固件（目标=0 · 掩码清位 ok={released && maskClean} · 通道={FanWriter.ChannelName(FanWriter.PreferredChannel)}）"
 			+ $" · 曲线表已重置为默认（满转={defaults.MaxRpm} RPM · 16 点 · 保存 ok={curveSaved}）· 闭环已停用（enabled={(curveNow != null ? curveNow.Enabled : false)}，应 false）");
 		Logger.WriteError($"[reset] 强冷：已关闭并交回固件（FanBoostActive={(MechrevoHw.FanBoostActive ? "true" : "false")} · 掩码={(mask < 0 ? "读不到" : "0x" + mask.ToString("X2"))} 回读 ok={maskClean}）"
-			+ (boostWasActive ? $" · 原状态=开 ⇒ 已走关闭流程（快照恢复={boostConfirmed}）" : " · 原状态=关（无需关闭流程）"));
+			+ (boostWasActive ? $" · 原状态=开 ⇒ 已走关闭流程（写成功={boostOk} · 快照恢复={boostConfirmed}）" : " · 原状态=关（无需关闭流程）"));
 		Logger.WriteError($"[reset] 风扇 EC 回读（{readVia}）：0xC83C={(fan1 < 0 ? "读不到" : fan1.ToString())} · 0xC83D={(fan2 < 0 ? "读不到" : fan2.ToString())}"
 			+ $" · 0xB20={(mask < 0 ? "读不到" : "0x" + mask.ToString("X2"))} ⇒ 目标归零={targetsZero} · 接管位(0x02|0x08)已清={maskClean}"
 			+ $" · 诊断标记 FanCurveVerified={hw.FanCurveVerified}（仅诊断；UI/写入已直接开放）"

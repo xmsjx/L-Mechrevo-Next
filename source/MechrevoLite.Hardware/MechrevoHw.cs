@@ -5737,6 +5737,11 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			return;
 		}
 		_fanCurveDeferredCleanupDone = true;
+		if (_fanCurveArmed)
+		{
+			Logger.WriteLine("[init] 曲线已被本次启动重放武装 ⇒ 跳过启动交回清理（避免刚接管就被停掉）");
+			return;
+		}
 		long start = Environment.TickCount64;
 		EnsureFanCurveLazyInit();
 		// ⭐⭐ 2026-10-18（机主：删除闸门）：⭐ 不再看 cfg，直接做启动清理（交回固件）✅
@@ -6638,6 +6643,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	// 软件闭环是否已被当前目标档“武装”；交回固件后必须 disarm，否则 3 s tick 会重新接管。
 	private volatile bool _fanCurveArmed;
 	private int _fanCurveTickBusy;
+	private readonly object _fanCurveIoGate = new object();
 
 	private const int BaolongdaCurveReassertMs = 30000;
 
@@ -6960,7 +6966,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// <summary>曲线单步入口：tick 与保存/接管/交回共用一把互斥，避免并发改决策器/斜坡状态。</summary>
 	internal bool ApplyBaolongdaFanCurveStep()
 	{
-		if (Interlocked.Exchange(ref _fanCurveTickBusy, 1) != 0)
+		if (!Monitor.TryEnter(_fanCurveIoGate))
 		{
 			return false;
 		}
@@ -6970,7 +6976,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 		finally
 		{
-			Volatile.Write(ref _fanCurveTickBusy, 0);
+			Monitor.Exit(_fanCurveIoGate);
 		}
 	}
 
@@ -7270,6 +7276,13 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 
 	internal void RestoreBaolongdaFanFirmwareControl()
 	{
+		if (!Monitor.TryEnter(_fanCurveIoGate, 5000))
+		{
+			Logger.WriteError("[fan] 交回固件：曲线步长时间占用 I/O 锁 ⇒ 本次跳过（避免与 tick 并发写 EC）");
+			return;
+		}
+		try
+		{
 		// 切到无曲线档/交回固件时，强冷状态也必须结束；否则 UI 仍显示强冷开、tick 被永久挡住。
 		if (_fanBoostActive)
 		{
@@ -7348,6 +7361,11 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		catch (Exception ex)
 		{
 			Logger.WriteLine("宝龙达风扇曲线：⭐ 交回固件失败（已吞掉）：" + ex.Message);
+		}
+		}
+		finally
+		{
+			Monitor.Exit(_fanCurveIoGate);
 		}
 	}
 
