@@ -302,19 +302,24 @@ internal sealed class LightingService : ILightingService
         }
     }
 
-    public Task<ServiceResult> SetKeyboardEffectAsync(string effectId) => RunProbeAsync(
+    public Task<ServiceResult> SetKeyboardEffectAsync(string effectId) => RunProbeGatedAsync(
+        FeatureId.KeyboardLight, _backend.Probe?.Hw?.SupportsKeyboard == true,
         static (probe, effect) => probe.SetKeyboardEffectAsync(effect), effectId, WpfStrings.HidKeyboardWindow_Text_9);
 
-    public Task<ServiceResult> SetLightbarEffectAsync(string effectId) => RunProbeAsync(
+    public Task<ServiceResult> SetLightbarEffectAsync(string effectId) => RunProbeGatedAsync(
+        FeatureId.Lightbar, _backend.Probe?.SupportsLightbar == true,
         static (probe, effect) => probe.SetLightbarEffectAsync(effect), effectId, WpfStrings.LightChannelLightbar);
 
-    public Task<ServiceResult> SetLogoEffectAsync(string effectId) => RunProbeAsync(
+    public Task<ServiceResult> SetLogoEffectAsync(string effectId) => RunProbeGatedAsync(
+        FeatureId.LogoLight, _backend.Probe?.Hw?.SupportsLogoLight == true,
         static (probe, effect) => probe.SetLogoEffectAsync(effect), effectId, WpfStrings.LightChannelLogo);
 
-    public Task<ServiceResult> SetHingeEffectAsync(string effectId) => RunProbeAsync(
+    public Task<ServiceResult> SetHingeEffectAsync(string effectId) => RunProbeGatedAsync(
+        FeatureId.HingeLight, _backend.Probe?.SupportsHingeLight == true,
         static (probe, effect) => probe.SetHingeEffectAsync(effect), effectId, WpfStrings.LightChannelHinge);
 
-    public Task<ServiceResult> SetSyncEffectAsync(string effectId) => RunProbeAsync(
+    public Task<ServiceResult> SetSyncEffectAsync(string effectId) => RunProbeGatedAsync(
+        FeatureId.SyncLight, _backend.Probe?.SupportsSyncLight == true,
         static (probe, effect) => probe.SetSyncEffectAsync(effect), effectId, WpfStrings.LightChannelSync);
 
     public async Task<ServiceResult> SetKeyboardPowerAsync(bool on)
@@ -323,6 +328,11 @@ internal sealed class LightingService : ILightingService
         if (probe == null)
         {
             return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
+        }
+        if (!FeatureGate.ResolveSupportOrLegacy(FeatureId.KeyboardLight, _backend.Hw,
+            probe.Hw?.SupportsKeyboard == true))
+        {
+            return ServiceResult.Fail(WpfStrings.LightKeyboardPowerFailed);
         }
         try
         {
@@ -341,6 +351,29 @@ internal sealed class LightingService : ILightingService
         if (probe == null)
         {
             return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
+        }
+        bool gateOk;
+        if (string.Equals(topic, LightingTopics.Keyboard, StringComparison.Ordinal))
+        {
+            gateOk = FeatureGate.ResolveSupportOrLegacy(FeatureId.KeyboardLight, _backend.Hw,
+                probe.Hw?.SupportsKeyboard == true);
+        }
+        else
+        {
+            FeatureId? feature = FeatureForLightTopic(topic);
+            bool legacy = topic switch
+            {
+                LightingTopics.Lightbar => probe.SupportsLightbar,
+                LightingTopics.Logo => probe.Hw?.SupportsLogoLight == true,
+                LightingTopics.Hinge => probe.SupportsHingeLight,
+                LightingTopics.Sync => probe.SupportsSyncLight,
+                _ => false
+            };
+            gateOk = feature != null && FeatureGate.ResolveSupportOrLegacy(feature.Value, _backend.Hw, legacy);
+        }
+        if (!gateOk)
+        {
+            return ServiceResult.Fail(WpfStrings.LightPowerFailed);
         }
         try
         {
@@ -512,6 +545,16 @@ internal sealed class LightingService : ILightingService
             LightingTopics.Sync => FeatureId.SyncLight,
             _ => null
         };
+    }
+
+    private Task<ServiceResult> RunProbeGatedAsync(FeatureId feature, bool legacySupport,
+        Func<BackendProbe, string, Task<bool>> apply, string effectId, string displayName)
+    {
+        if (!FeatureGate.ResolveSupportOrLegacy(feature, _backend.Hw, legacySupport))
+        {
+            return Task.FromResult(ServiceResult.Fail(displayName + WpfStrings.ApplyFailedSuffix));
+        }
+        return RunProbeAsync(apply, effectId, displayName);
     }
 
     private async Task<ServiceResult> RunProbeAsync(
