@@ -286,7 +286,7 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			state = "非活动档·仅保存";
 		}
 		Logger.WriteLine($"[fan] 宝龙达本地曲线：档位={modeId} · {state}"
-			+ $" · {(cpu ? "CPU/ch1" : "GPU/ch0")} · {min}~{max} RPM · enabled=true）⇒ ok={ok}");
+			+ $" · {(cpu ? "CPU/ch1" : "GPU/ch0")} · {min}~{max} RPM · enabled=true ⇒ ok={ok}");
 		return ok;
 	}
 	// （显卡功耗上限）： 走本机 **NVML**（nvmlDeviceSetPowerManagementLimit）

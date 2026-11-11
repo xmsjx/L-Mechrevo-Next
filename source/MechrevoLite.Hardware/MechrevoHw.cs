@@ -5885,7 +5885,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			ResetBaolongdaFanCurveSmoothing();
 			if (_fanBoostSavedCurve != null && _fanBoostSavedCurve.Enabled)
 			{
-				SaveBaolongdaFanCurve(_fanBoostSavedCurveModeId, CloneCurve(_fanBoostSavedCurve, enabled: false));
+				// 只把该档存档标成暂停，不能走 Save 的“关闭即交回”分支（那会清掉强冷状态/快照）。
+				SaveBaolongdaFanCurveOnly(_fanBoostSavedCurveModeId, CloneCurve(_fanBoostSavedCurve, enabled: false));
 			}
 			int baselineRpm = 0;
 			if (TryReadFanSpeedsViaBackend(out int preFirst, out int preSecond))
@@ -6811,13 +6812,23 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		Logger.WriteLine("[fan] 曲线：保存到档位 " + id + "（path=" + path + "）⇒ ok=" + ok);
 		if (!ok)
 		{
-			// 落盘失败也必须交回固件：尤其关闭曲线时，不能把风扇停在旧的手动目标上。
-			_fanCurveArmed = false;
-			Logger.WriteError("[fan] 曲线：写入档位 " + id + " 失败 ⇒ 已停用软件闭环并交回固件");
-			RestoreBaolongdaFanFirmwareControl();
+			if (!settings.Enabled && activeMode)
+			{
+				// 关闭当前曲线但落盘失败：仍必须交回固件，不能把风扇停在旧手动目标。
+				_fanCurveArmed = false;
+				Logger.WriteError("[fan] 曲线：关闭写入档位 " + id + " 失败 ⇒ 停用闭环并尝试交回固件");
+				RestoreBaolongdaFanFirmwareControl();
+			}
+			else
+			{
+				Logger.WriteError("[fan] 曲线：写入档位 " + id + " 失败 ⇒ 保持当前曲线/武装状态不变");
+			}
 			return false;
 		}
-		_fanCurveArmed = settings.Enabled && activeMode;
+		if (activeMode)
+		{
+			_fanCurveArmed = settings.Enabled;
+		}
 		// ⭐ 曲线被保存（含只改开关）⇒ 决策器清零 ⇒ 下一个 tick **必定重写**
 		//   （⛔ 否则会拿旧回差状态压住新曲线，用户会以为"保存了没反应" ⚠️）
 		_baolongdaCurveDecider0.Reset();
@@ -6836,7 +6847,14 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 		if (!settings.Enabled)
 		{
-			RestoreBaolongdaFanFirmwareControl();
+			if (activeMode)
+			{
+				RestoreBaolongdaFanFirmwareControl();
+			}
+			else
+			{
+				Logger.WriteLine("[fan] 曲线：非活动档 " + id + " 已关闭，当前闭环不受影响");
+			}
 		}
 		else if (activeMode)
 		{
