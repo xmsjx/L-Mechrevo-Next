@@ -140,25 +140,28 @@ internal sealed class DisplayService : IDisplayService
         }
     }
 
-    public async Task<ServiceResult> SetRefreshRateAsync(int hertz)
+    public Task<ServiceResult> SetRefreshRateAsync(int hertz)
     {
-        BackendProbe? probe = _backend.Probe;
-        if (probe == null)
-        {
-            return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
-        }
         try
         {
-            bool ok = await probe.SwitchRefreshRateAsync(hertz).ConfigureAwait(false);
-            // 与原窗口 RefreshRate_Click 一致：手选刷新率 ⇒ 自动刷新率关闭并落盘。
-            AppConfig.Set("screen_auto", 0);
-            ScreenControl.SetAutoRefresh(0);
-            AppConfig.Flush();
-            return ok ? ServiceResult.Success(WpfStrings.DisplayRefreshSent) : ServiceResult.Fail(WpfStrings.DisplayRefreshFailed);
+            // 手动刷新率唯一动作走 Windows 显示路径；手选不关闭自动刷新率。
+            int rc = ScreenNative.SetRefreshRate(null, hertz);
+            bool ok = rc == 0;
+            if (ok)
+            {
+                BackendProbe? probe = _backend.Probe;
+                if (probe?.Hw?.IsGcuConnected == true)
+                {
+                    _ = probe.SwitchRefreshRateAsync(hertz);
+                }
+            }
+            return Task.FromResult(ok
+                ? ServiceResult.Success(WpfStrings.DisplayRefreshSent)
+                : ServiceResult.Fail(WpfStrings.DisplayRefreshFailedPrefix + " rc=" + rc));
         }
         catch (Exception ex)
         {
-            return ServiceResult.Fail(WpfStrings.DisplayRefreshExceptionPrefix + ex.GetType().Name);
+            return Task.FromResult(ServiceResult.Fail(WpfStrings.DisplayRefreshExceptionPrefix + ex.GetType().Name));
         }
     }
 

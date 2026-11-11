@@ -774,12 +774,17 @@ public partial class OriginalStyleWindow : Window
         // 手选档位不关闭“自动刷新率”，只提示可能被插拔电源覆盖。
         bool autoOn = AppConfig.Is("screen_auto");
         bool ok;
+        int rc = 0;
         try
         {
             // 对当前活动显示设备直接调用 Win32 ChangeDisplaySettingsEx；
             // 不再先 FindLaptopScreen 把外接屏场景导到错误目标。
-            ScreenNative.SetRefreshRate(null, hertz);
-            ok = true;
+            rc = ScreenNative.SetRefreshRate(null, hertz);
+            ok = rc == 0;
+            if (!ok)
+            {
+                Logger.WriteLine("[refresh] Win32 切换返回 rc=" + rc);
+            }
         }
         catch (Exception ex)
         {
