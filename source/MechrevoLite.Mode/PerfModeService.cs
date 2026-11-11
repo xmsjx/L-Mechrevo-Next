@@ -856,6 +856,7 @@ internal sealed class PerfModeService
 		// （机主：「显卡超频设置了但频率没变化」· 可观测性①）
 		LogGpuOverclockPlan(mode, plan, caps, readOnlyList);
 		LogFanAndRefreshPlan(mode, plan, caps, readOnlyList);
+		bool fanCurveStepGenerated = readOnlyList.Any((PerfApplyStep s) => s.Kind == PerfApplyStepKind.WriteFanCurve);
 		Logger.WriteLine($"PerfModes: activate {mode.Id} ({reason}) route={mode.Route} slot={plan?.SlotIndex.ToString() ?? "-"} write={plan?.NeedsParameterWrite.ToString() ?? "-"} steps={readOnlyList.Count}");
 		// 2026-10-21（机主）：无界目标功耗 ≥ 60W 时，先切狂暴模式再下发 SMU（已在狂暴不重复发）。
 		if (caps.WujieSmuLocalOnly && mode.IsCustom)
@@ -907,13 +908,25 @@ internal sealed class PerfModeService
 			// 会**重试自定义档**，不会再拿老键里的内置档（静音/平衡）把它顶掉。
 			Logger.WriteLine($"PerfModes: {mode.Id} 未切换成功（reason={reason} route={mode.Route}）→ ActiveModeId 仍为 {ActiveModeId}；档位意图保持用户选择，等下一次重试。失败/未确认项：{outcome.Describe()}");
 			// 激活失败时回滚“稍后接管”写入的曲线存档，避免留下 enabled=true 但没人接管的状态。
-			if (curveBefore != null && !curveBefore.IsUnreadableArchive)
+			if (!fanCurveStepGenerated)
+			{
+				Logger.WriteLine("[fan] 激活失败：本次没有生成曲线步，曲线存档保持不变（档位=" + mode.Id + "）");
+			}
+			else if (curveBefore != null && !curveBefore.IsUnreadableArchive)
 			{
 				bool rollbackWritten = curveFileExisted
 					? hw.SaveBaolongdaFanCurveOnly(mode.Id, curveBefore)
 					: BaolongdaFanCurveStore.DeleteForMode(mode.Id);
-				Logger.WriteLine("[fan] 激活失败 ⇒ 曲线存档已回滚（档位=" + mode.Id
-					+ " · 原文件存在=" + curveFileExisted + " · 写回=" + rollbackWritten + "）");
+				if (rollbackWritten)
+				{
+					Logger.WriteLine("[fan] 激活失败 ⇒ 曲线存档已回滚（档位=" + mode.Id
+						+ " · 原文件存在=" + curveFileExisted + "）");
+				}
+				else
+				{
+					Logger.WriteError("[fan] 激活失败 ⇒ 曲线存档回滚失败（档位=" + mode.Id
+						+ " · 原文件存在=" + curveFileExisted + "）⇒ 尝试交回固件");
+				}
 				// 本次激活可能已把 EC 切到手动接管；活动档失败时必须把武装/EC 一并回滚。
 				if (string.Equals(ActiveModeId, mode.Id, StringComparison.Ordinal))
 				{
@@ -934,8 +947,7 @@ internal sealed class PerfModeService
 				{
 					hw.RestoreBaolongdaFanFirmwareControl();
 				}
-			}
-		}
+			}		}
 		// （机主：Wujie 规划器误生成固件字段步/ActiveModeId 回退）：本机 SMU 应用成功的判据日志
 		if (caps.WujieSmuLocalOnly && mode.IsCustom)
 		{
@@ -1239,7 +1251,9 @@ internal sealed class PerfModeService
 				? "FanCurveOn=false"
 				: (plan != null && !plan.NeedsParameterWrite
 					? "本次不需要写参数"
-					: (!caps.SupportsFanCurve ? "后端不支持" : "没有可写的 16 点曲线"));
+					: (caps.WujieSmuLocalOnly
+						? "该机型不走固件曲线"
+						: (!caps.SupportsFanCurve ? "后端不支持" : "没有可写的 16 点曲线")));
 			string message = "[fan-plan] 曲线未生成：原因=" + reason + " · mode=" + mode.Id;
 			if (Logger.TryMarkChanged("fan-plan-" + mode.Id, message))
 			{
