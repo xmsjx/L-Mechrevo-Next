@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -41,6 +41,8 @@ public partial class SettingsWindow : Window
         FontFamily = (System.Windows.Media.FontFamily)Application.Current.Resources["AppFontFamily"];
         _owner = owner;
         Owner = owner;
+        _owner.BackendReady += OwnerBackendReady;
+        Closed += (_, _) => _owner.BackendReady -= OwnerBackendReady;
         try
         {
             LoadState();
@@ -61,6 +63,20 @@ public partial class SettingsWindow : Window
       PositionAdjacentToOwner();
       SchedulePeripheralBatteryRefresh();
   };
+    }
+
+    private void OwnerBackendReady()
+    {
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                LoadState();
+            }
+            catch
+            {
+            }
+        }));
     }
 
     /// <summary>
