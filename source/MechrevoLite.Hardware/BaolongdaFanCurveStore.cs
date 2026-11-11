@@ -498,6 +498,7 @@ internal static class BaolongdaFanCurveStore
 		{
 			return false;
 		}
+		string? temp = null;
 		try
 		{
 			string path = GetPath();
@@ -522,15 +523,26 @@ internal static class BaolongdaFanCurveStore
 			sb.Append("ch0rpm=").AppendLine(Join(settings.Channel0Rpms));
 			sb.Append("ch1temp=").AppendLine(Join(settings.Channel1Temperatures));
 			sb.Append("ch1rpm=").AppendLine(Join(settings.Channel1Rpms));
-			string temp = path + ".tmp";
-			File.WriteAllText(temp, sb.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
-			File.Move(temp, path, overwrite: true);
+			string tempPath = path + ".tmp";
+			temp = tempPath;
+			File.WriteAllText(tempPath, sb.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+			File.Move(tempPath, path, overwrite: true);
 			Logger.WriteLine($"宝龙达风扇曲线：⭐ 已保存（⭐ format={BaolongdaFanCurveSettings.CurrentFormatVersion} · ⭐ enabled={settings.Enabled}"
 				+ $" · ⭐ 双风扇联动={settings.SyncEnabled} · ⭐ ch0={Join(settings.Channel0Rpms)} · ⭐ ch1={Join(settings.Channel1Rpms)}）");
 			return true;
 		}
 		catch (Exception ex)
 		{
+			if (temp != null)
+			{
+				try
+				{
+					File.Delete(temp);
+				}
+				catch
+				{
+				}
+			}
 			Logger.WriteLine("宝龙达风扇曲线：⭐ 保存失败：" + ex.Message);
 			return false;
 		}
