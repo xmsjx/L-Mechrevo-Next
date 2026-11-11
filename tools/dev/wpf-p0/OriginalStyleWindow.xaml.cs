@@ -1041,32 +1041,6 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    internal async Task<bool> WideApplyKeyboardEffectAsync(string effect, bool on)
-    {
-        try
-        {
-            if (effect.StartsWith("hid:", StringComparison.Ordinal))
-            {
-                int mode = int.TryParse(effect.AsSpan(4), out int parsed) ? parsed : 1;
-                return await ApplyHidKeyboardAsync(mode, on);
-            }
-            if (_backendProbe == null)
-            {
-                return false;
-            }
-            _keyboardLightUiLockUntil = Environment.TickCount64 + 5000;
-            if (on)
-            {
-                await _backendProbe.SetKeyboardPowerAsync(true);
-            }
-            return await SetKeyboardEffectServiceAsync(effect);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     /// <summary>宽屏/迷你窗共享命令入口（第二步命令收口）。</summary>
     internal IDashboardCommands DashboardCommands =>
         _dashboardCommands ??= new DashboardCommands(_services, _backendProbe, () => EnsureWaterCoolerRouting());
