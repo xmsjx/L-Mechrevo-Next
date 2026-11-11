@@ -448,13 +448,13 @@ internal static class FunctionVerifier
 		else
 		{
 			int target = hzRates.First((int hz) => Math.Abs(hz - baseline) > 2);
-			MechrevoLite.Display.ScreenControl.SetScreen(target);
+			bool setOk = MechrevoLite.Display.ScreenControl.SetScreen(target);
 			await Task.Delay(Settle);
 			int after = MechrevoLite.Display.ScreenNative.GetRefreshRate(screenName);
-			MechrevoLite.Display.ScreenControl.SetScreen(baseline);
+			bool restoreOk = MechrevoLite.Display.ScreenControl.SetScreen(baseline);
 			await Task.Delay(Settle);
 			int restored = MechrevoLite.Display.ScreenNative.GetRefreshRate(screenName);
-			results.Add((Math.Abs(after - target) <= 2 && Math.Abs(restored - baseline) <= 2) ? new VerifyResult("显示", "刷新率切换", VerifyOutcome.Pass, $"基线={baseline}Hz 切{target}Hz 后回读={after}Hz 已恢复={restored}Hz") : new VerifyResult("显示", "刷新率切换", VerifyOutcome.Fail, $"基线={baseline}Hz 切{target}Hz 后回读={after}Hz 恢复后={restored}Hz"));
+			results.Add((Math.Abs(after - target) <= 2 && Math.Abs(restored - baseline) <= 2) ? new VerifyResult("显示", "刷新率切换", VerifyOutcome.Pass, $"基线={baseline}Hz 切{target}Hz(写={setOk}) 后回读={after}Hz 已恢复={restored}Hz(写={restoreOk})") : new VerifyResult("显示", "刷新率切换", VerifyOutcome.Fail, $"基线={baseline}Hz 切{target}Hz(写={setOk}) 后回读={after}Hz 恢复后={restored}Hz(写={restoreOk})"));
 		}
 		if (!hw.SupportsColorCalibration)
 		{
