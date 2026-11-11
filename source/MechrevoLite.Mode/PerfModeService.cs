@@ -930,7 +930,10 @@ internal sealed class PerfModeService
 				else
 				{
 					Logger.WriteError("[fan] 激活失败 ⇒ 曲线存档回滚失败（档位=" + mode.Id
-						+ " · 原文件存在=" + curveFileExisted + "）⇒ 尝试交回固件");
+						+ " · 原文件存在=" + curveFileExisted + "）"
+						+ (string.Equals(ActiveModeId, mode.Id, StringComparison.Ordinal)
+							? "⇒ 尝试交回固件"
+							: "⇒ 非活动档，不动当前接管"));
 				}
 				// 本次激活可能已把 EC 切到手动接管；活动档失败时必须把武装/EC 一并回滚。
 				if (string.Equals(ActiveModeId, mode.Id, StringComparison.Ordinal))

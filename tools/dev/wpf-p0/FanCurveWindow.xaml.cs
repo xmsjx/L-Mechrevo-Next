@@ -347,6 +347,13 @@ public partial class FanCurveWindow : Window
         }
         if (_hw.UsesBaolongda)
         {
+            // 强冷期间曲线存档被临时标成 disabled；此时保存会结束强冷并覆盖快照，直接拒绝。
+            if (MechrevoLite.Hardware.MechrevoHw.FanBoostActive)
+            {
+                StatusText.Text = WpfStrings.L("强冷进行中，请先关闭强冷再保存曲线",
+                    "Fan boost is active; turn it off before saving the fan curve");
+                return;
+            }
             try
             {
                 int[] cpu = CpuCurve.Duties;
