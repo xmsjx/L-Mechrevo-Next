@@ -28,11 +28,11 @@ namespace MechrevoLite.Hardware;
 /// </summary>
 internal sealed class BaolongdaFanCurveSettings
 {
-	/// <summary>⭐ 点数（⭐ 与既有曲线一致 = 16 ✅）。</summary>
-	internal const int PointCount = 16;
+	/// <summary>⭐ 点数（宝龙达新 10 点曲线）。</summary>
+	internal const int PointCount = 10;
 
 	/// <summary>⭐⭐ 本程序**能解释**的存档版本号 ✅（⭐ 见 <see cref="BaolongdaFanCurveStore" /> 的兼容策略 ✅）。</summary>
-	internal const int CurrentFormatVersion = 2;
+	internal const int CurrentFormatVersion = 3;
 
 	/// <summary>
 	/// ⭐ 旧的（⭐ 2026-10-16 之前 ✅）格式版本号 ⚠️ —— ⭐ 单位是**占空比** ✅、⭐ 且带 `modeid` ✅。
@@ -109,17 +109,17 @@ internal sealed class BaolongdaFanCurveSettings
 	/// <summary>⭐ 转速上界（RPM ✅）—— ⭐ 决策器用它夹紧 ✅。</summary>
 	internal int MaxRpm { get; init; } = DefaultMaxRpm;
 
-	/// <summary>⭐ 通道 0（⭐ 协议 `FanType 0` ✅）的温度点（⭐ 16 个 ✅）。</summary>
-	internal int[] Channel0Temperatures { get; init; } = DefaultTemperatures();
+	/// <summary>⭐ 通道 0（GPU）的温度点（⭐ 10 个 ✅）。</summary>
+	internal int[] Channel0Temperatures { get; init; } = DefaultGpuTemperatures();
 
-	/// <summary>⭐ 通道 0 的转速（⭐ 16 个 · ⭐ RPM ✅）。</summary>
-	internal int[] Channel0Rpms { get; init; } = DefaultRpms();
+	/// <summary>⭐ 通道 0 的转速（⭐ 10 个 · ⭐ RPM ✅）。</summary>
+	internal int[] Channel0Rpms { get; init; } = DefaultGpuRpms();
 
-	/// <summary>⭐ 通道 1（⭐ 协议 `FanType 1` ✅）的温度点（⭐ 16 个 ✅）。</summary>
-	internal int[] Channel1Temperatures { get; init; } = DefaultTemperatures();
+	/// <summary>⭐ 通道 1（CPU）的温度点（⭐ 10 个 ✅）。</summary>
+	internal int[] Channel1Temperatures { get; init; } = DefaultCpuTemperatures();
 
-	/// <summary>⭐ 通道 1 的转速（⭐ 16 个 · ⭐ RPM ✅）。</summary>
-	internal int[] Channel1Rpms { get; init; } = DefaultRpms();
+	/// <summary>⭐ 通道 1 的转速（⭐ 10 个 · ⭐ RPM ✅）。</summary>
+	internal int[] Channel1Rpms { get; init; } = DefaultCpuRpms();
 
 	/// <summary>
 	/// ⭐⭐ 这份存档**读不懂**吗 ⚠️（⭐ 旧占空比格式 / ⭐ 版本号不认识 / ⭐ 某个值坏掉 ✅）。
@@ -132,49 +132,43 @@ internal sealed class BaolongdaFanCurveSettings
 	/// <summary>⭐ 读档时的**如实说明**（⭐ 空 = ⭐ 没有特殊情况 ✅）—— ⭐ 供 UI/日志展示 ✅。</summary>
 	internal string StatusNote { get; init; } = string.Empty;
 
-	/// <summary>
-	/// ⭐ 默认温度点：⭐ **<see cref="DefaultTemperatureStartC" />~<see cref="DefaultTemperatureEndC" />℃ ·
-	/// 16 点均匀**（每点 +4℃）✅
-	/// <para>⭐ 与既有曲线同为 16 点 ⇒ 存储格式、界面滑点都不变 ✅。</para>
-	/// </summary>
-	internal static int[] DefaultTemperatures()
+	/// <summary>⭐ CPU 温度轴：45~95℃ · 10 点 ✅。</summary>
+	internal static int[] DefaultCpuTemperatures()
 	{
-		int[] array = new int[PointCount];
-		for (int i = 0; i < PointCount; i++)
-		{
-			array[i] = DefaultTemperatureStartC
-				+ i * (DefaultTemperatureEndC - DefaultTemperatureStartC) / (PointCount - 1);
-		}
-		return array;
+		return new[] { 45, 51, 56, 62, 67, 73, 78, 84, 89, 95 };
+	}
+
+	/// <summary>⭐ GPU 温度轴：45~87℃ · 10 点 ✅。</summary>
+	internal static int[] DefaultGpuTemperatures()
+	{
+		return new[] { 45, 50, 54, 59, 64, 68, 73, 78, 82, 87 };
+	}
+
+	/// <summary>⭐ 旧 16 点温度轴（仅用于 v2 存档迁移识别）。</summary>
+	internal const int LegacyPointCount = 16;
+
+	/// <summary>⭐ 通道 0（GPU）默认转速曲线（RPM ✅）。</summary>
+	internal static int[] DefaultGpuRpms()
+	{
+		return DefaultRpms(DefaultFullRpm, DefaultGpuTemperatures());
+	}
+
+	/// <summary>⭐ 通道 1（CPU）默认转速曲线（RPM ✅）。</summary>
+	internal static int[] DefaultCpuRpms()
+	{
+		return DefaultRpms(DefaultFullRpm, DefaultCpuTemperatures());
 	}
 
 	/// <summary>
-	/// ⭐ 默认转速曲线（RPM ✅）—— ⭐ 无硬件上下文时按 <see cref="DefaultFullRpm" />（40 系 6000）生成 ✅。
-	/// <para>⚠️ 带硬件路径请用 <see cref="DefaultRpms(int)" /> 传本机满转（30 系 4900）✅。</para>
+	/// ⭐ 默认转速曲线（RPM ✅）：⭐ **本机满转 × 百分比形状** ✅
 	/// </summary>
-	internal static int[] DefaultRpms()
-	{
-		return DefaultRpms(DefaultFullRpm);
-	}
-
-	/// <summary>
-	/// ⭐⭐ 默认转速曲线（RPM ✅）：⭐ **本机满转 × 百分比形状** ✅
-	/// <para>⭐ 形状锚点（<see cref="DefaultRpmPercent" />）：⭐ 40℃≈30% · ⭐ 70℃≈58% ·
-	/// ⭐ 90℃≈73% · ⭐ 100%=100%（⭐ 线性插值 ✅）。</para>
-	/// <para>⚠️ <paramref name="fullRpm" /> ≤ 0 ⇒ 回退到 <see cref="DefaultFullRpm" />（40 系）⚠️；
-	/// 真正下发路径必须传本机满转（40 系 <see cref="FullRpm40Series" /> / 30 系 <see cref="FullRpm30Series" />）✅。</para>
-	/// <para>⚠️ 这是**我们软件的默认起点**，⛔ **不是厂商数据** —— 宝龙达协议没有曲线表 ✅
-	/// ⇒ 用户可在「风扇曲线」窗口自行调整（⭐ 存档值永远优先）✅。</para>
-	/// </summary>
-	internal static int[] DefaultRpms(int fullRpm)
+	internal static int[] DefaultRpms(int fullRpm, int[] temperatures)
 	{
 		int full = (fullRpm > 0) ? fullRpm : DefaultFullRpm;
-		int[] temperatures = DefaultTemperatures();
-		int[] array = new int[PointCount];
-		for (int i = 0; i < PointCount; i++)
+		int[] array = new int[temperatures.Length];
+		for (int i = 0; i < temperatures.Length; i++)
 		{
 			double percent = DefaultRpmPercent(temperatures[i]);
-			// ⭐ 明确用 AwayFromZero：中点（如 30 系 4900 × 59.5% = 2915.5）向上取整，⛔ 不用银行家舍入（结果更直观）✅
 			int rpm = (int)Math.Round(full * percent / 100.0, MidpointRounding.AwayFromZero);
 			array[i] = Math.Clamp(rpm, 0, full);
 		}
@@ -210,15 +204,51 @@ internal sealed class BaolongdaFanCurveSettings
 	}
 
 	/// <summary>
-	/// ⭐⭐ 生成一份**默认曲线**（⭐ 已按代际校准 ✅）：⭐ 温度 40~100℃/16 点、RPM 按本机满转 × 形状 ✅。
+	/// 旧版本只有 16 点百分比占空比（PerfModeStore）时，迁移为新的 10 点曲线：
+	/// 保留旧点 1..10，丢弃 11..16，温度轴换成新轴。
+	/// </summary>
+	internal static BaolongdaFanCurveSettings FromLegacyDuties(int[] cpuDuties, int[] gpuDuties, int fullRpm, bool enabled)
+	{
+		int bandMax = (fullRpm > 0) ? fullRpm : DefaultFullRpm;
+		int[] cpuTemps = DefaultCpuTemperatures();
+		int[] gpuTemps = DefaultGpuTemperatures();
+		return new BaolongdaFanCurveSettings
+		{
+			Enabled = enabled,
+			FormatVersion = CurrentFormatVersion,
+			SyncEnabled = true,
+			HysteresisC = FanCurveEngine.DefaultHysteresisC,
+			IntervalMs = DefaultIntervalMs,
+			MinRpm = DefaultMinRpm,
+			MaxRpm = bandMax,
+			Channel0Temperatures = gpuTemps,
+			Channel0Rpms = DutiesToRpms(gpuDuties, bandMax, PointCount),
+			Channel1Temperatures = cpuTemps,
+			Channel1Rpms = DutiesToRpms(cpuDuties, bandMax, PointCount)
+		};
+	}
+
+	private static int[] DutiesToRpms(int[] duties, int fullRpm, int count)
+	{
+		int[] result = new int[count];
+		for (int i = 0; i < count; i++)
+		{
+			int duty = (duties != null && i < duties.Length) ? Math.Clamp(duties[i], 0, 100) : 0;
+			result[i] = Math.Clamp((int)Math.Round(fullRpm * duty / 100.0, MidpointRounding.AwayFromZero), 0, fullRpm);
+		}
+		return result;
+	}
+
+	/// <summary>
+	/// ⭐⭐ 生成一份**默认曲线**（⭐ 已按代际校准 ✅）：⭐ CPU/GPU 各自 10 点、RPM 按本机满转 × 形状 ✅。
 	/// <para>⭐ 存档不存在 / 读不懂时用本方法返回（⭐ <c>Enabled=false</c> ⇒ ⛔ 不会被静默应用 ✅）。</para>
 	/// <para>⚠️ <paramref name="fullRpm" /> ≤ 0 ⇒ 回退到 <see cref="DefaultFullRpm" />（40 系）⚠️。</para>
 	/// </summary>
 	internal static BaolongdaFanCurveSettings CreateDefault(int fullRpm)
 	{
 		int bandMax = (fullRpm > 0) ? fullRpm : DefaultFullRpm;
-		int[] temperatures = DefaultTemperatures();
-		int[] rpms = DefaultRpms(bandMax);
+		int[] gpuTemperatures = DefaultGpuTemperatures();
+		int[] cpuTemperatures = DefaultCpuTemperatures();
 		return new BaolongdaFanCurveSettings
 		{
 			Enabled = false,
@@ -228,10 +258,10 @@ internal sealed class BaolongdaFanCurveSettings
 			IntervalMs = DefaultIntervalMs,
 			MinRpm = DefaultMinRpm,
 			MaxRpm = bandMax,
-			Channel0Temperatures = (int[])temperatures.Clone(),
-			Channel0Rpms = (int[])rpms.Clone(),
-			Channel1Temperatures = (int[])temperatures.Clone(),
-			Channel1Rpms = (int[])rpms.Clone()
+			Channel0Temperatures = gpuTemperatures,
+			Channel0Rpms = DefaultRpms(bandMax, gpuTemperatures),
+			Channel1Temperatures = cpuTemperatures,
+			Channel1Rpms = DefaultRpms(bandMax, cpuTemperatures)
 		};
 	}
 
@@ -446,12 +476,13 @@ internal static class BaolongdaFanCurveStore
 				return Unreadable(BaolongdaFanCurveSettings.LegacyDutyFormatVersion,
 					"文件里没有 format 版本号 ⇒ 判定为旧的占空比格式（占空比无法换算成 RPM）", bandMax);
 			}
-			if (version != BaolongdaFanCurveSettings.CurrentFormatVersion)
+			if (version != BaolongdaFanCurveSettings.CurrentFormatVersion && version != 2)
 			{
-				return Unreadable(version, $"format={version}（本程序只认 {BaolongdaFanCurveSettings.CurrentFormatVersion}）", bandMax);
+				return Unreadable(version, $"format={version}（本程序只认 2/3）", bandMax);
 			}
 
-			// ⭐⭐ v2：⭐ **严格**解析 ✅ —— ⭐ 任何一个出现的值读不懂 ⇒ ⭐ 整份算读不懂 ⚠️（⛔ 不猜 ✅）
+			// v3 = 10 点；v2 = 旧 16 点，读取时迁移。
+			int expectedPoints = version == 2 ? BaolongdaFanCurveSettings.LegacyPointCount : BaolongdaFanCurveSettings.PointCount;
 			List<string> problems = new List<string>();
 			if (!TryParseInt(map, "hysteresis", FanCurveEngine.DefaultHysteresisC, out int hysteresis, out string e1)) { problems.Add(e1); }
 			if (!TryParseInt(map, "intervalms", BaolongdaFanCurveSettings.DefaultIntervalMs, out int interval, out string e2)) { problems.Add(e2); }
@@ -459,13 +490,21 @@ internal static class BaolongdaFanCurveStore
 			if (!TryParseInt(map, "maxrpm", bandMax, out int maxRpm, out string e4)) { problems.Add(e4); }
 			// ⭐ 双风扇联动：⭐ 旧存档**没有这个键** ⇒ ⭐ 默认 **1（开）**，⛔ 不当作坏档 ✅（向后兼容）
 			if (!TryParseInt(map, "syncenabled", 1, out int syncEnabled, out string e0)) { problems.Add(e0); }
-			if (!TryParseCurve(map, "ch0temp", out int[] ch0Temp, out string e5)) { problems.Add(e5); }
-			if (!TryParseCurve(map, "ch0rpm", out int[] ch0Rpm, out string e6)) { problems.Add(e6); }
-			if (!TryParseCurve(map, "ch1temp", out int[] ch1Temp, out string e7)) { problems.Add(e7); }
-			if (!TryParseCurve(map, "ch1rpm", out int[] ch1Rpm, out string e8)) { problems.Add(e8); }
+			if (!TryParseCurve(map, "ch0temp", expectedPoints, out int[] ch0Temp, out string e5)) { problems.Add(e5); }
+			if (!TryParseCurve(map, "ch0rpm", expectedPoints, out int[] ch0Rpm, out string e6)) { problems.Add(e6); }
+			if (!TryParseCurve(map, "ch1temp", expectedPoints, out int[] ch1Temp, out string e7)) { problems.Add(e7); }
+			if (!TryParseCurve(map, "ch1rpm", expectedPoints, out int[] ch1Rpm, out string e8)) { problems.Add(e8); }
 			if (problems.Count > 0)
 			{
 				return Unreadable(version, string.Join("；", problems), bandMax);
+			}
+			if (version == 2)
+			{
+				// 旧 16 点 → 新 10 点：保留旧点 1..10 的占空比，丢弃 11..16，温度轴换成新轴。
+				ch0Temp = BaolongdaFanCurveSettings.DefaultGpuTemperatures();
+				ch1Temp = BaolongdaFanCurveSettings.DefaultCpuTemperatures();
+				ch0Rpm = TakeFirst(ch0Rpm, BaolongdaFanCurveSettings.PointCount);
+				ch1Rpm = TakeFirst(ch1Rpm, BaolongdaFanCurveSettings.PointCount);
 			}
 
 			return new BaolongdaFanCurveSettings
@@ -686,11 +725,11 @@ internal static class BaolongdaFanCurveStore
 	}
 
 	/// <summary>
-	/// ⭐ 解析一条 **16 点曲线** ✅：⭐ 缺省 / ⭐ 点数不对 / ⭐ 有非整数 ⇒ ⭐ 返回 false ＋ ⭐ 具体原因 ✅。
+	/// ⭐ 解析一条曲线 ✅：⭐ 缺省 / ⭐ 点数不对 / ⭐ 有非整数 ⇒ ⭐ 返回 false ＋ ⭐ 具体原因 ✅。
 	/// <para>⚠️ <b>必须整条一起校验</b> ⚠️：⭐ 温度数组与转速数组描述的是**同一条曲线** ✅
 	/// ⇒ ⭐ ⛔ 绝不允许"⭐ 一个用默认、⭐ 一个用用户的"⭐（⭐ 那会拼出怪曲线 ✅）。</para>
 	/// </summary>
-	private static bool TryParseCurve(Dictionary<string, string> map, string key, out int[] values, out string error)
+	private static bool TryParseCurve(Dictionary<string, string> map, string key, int expectedPoints, out int[] values, out string error)
 	{
 		values = null;
 		error = null;
@@ -700,9 +739,9 @@ internal static class BaolongdaFanCurveStore
 			return false;
 		}
 		string[] parts = raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-		if (parts.Length != BaolongdaFanCurveSettings.PointCount)
+		if (parts.Length != expectedPoints)
 		{
-			error = $"{key} 点数={parts.Length}（应为 {BaolongdaFanCurveSettings.PointCount}）";
+			error = $"{key} 点数={parts.Length}（应为 {expectedPoints}）";
 			return false;
 		}
 		int[] array = new int[parts.Length];
@@ -716,6 +755,17 @@ internal static class BaolongdaFanCurveStore
 		}
 		values = array;
 		return true;
+	}
+
+	private static int[] TakeFirst(int[] values, int count)
+	{
+		if (values == null || values.Length <= count)
+		{
+			return values ?? Array.Empty<int>();
+		}
+		int[] result = new int[count];
+		Array.Copy(values, result, count);
+		return result;
 	}
 
 	private static string Join(int[] values)

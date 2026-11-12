@@ -14,6 +14,7 @@
 // 许可/署名：与本树同一实现，见 THIRD-PARTY-NOTICES.md 与 LICENSES\。
 
 using System;
+using System.Linq;
 using MechrevoLite.Hardware;
 
 internal static class Program
@@ -60,6 +61,10 @@ internal static class Program
 		Console.WriteLine();
 		Console.WriteLine("-- 8b. 按档位曲线存档（custom1..5 各自一份 + 旧全局兜底）--");
 		TestPerModeStore();
+
+		Console.WriteLine();
+		Console.WriteLine("-- 8c. 旧 16 点占空比迁移到 10 点 --");
+		TestLegacyDutyMigration();
 
 		Console.WriteLine();
 		Console.WriteLine(_fail == 0
@@ -334,6 +339,23 @@ internal static class Program
 		}
 	}
 
+	private static void TestLegacyDutyMigration()
+	{
+		int[] cpu = CsvToInts("0,9,27,31,44,44,52,59,81,81,90,90,90,90,90,90");
+		int[] gpu = CsvToInts("0,30,35,40,50,55,60,65,75,80,90,90,90,90,90,90");
+		BaolongdaFanCurveSettings migrated = BaolongdaFanCurveSettings.FromLegacyDuties(cpu, gpu, 6000, enabled: true);
+		Eq("迁移后 = 10 点", 10, migrated.Channel1Rpms.Length);
+		Eq("迁移后 CPU 温度首点 = 45", 45, migrated.Channel1Temperatures[0]);
+		Eq("迁移后 GPU 温度首点 = 45", 45, migrated.Channel0Temperatures[0]);
+		Eq("迁移后 CPU 保留旧第 2 点占空比 ⇒ 9% = 540", 540, migrated.Channel1Rpms[1]);
+		Eq("迁移后 GPU 保留旧第 10 点占空比 ⇒ 80% = 4800", 4800, migrated.Channel0Rpms[9]);
+	}
+
+	private static int[] CsvToInts(string csv)
+	{
+		return csv.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(int.Parse).ToArray();
+	}
+
 	private static void TestStore()
 	{
 		_tempDir = System.IO.Path.Combine(
@@ -348,15 +370,17 @@ internal static class Program
 		BaolongdaFanCurveSettings fresh = BaolongdaFanCurveStore.Load();
 		True("无存档 ⇒ Enabled=false", !fresh.Enabled);
 		True("无存档 ⇒ 不标记为旧存档", !fresh.IsUnreadableArchive);
-		Eq("无存档 ⇒ FormatVersion=2", BaolongdaFanCurveSettings.CurrentFormatVersion, fresh.FormatVersion);
-		Eq("无存档 ⇒ 点数 16", BaolongdaFanCurveSettings.PointCount, fresh.Channel0Rpms.Length);
+		Eq("无存档 ⇒ FormatVersion=3", BaolongdaFanCurveSettings.CurrentFormatVersion, fresh.FormatVersion);
+		Eq("无存档 ⇒ 点数 10", BaolongdaFanCurveSettings.PointCount, fresh.Channel0Rpms.Length);
 		Eq("默认 band 下界 = 1200", BaolongdaFanCurveSettings.DefaultMinRpm, fresh.MinRpm);
-		// 2026-10-19（默认曲线校准）：band 上界 = 满转（无硬件上下文按 40 系 6000）
+		// 2026-11-12（机主指定 10 点轴）：band 上界 = 满转（无硬件上下文按 40 系 6000）
 		Eq("默认 band 上界 = 满转 6000（40 系）", BaolongdaFanCurveSettings.FullRpm40Series, fresh.MaxRpm);
-		Eq("默认温度首点 = 40℃", 40, fresh.Channel0Temperatures[0]);
-		Eq("默认温度末点 = 100℃", 100, fresh.Channel0Temperatures[15]);
-		Eq("默认 RPM 首点 = 1800（40 系 30%）", 1800, fresh.Channel0Rpms[0]);
-		Eq("默认 RPM 末点 = 6000（40 系 100%）", 6000, fresh.Channel0Rpms[15]);
+		Eq("GPU 默认温度首点 = 45℃", 45, fresh.Channel0Temperatures[0]);
+		Eq("GPU 默认温度末点 = 87℃", 87, fresh.Channel0Temperatures[9]);
+		Eq("CPU 默认温度首点 = 45℃", 45, fresh.Channel1Temperatures[0]);
+		Eq("CPU 默认温度末点 = 95℃", 95, fresh.Channel1Temperatures[9]);
+		Eq("默认 RPM 首点 = 45℃ 对应形状", BaolongdaFanCurveSettings.DefaultGpuRpms()[0], fresh.Channel0Rpms[0]);
+		Eq("默认 RPM 末点 = 87℃ 对应形状", BaolongdaFanCurveSettings.DefaultGpuRpms()[9], fresh.Channel0Rpms[9]);
 		True("默认双风扇联动 = 开", fresh.SyncEnabled);
 		Eq("默认回差 = 3", FanCurveEngine.DefaultHysteresisC, fresh.HysteresisC);
 		Eq("无存档 ⇒ 不该打错误日志", 0, Logger.Errors.Count);
@@ -366,14 +390,12 @@ internal static class Program
 			4900, BaolongdaFanCurveSettings.FullRpm30Series);
 		BaolongdaFanCurveSettings fresh30 = BaolongdaFanCurveStore.Load(BaolongdaFanCurveSettings.FullRpm30Series);
 		Eq("30 系 ⇒ band 上界 4900", BaolongdaFanCurveSettings.FullRpm30Series, fresh30.MaxRpm);
-		Eq("30 系 ⇒ RPM 首点 = 1470（30% × 4900）", 1470, fresh30.Channel0Rpms[0]);
-		Eq("30 系 ⇒ RPM 第 5 点 = 2202（44.933% × 4900）", 2202, fresh30.Channel0Rpms[4]);
-		Eq("30 系 ⇒ RPM 末点 = 4900（100%）", 4900, fresh30.Channel0Rpms[15]);
-		// ⭐ 全序列回归（⭐ 16 点全部按 4900 × 形状重算，⭐ 防止将来有人只改常量忘了重算）
-		string expectedDefault30 = "1470,1653,1836,2019,2202,2385,2568,2751,2916,3063,3210,3357,3504,3842,4371,4900";
-		string actualDefault30 = string.Join(",", fresh30.Channel0Rpms);
-		True("30 系默认 16 点 RPM 序列 = 按 4900×形状重算",
-			actualDefault30 == expectedDefault30, $"实际 {actualDefault30}");
+		int[] expected30 = BaolongdaFanCurveSettings.DefaultRpms(4900, BaolongdaFanCurveSettings.DefaultGpuTemperatures());
+		Eq("30 系 ⇒ RPM 首点按 4900×形状", expected30[0], fresh30.Channel0Rpms[0]);
+		Eq("30 系 ⇒ RPM 末点按 4900×形状", expected30[9], fresh30.Channel0Rpms[9]);
+		True("30 系默认 10 点 RPM 序列 = 按 4900×形状重算",
+			string.Join(",", fresh30.Channel0Rpms) == string.Join(",", expected30),
+			string.Join(",", fresh30.Channel0Rpms));
 
 		// ---- 用例 2：**旧格式**（⭐ 占空比 ＋ ⭐ modeid ＋ ⭐ 没有 format ✅）⇒ ⭐ 不启用 ＋ ⭐ 如实告知 ----
 		//    ⚠️ 注意 `enabled=1`：⭐ 旧存档是**开着**的 ⚠️ ⇒ ⭐ 更要证明它**不会**被启用 ✅
@@ -385,7 +407,7 @@ internal static class Program
 		True("旧格式（即使 enabled=1）⇒ ⭐ 仍不启用", !legacy.Enabled);
 		True("旧格式 ⇒ 标记 IsUnreadableArchive", legacy.IsUnreadableArchive);
 		True("旧格式 ⇒ StatusNote 非空（可给 UI 显示）", legacy.StatusNote.Length > 0);
-		Eq("旧格式 ⇒ 不该静默迁移（曲线退回默认值）", 1800, legacy.Channel0Rpms[0]);
+		Eq("旧格式 ⇒ 不该静默迁移（曲线退回默认值）", BaolongdaFanCurveSettings.DefaultGpuRpms()[0], legacy.Channel0Rpms[0]);
 		Logged("旧格式 ⇒ 打了【默认级别可见】的日志", "无法解释");
 
 		// ⭐ 再读一次 ⇒ ⭐ 去重生效（⭐ 不刷屏 ✅）
@@ -422,7 +444,7 @@ internal static class Program
 			Channel1Rpms = Ramp16(1800)
 		};
 		True("Save 成功", BaolongdaFanCurveStore.Save(saved));
-		True("存档里写了 format=2", ReadConfig().Contains("format=2"));
+		True("存档里写了 format=3", ReadConfig().Contains("format=3"));
 		True("存档里写了 syncenabled=0", ReadConfig().Contains("syncenabled=0"));
 		Logger.Reset();
 		BaolongdaFanCurveSettings back = BaolongdaFanCurveStore.Load();
@@ -437,8 +459,8 @@ internal static class Program
 		Eq("往返 ⇒ ch0 转速首点", 1500, back.Channel0Rpms[0]);
 		Eq("往返 ⇒ ch1 温度首点", 35, back.Channel1Temperatures[0]);
 		Eq("往返 ⇒ ch1 转速首点", 1800, back.Channel1Rpms[0]);
-		Eq("往返 ⇒ ch0 温度末点", 30 + 15, back.Channel0Temperatures[15]);
-		Eq("往返 ⇒ ch1 转速末点", 1800 + 15, back.Channel1Rpms[15]);
+		Eq("往返 ⇒ ch0 温度末点", 30 + 9, back.Channel0Temperatures[9]);
+		Eq("往返 ⇒ ch1 转速末点", 1800 + 9, back.Channel1Rpms[9]);
 		Eq("往返 ⇒ 不该有错误日志", 0, Logger.Errors.Count);
 
 		// ---- 用例 4b：WithEnabled —— 界面开关"只改 Enabled、⛔ 不动曲线" ✅（2026-10-17 接手修复）----
@@ -468,6 +490,11 @@ internal static class Program
 		True("旧 v2 缺 syncenabled ⇒ 按 true（向后兼容）", oldV2.SyncEnabled);
 		True("旧 v2 缺 syncenabled ⇒ 不当作坏档", !oldV2.IsUnreadableArchive);
 		Eq("旧 v2 缺 syncenabled ⇒ 不该有错误日志", 0, Logger.Errors.Count);
+		Eq("旧 v2 迁移后 = 10 点", BaolongdaFanCurveSettings.PointCount, oldV2.Channel0Rpms.Length);
+		Eq("旧 v2 迁移后 GPU 温度轴 = 新 45℃ 首点", 45, oldV2.Channel0Temperatures[0]);
+		Eq("旧 v2 迁移后 CPU 温度轴 = 新 45℃ 首点", 45, oldV2.Channel1Temperatures[0]);
+		Eq("旧 v2 保留旧点 1-10 的 RPM 首点", 11, oldV2.Channel0Rpms[0]);
+		Eq("旧 v2 保留旧点 1-10 的 RPM 末点", 20, oldV2.Channel0Rpms[9]);
 
 		// ---- 用例 5：v2 但某条曲线点数不对 ⇒ ⭐ **整份读不懂** ✅（⭐ 自检发现的设计修正 ⚠️）----
 		//    ⚠️ 为什么不是"⭐ 该条退回默认、⭐ 别的照用"⚠️：
@@ -481,7 +508,7 @@ internal static class Program
 		True("点数错 ⇒ 整份不启用（⛔ 不半个用默认半个用用户的）", !partial.Enabled);
 		True("点数错 ⇒ 标记 IsUnreadableArchive", partial.IsUnreadableArchive);
 		Logged("点数错 ⇒ 可见日志点名 ch1temp 点数", "ch1temp 点数=3");
-		Eq("点数错 ⇒ 好的那条也不被采用（曲线回默认值）", 1800, partial.Channel0Rpms[0]);
+		Eq("点数错 ⇒ 好的那条也不被采用（曲线回默认值）", BaolongdaFanCurveSettings.DefaultGpuRpms()[0], partial.Channel0Rpms[0]);
 
 		// ⭐ 配对问题：⭐ 温度好、⭐ 转速坏 ⇒ ⭐ 同样整份读不懂（⭐ ⛔ 绝不拼"⭐ 默认温度 × ⭐ 用户转速"✅）
 		WriteConfig("format=2\nenabled=1\n"
@@ -541,7 +568,7 @@ internal static class Program
 		}
 	}
 
-	/// <summary>⭐ 16 个递增数（⭐ 便于验证"⭐ 位置对不对"✅）。</summary>
+	/// <summary>⭐ 10 个递增数（当前宝龙达曲线）。</summary>
 	private static int[] Ramp16(int start)
 	{
 		int[] a = new int[BaolongdaFanCurveSettings.PointCount];
@@ -552,10 +579,15 @@ internal static class Program
 		return a;
 	}
 
-	/// <summary>⭐ 16 个递增数的 CSV ✅。</summary>
+	/// <summary>⭐ 旧 16 点递增 CSV（用于验证旧档迁移）。</summary>
 	private static string Csv16(int start)
 	{
-		return string.Join(",", Ramp16(start));
+		int[] a = new int[BaolongdaFanCurveSettings.LegacyPointCount];
+		for (int i = 0; i < a.Length; i++)
+		{
+			a[i] = start + i;
+		}
+		return string.Join(",", a);
 	}
 
 	private static void Logged(string name, string needle)

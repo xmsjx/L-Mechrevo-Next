@@ -241,7 +241,15 @@ public partial class FanCurveWindow : Window
         if (_hw.UsesBaolongda)
         {
             BaolongdaFanCurveSettings curve = _hw.LoadBaolongdaFanCurve(_modeId);
-            bool pushCurveOn = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId).FanCurveOn ?? true;
+            // 旧版本只有 PerfModeStore 的 16 点占空比：没有档位曲线文件时迁移前 10 点到新 10 点轴。
+            MechrevoLite.Mode.PerfModeSettings savedCurve = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId);
+            if (!BaolongdaFanCurveStore.ExistsForMode(_modeId)
+                && savedCurve.CpuFanDuty is { Length: >= BaolongdaFanCurveSettings.PointCount } legacyCpu
+                && savedCurve.GpuFanDuty is { Length: >= BaolongdaFanCurveSettings.PointCount } legacyGpu)
+            {
+                curve = BaolongdaFanCurveSettings.FromLegacyDuties(legacyCpu, legacyGpu, curve.MaxRpm, curve.Enabled);
+            }
+            bool pushCurveOn = savedCurve.FanCurveOn ?? true;
             BaolongdaLoopCheck.IsChecked = curve.Enabled && pushCurveOn;
             BaolongdaSyncCheck.IsChecked = curve.SyncEnabled;
             CpuCurve.Load(TempsToBytes(curve.Channel1Temperatures),
@@ -364,8 +372,8 @@ public partial class FanCurveWindow : Window
             }
             try
             {
-                int[] cpu = CpuCurve.Duties;
-                int[] gpu = GpuCurve.Duties;
+                int[] cpu = CpuCurve.Duties.Take(BaolongdaFanCurveSettings.PointCount).ToArray();
+                int[] gpu = GpuCurve.Duties.Take(BaolongdaFanCurveSettings.PointCount).ToArray();
                 int maxRpm = Math.Max(1, _hw.FanRpmMaxForPercent);
                 bool pushCurve = PushFanCurveCheck?.IsChecked != false;
                 bool loopOn = BaolongdaLoopCheck.IsChecked == true;
@@ -380,9 +388,9 @@ public partial class FanCurveWindow : Window
                     IntervalMs = BaolongdaFanCurveSettings.DefaultIntervalMs,
                     MinRpm = BaolongdaFanCurveSettings.DefaultMinRpm,
                     MaxRpm = maxRpm,
-                    Channel1Temperatures = TempsToInts(CpuCurve.Temperatures),
+                    Channel1Temperatures = TempsToInts(CpuCurve.Temperatures).Take(BaolongdaFanCurveSettings.PointCount).ToArray(),
                     Channel1Rpms = PercentToRpms(cpu, maxRpm),
-                    Channel0Temperatures = TempsToInts(GpuCurve.Temperatures),
+                    Channel0Temperatures = TempsToInts(GpuCurve.Temperatures).Take(BaolongdaFanCurveSettings.PointCount).ToArray(),
                     Channel0Rpms = PercentToRpms(gpu, maxRpm)
                 };
                 bool ok = _hw.SaveBaolongdaFanCurve(_modeId, curve);
