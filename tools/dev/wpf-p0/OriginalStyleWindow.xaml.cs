@@ -190,9 +190,12 @@ public partial class OriginalStyleWindow : Window
     private enum BackendRoute { None, Gcu, Ec }
     private BackendRoute _backendRoute = BackendRoute.None;
 
+    /// <summary>EC 模式已开启（不代表路由已经落到 EC）。</summary>
+    private bool IsEcModeActive => GcuEcExperimental.Enabled;
+
     /// <summary>当前是否处于 EC-only 本地路由（EC 模式已接管且路由落在 EC）。</summary>
     private bool IsEcLocalRoute =>
-        GcuEcExperimental.Enabled && _backendRoute == BackendRoute.Ec;
+        IsEcModeActive && _backendRoute == BackendRoute.Ec;
     private int _gcuConnectFailures;
     private const string QuickTilesConfigKey = "perf_quick_tiles";
     private const string QuickTilesEmptySentinel = "-";
@@ -600,8 +603,7 @@ public partial class OriginalStyleWindow : Window
     private static bool ShouldShowTurboMode(MechrevoDeviceCapabilities? caps, MechrevoHw? hw)
     {
         if (UiQaShowAll.Enabled) return true;
-        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
-            && MechrevoLite.Hardware.GcuEcMode.IsEcMode
+        if (GcuEcExperimental.Enabled
             && hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
         {
             return true;
@@ -624,8 +626,7 @@ public partial class OriginalStyleWindow : Window
     private static bool ShouldShowSilentTurbo(MechrevoDeviceCapabilities? caps, MechrevoHw? hw)
     {
         if (UiQaShowAll.Enabled) return true;
-        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
-            && MechrevoLite.Hardware.GcuEcMode.IsEcMode
+        if (GcuEcExperimental.Enabled
             && hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
         {
             return true;
@@ -1221,7 +1222,7 @@ public partial class OriginalStyleWindow : Window
                     || _backendProbe?.Hw?.IsUmiMachine == true
                     || _backendProbe?.Hw?.DisplayEffectProfiles.Count > 0
                     || _backendProbe?.Capabilities?.ColorCalibration == true
-                    || (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+                    || (IsEcModeActive
                         && _backendProbe?.Hw != null
                         && !_backendProbe.Hw.UsesBaolongda);
                 bool value = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
@@ -3759,8 +3760,7 @@ public partial class OriginalStyleWindow : Window
         _modeSwitchInFlight = true;
         bool turboSubModeSupported = _backendProbe?.Capabilities?.SilentTurboAvailability
             == MechrevoLite.Hardware.FeatureAvailability.Supported
-            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled
-                && MechrevoLite.Hardware.GcuEcMode.IsEcMode
+            || (IsEcModeActive
                 && _backendProbe?.Hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50);
         string osdMode = mode switch
         {
@@ -3936,7 +3936,7 @@ public partial class OriginalStyleWindow : Window
                     SyncGpuDbForMode(mode, "WPF 切档");
                 }
                 // EC 模式已开启即允许本机 GPU OC，不要求路由已落到 EC。
-                if (ok && GcuEcExperimental.Enabled
+                if (ok && IsEcModeActive
                     && MechrevoLite.AppConfig.Is("gpu_oc"))
                 {
                     if (mode == 1)
@@ -4916,7 +4916,7 @@ public partial class OriginalStyleWindow : Window
             MechrevoHw? hw = probe?.Hw;
             if (probe == null || hw == null
                 // 没有 GCU 且 EC 模式未开启时没有可恢复的后端。
-                || (!hw.IsGcuConnected && !GcuEcExperimental.Enabled)
+                || (!hw.IsGcuConnected && !IsEcModeActive)
                 || hw.UsesBaolongda
                 || hw.IsIntelNucMachine
                 || hw.IsUmiMachine)
@@ -5439,7 +5439,7 @@ public partial class OriginalStyleWindow : Window
         if (hardware != null
             && (service == null
                 // EC 模式可在 GCU 未连接时走本地静音/GPU 切换。
-                || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && !hardware.IsGcuConnected)
+                || (IsEcModeActive && !hardware.IsGcuConnected)
                 || hardware.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
             && MechrevoLite.Hardware.AcpiGpuHotSwitch.CanUseLocalSilence)
         {
@@ -7496,7 +7496,7 @@ public partial class OriginalStyleWindow : Window
         }
         _connectAttempting = true;
         // 用户明确选择 EC 时才跳过 GCU 连接，直接启动 EC-only。
-        if (GcuEcExperimental.Enabled
+        if (IsEcModeActive
             && GcuEcExperimental.DirectMode
             && TryStartExperimentalOfflineBackend("直接 EC 实验模式"))
         {
@@ -7884,7 +7884,7 @@ public partial class OriginalStyleWindow : Window
             bool smuCustom = hw?.SmuCustomApu == true;
             // EC 实验模式/无 GCU 的同方独显机：本地 EC 也能跑自定义档，
             // 不能因为 ItemSupport 能力位缺失就把自定义入口藏掉。
-            bool ecLocalCustom = MechrevoLite.Hardware.GcuEcExperimental.Enabled
+            bool ecLocalCustom = IsEcModeActive
                 && hw?.IsGcuConnected != true
                 && hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
             bool allowPerfOnBattery = AppConfig.Is("perf_allow_on_battery")
@@ -10583,7 +10583,7 @@ public partial class OriginalStyleWindow : Window
             }
             if (!supported) return;
 
-            if (_backendProbe.Service == null && MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            if (_backendProbe.Service == null && IsEcModeActive)
             {
                 string detail;
                 bool ok = topic switch
