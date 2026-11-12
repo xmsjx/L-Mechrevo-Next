@@ -1077,7 +1077,7 @@ public class MechrevoHw : IDisposable
 	{
 		get
 		{
-			return Capabilities.Lightbar || Capabilities.RgbLightbar || LightbarStatusSeen || IsIntelNucMachine;
+			return Capabilities.Lightbar || Capabilities.RgbLightbar || LightbarStatusSeen || IsNucUmiFamily;
 		}
 	}
 
@@ -2074,6 +2074,9 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		// 否则第三档会被永久隐藏。
 		|| BoardWhitelist.ReadBoardProduct().StartsWith("LAPKC", StringComparison.OrdinalIgnoreCase);
 
+	/// <summary>NUC/UMI 本地控制族。</summary>
+	internal bool IsNucUmiFamily => IsIntelNucMachine || IsUmiMachine;
+
 	/// <summary>把 ACPI H2RAM 读到的 NUC 风扇值回写到门面属性，供所有 UI/曲线读取。</summary>
 	internal void ApplyIntelNucFanSpeeds(int mainFanRpm, int secondFanRpm)
 	{
@@ -2814,9 +2817,9 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			"wifi" => WifiSeen || (UsesBaolongda && RadioSwitch.Available(RadioSwitchKind.Wifi)), 
 			"bt" => BluetoothSeen || (UsesBaolongda && RadioSwitch.Available(RadioSwitchKind.Bluetooth)), 
 			// 现在只读**缓存值**（HasCameraCached，未探测 = false， 不枚举）；
-			"webcam" => WebcamSeen || (UsesBaolongda && (CameraPnpControl.HasCameraCached || CameraPrivacy.Available)) || IsIntelNucMachine || IsUmiMachine,
-			"winkey" => WinKeySeen || IsIntelNucMachine || IsUmiMachine, 
-			"fnkey" => FnKeySeen || UsesBaolongda || IsIntelNucMachine || IsUmiMachine, 
+			"webcam" => WebcamSeen || (UsesBaolongda && (CameraPnpControl.HasCameraCached || CameraPrivacy.Available)) || IsNucUmiFamily,
+			"winkey" => WinKeySeen || IsNucUmiFamily, 
+			"fnkey" => FnKeySeen || UsesBaolongda || IsNucUmiFamily, 
 			// ⭐⭐ 2026-10-17（大小写锁定 / 数字小键盘锁定）：这两个**不是 WMI 开关** ——
 			//   宝龙达的 WMI 功能号表（8 起）里只有 `FnLock=11` / `TPLock=12`，没有它们；
 			//   它们本来就是键盘自身的锁定键 ⇒ 由 Windows 的键盘状态机负责，靠"模拟一次按键"切换
@@ -2838,11 +2841,11 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			"usb" => !UsesBaolongda, 
 			"deepsleep" => DeepSleepSeen, 
 			"copilot" => CopilotSeen || XingyaoQuickSwitch.IsApplicable(this), 
-			"acrecovery" => Capabilities.AcRecovery || AcRecoverySeen || IsIntelNucMachine || IsUmiMachine, 
+			"acrecovery" => Capabilities.AcRecovery || AcRecoverySeen || IsNucUmiFamily, 
 			// ⇒ 界面显示"下发被拒、已回滚"（机主日志 [QS-apply] 键=highperf 下发结果=False）
 			"highperf" => true, 
 			// （风扇强冷 · 无 GCU）：宝龙达用本机通道（EC 目标档/掩码 + 13 回读）
-		"fanboost" => SupportsFanBoostQuickSwitch || IsIntelNucMachine || IsUmiMachine,
+		"fanboost" => SupportsFanBoostQuickSwitch,
 		// （APU 防缩缸）： 纯 Windows 电源策略 ⇒ 所有机型可用
 		"apuboost" => true, 
 			"lightbar" => SupportsLightbar, 
