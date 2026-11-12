@@ -995,7 +995,7 @@ internal sealed class BackendProbe : IDisposable
                 Logger.WriteError("[umi-lightbar] 电源回读不匹配 requested=" + on + " read=" + state?.ToString() + " local=" + local + " remote=" + remote);
                 return local || remote;
             }
-            if ((_service == null || MechrevoLite.Hardware.GcuEcMode.IsEcMode) && MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
             {
                 string localDetail;
                 bool localOk = topic switch
@@ -1055,7 +1055,7 @@ internal sealed class BackendProbe : IDisposable
         {
             try
             {
-                if (MechrevoLite.Hardware.GcuEcExperimental.Enabled && IteLightingLocal.HasLightbar)
+                if (MechrevoLite.Hardware.GcuEcExperimental.LocalLightbar)
                 {
                     return true;
                 }
@@ -1069,7 +1069,7 @@ internal sealed class BackendProbe : IDisposable
     }
 
     internal bool SupportsHingeLight => (_hw?.SupportsHingeLight == true)
-        || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && IteLightingLocal.HasHinge);
+        || (MechrevoLite.Hardware.GcuEcExperimental.LocalHingeLight);
 
     internal bool SupportsSyncLight => _hw?.SupportsSyncLight == true;
 
@@ -1109,7 +1109,7 @@ internal sealed class BackendProbe : IDisposable
         try
         {
             (int light, int speed, Color? color) = ReadLightArgs("HidLightbar_Hinge/Ctrl", effect, keyboard: false);
-            if ((_service == null || MechrevoLite.Hardware.GcuEcMode.IsEcMode) && MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
             {
                 return IteLightingLocal.TryApplyHinge(effect, true, light, speed,
                     color?.ToArgb() ?? unchecked((int)0xFFFFFFFF), out _);
@@ -1162,7 +1162,7 @@ internal sealed class BackendProbe : IDisposable
                 }
                 return UmiLightbar.SetEffect(effect, color, light);
             }
-            if ((_service == null || MechrevoLite.Hardware.GcuEcMode.IsEcMode) && MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
             {
                 return IteLightingLocal.TryApplyLightbar(effect, true, light, speed,
                     color?.ToArgb() ?? unchecked((int)0xFFFFFFFF), out _);
@@ -1180,7 +1180,7 @@ internal sealed class BackendProbe : IDisposable
         try
         {
             (int light, int speed, Color? color) = ReadLightArgs("HidLightbar_Logo/Ctrl", effect, keyboard: false);
-            if ((_service == null || MechrevoLite.Hardware.GcuEcMode.IsEcMode) && MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
             {
                 return IteLightingLocal.TryApplyLogo(effect, true, light, speed,
                     color?.ToArgb() ?? unchecked((int)0xFFFFFFFF), out _);

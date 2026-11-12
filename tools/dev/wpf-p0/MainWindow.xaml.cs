@@ -3099,19 +3099,19 @@ public partial class MainWindow : Window
             MechrevoLite.Hardware.Architecture.FeatureId.KeyboardLight, hw, hasKeyboard);
         MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogKeyboardLight(hw, legacyKeyboard, "mini");
         bool hasLightbar = (hw?.SupportsLightbar ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
+            || (MechrevoLite.Hardware.GcuEcExperimental.LocalLightbar);
         bool legacyLightbar = hasLightbar;
         hasLightbar = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
             MechrevoLite.Hardware.Architecture.FeatureId.Lightbar, hw, hasLightbar);
         MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLightbar(hw, legacyLightbar, "mini");
         bool hasLogo = (hw?.SupportsLogoLight ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo);
+            || (MechrevoLite.Hardware.GcuEcExperimental.LocalLogoLight);
         bool logoSupport = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
             MechrevoLite.Hardware.Architecture.FeatureId.LogoLight, hw, hasLogo);
         bool logoVisible = ResolveWideLightVisible("light_logo_ui", logoSupport);
         MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, hasLogo, "mini");
         bool hasHinge = (hw?.SupportsHingeLight ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasHinge);
+            || (MechrevoLite.Hardware.GcuEcExperimental.LocalHingeLight);
         bool hasSync = hw?.SupportsSyncLight ?? false;
         bool legacyHinge = hasHinge;
         bool legacySync = hasSync;

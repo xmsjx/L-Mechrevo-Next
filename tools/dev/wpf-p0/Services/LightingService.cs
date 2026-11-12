@@ -406,7 +406,7 @@ internal sealed class LightingService : ILightingService
         {
             LightingTopics.Lightbar => probe.SupportsLightbar,
             LightingTopics.Logo => probe.Hw?.SupportsLogoLight == true
-                || (GcuEcExperimental.Enabled && IteLightingLocal.HasUsbLogo),
+                || (GcuEcExperimental.LocalLogoLight),
             LightingTopics.Hinge => probe.SupportsHingeLight,
             LightingTopics.Sync => probe.SupportsSyncLight,
             _ => false
@@ -441,7 +441,7 @@ internal sealed class LightingService : ILightingService
             {
                 LightingTopics.Lightbar => probe.SupportsLightbar,
                 LightingTopics.Logo => probe.Hw?.SupportsLogoLight == true
-                    || (GcuEcExperimental.Enabled && IteLightingLocal.HasUsbLogo),
+                    || (GcuEcExperimental.LocalLogoLight),
                 LightingTopics.Hinge => probe.SupportsHingeLight,
                 LightingTopics.Sync => probe.SupportsSyncLight,
                 _ => false

@@ -3935,6 +3935,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     SyncGpuDbForMode(mode, "WPF 切档");
                 }
+                // EC 模式已开启即允许本机 GPU OC，不要求路由已落到 EC。
                 if (ok && GcuEcExperimental.Enabled
                     && MechrevoLite.AppConfig.Is("gpu_oc"))
                 {
@@ -4606,6 +4607,7 @@ public partial class OriginalStyleWindow : Window
     private static int ResolveDisplayMode(BackendProbe probe)
     {
         // 实验通道且 GCU 已让出控制权时，直接读 EC，不依赖 GCU 状态包。
+        // 这里判断 EC 模式，不是 EC 本地路由：GCU 未连接时优先读 EC。
         if (GcuEcExperimental.Enabled
             && probe.Hw?.IsGcuConnected != true
             && GcuEcExperimental.TryReadVisualMode(out int experimentalEcMode))
@@ -4913,6 +4915,7 @@ public partial class OriginalStyleWindow : Window
             BackendProbe? probe = _backendProbe;
             MechrevoHw? hw = probe?.Hw;
             if (probe == null || hw == null
+                // 没有 GCU 且 EC 模式未开启时没有可恢复的后端。
                 || (!hw.IsGcuConnected && !GcuEcExperimental.Enabled)
                 || hw.UsesBaolongda
                 || hw.IsIntelNucMachine
@@ -5435,6 +5438,7 @@ public partial class OriginalStyleWindow : Window
         }
         if (hardware != null
             && (service == null
+                // EC 模式可在 GCU 未连接时走本地静音/GPU 切换。
                 || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && !hardware.IsGcuConnected)
                 || hardware.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
             && MechrevoLite.Hardware.AcpiGpuHotSwitch.CanUseLocalSilence)
@@ -7491,6 +7495,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         _connectAttempting = true;
+        // 用户明确选择 EC 时才跳过 GCU 连接，直接启动 EC-only。
         if (GcuEcExperimental.Enabled
             && GcuEcExperimental.DirectMode
             && TryStartExperimentalOfflineBackend("直接 EC 实验模式"))
@@ -7856,10 +7861,10 @@ public partial class OriginalStyleWindow : Window
                 : caps.Keyboard || (hw?.SupportsKeyboard ?? false)
                     || hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
             bool hasLightbar = caps.Lightbar || (hw?.SupportsLightbar ?? false)
-                || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar)
+                || (MechrevoLite.Hardware.GcuEcExperimental.LocalLightbar)
                 || hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
             bool hasLogo = caps.LogoLight || (hw?.SupportsLogoLight ?? false)
-                || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo);
+                || (MechrevoLite.Hardware.GcuEcExperimental.LocalLogoLight);
             bool hasHinge = _backendProbe?.SupportsHingeLight == true;
             bool hasSync = _backendProbe?.SupportsSyncLight == true;
             bool xingyaoLightIdle = MechrevoLite.Hardware.XingyaoQuickSwitch.IsApplicable(hw);
@@ -8015,11 +8020,11 @@ public partial class OriginalStyleWindow : Window
         keyboard = ResolveKeyboardSupport(hw, keyboard);
         MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogKeyboardLight(hw, legacyKeyboard, "wide");
         bool hasStrip = (caps?.Lightbar ?? false) || (hw?.SupportsLightbar ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasLightbar);
+            || (MechrevoLite.Hardware.GcuEcExperimental.LocalLightbar);
         bool legacyStrip = hasStrip;
         hasStrip = ResolveLightbarSupport(hw, hasStrip);
         bool hasLogo = (caps?.LogoLight ?? false) || (hw?.SupportsLogoLight ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo);
+            || (MechrevoLite.Hardware.GcuEcExperimental.LocalLogoLight);
         bool legacyLogo = hasLogo;
         hasLogo = ResolveLogoSupport(hw, hasLogo);
         bool hasHinge = _backendProbe?.SupportsHingeLight == true;
@@ -10567,7 +10572,7 @@ public partial class OriginalStyleWindow : Window
             {
                 "HidLightbar/Ctrl" => _backendProbe.SupportsLightbar,
                 "HidLightbar_Logo/Ctrl" => _backendProbe.Hw?.SupportsLogoLight == true
-                    || (MechrevoLite.Hardware.GcuEcExperimental.Enabled && MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo),
+                    || (MechrevoLite.Hardware.GcuEcExperimental.LocalLogoLight),
                 "HidLightbar_Hinge/Ctrl" => _backendProbe.SupportsHingeLight,
                 _ => false
             };

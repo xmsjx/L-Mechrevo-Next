@@ -24,6 +24,15 @@ internal static class GcuEcExperimental
     /// <summary>用户配置强制走 EC（区别于运行时探测后接管）。</summary>
     internal static bool ForcedByConfig => GcuEcMode.IsDirectConfigured;
 
+    /// <summary>EC 本地灯带可用。</summary>
+    internal static bool LocalLightbar => Enabled && IteLightingLocal.HasLightbar;
+
+    /// <summary>EC 本地 Logo 灯可用。</summary>
+    internal static bool LocalLogoLight => Enabled && IteLightingLocal.HasUsbLogo;
+
+    /// <summary>EC 本地 Hinge 灯可用。</summary>
+    internal static bool LocalHingeLight => Enabled && IteLightingLocal.HasHinge;
+
     /// <summary>用户明确选择 EC 时直接进入 EC-only，不等待 GCU 连接。</summary>
     internal static bool DirectMode =>
         string.Equals(Environment.GetEnvironmentVariable("LM_GCU_EC_DIRECT"), "1", StringComparison.Ordinal)
