@@ -14,6 +14,7 @@ internal static class GcuEcExperimental
     private const int CustomModeFlagAddress = 1798;
     private const int FanRampAddress = 1927;
     private static int _probeLogged;
+    private static int _routeLogged;
 
     /// <summary>EC 控制模式是否生效；不再是实验开关。</summary>
     internal static bool Enabled => GcuEcMode.IsEcMode;
@@ -25,7 +26,26 @@ internal static class GcuEcExperimental
 
     internal static void LogCurrentState(string reason)
     {
-        if (!Enabled || Interlocked.Exchange(ref _probeLogged, 1) != 0)
+        if (!Enabled)
+        {
+            return;
+        }
+        // EC-only 启动不经过后端探测；这里只读跑一次路由，让诊断包能看到声明/机型事实。
+        if (Interlocked.Exchange(ref _routeLogged, 1) == 0)
+        {
+            try
+            {
+                BackendRouteDecision route = BackendRouter.DecideAndLog();
+                Logger.WriteError("[gcu-ec] 路由声明（EC-only 只读）：backend=" + route.Backend
+                    + " · rule=#" + route.RuleIndex + " " + route.Rule
+                    + " · machine=" + route.Identity.Summary);
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("[gcu-ec] 路由声明读取失败（已忽略）：" + ex.Message);
+            }
+        }
+        if (Interlocked.Exchange(ref _probeLogged, 1) != 0)
         {
             return;
         }
