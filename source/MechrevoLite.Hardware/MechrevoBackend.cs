@@ -83,7 +83,7 @@ internal static class MechrevoBackendOrder
 		//   ⚠️ 不会误伤同方（⭐ **真正的保证在 `BaolongdaBackend.TryCreate` 里那道【机型白名单】硬闸门** ✅）：
 		//      ⭐ 本候选一旦探到 `MICommonInterface`，⭐ `BaolongdaBackend.TryCreate()` **会先查板号白名单**
 		//      （⭐ `MRID6` 精确 / `MRID6-` 前缀 ✅）⇒ ⭐ 不在白名单 ⇒ ⭐ **立即弃掉并返回 null** ✅
-		//      ⇒ ⭐ 自动落到下一格 `LegacyMifs` / `GCU` ⇒ ⭐ **行为与改动前一致** ✅
+		//      ⇒ ⭐ 该候选返回 null；⭐ 路由声明宝龙达时**不再换其它后端** ✅。
 		//   ⚠️⚠️ 2026-10-17（30 系宝龙达整机失效修复后**必须同步更正本段**）：
 		//      旧说法「`BaolongdaWmi.TryCreate` 要求真读一次 **CPU 温度（功能号 22）** 才算活体」
 		//      ⭐ **已不再是事实** ⚠️ —— 该判据被证明过严：**30 系宝龙达（`MRID6`·6800H+3070Ti）
@@ -98,13 +98,9 @@ internal static class MechrevoBackendOrder
 	};
 
 	/// <summary>
-	/// 按 <see cref="Candidates" /> 顺序探测，返回第一个可用的后端（<c>Kind=None / Created=null</c> = 都没探到）。
-	/// ⚠️ 每个候选的异常都被吞掉（只写一行日志），⛔ 绝不外抛 —— ConnectAsync 里探后端不许把启动搞崩。
-	/// ⚠️ 本方法是**同步阻塞**的（调用方已经把它包在 <c>Task.Run</c> 里），⛔ 别在 UI 线程上直接调。
-	/// <para>⭐ 2026-10-27（task-41）：新增 <see cref="MechrevoBackendKind.LegacyMifs" /> 分支 ——
-	/// 路由声明为老接口时**老接口排第一**（原来只有 Baolongda/GCU 两个特例，声明 LegacyMifs 会先白跑 GCU/宝龙达探测）。
-	/// 「声明」只决定**尝试顺序**；探测失败仍按后面的候选兜底（不破坏已知机型），实际后端与声明的差异由
-	/// <see cref="Probe" /> 统一记 <c>[强化机型分流]</c> 日志。</para>
+	/// 按路由声明给出候选：只探测声明后端，⛔ 不再“失败后换别的后端”。
+	/// <para>GCU 的 gate 与 marker 属于同一个后端，允许 gate 失败后由 marker 兜底；
+	/// 宝龙达/老接口声明失败时如实返回 None，由调用方提示未连接。</para>
 	/// </summary>
 	internal static MechrevoBackendProbe[] CandidatesFor(MechrevoBackendKind preferred)
 	{
@@ -114,16 +110,14 @@ internal static class MechrevoBackendOrder
 		MechrevoBackendProbe gcuMarker = Candidates[3];
 		if (preferred == MechrevoBackendKind.Baolongda)
 		{
-			// 机型已证明是宝龙达：先宝龙达（内部仍有板号白名单硬闸门），再老接口，最后 GCU 哨兵。
-			return new MechrevoBackendProbe[3] { baolongda, legacyMifs, gcuMarker };
+			return new MechrevoBackendProbe[1] { baolongda };
 		}
 		if (preferred == MechrevoBackendKind.LegacyMifs)
 		{
-			// 路由声明 = 老接口（MICommonInterface 存在且未装 GCU）：先老接口，再按原安全顺序兜底。
-			return new MechrevoBackendProbe[3] { legacyMifs, gcuGate, gcuMarker };
+			return new MechrevoBackendProbe[1] { legacyMifs };
 		}
-		// GCU 优先或兜底：保持原有安全顺序（GCU 门控 → 宝龙达 → 老接口 → GCU 哨兵）。
-		return new MechrevoBackendProbe[4] { gcuGate, baolongda, legacyMifs, gcuMarker };
+		// Gcu gate 与 marker 同一后端：gate 只判断服务，marker 是既有哨兵。
+		return new MechrevoBackendProbe[2] { gcuGate, gcuMarker };
 	}
 
 	/// <summary>
