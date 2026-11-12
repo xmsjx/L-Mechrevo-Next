@@ -33,6 +33,12 @@ internal static class GcuEcExperimental
     /// <summary>EC 本地 Hinge 灯可用。</summary>
     internal static bool LocalHingeLight => Enabled && IteLightingLocal.HasHinge;
 
+    /// <summary>EC 本地功耗/自定义档配置可用。</summary>
+    internal static bool LocalPowerConfig => Enabled;
+
+    /// <summary>EC 本地风扇曲线可用。</summary>
+    internal static bool LocalFanCurve => Enabled;
+
     /// <summary>用户明确选择 EC 时直接进入 EC-only，不等待 GCU 连接。</summary>
     internal static bool DirectMode =>
         string.Equals(Environment.GetEnvironmentVariable("LM_GCU_EC_DIRECT"), "1", StringComparison.Ordinal)

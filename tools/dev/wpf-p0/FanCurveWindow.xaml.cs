@@ -108,7 +108,7 @@ public partial class FanCurveWindow : Window
         }
         bool supported = _hw != null && (_hw.IsGcuConnected || _hw.UsesBaolongda || _hw.WujieSmuApu
             || _hw.IsIntelNucMachine || _hw.IsUmiMachine
-            || MechrevoLite.Hardware.GcuEcExperimental.Enabled);
+            || MechrevoLite.Hardware.GcuEcExperimental.LocalFanCurve);
         if (!supported)
         {
             HintText.Text = WpfStrings.FanCurveWindow_xaml_Text;
@@ -447,7 +447,7 @@ public partial class FanCurveWindow : Window
             }
             return;
         }
-        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+        if (MechrevoLite.Hardware.GcuEcExperimental.LocalFanCurve)
         {
             try
             {
@@ -614,7 +614,7 @@ public partial class FanCurveWindow : Window
                     ? WpfStrings.L("已恢复默认：NUC/UMI 风扇表已还原", "Restored: NUC/UMI fan table restored")
                     : WpfStrings.L("恢复默认失败：", "Restore default failed: ") + nucDetail;
             }
-            else if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            else if (MechrevoLite.Hardware.GcuEcExperimental.LocalFanCurve)
             {
                 bool restored = MechrevoLite.Hardware.NucFanTable.TryRestoreDefault(out string nucDetail);
                 bool isolatedRestore = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(false, out string isolatedDetail);

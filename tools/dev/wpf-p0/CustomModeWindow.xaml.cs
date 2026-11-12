@@ -139,7 +139,7 @@ public partial class CustomModeWindow : Window
         {
             LoadSettingsToUi(_settings);
         }
-        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+        if (MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig)
         {
             DbSwitch.IsEnabled = true;
             GpuOcSwitch.IsEnabled = true;
@@ -784,8 +784,8 @@ public partial class CustomModeWindow : Window
             && _current?.IsCustom != true
             && !nucDirectRows
             && !intelMsrRows;
-        CpuPowerCard.IsEnabled = MechrevoLite.Hardware.GcuEcExperimental.Enabled || !locked;
-        TempGpuCard.IsEnabled = MechrevoLite.Hardware.GcuEcExperimental.Enabled || !locked;
+        CpuPowerCard.IsEnabled = MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig || !locked;
+        TempGpuCard.IsEnabled = MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig || !locked;
         FanCard.IsEnabled = !locked;
         CpuPowerCard.Opacity = locked ? 0.45 : 1.0;
         TempGpuCard.Opacity = locked ? 0.45 : 1.0;
@@ -809,7 +809,7 @@ public partial class CustomModeWindow : Window
         bool pl4Supported = hwForRows != null && hwForRows.Pl4Minimum >= 0 && hwForRows.Pl4Maximum > hwForRows.Pl4Minimum;
         bool gcuTongfangMachine = IsGcuTongfangMachine(hwForRows);
         bool gcuTongfangIntel = IsGcuTongfangIntel(hwForRows);
-        bool forceEcPl4 = MechrevoLite.Hardware.GcuEcExperimental.Enabled
+        bool forceEcPl4 = MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig
             && hwForRows != null
             && !hwForRows.UsesBaolongda
             && !hwForRows.IsIntelNucMachine
@@ -872,7 +872,7 @@ public partial class CustomModeWindow : Window
         SmuSlowLimitRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuSlowTimeRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuFastTimeRow.Visibility = Visibility.Collapsed;
-        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled && !apuOrNoDgpu)
+        if (MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig && !apuOrNoDgpu)
         {
             Pl4Row.Visibility = Visibility.Visible;
         }
@@ -1081,7 +1081,7 @@ public partial class CustomModeWindow : Window
         {
             SetSliderRange(Pl1Slider, hw.Pl1Minimum, hw.Pl1Maximum);
             SetSliderRange(Pl2Slider, hw.Pl2Minimum, hw.Pl2Maximum);
-            if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+            if (MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig
                 && MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1959, out byte turboPl1Raw)
                 && MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1960, out byte turboPl2Raw))
             {
@@ -1127,7 +1127,7 @@ public partial class CustomModeWindow : Window
         SetSliderRange(TccSlider, hw.TccMinimum, hw.TccMaximum);
         SetSliderRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
         SetSliderRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
-        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+        if (MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig
             && MechrevoLite.Hardware.EcGpuPower.TryGetCapabilities(hw,
                 out MechrevoLite.Hardware.EcGpuPower.Capabilities gpuCaps, out _))
         {
@@ -1138,7 +1138,7 @@ public partial class CustomModeWindow : Window
         }
         SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, Math.Min(hw.FanSwitchSpeedMaximum, 12700));
         bool nucDirectUi = (hw.IsIntelNucMachine || hw.IsUmiMachine)
-            && !MechrevoLite.Hardware.GcuEcExperimental.Enabled;
+            && !MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig;
         bool intelXingyaoMsr = MechrevoLite.Hardware.CpuVendor.IsIntel
             && MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
             && !hw.IsIntelNucMachine && !hw.IsUmiMachine
@@ -1175,7 +1175,7 @@ public partial class CustomModeWindow : Window
         }
         // 30 系固件配置编辑器是完整参数页；能力位滞后时不能把整页做成只读。
         bool vendorProfile = _firmwareMode;
-        bool ecPowerUi = MechrevoLite.Hardware.GcuEcExperimental.Enabled;
+        bool ecPowerUi = MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig;
         TccSwitch.IsEnabled = nucDirectUi || hw.TccAdjustable || vendorProfile || ecPowerUi;
         DbSwitch.IsEnabled = nucDirectUi || hw.GpuDynamicBoostAdjustable || vendorProfile || ecPowerUi;
         GpuTgpSlider.IsEnabled = nucDirectUi || hw.GpuTgpAdjustable || vendorProfile || ecPowerUi;
@@ -1706,7 +1706,7 @@ public partial class CustomModeWindow : Window
         {
             return;
         }
-        if (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+        if (MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig
             && CurrentHw?.IsGcuConnected != true)
         {
             await ApplyEcExperimentalCustomAsync();
