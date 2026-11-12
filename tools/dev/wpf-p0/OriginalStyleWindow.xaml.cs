@@ -1647,8 +1647,7 @@ public partial class OriginalStyleWindow : Window
                 bool gcuMode = hw != null
                     && hw.IsGcuConnected
                     && !hw.UsesBaolongda
-                    && !hw.IsIntelNucMachine
-                    && !hw.IsUmiMachine
+                    && !hw.IsNucUmiFamily
                     && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
                 if (gcuMode)
                 {
@@ -4048,8 +4047,7 @@ public partial class OriginalStyleWindow : Window
             bool gcuPerf = hw != null
                 && hw.IsGcuConnected
                 && !hw.UsesBaolongda
-                && !hw.IsIntelNucMachine
-                && !hw.IsUmiMachine;
+                && !hw.IsNucUmiFamily;
             if (probe == null || hw == null || (!gcuPerf && !nucPerf))
             {
                 return;

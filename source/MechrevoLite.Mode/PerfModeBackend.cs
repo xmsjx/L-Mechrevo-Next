@@ -65,7 +65,7 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		// 星耀 Intel PTL：没有 GCU 固件槽，自定义 PL1/PL2 走本机 MSR。
 		bool intelXingyaoMsr = MechrevoLite.Hardware.CpuVendor.IsIntel
 			&& MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
-			&& !hw.IsIntelNucMachine && !hw.IsUmiMachine;
+			&& !hw.IsNucUmiFamily;
 		// 宝龙达 30 系保持原「只读缓存」口径（行为逐位不变）
 		bool smuReady = (hw.IsBaolongda30Series && SmuAvailability.IsReadyCached) || (smuCustomApu && SmuAvailability.IsReady);
 		return new PerfModeCapabilities

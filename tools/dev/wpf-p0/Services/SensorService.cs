@@ -97,7 +97,7 @@ internal sealed class SensorService : ISensorService
             int gpuDutyPercent = umiDuty && umiSecondDuty >= 0
                 ? umiSecondDuty
                 : Prefer(connected ? hw!.GpuFanDuty : -1, HardwareControl.gpuFan ?? 0);
-            if (hw != null && !hw.IsIntelNucMachine && !hw.IsUmiMachine && !hw.UsesBaolongda
+            if (hw != null && !hw.IsNucUmiFamily && !hw.UsesBaolongda
                 && (!connected || cpuFanRpm <= 0 || gpuFanRpm <= 0))
             {
                 try

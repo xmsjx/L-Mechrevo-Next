@@ -5789,7 +5789,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// <summary>同方 GCU 体系：无界、星耀，以及已连接 GCU 的同方机型（不含 NUC/UMI/宝龙达）。</summary>
 	internal bool IsTongfangGcuMachine =>
 		!UsesBaolongda
-		&& (WujieSmuApu || XingyaoAmdSmuApu || (IsGcuConnected && !IsIntelNucMachine && !IsUmiMachine));
+		&& (WujieSmuApu || XingyaoAmdSmuApu || (IsGcuConnected && !IsNucUmiFamily));
 
 	/// <summary>无界机型 PawnIO 缺失提示只记一次（避免刷屏）。</summary>
 	private static bool _wujiePawnIoWarned;

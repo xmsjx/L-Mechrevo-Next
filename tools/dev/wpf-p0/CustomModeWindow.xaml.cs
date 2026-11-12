@@ -1055,7 +1055,7 @@ public partial class CustomModeWindow : Window
     {
         return hw != null
             && !hw.UsesBaolongda
-            && !hw.IsIntelNucMachine && !hw.IsUmiMachine
+            && !hw.IsNucUmiFamily
             && MechrevoHw.IsGcuServiceInstalled;
     }
 
@@ -1141,7 +1141,7 @@ public partial class CustomModeWindow : Window
             && !MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig;
         bool intelXingyaoMsr = MechrevoLite.Hardware.CpuVendor.IsIntel
             && MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
-            && !hw.IsIntelNucMachine && !hw.IsUmiMachine
+            && !hw.IsNucUmiFamily
             && !MechrevoHw.IsGcuServiceInstalled;
         if (intelXingyaoMsr)
         {

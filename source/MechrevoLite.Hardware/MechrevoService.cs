@@ -4175,7 +4175,7 @@ public class MechrevoService
 	{
 		MechrevoHw hw = _hw;
 		bool intelMsrPower = hw != null && MechrevoLite.Hardware.CpuVendor.IsIntel
-			&& !hw.IsIntelNucMachine && !hw.IsUmiMachine && !MechrevoHw.IsGcuServiceInstalled;
+			&& !hw.IsNucUmiFamily && !MechrevoHw.IsGcuServiceInstalled;
 		if (hw == null || (!hw.UsesBaolongda && !hw.SmuCustomApu && !intelMsrPower))
 		{
 			return false; // ⭐ 不是宝龙达/无界 APU/Intel MSR 在管事 ⇒ ⭐ 原样交给 GCU ✅
