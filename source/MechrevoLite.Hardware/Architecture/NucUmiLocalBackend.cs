@@ -33,6 +33,16 @@ internal sealed class NucUmiLocalBackend : IBackendModule
 				"NUC/UMI 灯带证据未采集，回退旧判据", new string[0]);
 		FeatureDeclaration noOemDisplay = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "NUC/UMI 没有 OEM 显示能力通道", new string[0]);
+		FeatureDeclaration fanCurve = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "NUC/UMI 本地风扇表", new[] { "ec:FanTable" });
+		FeatureDeclaration fanBoost = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "NUC/UMI 本地强冷", new[] { "ec:0x751" });
+		FeatureDeclaration chargeLimit = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "NUC/UMI 本地限充", new[] { "acpi:NucBatteryMode" });
+		FeatureDeclaration performanceMode = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "NUC/UMI 本地性能档", new[] { "acpi:NucPerformanceMode" });
+		FeatureDeclaration refreshRate = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "Windows 显示通道", new[] { "win32:EnumDisplaySettings" });
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
@@ -40,7 +50,12 @@ internal sealed class NucUmiLocalBackend : IBackendModule
 				[FeatureId.Lightbar] = lightbar,
 				[FeatureId.LocalDimming] = noOemDisplay,
 				[FeatureId.LcdOverdrive] = noOemDisplay,
-				[FeatureId.ColorCalibration] = noOemDisplay
+				[FeatureId.ColorCalibration] = noOemDisplay,
+				[FeatureId.FanCurve] = fanCurve,
+				[FeatureId.FanBoost] = fanBoost,
+				[FeatureId.ChargeLimit] = chargeLimit,
+				[FeatureId.PerformanceMode] = performanceMode,
+				[FeatureId.RefreshRate] = refreshRate
 			});
 	}
 }

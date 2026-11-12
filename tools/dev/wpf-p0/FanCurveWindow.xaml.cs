@@ -106,9 +106,11 @@ public partial class FanCurveWindow : Window
             BaolongdaLoopCheck.Visibility = Visibility.Visible;
             BaolongdaSyncCheck.Visibility = Visibility.Visible;
         }
-        bool supported = _hw != null && (_hw.IsGcuConnected || _hw.UsesBaolongda || _hw.WujieSmuApu
+        bool legacyFanCurve = _hw != null && (_hw.IsGcuConnected || _hw.UsesBaolongda || _hw.WujieSmuApu
             || _hw.IsNucUmiFamily
             || MechrevoLite.Hardware.GcuEcExperimental.LocalFanCurve);
+        bool supported = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+            MechrevoLite.Hardware.Architecture.FeatureId.FanCurve, _hw, legacyFanCurve);
         if (!supported)
         {
             HintText.Text = WpfStrings.FanCurveWindow_xaml_Text;

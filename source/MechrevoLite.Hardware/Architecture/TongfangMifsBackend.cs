@@ -17,6 +17,12 @@ internal sealed class TongfangMifsBackend : IBackendModule
 			BackendChannel.None, "老 MIFS 未声明灯带通道，回退旧判据", new string[0]);
 		FeatureDeclaration noOemDisplay = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "老 MIFS 后端没有 OEM 显示能力通道", new string[0]);
+		FeatureDeclaration unsupported = new FeatureDeclaration(FeatureAvailability.Unsupported,
+			BackendChannel.None, "老 MIFS 没有该下发通道", new string[0]);
+		FeatureDeclaration perf = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "老 MIFS 内置性能档", new[] { "wmi:MICommonInterface.Mode" });
+		FeatureDeclaration refreshRate = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "Windows 显示通道", new[] { "win32:EnumDisplaySettings" });
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
@@ -24,7 +30,12 @@ internal sealed class TongfangMifsBackend : IBackendModule
 				[FeatureId.Lightbar] = lightbar,
 				[FeatureId.LocalDimming] = noOemDisplay,
 				[FeatureId.LcdOverdrive] = noOemDisplay,
-				[FeatureId.ColorCalibration] = noOemDisplay
+				[FeatureId.ColorCalibration] = noOemDisplay,
+				[FeatureId.FanCurve] = unsupported,
+				[FeatureId.FanBoost] = unsupported,
+				[FeatureId.ChargeLimit] = unsupported,
+				[FeatureId.PerformanceMode] = perf,
+				[FeatureId.RefreshRate] = refreshRate
 			});
 	}
 }

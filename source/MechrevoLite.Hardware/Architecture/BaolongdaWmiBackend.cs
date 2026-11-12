@@ -18,6 +18,16 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
 			BackendChannel.None, "宝龙达未声明灯带通道，回退旧判据", new string[0]);
 		FeatureDeclaration noOemDisplay = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "宝龙达没有 OEM 显示能力通道", new string[0]);
+		FeatureDeclaration fanCurve = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.WmiMailbox, "宝龙达软件闭环风扇曲线", new[] { "wmi:Baolongda.FanCurve" });
+		FeatureDeclaration fanBoost = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.WmiMailbox, "宝龙达本机强冷通道", new[] { "wmi:Baolongda.FanBoost" });
+		FeatureDeclaration chargeLimit = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.WmiMailbox, "宝龙达限充通道", new[] { "wmi:Baolongda.ChargeLimit" });
+		FeatureDeclaration performanceMode = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.WmiMailbox, "宝龙达性能档通道", new[] { "wmi:Baolongda.OperatingMode" });
+		FeatureDeclaration refreshRate = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "Windows 显示通道", new[] { "win32:EnumDisplaySettings" });
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
@@ -25,7 +35,12 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
 				[FeatureId.Lightbar] = lightbar,
 				[FeatureId.LocalDimming] = noOemDisplay,
 				[FeatureId.LcdOverdrive] = noOemDisplay,
-				[FeatureId.ColorCalibration] = noOemDisplay
+				[FeatureId.ColorCalibration] = noOemDisplay,
+				[FeatureId.FanCurve] = fanCurve,
+				[FeatureId.FanBoost] = fanBoost,
+				[FeatureId.ChargeLimit] = chargeLimit,
+				[FeatureId.PerformanceMode] = performanceMode,
+				[FeatureId.RefreshRate] = refreshRate
 			});
 	}
 }

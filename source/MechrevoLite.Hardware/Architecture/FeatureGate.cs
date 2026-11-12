@@ -192,6 +192,16 @@ internal static class FeatureGate
 			FeatureAvailability.Unknown, BackendChannel.None);
 		Check(lines, "ec-unprobed", Facts(BackendKind.TongfangEc), new FeatureProbe(false, false, false, null, null),
 			FeatureAvailability.Unknown, BackendChannel.None);
+		Check(lines, "ec-fancurve", Facts(BackendKind.TongfangEc), new FeatureProbe(false, false, false, null, false),
+			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.FanCurve);
+		Check(lines, "nuc-fancurve", Facts(BackendKind.NucUmiLocal), new FeatureProbe(false, false, false, null, false),
+			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.FanCurve);
+		Check(lines, "baolongda-fancurve", Facts(BackendKind.BaolongdaWmi), new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Supported, BackendChannel.WmiMailbox, FeatureId.FanCurve);
+		Check(lines, "mifs-fancurve", Facts(BackendKind.TongfangMifs), new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.FanCurve);
+		Check(lines, "gcu-refresh", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
+			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.RefreshRate);
 		Check(lines, "undeclared-feature", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.KeyboardLight);
 		return string.Join(Environment.NewLine, lines);

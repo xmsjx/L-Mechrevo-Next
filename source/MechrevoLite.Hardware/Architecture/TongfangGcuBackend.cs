@@ -170,6 +170,26 @@ internal sealed class TongfangGcuBackend : IBackendModule
 					"GCU 未上报校色能力", new string[0]);
 		}
 
+		FeatureDeclaration refreshRate = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "Windows 显示通道", new[] { "win32:EnumDisplaySettings" });
+		FeatureDeclaration fanCurve = probe.GcuConnected
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+				"GCU 风扇曲线通道", new[] { "gcu:FanCurve" })
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"GCU 未连接", new string[0]);
+		FeatureDeclaration fanBoost = probe.GcuConnected
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+				"GCU 强冷通道", new[] { "gcu:FanBoost" })
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"GCU 未连接", new string[0]);
+		FeatureDeclaration chargeLimit = probe.GcuConnected
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+				"GCU 限充通道", new[] { "gcu:ChargeLimit" })
+			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"GCU 未连接", new string[0]);
+		FeatureDeclaration performanceMode = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Gcu, "GCU 性能档通道", new[] { "gcu:OperatingMode" });
+
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
@@ -181,7 +201,12 @@ internal sealed class TongfangGcuBackend : IBackendModule
 				[FeatureId.LocalDimming] = localDimming,
 				[FeatureId.LcdOverdrive] = lcdOverdrive,
 				[FeatureId.DisplayEffect] = displayEffect,
-				[FeatureId.ColorCalibration] = colorCalibration
+				[FeatureId.ColorCalibration] = colorCalibration,
+				[FeatureId.FanCurve] = fanCurve,
+				[FeatureId.FanBoost] = fanBoost,
+				[FeatureId.ChargeLimit] = chargeLimit,
+				[FeatureId.PerformanceMode] = performanceMode,
+				[FeatureId.RefreshRate] = refreshRate
 			});
 	}
 }

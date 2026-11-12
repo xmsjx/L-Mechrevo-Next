@@ -11,5 +11,10 @@ internal enum FeatureId
 	LocalDimming,
 	LcdOverdrive,
 	DisplayEffect,
-	ColorCalibration
+	ColorCalibration,
+	FanCurve,
+	FanBoost,
+	ChargeLimit,
+	PerformanceMode,
+	RefreshRate
 }

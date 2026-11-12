@@ -118,6 +118,16 @@ internal sealed class TongfangEcBackend : IBackendModule
 		FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "EC 没有 OEM 校色通道", new string[0]);
 
+		FeatureDeclaration fanCurve = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "EC 本地风扇曲线", new[] { "ec:FanCurve" });
+		FeatureDeclaration fanBoost = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "EC 本地强冷", new[] { "ec:0x751" });
+		FeatureDeclaration chargeLimit = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "EC 本地限充", new[] { "ec:ChargeLimit" });
+		FeatureDeclaration performanceMode = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "EC 本地性能档", new[] { "ec:OperatingMode" });
+		FeatureDeclaration refreshRate = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "Windows 显示通道", new[] { "win32:EnumDisplaySettings" });
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
@@ -127,7 +137,12 @@ internal sealed class TongfangEcBackend : IBackendModule
 				[FeatureId.LocalDimming] = localDimming,
 				[FeatureId.LcdOverdrive] = lcdOverdrive,
 				[FeatureId.DisplayEffect] = displayEffect,
-				[FeatureId.ColorCalibration] = colorCalibration
+				[FeatureId.ColorCalibration] = colorCalibration,
+				[FeatureId.FanCurve] = fanCurve,
+				[FeatureId.FanBoost] = fanBoost,
+				[FeatureId.ChargeLimit] = chargeLimit,
+				[FeatureId.PerformanceMode] = performanceMode,
+				[FeatureId.RefreshRate] = refreshRate
 			});
 	}
 }
