@@ -98,6 +98,40 @@ internal static class MechrevoBackendOrder
 	};
 
 	/// <summary>
+	/// 纯函数自测：只检查候选表构建，不探测、不碰硬件。
+	/// </summary>
+	internal static string RunProbeSelfTest()
+	{
+		List<string> lines = new List<string>();
+		CheckCandidates(lines, MechrevoBackendKind.Baolongda, MechrevoBackendKind.Baolongda, 1);
+		CheckCandidates(lines, MechrevoBackendKind.LegacyMifs, MechrevoBackendKind.LegacyMifs, 1);
+		CheckCandidates(lines, MechrevoBackendKind.Gcu, MechrevoBackendKind.Gcu, 2);
+		int fail = 0;
+		foreach (string line in lines)
+		{
+			if (line.StartsWith("FAIL", StringComparison.Ordinal))
+			{
+				fail++;
+			}
+		}
+		return "[候选表自测] PASS=" + (lines.Count - fail) + " FAIL=" + fail
+			+ Environment.NewLine + string.Join(Environment.NewLine, lines);
+	}
+
+	private static void CheckCandidates(List<string> lines, MechrevoBackendKind preferred,
+		MechrevoBackendKind expectedKind, int expectedCount)
+	{
+		MechrevoBackendProbe[] probes = CandidatesFor(preferred);
+		bool ok = probes.Length == expectedCount;
+		for (int i = 0; ok && i < probes.Length; i++)
+		{
+			ok = probes[i].Kind == expectedKind;
+		}
+		lines.Add((ok ? "PASS " : "FAIL ") + preferred + " ⇒ count=" + probes.Length
+			+ " · kinds=" + string.Join(",", Array.ConvertAll(probes, p => p.Kind.ToString())));
+	}
+
+	/// <summary>
 	/// 按路由声明给出候选：只探测声明后端，⛔ 不再“失败后换别的后端”。
 	/// <para>GCU 的 gate 与 marker 属于同一个后端，允许 gate 失败后由 marker 兜底；
 	/// 宝龙达/老接口声明失败时如实返回 None，由调用方提示未连接。</para>
