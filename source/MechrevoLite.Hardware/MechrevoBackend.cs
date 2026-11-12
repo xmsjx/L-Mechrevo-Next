@@ -6,6 +6,7 @@
 // 许可/署名：与本树同一实现，见 THIRD-PARTY-NOTICES.md 与 LICENSES\。
 
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -149,6 +150,7 @@ internal static class MechrevoBackendOrder
 			order.Append(candidates[i].Kind);
 		}
 		Logger.WriteLine("[强化机型分流] 候选顺序=" + order + "（declared=" + decision.Backend + " · rule=#" + decision.RuleIndex + "）");
+		List<string> attempts = new List<string>();
 		for (int j = 0; j < candidates.Length; j++)
 		{
 			MechrevoBackendProbe candidate = candidates[j];
@@ -157,31 +159,38 @@ internal static class MechrevoBackendOrder
 				object created = candidate.TryCreate();
 				if (created != null)
 				{
-					LogDeclaredVsActual(decision, candidate.Kind);
+					LogDeclaredVsActual(decision, candidate.Kind, attempts);
 					return (Kind: candidate.Kind, Created: created);
 				}
+				attempts.Add(candidate.Kind + "=null");
 			}
 			catch (Exception ex)
 			{
+				attempts.Add(candidate.Kind + "=throw");
 				Logger.WriteLine($"Backend probe failed ({candidate.Kind}): " + ex.Message);
 			}
 		}
-		LogDeclaredVsActual(decision, MechrevoBackendKind.None);
+		LogDeclaredVsActual(decision, MechrevoBackendKind.None, attempts);
 		return (Kind: MechrevoBackendKind.None, Created: null);
 	}
 
 	/// <summary>
 	/// ⭐ 声明 vs 实际：一致记一行 Info；**不一致**必须记 <c>WriteError</c>（默认日志级别下也可见），
 	/// 并写明"已按实际后端运行、诊断包会记录"——⛔ 不静默换后端（设计文档 §3.4）。
+	/// <para><paramref name="attempts" /> 记录声明后端之前失败的候选，用于区分“正常兜底”和“声明探测失败后换后端”。</para>
 	/// </summary>
-	private static void LogDeclaredVsActual(BackendRouteDecision decision, MechrevoBackendKind actual)
+	private static void LogDeclaredVsActual(BackendRouteDecision decision, MechrevoBackendKind actual, IReadOnlyList<string>? attempts = null)
 	{
 		System.Threading.Volatile.Write(ref _lastActualKind, (int)actual);
 		BackendRoute declaredRoute = BackendRouter.ToRoute(decision.Backend);
 		BackendRoute actualRoute = BackendRouter.ToRoute(actual);
+		string fallback = (attempts == null || attempts.Count == 0)
+			? ""
+			: " · fallback=" + string.Join("; ", attempts);
 		string message = "[强化机型分流] declared=" + decision.Backend + "(rule=#" + decision.RuleIndex + ")"
 			+ " · actual=" + actual
 			+ " · 一致=" + (declaredRoute == actualRoute)
+			+ fallback
 			+ " · machine=" + decision.Identity.Summary;
 		if (declaredRoute == actualRoute)
 		{
