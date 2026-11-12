@@ -3088,7 +3088,7 @@ public partial class MainWindow : Window
             // NUC/UMI：HID 单键 RGB 优先；没有 HID 时看 EC 单区支持位（0x766 bit2）。
             hasKeyboard = (hw?.SupportsKeyboard ?? false)
                 || WpfBackend.rgb?.IsConnected == true
-                || (hw?.IsUmiMachine != true && MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone());
+                || (hw?.IsNucOnly == true && MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone());
         }
         if (GcuEcKeyboard.Active)
         {
@@ -3780,7 +3780,7 @@ public partial class MainWindow : Window
             {
                 return false;
             }
-            if (hw.IsIntelNucMachine || hw.IsUmiMachine)
+            if (hw.IsNucUmiFamily)
             {
                 // NUC/UMI：只有 HID 控制器在线才走 HID；否则是 EC 单区/无键盘。
                 return WpfBackend.rgb?.IsConnected == true;
@@ -3822,7 +3822,7 @@ public partial class MainWindow : Window
                 return false;
             }
             // NUC/UMI 单区 RGB 不是白色背光，走 LightEditorWindow 的四档单区效果。
-            if (hw.IsIntelNucMachine || hw.IsUmiMachine)
+            if (hw.IsNucUmiFamily)
             {
                 return false;
             }

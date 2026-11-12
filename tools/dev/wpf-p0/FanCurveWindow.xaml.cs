@@ -107,7 +107,7 @@ public partial class FanCurveWindow : Window
             BaolongdaSyncCheck.Visibility = Visibility.Visible;
         }
         bool supported = _hw != null && (_hw.IsGcuConnected || _hw.UsesBaolongda || _hw.WujieSmuApu
-            || _hw.IsIntelNucMachine || _hw.IsUmiMachine
+            || _hw.IsNucUmiFamily
             || MechrevoLite.Hardware.GcuEcExperimental.LocalFanCurve);
         if (!supported)
         {
@@ -329,7 +329,7 @@ public partial class FanCurveWindow : Window
             StatusText.Text = WpfStrings.FanCurveWindow_xaml_Text_3;
             return;
         }
-        if (_hw.IsIntelNucMachine || _hw.IsUmiMachine)
+        if (_hw.IsNucUmiFamily)
         {
             try
             {
@@ -602,7 +602,7 @@ public partial class FanCurveWindow : Window
                 _dirty = false;
                 StatusText.Text = WpfStrings.L("已恢复默认：宝龙达软件闭环已关闭，曲线回到固件默认", "Restored: Baolongda software loop disabled; curve returned to firmware default");
             }
-            else if (_hw.IsIntelNucMachine || _hw.IsUmiMachine)
+            else if (_hw.IsNucUmiFamily)
             {
                 bool restored = MechrevoLite.Hardware.NucFanTable.TryRestoreDefault(out string nucDetail);
                 bool isolatedRestore = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(false, out string isolatedDetail);

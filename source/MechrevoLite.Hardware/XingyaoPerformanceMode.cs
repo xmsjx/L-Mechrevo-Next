@@ -23,7 +23,7 @@ internal static class XingyaoPerformanceMode
         // OpenRevo 的 Xingyao 14 manifest 同时覆盖 P916F-STX(AMD) 和 P916F-PTL(Intel)。
         // Intel PTL 的 WJXY GCU 不提供 TurboMode/性能档字段（诊断实测 TurboModeSupport=0），
         // 所以即使 GCU 已连接也必须走 WMAA；AMD + GCU 仍保留原 GCU 链路。
-        if (hw == null || hw.IsIntelNucMachine || hw.IsUmiMachine || !XingyaoPmc2.IsXingyaoPlatform())
+        if (hw == null || hw.IsNucUmiFamily || !XingyaoPmc2.IsXingyaoPlatform())
         {
             return false;
         }

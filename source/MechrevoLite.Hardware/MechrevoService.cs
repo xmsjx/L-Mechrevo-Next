@@ -1886,7 +1886,7 @@ public class MechrevoService
 
 	public async Task<bool> ApplyDisplayEffectProfile(DisplayEffectProfile profile)
 	{
-		if (_hw.IsIntelNucMachine || _hw.IsUmiMachine)
+		if (_hw.IsNucUmiFamily)
 		{
 			return SoftwareColorEnhancement.ApplyProfile(profile.Name, profile.Brightness, profile.ColorTemp,
 				profile.ColorR, profile.ColorG, profile.ColorB, profile.VibrantValue, profile.Constrast, profile.Gamma);
@@ -1921,7 +1921,7 @@ public class MechrevoService
 
 	public async Task<bool> ResetDisplayEffectProfile(string mode)
 	{
-		if (_hw.IsIntelNucMachine || _hw.IsUmiMachine)
+		if (_hw.IsNucUmiFamily)
 		{
 			return SoftwareColorEnhancement.Reset();
 		}
@@ -3009,7 +3009,7 @@ public class MechrevoService
 				return false;
 			}
 			// NUC/UMI 的 Fn 锁 / 摄像头 / Win 键锁走 ACPI EC，不经过 GCU 能力位。
-			if (_hw.IsIntelNucMachine || _hw.IsUmiMachine)
+			if (_hw.IsNucUmiFamily)
 			{
 				if (string.Equals(key, "touchpad", StringComparison.Ordinal))
 				{
@@ -3289,7 +3289,7 @@ public class MechrevoService
 			//   实现见 `MechrevoLite.Helpers.NativeLockKey`：读状态 `GetKeyState`（只看锁定位）、
 			//   写状态 `keybd_event`（带扩展键标志，按下＋抬起一次），并且**幂等**（已到位就不发）。
 			if (string.Equals(key, "capslock", StringComparison.Ordinal)
-				|| (string.Equals(key, "numpad", StringComparison.Ordinal) && (_hw.UsesBaolongda || _hw.IsIntelNucMachine || _hw.IsUmiMachine)))
+				|| (string.Equals(key, "numpad", StringComparison.Ordinal) && (_hw.UsesBaolongda || _hw.IsNucUmiFamily)))
 			{
 				bool isCapsLock = string.Equals(key, "capslock", StringComparison.Ordinal);
 				bool keyOk = isCapsLock
@@ -6081,7 +6081,7 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 				return handled;
 			}
 			// NUC/UMI 的强冷是本地 EC 0x751 bit6，不走 GCU。
-			if (_hw.IsIntelNucMachine || _hw.IsUmiMachine)
+			if (_hw.IsNucUmiFamily)
 			{
 				bool ok = NucQuickSwitches.TrySetFanBoost(enable, out bool confirmed);
 				Logger.WriteLine($"SwitchFanBoost({enable}) NUC/UMI EC ⇒ ok={ok} confirmed={confirmed}");

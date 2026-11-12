@@ -60,14 +60,14 @@ public partial class LightEditorWindow : Window
         MechrevoHw? keyboardHw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
         _ecExperimentKeyboard = _keyboard && GcuEcKeyboard.Active;
         _nucSingleZone = _keyboard
-            && (((keyboardHw?.IsIntelNucMachine == true && keyboardHw?.IsUmiMachine != true)
+            && (((keyboardHw?.IsNucOnly == true)
                     && L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.IsConnected != true
                     && NucKeyboardLighting.IsSingleZone())
                 // EC 实验模式的同方单区键盘与 NUC 单区同一套 EC 写法。
                 || GcuEcKeyboard.IsEcSingleZone);
         _hideSpeedForNucLightbar = string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
             && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } lightbarHw
-            && (lightbarHw.IsIntelNucMachine || lightbarHw.IsUmiMachine);
+            && (lightbarHw.IsNucUmiFamily);
         Title = title;
         TitleText.Text = title;
         MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
@@ -887,7 +887,7 @@ public partial class LightEditorWindow : Window
             {
                 bool nucLightbar = string.Equals(_topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
                     && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } lbHw
-                    && (lbHw.IsIntelNucMachine || lbHw.IsUmiMachine);
+                    && (lbHw.IsNucUmiFamily);
                 if (nucLightbar)
                 {
                     // NUC/UMI 灯带走本地 ACPI 通道；XAML 编辑器原来走 GCU service，
@@ -917,7 +917,7 @@ public partial class LightEditorWindow : Window
             {
                 bool nucLightbarOff = string.Equals(_topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
                     && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } lbHwOff
-                    && (lbHwOff.IsIntelNucMachine || lbHwOff.IsUmiMachine);
+                    && (lbHwOff.IsNucUmiFamily);
                 ok = nucLightbarOff
                     ? MechrevoLite.Hardware.UmiLightbar.SetPower(false)
                     : await L_Mechrevo.WpfP0.Services.WpfBackend.Service.SetLightPower(_topic, false);

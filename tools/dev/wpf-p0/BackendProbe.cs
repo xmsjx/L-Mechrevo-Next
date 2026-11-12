@@ -44,7 +44,7 @@ internal sealed class BackendProbe : IDisposable
             MechrevoLite.Hardware.GcuIdentity.Prewarm();
             _hw = new MechrevoHw();
             bool ok = await _hw.ConnectAsync().ConfigureAwait(false);
-            if (!ok && (_hw.IsIntelNucMachine || _hw.IsUmiMachine))
+            if (!ok && (_hw.IsNucUmiFamily))
             {
                 // NUC/UMI 的性能档、快捷键和大部分灯光/传感器走本地 ACPI/EC；
                 // GCU 服务没起来时仍让窗口进入“已就绪”，否则性能键监听不会启动。
@@ -86,7 +86,7 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            if (_hw == null || !(_hw.IsIntelNucMachine || _hw.IsUmiMachine))
+            if (_hw == null || !(_hw.IsNucUmiFamily))
             {
                 return false;
             }
@@ -148,7 +148,7 @@ internal sealed class BackendProbe : IDisposable
                     return GcuEcExperimental.LocalQuickSwitch || _hw.SupportsQuickSwitch(key);
                 case "fanboost":
                     return _hw.Capabilities.FanBoost || _hw.UsesBaolongda
-                        || _hw.IsIntelNucMachine || _hw.IsUmiMachine
+                        || _hw.IsNucUmiFamily
                         || GcuEcExperimental.LocalQuickSwitch;
                 case "winkey":
                 case "fnkey":
@@ -402,7 +402,7 @@ internal sealed class BackendProbe : IDisposable
     {
         detail = "";
         MechrevoHw? hw = _hw;
-        if (hw == null || hw.UsesBaolongda || hw.IsIntelNucMachine || hw.IsUmiMachine)
+        if (hw == null || hw.UsesBaolongda || hw.IsNucUmiFamily)
         {
             return false;
         }
@@ -1478,7 +1478,7 @@ internal sealed class BackendProbe : IDisposable
         if (string.Equals(key, "fanboost", StringComparison.OrdinalIgnoreCase))
         {
             if (_hw.UsesBaolongda) return MechrevoHw.FanBoostActive;
-            if (_hw.IsIntelNucMachine || _hw.IsUmiMachine)
+            if (_hw.IsNucUmiFamily)
             {
                 // NUC/UMI 强冷状态来自 EC 0x751，由 NucQuickSwitches.Sync 回填。
                 return _hw.QuickSwitches.TryGetValue("fanboost", out bool quickOn) && quickOn;

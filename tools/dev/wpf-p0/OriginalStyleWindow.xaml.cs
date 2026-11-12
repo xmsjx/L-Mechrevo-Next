@@ -848,7 +848,7 @@ public partial class OriginalStyleWindow : Window
             {
                 return EcKeyboardEffects();
             }
-            if (hw != null && hw.IsIntelNucMachine && hw.IsUmiMachine != true
+            if (hw != null && hw.IsNucOnly
                 && WpfBackend.rgb?.IsConnected != true
                 && MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone())
             {
@@ -2951,7 +2951,7 @@ public partial class OriginalStyleWindow : Window
             MechrevoHw? hw = _backendProbe?.Hw;
             supported = hw != null
                 && (BatteryLimitPanel.IsSupportedBoard(hw)
-                    || hw.IsIntelNucMachine || hw.IsUmiMachine
+                    || hw.IsNucUmiFamily
                     || EcTransportHardwareAvailable());
         }
         catch
@@ -3995,7 +3995,7 @@ public partial class OriginalStyleWindow : Window
 
     private static bool IsNucLike(MechrevoHw? hw)
     {
-        return hw != null && (hw.IsIntelNucMachine || hw.IsUmiMachine);
+        return hw != null && (hw.IsNucUmiFamily);
     }
 
     /// <summary>外部性能键切到内置档时，清掉仍残留的自定义显示态。</summary>
@@ -4395,7 +4395,7 @@ public partial class OriginalStyleWindow : Window
         {
             bool fnKnown;
             bool fnOn = false;
-            if (hw.IsIntelNucMachine || hw.IsUmiMachine)
+            if (hw.IsNucUmiFamily)
             {
                 fnKnown = MechrevoLite.Hardware.NucQuickSwitches.TryReadFnLock(out fnOn);
             }

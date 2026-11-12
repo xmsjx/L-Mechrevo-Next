@@ -1125,7 +1125,7 @@ public static class HardwareControl
 				_cpuTempVendorWatchSinceTick = vendorNow;
 			}
 		}
-		bool preferLhmCpu = ((hw.IsIntelNucMachine || hw.IsUmiMachine || hw.WujieSmuApu || hw.IsYaoshiMachine)
+		bool preferLhmCpu = ((hw.IsNucUmiFamily || hw.WujieSmuApu || hw.IsYaoshiMachine)
 			|| vendorDivergesFromLhm || vendorStuck)
 			&& !lhmSuspect && lhmCelsius > 0;
 		if (preferLhmCpu)

@@ -2077,6 +2077,9 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// <summary>NUC/UMI 本地控制族。</summary>
 	internal bool IsNucUmiFamily => IsIntelNucMachine || IsUmiMachine;
 
+	/// <summary>仅 NUC、不含 UMI。</summary>
+	internal bool IsNucOnly => IsIntelNucMachine && !IsUmiMachine;
+
 	/// <summary>把 ACPI H2RAM 读到的 NUC 风扇值回写到门面属性，供所有 UI/曲线读取。</summary>
 	internal void ApplyIntelNucFanSpeeds(int mainFanRpm, int secondFanRpm)
 	{

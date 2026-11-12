@@ -860,10 +860,10 @@ public partial class CustomModeWindow : Window
         }
         // 30 系 NUC/UMI 是固定基础 TGP，只能调 Dynamic Boost；基础 TGP 行直接隐藏。
         bool fixedBaseTgp = hwForRows != null
-            && (hwForRows.IsIntelNucMachine || hwForRows.IsUmiMachine)
+            && (hwForRows.IsNucUmiFamily)
             && hwForRows.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen30;
         bool tgpAdjustable = hwForRows != null
-            && (hwForRows.GpuTgpAdjustable || hwForRows.IsIntelNucMachine || hwForRows.IsUmiMachine);
+            && (hwForRows.GpuTgpAdjustable || hwForRows.IsNucUmiFamily);
         GpuTgpRow.Visibility = (apuOrNoDgpu || fixedBaseTgp || intelXingyaoMsr || !tgpAdjustable)
             ? Visibility.Collapsed : Visibility.Visible;
         FanBoostRow.Visibility = (noDgpu || intelXingyaoMsr) ? Visibility.Collapsed : Visibility.Visible;
@@ -1137,7 +1137,7 @@ public partial class CustomModeWindow : Window
             DbSlider.Value = Math.Clamp(DbSlider.Value, 0, gpuCaps.DbMaxWatts);
         }
         SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, Math.Min(hw.FanSwitchSpeedMaximum, 12700));
-        bool nucDirectUi = (hw.IsIntelNucMachine || hw.IsUmiMachine)
+        bool nucDirectUi = (hw.IsNucUmiFamily)
             && !MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig;
         bool intelXingyaoMsr = MechrevoLite.Hardware.CpuVendor.IsIntel
             && MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
