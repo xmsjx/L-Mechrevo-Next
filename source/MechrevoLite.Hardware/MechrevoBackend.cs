@@ -134,6 +134,10 @@ internal static class MechrevoBackendOrder
 	internal static MechrevoBackendKind LastActualKind => (MechrevoBackendKind)System.Threading.Volatile.Read(ref _lastActualKind);
 
 	private static int _lastActualKind;
+	private static int _lastFallbackUsed;
+
+	/// <summary>最近一次路由是否从“声明后端”换到了别的后端（诊断用，不改变选择）。</summary>
+	internal static bool LastFallbackUsed => System.Threading.Volatile.Read(ref _lastFallbackUsed) != 0;
 
 	internal static (MechrevoBackendKind Kind, object Created) Probe()
 	{
@@ -185,6 +189,7 @@ internal static class MechrevoBackendOrder
 		BackendRoute declaredRoute = BackendRouter.ToRoute(decision.Backend);
 		BackendRoute actualRoute = BackendRouter.ToRoute(actual);
 		bool routeMatches = declaredRoute == actualRoute;
+		System.Threading.Volatile.Write(ref _lastFallbackUsed, routeMatches ? 0 : 1);
 		// 只有声明与实际不一致时才算“兜底”；否则前面的候选失败只是探测顺序，不能写成 fallback。
 		string fallback = (!routeMatches && attempts != null && attempts.Count > 0)
 			? " · fallback=" + string.Join("; ", attempts)

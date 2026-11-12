@@ -59,6 +59,7 @@ internal static class DiagnosticBackendRouteInfo
 			bool probed = runtimeDecision != null;
 			string actualText = probed ? actual.ToString() : "(未探测)";
 			sb.AppendLine("  实际后端（探测结果）：" + actualText);
+			sb.AppendLine("  最近一次是否使用兜底：" + (probed && MechrevoBackendOrder.LastFallbackUsed ? "是 ⚠️" : "否"));
 			if (probed)
 			{
 				BackendRoute decisionRoute = runtimeDecision == null ? BackendRoute.None : BackendRouter.ToRoute(runtimeDecision.Backend);
