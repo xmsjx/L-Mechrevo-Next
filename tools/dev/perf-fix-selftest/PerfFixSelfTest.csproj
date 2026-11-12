@@ -10,6 +10,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="HardwareStubs.cs" />
     <!-- ⭐ 直接 Link 产品源码本体（⛔ 不是复制一份逻辑），与 tools\dev\kblight-selftest 同一做法。
          覆盖两件事：
          ① PL1 ≤ PL2 ≤ PL4 联动（纯函数 PowerLimitOrder）；

@@ -324,7 +324,9 @@ internal static class Program
 		PerfModeCapabilities caps = new PerfModeCapabilities
 		{
 			SupportsFirmwareSlot = true,
-			SupportsWmiPowerFields = false
+			SupportsWmiPowerFields = false,
+			// 走旧 GCU 字段路径的场景：不支持直写 ApplyGpuOverclock。
+			SupportsGpuOverclock = false
 		};
 		PerfModeSettings settings = new PerfModeSettings
 		{
