@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 
@@ -42,10 +42,10 @@ internal static class NucFanTable
     private static readonly ModeTable Office = new()
     {
         Name = "Office",
-        CpuUp = new byte[] { 0, 55, 57, 59, 61, 63, 65, 67, 69, 255, 255, 255, 255, 255, 255, 255 },
+        CpuUp = new byte[] { 0, 45, 51, 56, 62, 67, 73, 78, 84, 89, 95, 255, 255, 255, 255, 255 },
         CpuDown = new byte[] { 48, 58, 60, 62, 64, 66, 68, 70, 255, 255, 255, 255, 255, 255, 255, 255 },
         CpuDuty = new byte[] { 0, 60, 60, 60, 60, 70, 70, 90, 110, 110, 110, 110, 110, 110, 110, 110 },
-        GpuUp = new byte[] { 0, 55, 55, 57, 57, 59, 62, 64, 66, 255, 255, 255, 255, 255, 255, 255 },
+        GpuUp = new byte[] { 0, 45, 50, 54, 59, 64, 68, 73, 78, 82, 87, 255, 255, 255, 255, 255 },
         GpuDown = new byte[] { 48, 56, 58, 58, 60, 63, 65, 67, 255, 255, 255, 255, 255, 255, 255, 255 },
         GpuDuty = new byte[] { 0, 60, 60, 60, 60, 70, 70, 90, 110, 110, 110, 110, 110, 110, 110, 110 }
     };
@@ -53,10 +53,10 @@ internal static class NucFanTable
     private static readonly ModeTable Gaming = new()
     {
         Name = "Gaming",
-        CpuUp = new byte[] { 0, 55, 58, 61, 65, 69, 72, 75, 78, 81, 255, 255, 255, 255, 255, 255 },
+        CpuUp = new byte[] { 0, 45, 51, 56, 62, 67, 73, 78, 84, 89, 95, 255, 255, 255, 255, 255 },
         CpuDown = new byte[] { 48, 58, 61, 65, 69, 73, 76, 79, 82, 255, 255, 255, 255, 255, 255, 255 },
         CpuDuty = new byte[] { 0, 60, 70, 80, 100, 110, 120, 130, 150, 160, 160, 160, 160, 160, 160, 160 },
-        GpuUp = new byte[] { 0, 55, 58, 61, 65, 69, 72, 75, 78, 81, 255, 255, 255, 255, 255, 255 },
+        GpuUp = new byte[] { 0, 45, 50, 54, 59, 64, 68, 73, 78, 82, 87, 255, 255, 255, 255, 255 },
         GpuDown = new byte[] { 48, 58, 61, 65, 69, 73, 76, 79, 82, 255, 255, 255, 255, 255, 255, 255 },
         GpuDuty = new byte[] { 0, 60, 70, 80, 100, 110, 120, 130, 150, 160, 160, 160, 160, 160, 160, 160 }
     };
@@ -64,10 +64,10 @@ internal static class NucFanTable
     private static readonly ModeTable Turbo = new()
     {
         Name = "Turbo",
-        CpuUp = new byte[] { 0, 55, 58, 61, 65, 69, 72, 75, 78, 81, 84, 255, 255, 255, 255, 255 },
+        CpuUp = new byte[] { 0, 45, 51, 56, 62, 67, 73, 78, 84, 89, 95, 255, 255, 255, 255, 255 },
         CpuDown = new byte[] { 48, 58, 61, 65, 69, 73, 76, 79, 82, 85, 255, 255, 255, 255, 255, 255 },
         CpuDuty = new byte[] { 0, 60, 70, 80, 100, 110, 120, 130, 150, 160, 180, 180, 180, 180, 180, 180 },
-        GpuUp = new byte[] { 0, 55, 58, 61, 65, 69, 72, 75, 78, 81, 84, 255, 255, 255, 255, 255 },
+        GpuUp = new byte[] { 0, 45, 50, 54, 59, 64, 68, 73, 78, 82, 87, 255, 255, 255, 255, 255 },
         GpuDown = new byte[] { 48, 58, 61, 65, 69, 73, 76, 79, 82, 85, 255, 255, 255, 255, 255, 255 },
         GpuDuty = new byte[] { 0, 60, 70, 80, 100, 110, 120, 130, 150, 160, 180, 180, 180, 180, 180, 180 }
     };
@@ -136,11 +136,16 @@ internal static class NucFanTable
         }
 
         bool ok = true;
+        byte[] cpuDown = BuildDown(table.CpuUp);
+        byte[] gpuDown = BuildDown(table.GpuUp);
+        // 保留原表头第一个 Down 值（48），其余按新 10 点 Up 轴重新生成。
+        cpuDown[0] = table.CpuDown[0];
+        gpuDown[0] = table.GpuDown[0];
         for (int i = 0; i < 16; i++) ok &= TryWrite(CpuUptBase + i, table.CpuUp[i]);
-        for (int i = 0; i < 16; i++) ok &= TryWrite(CpuDowntBase + i, table.CpuDown[i]);
+        for (int i = 0; i < 16; i++) ok &= TryWrite(CpuDowntBase + i, cpuDown[i]);
         for (int i = 0; i < 16; i++) ok &= TryWrite(CpuDutyBase + i, i == 0 ? 0 : table.CpuDuty[i]);
         for (int i = 0; i < 16; i++) ok &= TryWrite(GpuUptBase + i, table.GpuUp[i]);
-        for (int i = 0; i < 16; i++) ok &= TryWrite(GpuDowntBase + i, table.GpuDown[i]);
+        for (int i = 0; i < 16; i++) ok &= TryWrite(GpuDowntBase + i, gpuDown[i]);
         // GPU 占空比只写 13 段（3920..3932）；3933–3935 是 Max1/Max2/TableCtrl，不能混写。
         for (int i = 0; i < 13; i++) ok &= TryWrite(GpuDutyBase + i, i == 0 ? 0 : table.GpuDuty[i]);
 
