@@ -8231,6 +8231,13 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 					await ApplyLegacyBackendAsync(legacyBackend).ConfigureAwait(continueOnCapturedContext: false);
 					return true;
 				}
+				// 声明后端探测失败 ⇒ 不换后端；NUC/UMI 本地通道另行处理。
+				if (kind == MechrevoBackendKind.None && !IsNucUmiFamily)
+				{
+					_activeBackend = MechrevoBackendKind.None;
+					Logger.WriteError("[backend] 声明后端探测失败 ⇒ 不换后端（不回落 GCU），如实保持未连接");
+					return false;
+				}
 				// 没探到老接口（或 GCU 服务已装、直接优先 GCU）⇒ 落到 GCU（默认后端）。
 				// ⛔ 这一档不碰任何既有字段：行为与改动前逐项一致。
 				_activeBackend = MechrevoBackendKind.Gcu;

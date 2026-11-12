@@ -129,12 +129,17 @@ internal static class MechrevoBackendOrder
 
 	private static int _lastActualKind;
 	private static int _lastFallbackUsed;
+	private static int _lastProbeAttempted;
 
 	/// <summary>最近一次路由是否从“声明后端”换到了别的后端（诊断用，不改变选择）。</summary>
 	internal static bool LastFallbackUsed => System.Threading.Volatile.Read(ref _lastFallbackUsed) != 0;
 
+	/// <summary>本进程是否真正执行过后端探测（EC-only 不探测）。</summary>
+	internal static bool LastProbeAttempted => System.Threading.Volatile.Read(ref _lastProbeAttempted) != 0;
+
 	internal static (MechrevoBackendKind Kind, object Created) Probe()
 	{
+		System.Threading.Volatile.Write(ref _lastProbeAttempted, 1);
 		BackendRouteDecision decision = BackendRouter.DecideAndLog();
 		MechrevoBackendProbe[] candidates = CandidatesFor(decision.Backend);
 		// 候选顺序留痕：排障时能看出"为什么先探了某个后端"，也与诊断包里的声明对照。
@@ -183,11 +188,13 @@ internal static class MechrevoBackendOrder
 		BackendRoute declaredRoute = BackendRouter.ToRoute(decision.Backend);
 		BackendRoute actualRoute = BackendRouter.ToRoute(actual);
 		bool routeMatches = declaredRoute == actualRoute;
-		System.Threading.Volatile.Write(ref _lastFallbackUsed, routeMatches ? 0 : 1);
-		// 只有声明与实际不一致时才算“兜底”；否则前面的候选失败只是探测顺序，不能写成 fallback。
-		string fallback = (!routeMatches && attempts != null && attempts.Count > 0)
+		System.Threading.Volatile.Write(ref _lastFallbackUsed, (!routeMatches && actual != MechrevoBackendKind.None) ? 1 : 0);
+		// 只有实际换到另一个后端才算兜底；None 是“声明后端不可用”，不是兜底。
+		string fallback = (!routeMatches && actual != MechrevoBackendKind.None && attempts != null && attempts.Count > 0)
 			? " · fallback=" + string.Join("; ", attempts)
-			: "";
+			: (!routeMatches && actual == MechrevoBackendKind.None && attempts != null && attempts.Count > 0)
+				? " · probe_failed=" + string.Join("; ", attempts)
+				: "";
 		string message = "[强化机型分流] declared=" + decision.Backend + "(rule=#" + decision.RuleIndex + ")"
 			+ " · actual=" + actual
 			+ " · 一致=" + routeMatches

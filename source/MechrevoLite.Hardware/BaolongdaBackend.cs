@@ -237,6 +237,9 @@ internal sealed class BaolongdaBackend : IDisposable
 			+ "（已知宝龙达为 `MRID6` 精确 / `MRID6-` 前缀 ✅）⇒ 按用户澄清「其他蛟龙都是同方模具」判定为**同方** ⇒ 走老接口/GCU ✅";
 		return false;
 	}
+	/// <summary>排障开关：环境变量显式设为 0 时跳过宝龙达后端。</summary>
+	internal static bool IsDisabledByEnv => IsDisabledByEnvVar();
+
 	private static bool IsDisabledByEnvVar()
 	{
 		try

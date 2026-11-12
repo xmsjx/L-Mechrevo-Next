@@ -58,7 +58,8 @@ internal static class DiagnosticBackendRouteInfo
 			MechrevoBackendKind actual = MechrevoBackendOrder.LastActualKind;
 			bool probed = runtimeDecision != null;
 			// EC-only 不探测后端，LastActualKind 保持 None；此时实际运行的是本地 EC 通道。
-			bool ecOnly = GcuEcMode.IsEcMode && actual == MechrevoBackendKind.None;
+			bool ecOnly = GcuEcMode.IsEcMode && actual == MechrevoBackendKind.None
+				&& !MechrevoBackendOrder.LastProbeAttempted;
 			string actualText = ecOnly ? "TongfangEc（EC-only 本地）" : (probed ? actual.ToString() : "(未探测)");
 			sb.AppendLine("  实际后端（探测结果）：" + actualText);
 			sb.AppendLine("  最近一次是否使用兜底：" + (probed && MechrevoBackendOrder.LastFallbackUsed ? "是 ⚠️" : "否"));

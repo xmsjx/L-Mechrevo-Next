@@ -39,7 +39,7 @@ internal static class BackendRouter
 	{
 		// ① 板号白名单是**硬机型证据**：即使装了 GCU 服务也先交给宝龙达后端
 		//    （否则会被 GCU 抢先，表现为「GCU 未连接」；见设计文档 §2 蛟龙事故）。
-		new Rule(1, "board in Baolongda whitelist -> Baolongda", identity => identity.BaolongdaWhitelisted, MechrevoBackendKind.Baolongda),
+		new Rule(1, "board in Baolongda whitelist -> Baolongda", identity => identity.BaolongdaWhitelisted && !BaolongdaBackend.IsDisabledByEnv, MechrevoBackendKind.Baolongda),
 		// ② 设计文档 §1 规则 2：代际只能"佐证"，必须**已装 GCU 服务**才声明 GCU
 		//    （原实现 gen 30/40/50 单独即声明 GCU ⇒ 无 GCU 的老接口机型被误声明）。
 		new Rule(2, "gpu gen 30/40/50 && GCU service installed -> Gcu", identity => identity.GcuServiceInstalled && IsGcuGeneration(identity.GpuGeneration), MechrevoBackendKind.Gcu),
