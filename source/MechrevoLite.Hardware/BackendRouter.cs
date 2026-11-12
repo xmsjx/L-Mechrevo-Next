@@ -32,27 +32,39 @@ internal sealed record BackendDeclaration(
 /// </summary>
 internal static class BackendRouter
 {
-	internal sealed record Rule(int Index, string Description, Func<MachineIdentity, bool> When, MechrevoBackendKind Backend);
+	/// <summary>规则只读事实项；条件表由数据组成，不写 lambda。</summary>
+	internal enum RouteFact
+	{
+		BaolongdaWhitelisted,
+		BaolongdaEnabled,
+		GcuServiceInstalled,
+		GcuGenerationSupported,
+		MifsLegacyCompatible,
+		TongfangFamily
+	}
+
+	internal sealed record RuleCondition(RouteFact Fact, bool Expected = true);
+
+	internal sealed record RuleSpec(int Index, string Description, MechrevoBackendKind Backend, RuleCondition[] Conditions);
 
 	/// <summary>规则表（顺序 = 优先级；首条命中即选中）。</summary>
-	private static readonly Rule[] Rules =
+	private static readonly RuleSpec[] Rules =
 	{
-		// ① 板号白名单是**硬机型证据**：即使装了 GCU 服务也先交给宝龙达后端
-		//    （否则会被 GCU 抢先，表现为「GCU 未连接」；见设计文档 §2 蛟龙事故）。
-		new Rule(1, "board in Baolongda whitelist -> Baolongda", identity => identity.BaolongdaWhitelisted && !BaolongdaBackend.IsDisabledByEnv, MechrevoBackendKind.Baolongda),
-		// ② 设计文档 §1 规则 2：代际只能"佐证"，必须**已装 GCU 服务**才声明 GCU
-		//    （原实现 gen 30/40/50 单独即声明 GCU ⇒ 无 GCU 的老接口机型被误声明）。
-		new Rule(2, "gpu gen 30/40/50 && GCU service installed -> Gcu", identity => identity.GcuServiceInstalled && IsGcuGeneration(identity.GpuGeneration), MechrevoBackendKind.Gcu),
-		// ③ 设计文档 §1 规则 3：装了 GCU 服务（代际未知也走这一条）
-		new Rule(3, "GCU service installed -> Gcu", identity => identity.GcuServiceInstalled, MechrevoBackendKind.Gcu),
-		// ④ 设计文档 §1 规则 4：MICommonInterface 存在（且 GUID 与老同方一致）+ 未装 GCU ⇒ 老接口后端
-		//    ⚠️ 必须排在"装了 GCU"之后：MICommonInterface 是同方通用类，新机型也可能带（设计文档 §2）。
-		new Rule(4, "MICommonInterface(legacy GUID) && no GCU service -> LegacyMifs",
-			identity => identity.MifsLegacyCompatible && !identity.GcuServiceInstalled, MechrevoBackendKind.LegacyMifs),
-		// ⑤ 同方族（无界 X / UMI / 原 GCU 同方板号）即使当前没装 GCU 服务，也明确归到同方通道；
-		//    无服务时由 EC 实验/本地 EC 回退接管，不再只表现为“未识别 → GCU 未连接”。
-		new Rule(5, "Tongfang family -> Gcu（无 GCU 时由本地 EC 接管）",
-			identity => identity.TongfangFamily, MechrevoBackendKind.Gcu)
+		// ① 板号白名单是硬机型证据；排障开关=0 时让给后续规则。
+		new RuleSpec(1, "board in Baolongda whitelist -> Baolongda", MechrevoBackendKind.Baolongda,
+			new[] { new RuleCondition(RouteFact.BaolongdaWhitelisted), new RuleCondition(RouteFact.BaolongdaEnabled) }),
+		// ② 代际只能佐证，必须已装 GCU 服务才声明 GCU。
+		new RuleSpec(2, "gpu gen 30/40/50 && GCU service installed -> Gcu", MechrevoBackendKind.Gcu,
+			new[] { new RuleCondition(RouteFact.GcuServiceInstalled), new RuleCondition(RouteFact.GcuGenerationSupported) }),
+		// ③ 装了 GCU 服务（代际未知也走这一条）。
+		new RuleSpec(3, "GCU service installed -> Gcu", MechrevoBackendKind.Gcu,
+			new[] { new RuleCondition(RouteFact.GcuServiceInstalled) }),
+		// ④ MICommonInterface 存在且 GUID 与老同方一致，且未装 GCU。
+		new RuleSpec(4, "MICommonInterface(legacy GUID) && no GCU service -> LegacyMifs", MechrevoBackendKind.LegacyMifs,
+			new[] { new RuleCondition(RouteFact.MifsLegacyCompatible), new RuleCondition(RouteFact.GcuServiceInstalled, false) }),
+		// ⑤ 同方族即使当前没装 GCU 服务，也归到同方通道。
+		new RuleSpec(5, "Tongfang family -> Gcu（无 GCU 时由本地 EC 接管）", MechrevoBackendKind.Gcu,
+			new[] { new RuleCondition(RouteFact.TongfangFamily) })
 	};
 
 	// 后端能力声明（第 3 步）：事实需求 + 支持的机型类别
@@ -130,8 +142,8 @@ internal static class BackendRouter
 		}
 		for (int i = 0; i < Rules.Length; i++)
 		{
-			Rule rule = Rules[i];
-			if (!rule.When(identity))
+			RuleSpec rule = Rules[i];
+			if (!Matches(identity, rule))
 			{
 				continue;
 			}
@@ -146,6 +158,29 @@ internal static class BackendRouter
 		}
 		return new BackendRouteDecision(Rules.Length + 1, "fallback -> GCU（未识别机型；未连接则如实提示）", Fallback, identity,
 			DeclarationPassed: DeclarationFor(Fallback)?.Supports(identity) ?? true);
+	}
+
+	private static bool Matches(MachineIdentity identity, RuleSpec rule)
+	{
+		for (int i = 0; i < rule.Conditions.Length; i++)
+		{
+			RuleCondition condition = rule.Conditions[i];
+			bool actual = condition.Fact switch
+			{
+				RouteFact.BaolongdaWhitelisted => identity.BaolongdaWhitelisted,
+				RouteFact.BaolongdaEnabled => !BaolongdaBackend.IsDisabledByEnv,
+				RouteFact.GcuServiceInstalled => identity.GcuServiceInstalled,
+				RouteFact.GcuGenerationSupported => IsGcuGeneration(identity.GpuGeneration),
+				RouteFact.MifsLegacyCompatible => identity.MifsLegacyCompatible,
+				RouteFact.TongfangFamily => identity.TongfangFamily,
+				_ => false
+			};
+			if (actual != condition.Expected)
+			{
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/// <summary>仅 UI 探针/离线预览用：把合成机型事实落到 LastDecision，让 UI 按 NUC 渲染；不触碰真实后端。</summary>
