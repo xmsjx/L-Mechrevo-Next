@@ -4846,6 +4846,18 @@ public partial class OriginalStyleWindow : Window
         try
         {
             MechrevoLite.Hardware.GcuEcMode.MarkActive();
+            try
+            {
+                // EC-only 不经过后端探测；这里只读记录一次路由声明，供诊断包解释当前机型。
+                var ecRoute = MechrevoLite.Hardware.BackendRouter.DecideAndLog();
+                Logger.WriteError("[gcu-ec] 路由声明（EC-only 只读）：backend=" + ecRoute.Backend
+                    + " · rule=#" + ecRoute.RuleIndex + " " + ecRoute.Rule
+                    + " · machine=" + ecRoute.Identity.Summary);
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("[gcu-ec] 路由声明读取失败（已忽略）：" + ex.Message);
+            }
             _ = System.Threading.Tasks.Task.Run(() => MechrevoLite.Hardware.IteLightingLocal.RefreshFromHid());
             MechrevoHw offlineHw = new();
             BackendProbe probe = new(offlineHw, null);
