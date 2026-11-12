@@ -2468,8 +2468,10 @@ public partial class MainWindow : Window
         bool localIccAvailable = MechrevoLite.Display.IccHelper.HasFactoryIccFile()
             || MechrevoLite.Display.IccHelper.ListCustomIccFiles().Count > 0;
         bool calibrationVisible = _owner?.SupportsOemCalibration == true || localIccAvailable;
-        bool hasWindowsRefresh = L_Mechrevo.WpfP0.Services.DisplayPlatformFacts.Read().WindowsRefreshAvailable;
-        bool displaySupported = hasWindowsRefresh || caps.DisplayRefresh || _probe?.Hw?.SupportsDisplayRefresh == true
+        var platformFacts = L_Mechrevo.WpfP0.Services.DisplayPlatformFacts.Read();
+        bool hasWindowsRefresh = platformFacts.WindowsRefreshAvailable;
+        bool hasWmiBrightness = platformFacts.WmiBrightnessAvailable;
+        bool displaySupported = hasWindowsRefresh || hasWmiBrightness || caps.DisplayRefresh || _probe?.Hw?.SupportsDisplayRefresh == true
             || calibrationVisible || _owner?.SupportsLcdOverdrive == true || _owner?.SupportsMiniled == true;
         HomeDisplayCard.Visibility = displaySupported ? Visibility.Visible : Visibility.Collapsed;
         HomeDisplayColumn.Width = displaySupported ? new GridLength(1, GridUnitType.Star) : new GridLength(0);

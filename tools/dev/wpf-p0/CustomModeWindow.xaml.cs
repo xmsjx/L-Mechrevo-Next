@@ -1205,7 +1205,17 @@ public partial class CustomModeWindow : Window
         RefreshCombo.Items.Add(new ComboBoxItem { Content = WpfStrings.CustomModeWindow_Content_4, Tag = "" });
         try
         {
-            foreach (int hz in (CurrentHw?.HzList ?? Array.Empty<int>()).Distinct().OrderByDescending(v => v))
+            // 后端 HzList 优先；没有或不全时并入 Windows 当前显示设备档位。
+            IEnumerable<int> rates = CurrentHw?.HzList ?? Array.Empty<int>();
+            try
+            {
+                rates = rates.Concat(MechrevoLite.Display.ScreenNative.GetAvailableRefreshRates(null, allowCurrentDeviceFallback: true)
+                    ?? Array.Empty<int>());
+            }
+            catch
+            {
+            }
+            foreach (int hz in rates.Distinct().OrderByDescending(v => v))
             {
                 RefreshCombo.Items.Add(new ComboBoxItem { Content = hz + "Hz", Tag = hz.ToString() });
             }

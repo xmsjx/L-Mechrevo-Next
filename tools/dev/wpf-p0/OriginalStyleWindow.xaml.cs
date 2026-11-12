@@ -1218,6 +1218,11 @@ public partial class OriginalStyleWindow : Window
         {
             try
             {
+                // 色彩增强有本地 Win32 gamma/矩阵通道，任何后端都应可用。
+                if (_backendProbe?.Hw != null)
+                {
+                    return true;
+                }
                 bool legacy = _backendProbe?.Hw?.IsIntelNucMachine == true
                     || _backendProbe?.Hw?.IsUmiMachine == true
                     || _backendProbe?.Hw?.DisplayEffectProfiles.Count > 0
@@ -1908,6 +1913,11 @@ public partial class OriginalStyleWindow : Window
     {
         get
         {
+            // 本地 ACPI 探测成功即显示，不受后端声明压制。
+            if (_backendProbe?.Hw != null && MechrevoLite.Hardware.AcpiDisplaySwitch.QueryLocalDimmingSupport())
+            {
+                return true;
+            }
             bool legacy = _backendProbe?.Hw?.SupportsLocalDimming == true
                 || _backendProbe?.Capabilities?.LocalDimming == true;
             bool value = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
@@ -7852,7 +7862,7 @@ public partial class OriginalStyleWindow : Window
             bool localIccAvailable = IccHelper.HasFactoryIccFile() || IccHelper.ListCustomIccFiles().Count > 0;
             L_Mechrevo.WpfP0.Services.DisplayPlatformFacts platform = L_Mechrevo.WpfP0.Services.DisplayPlatformFacts.Read();
             bool hasWindowsRefresh = platform.WindowsRefreshAvailable;
-            ScreenSection.Visibility = (hasWindowsRefresh || caps.DisplayRefresh || _backendProbe?.Hw?.SupportsDisplayRefresh == true || SupportsOemCalibration || SupportsLcdOverdrive || SupportsMiniled || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
+            ScreenSection.Visibility = (hasWindowsRefresh || platform.WmiBrightnessAvailable || caps.DisplayRefresh || _backendProbe?.Hw?.SupportsDisplayRefresh == true || SupportsOemCalibration || SupportsLcdOverdrive || SupportsMiniled || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
             AutoRefreshSwitch.Visibility = platform.AutoRefreshVisible ? Visibility.Visible : Visibility.Collapsed;
             bool hasKeyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
                 ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
@@ -11397,6 +11407,11 @@ public partial class OriginalStyleWindow : Window
     {
         get
         {
+            // 本地 ACPI 探测成功即显示，不受后端声明压制。
+            if (_backendProbe?.Hw != null && MechrevoLite.Hardware.AcpiDisplaySwitch.QueryLcdOverdriveSupport())
+            {
+                return true;
+            }
             bool legacy = _backendProbe?.SupportsLcdOverdrive == true;
             bool value = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
                 MechrevoLite.Hardware.Architecture.FeatureId.LcdOverdrive, _backendProbe?.Hw, legacy);
