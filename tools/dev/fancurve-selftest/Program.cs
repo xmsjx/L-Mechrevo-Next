@@ -306,6 +306,20 @@ internal static class Program
 			// default 仍写旧全局文件名（兼容）✅
 			True("default 档位保存成功", BaolongdaFanCurveStore.SaveForMode("default", custom1, out string pDefault));
 			True("default 文件名 = fan_curve_bd.cfg", pDefault.EndsWith("fan_curve_bd.cfg", StringComparison.OrdinalIgnoreCase), pDefault);
+
+			// 原子写：重复保存后只留目标文件，不残留临时文件。
+			True("custom1 再次保存成功", BaolongdaFanCurveStore.SaveForMode("custom1", custom1, out _));
+			Eq("保存后无 .tmp 残留", 0, System.IO.Directory.GetFiles(dir, "*.tmp").Length);
+			True("custom1 文件仍存在", BaolongdaFanCurveStore.ExistsForMode("custom1"));
+			True("custom3 没有档位文件（ExistsForMode=false）", !BaolongdaFanCurveStore.ExistsForMode("custom3"));
+
+			// 按档位删除：只删目标档，旧全局兜底不受影响。
+			True("删除 custom2 成功", BaolongdaFanCurveStore.DeleteForMode("custom2"));
+			True("custom2 删除后 ExistsForMode=false", !BaolongdaFanCurveStore.ExistsForMode("custom2"));
+			BaolongdaFanCurveSettings afterDelete = BaolongdaFanCurveStore.LoadForMode("custom2", 6000, out bool fromAfterDelete);
+			True("custom2 删除后不再回档位来源", !fromAfterDelete);
+			Eq("custom2 删除后回旧全局首点 = 1000", 1000, afterDelete.Channel0Rpms[0]);
+			True("删除 custom2 不影响 custom1", BaolongdaFanCurveStore.ExistsForMode("custom1"));
 		}
 		finally
 		{
