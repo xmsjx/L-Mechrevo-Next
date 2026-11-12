@@ -47,8 +47,8 @@ internal static class BackendRouter
 
 	internal sealed record RuleSpec(int Index, string Description, MechrevoBackendKind Backend, RuleCondition[] Conditions);
 
-	/// <summary>规则表（顺序 = 优先级；首条命中即选中）。</summary>
-	private static readonly RuleSpec[] Rules =
+	/// <summary>内置规则表（顺序 = 优先级；首条命中即选中）。</summary>
+	private static readonly RuleSpec[] BuiltInRules =
 	{
 		// ① 板号白名单是硬机型证据；排障开关=0 时让给后续规则。
 		new RuleSpec(1, "board in Baolongda whitelist -> Baolongda", MechrevoBackendKind.Baolongda,
@@ -67,6 +67,20 @@ internal static class BackendRouter
 			new[] { new RuleCondition(RouteFact.TongfangFamily) })
 	};
 
+	private static readonly BackendRuleStore.RuleTable RuleTable = BackendRuleStore.Load(BuiltInRules, MechrevoBackendKind.Gcu);
+
+	/// <summary>当前生效规则（内置或配置文件）。</summary>
+	private static readonly RuleSpec[] Rules = RuleTable.Rules;
+
+	/// <summary>规则来源：built-in / file。</summary>
+	internal static string RuleSource => RuleTable.Source;
+
+	internal static string RulePath => RuleTable.Path;
+
+	internal static string RuleLoadError => RuleTable.Error;
+
+	internal static int RuleCount => RuleTable.Rules.Length;
+
 	// 后端能力声明（第 3 步）：事实需求 + 支持的机型类别
 	private static readonly BackendDeclaration[] Declarations =
 	{
@@ -84,8 +98,8 @@ internal static class BackendRouter
 			"老同方 MICommonInterface（GUID 与 LegacyMifsWmi 一致）且未装 GCU 服务；内置性能档、不走 MQTT")
 	};
 
-	/// <summary>兜底后端（设计文档 §1 规则 5）：未识别机型也落到 GCU，未连接则如实提示。</summary>
-	private const MechrevoBackendKind Fallback = MechrevoBackendKind.Gcu;
+	/// <summary>兜底后端（默认 GCU；配置文件只允许与内置一致）。</summary>
+	private static MechrevoBackendKind Fallback => RuleTable.Fallback;
 
 	// ⭐ 运行期最近一次路由结果（供 [gate] 机型分类日志 / 诊断包 / ActiveRoute 对比复用同一份事实）。
 	private static BackendRouteDecision? _lastDecision;
