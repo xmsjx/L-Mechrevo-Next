@@ -125,6 +125,14 @@ public partial class FanCurveWindow : Window
         MechrevoLite.Mode.PerfModeService.Instance?.ActiveChanged += OnActiveModeChanged;
         MechrevoLite.Mode.PerfModeService.Instance?.Applied += OnAppliedMode;
         LoadFromHardware();
+        // 首次打开时后端/布局可能还没完成；等消息队列空闲后再读一次，避免第一次显示旧/默认温度轴。
+        Loaded += (_, _) => Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!_dirty && !CpuCurve.IsDragging && !GpuCurve.IsDragging)
+            {
+                LoadFromHardware();
+            }
+        }), DispatcherPriority.Background);
     }
 
     private void OnClosed(object? sender, EventArgs e)
