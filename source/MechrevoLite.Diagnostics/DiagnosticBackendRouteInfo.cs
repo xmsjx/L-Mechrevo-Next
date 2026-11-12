@@ -57,16 +57,23 @@ internal static class DiagnosticBackendRouteInfo
 
 			MechrevoBackendKind actual = MechrevoBackendOrder.LastActualKind;
 			bool probed = runtimeDecision != null;
-			string actualText = probed ? actual.ToString() : "(未探测)";
+			// EC-only 不探测后端，LastActualKind 保持 None；此时实际运行的是本地 EC 通道。
+			bool ecOnly = GcuEcMode.IsEcMode && actual == MechrevoBackendKind.None;
+			string actualText = ecOnly ? "TongfangEc（EC-only 本地）" : (probed ? actual.ToString() : "(未探测)");
 			sb.AppendLine("  实际后端（探测结果）：" + actualText);
 			sb.AppendLine("  最近一次是否使用兜底：" + (probed && MechrevoBackendOrder.LastFallbackUsed ? "是 ⚠️" : "否"));
 			if (probed)
 			{
 				BackendRoute decisionRoute = runtimeDecision == null ? BackendRoute.None : BackendRouter.ToRoute(runtimeDecision.Backend);
 				BackendRoute actualRoute = BackendRouter.ToRoute(actual);
-				sb.AppendLine("  声明 vs 实际：" + (decisionRoute == actualRoute
-					? "一致 ✅"
-					: "⚠️ **不一致**（声明 " + decisionRoute + " · 实际 " + actualRoute + "）；已按实际后端运行，不静默换后端"));
+				bool expectedEcLocal = ecOnly && runtimeDecision.Backend == MechrevoBackendKind.Gcu
+					&& runtimeDecision.RuleIndex == 5;
+				string compare = expectedEcLocal
+					? "一致 ✅（rule #5：无 GCU 时由本地 EC 接管）"
+					: decisionRoute == actualRoute
+						? "一致 ✅"
+						: "⚠️ **不一致**（声明 " + decisionRoute + " · 实际 " + actualRoute + "）；已按实际后端运行，不静默换后端";
+				sb.AppendLine("  声明 vs 实际：" + compare);
 			}
 
 			sb.AppendLine("  后端能力声明：");
