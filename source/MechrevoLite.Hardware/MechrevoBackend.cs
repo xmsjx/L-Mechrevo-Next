@@ -184,15 +184,17 @@ internal static class MechrevoBackendOrder
 		System.Threading.Volatile.Write(ref _lastActualKind, (int)actual);
 		BackendRoute declaredRoute = BackendRouter.ToRoute(decision.Backend);
 		BackendRoute actualRoute = BackendRouter.ToRoute(actual);
-		string fallback = (attempts == null || attempts.Count == 0)
-			? ""
-			: " · fallback=" + string.Join("; ", attempts);
+		bool routeMatches = declaredRoute == actualRoute;
+		// 只有声明与实际不一致时才算“兜底”；否则前面的候选失败只是探测顺序，不能写成 fallback。
+		string fallback = (!routeMatches && attempts != null && attempts.Count > 0)
+			? " · fallback=" + string.Join("; ", attempts)
+			: "";
 		string message = "[强化机型分流] declared=" + decision.Backend + "(rule=#" + decision.RuleIndex + ")"
 			+ " · actual=" + actual
-			+ " · 一致=" + (declaredRoute == actualRoute)
+			+ " · 一致=" + routeMatches
 			+ fallback
 			+ " · machine=" + decision.Identity.Summary;
-		if (declaredRoute == actualRoute)
+		if (routeMatches)
 		{
 			Logger.WriteLine(message);
 			return;
