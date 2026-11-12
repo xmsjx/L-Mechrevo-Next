@@ -189,6 +189,10 @@ public partial class OriginalStyleWindow : Window
     private bool _connectAttempting;
     private enum BackendRoute { None, Gcu, Ec }
     private BackendRoute _backendRoute = BackendRoute.None;
+
+    /// <summary>当前是否处于 EC-only 本地路由（EC 模式已接管且路由落在 EC）。</summary>
+    private bool IsEcLocalRoute =>
+        GcuEcExperimental.Enabled && _backendRoute == BackendRoute.Ec;
     private int _gcuConnectFailures;
     private const string QuickTilesConfigKey = "perf_quick_tiles";
     private const string QuickTilesEmptySentinel = "-";
@@ -3835,8 +3839,7 @@ public partial class OriginalStyleWindow : Window
             }
             else
             {
-                if (_backendRoute == BackendRoute.Ec
-                    && GcuEcExperimental.Enabled
+                if (IsEcLocalRoute
                     && _backendProbe?.Hw != null
                     && _backendProbe.Hw.UsesBaolongda == false
                     && _backendProbe.Hw.IsIntelNucMachine == false
@@ -3869,7 +3872,7 @@ public partial class OriginalStyleWindow : Window
             }
             else if (!nucDirect && !xingyaoDirect && ok && mode == 1 && silentTurbo.HasValue && turboSubModeSupported)
             {
-                if (_backendRoute == BackendRoute.Ec && GcuEcExperimental.Enabled)
+                if (IsEcLocalRoute)
                 {
                     ok = GcuEcExperimental.TrySetSilentTurbo(silentTurbo.Value, out string silentDetail);
                     if (!ok)
@@ -4729,7 +4732,7 @@ public partial class OriginalStyleWindow : Window
         MechrevoHw keyHw = _backendProbe.Hw;
         bool hasPerformanceKey = IsNucLike(keyHw)
             || (keyHw.IsGcuConnected && !keyHw.UsesBaolongda && !keyHw.IsIntelNucMachine && !keyHw.IsUmiMachine)
-            || (GcuEcExperimental.Enabled && _backendRoute == BackendRoute.Ec);
+            || IsEcLocalRoute;
         if (!hasPerformanceKey)
         {
             return;
@@ -4762,7 +4765,7 @@ public partial class OriginalStyleWindow : Window
                 return;
             }
 
-            if (GcuEcExperimental.Enabled && _backendRoute == BackendRoute.Ec)
+            if (IsEcLocalRoute)
             {
                 int before = GcuEcExperimental.TryReadVisualMode(out int ecMode) ? ecMode : ResolveDisplayMode(probe);
                 int next = before switch { 2 => 0, 0 => 1, 1 => 3, 3 => 2, _ => 0 };
@@ -5520,8 +5523,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         int mode = int.Parse(text);
-        bool gcuEcGpuExperiment = _backendRoute == BackendRoute.Ec
-            && GcuEcExperimental.Enabled
+        bool gcuEcGpuExperiment = IsEcLocalRoute
             && _backendProbe.Hw != null
             && _backendProbe.Hw.UsesBaolongda == false
             && _backendProbe.Hw.IsIntelNucMachine == false
@@ -5862,8 +5864,7 @@ public partial class OriginalStyleWindow : Window
         }
         // GCU 路固定走 GCU 的 BatteryProtection（旧 LM 默认三档行为），
         // 不因 _services 存在就改走 DashboardCommands/EC 侧。
-        bool modeEcThree = (modeGcu || modeLocalEc || (MechrevoLite.Hardware.GcuEcExperimental.Enabled
-                && _backendRoute == BackendRoute.Ec))
+        bool modeEcThree = (modeGcu || modeLocalEc || IsEcLocalRoute)
             && !modeBaolongda
             && modeHw?.IsIntelNucMachine != true
             && modeHw?.IsUmiMachine != true
@@ -8777,7 +8778,7 @@ public partial class OriginalStyleWindow : Window
 
     private string ResolveCustomModeId()
     {
-        if (GcuEcExperimental.Enabled && _backendRoute == BackendRoute.Ec)
+        if (IsEcLocalRoute)
         {
             string? ecActive = MechrevoLite.Mode.PerfModeStore.ActiveModeId;
             if (ecActive?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) == true)
