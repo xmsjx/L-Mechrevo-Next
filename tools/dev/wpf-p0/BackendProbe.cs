@@ -142,18 +142,18 @@ internal sealed class BackendProbe : IDisposable
                 case "numpad":
                     return true;
                 case "acrecovery":
-                    return _hw.Capabilities.AcRecovery || GcuEcExperimental.Enabled;
+                    return _hw.Capabilities.AcRecovery || GcuEcExperimental.LocalQuickSwitch;
                 case "usb":
                 case "copilot":
-                    return GcuEcExperimental.Enabled || _hw.SupportsQuickSwitch(key);
+                    return GcuEcExperimental.LocalQuickSwitch || _hw.SupportsQuickSwitch(key);
                 case "fanboost":
                     return _hw.Capabilities.FanBoost || _hw.UsesBaolongda
                         || _hw.IsIntelNucMachine || _hw.IsUmiMachine
-                        || GcuEcExperimental.Enabled;
+                        || GcuEcExperimental.LocalQuickSwitch;
                 case "winkey":
                 case "fnkey":
                 case "touchpad":
-                    return GcuEcExperimental.Enabled || _hw.Capabilities.Keyboard || _hw.SupportsQuickSwitch(key);
+                    return GcuEcExperimental.LocalQuickSwitch || _hw.Capabilities.Keyboard || _hw.SupportsQuickSwitch(key);
                 default:
                     return false;
             }
@@ -173,7 +173,7 @@ internal sealed class BackendProbe : IDisposable
             {
                 return mode;
             }
-            if (GcuEcExperimental.Enabled && GcuEcExperimental.TryReadVisualMode(out int ecMode))
+            if (GcuEcExperimental.TryReadVisualMode(out int ecMode))
             {
                 return ecMode;
             }
@@ -995,7 +995,7 @@ internal sealed class BackendProbe : IDisposable
                 Logger.WriteError("[umi-lightbar] 电源回读不匹配 requested=" + on + " read=" + state?.ToString() + " local=" + local + " remote=" + remote);
                 return local || remote;
             }
-            if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            if (MechrevoLite.Hardware.GcuEcExperimental.LocalFanCurve)
             {
                 string localDetail;
                 bool localOk = topic switch
@@ -1109,7 +1109,7 @@ internal sealed class BackendProbe : IDisposable
         try
         {
             (int light, int speed, Color? color) = ReadLightArgs("HidLightbar_Hinge/Ctrl", effect, keyboard: false);
-            if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            if (MechrevoLite.Hardware.GcuEcExperimental.LocalHingeLight)
             {
                 return IteLightingLocal.TryApplyHinge(effect, true, light, speed,
                     color?.ToArgb() ?? unchecked((int)0xFFFFFFFF), out _);
@@ -1162,7 +1162,7 @@ internal sealed class BackendProbe : IDisposable
                 }
                 return UmiLightbar.SetEffect(effect, color, light);
             }
-            if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            if (MechrevoLite.Hardware.GcuEcExperimental.LocalLightbar)
             {
                 return IteLightingLocal.TryApplyLightbar(effect, true, light, speed,
                     color?.ToArgb() ?? unchecked((int)0xFFFFFFFF), out _);
@@ -1180,7 +1180,7 @@ internal sealed class BackendProbe : IDisposable
         try
         {
             (int light, int speed, Color? color) = ReadLightArgs("HidLightbar_Logo/Ctrl", effect, keyboard: false);
-            if (MechrevoLite.Hardware.GcuEcExperimental.Enabled)
+            if (MechrevoLite.Hardware.GcuEcExperimental.LocalLogoLight)
             {
                 return IteLightingLocal.TryApplyLogo(effect, true, light, speed,
                     color?.ToArgb() ?? unchecked((int)0xFFFFFFFF), out _);
