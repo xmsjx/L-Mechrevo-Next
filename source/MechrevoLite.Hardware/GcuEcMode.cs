@@ -10,10 +10,21 @@ public static class GcuEcMode
     private const string DirectKey = "gcu_ec_direct";
     private static int _active;
 
+    /// <summary>运行时已进入 EC 后端。</summary>
+    public static bool IsRuntimeActive =>
+        System.Threading.Volatile.Read(ref _active) != 0;
+
+    /// <summary>用户在配置里明确选择 EC。</summary>
+    public static bool IsDirectConfigured =>
+        MechrevoLite.AppConfig.Get(DirectKey, 0) != 0;
+
     /// <summary>EC 控制模式是否生效：运行时已进入 EC，或用户明确选择 EC。</summary>
-    public static bool IsEcMode =>
-        System.Threading.Volatile.Read(ref _active) != 0
-        || MechrevoLite.AppConfig.Get(DirectKey, 0) != 0;
+    public static bool IsEcMode => IsRuntimeActive || IsDirectConfigured;
+
+    /// <summary>EC 模式来源，供日志/诊断区分“已接管”和“用户强制”。</summary>
+    public static string Reason => IsRuntimeActive
+        ? (IsDirectConfigured ? "runtime+direct" : "runtime")
+        : (IsDirectConfigured ? "direct" : "none");
 
     /// <summary>进入 EC 后端时标记，供灯光/校准/风扇等本地通道判断。</summary>
     public static void MarkActive() => System.Threading.Volatile.Write(ref _active, 1);

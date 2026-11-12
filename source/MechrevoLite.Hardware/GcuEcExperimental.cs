@@ -18,6 +18,12 @@ internal static class GcuEcExperimental
     /// <summary>EC 控制模式是否生效；不再是实验开关。</summary>
     internal static bool Enabled => GcuEcMode.IsEcMode;
 
+    /// <summary>运行时已实际接管 EC（区别于仅配置强制）。</summary>
+    internal static bool TakenOverByRuntime => GcuEcMode.IsRuntimeActive;
+
+    /// <summary>用户配置强制走 EC（区别于运行时探测后接管）。</summary>
+    internal static bool ForcedByConfig => GcuEcMode.IsDirectConfigured;
+
     /// <summary>用户明确选择 EC 时直接进入 EC-only，不等待 GCU 连接。</summary>
     internal static bool DirectMode =>
         string.Equals(Environment.GetEnvironmentVariable("LM_GCU_EC_DIRECT"), "1", StringComparison.Ordinal)

@@ -4895,7 +4895,8 @@ public partial class OriginalStyleWindow : Window
             _ = RestoreGpuOverclockOnStartupAsync();
             _backendRetryTimer.Stop();
             _backendTimer.Start();
-            Logger.WriteError("[gcu-ec] GCU 不可用 ⇒ 启动 EC-only 实验首页");
+            Logger.WriteError("[gcu-ec] GCU 不可用 ⇒ 启动 EC-only 实验首页"
+                + "（来源=" + MechrevoLite.Hardware.GcuEcMode.Reason + "）");
             return true;
         }
         catch (Exception ex)
