@@ -37,11 +37,20 @@ internal sealed class TongfangEcBackend : IBackendModule
 			{
 				sources.Add("registry:Capabilities.LogoLight");
 			}
-			logo = sources.Count > 0
-				? new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-					"仅有能力位/GCU 报文，未本地确认", sources.ToArray())
-				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-					"本地 EC 证据未采集或无证据", new string[0]);
+			if (probe.EcLogoEvidence == false && sources.Count == 0)
+			{
+				// 本地 USB/EC 已采集过且明确没有 Logo 灯 ⇒ 断言不支持（不再留给旧判据猜）。
+				logo = new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+					"本地无 Logo 灯通道", new[] { "usb:IteLightingLocal.HasUsbLogo" });
+			}
+			else
+			{
+				logo = sources.Count > 0
+					? new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+						"仅有能力位/GCU 报文，未本地确认", sources.ToArray())
+					: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+						"本地 EC 证据未采集或无证据", new string[0]);
+			}
 		}
 
 		FeatureDeclaration lightbar;
@@ -66,18 +75,52 @@ internal sealed class TongfangEcBackend : IBackendModule
 			{
 				sources.Add("registry:Capabilities.Lightbar");
 			}
-			lightbar = sources.Count > 0
-				? new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-					"仅有能力位/GCU 报文，未本地确认", sources.ToArray())
-				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-					"本地 EC 灯带证据未采集或无证据", new string[0]);
+			if (probe.EcLightbarEvidence == false && sources.Count == 0)
+			{
+				// 本地 USB/EC 已采集过且明确没有灯带 ⇒ 断言不支持。
+				lightbar = new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+					"本地无灯带通道", new[] { "usb:IteLightingLocal.HasLightbar" });
+			}
+			else
+			{
+				lightbar = sources.Count > 0
+					? new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+						"仅有能力位/GCU 报文，未本地确认", sources.ToArray())
+					: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+						"本地 EC 灯带证据未采集或无证据", new string[0]);
+			}
 		}
 
-		FeatureDeclaration keyboard = probe.KeyboardCapability
+		FeatureDeclaration keyboard;
+		if (probe.EcKeyboardEvidence == true)
+		{
+			keyboard = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local,
+				"EC 本地键盘灯通道", new[] { "ec:0x766" });
+		}
+		else if (probe.EcKeyboardEvidence == false)
+		{
+			keyboard = new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+				"EC 无可用键盘灯通道", new[] { "ec:0x766" });
+		}
+		else
+		{
+			keyboard = probe.KeyboardCapability
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+					"EC 本地键盘通道可用", new[] { "registry:Capabilities.Keyboard" })
+				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+					"EC 未上报键盘能力", new string[0]);
+		}
+
+		FeatureDeclaration hinge = probe.HingeCapability
 			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
-				"EC 本地键盘通道可用", new[] { "registry:Capabilities.Keyboard" })
-			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-				"EC 未上报键盘能力", new string[0]);
+				"EC 本地铰链灯通道", new[] { "usb:IteLightingLocal.HasHinge" })
+			: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+				"EC 没有铰链灯通道", new string[0]);
+		FeatureDeclaration sync = probe.SyncCapability
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+				"EC 本地同步灯带通道", new[] { "usb:IteLightingLocal.HasHinge" })
+			: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+				"EC 没有同步灯带通道", new string[0]);
 
 		FeatureDeclaration localDimming;
 		if (probe.EcLocalDimmingSupport == true)
@@ -134,6 +177,8 @@ internal sealed class TongfangEcBackend : IBackendModule
 				[FeatureId.LogoLight] = logo,
 				[FeatureId.Lightbar] = lightbar,
 				[FeatureId.KeyboardLight] = keyboard,
+				[FeatureId.HingeLight] = hinge,
+				[FeatureId.SyncLight] = sync,
 				[FeatureId.LocalDimming] = localDimming,
 				[FeatureId.LcdOverdrive] = lcdOverdrive,
 				[FeatureId.DisplayEffect] = displayEffect,

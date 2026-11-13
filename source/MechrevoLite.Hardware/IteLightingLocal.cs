@@ -72,6 +72,21 @@ internal static class IteLightingLocal
         return value;
     }
 
+    /// <summary>启动时把灯带 / Logo / 铰链证据缓存填满一次，之后门控只读缓存。</summary>
+    internal static void PrimeCaches()
+    {
+        try
+        {
+            _ = HasLightbar;
+            _ = HasUsbLogo;
+            _ = HasHinge;
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[ite] 灯光证据预采集失败：" + ex.GetType().Name + " " + ex.Message);
+        }
+    }
+
     /// <summary>无 USB 灯带时，按 OpenRevo 回退到主板 EC 灯带（支持位 1893 bit6 / 1934 bit4）。</summary>
     internal static bool EcDirectLightbarSupported
     {

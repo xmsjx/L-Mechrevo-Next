@@ -59,6 +59,8 @@ internal static class GcuEcKeyboard
             _active = true;
             Logger.WriteError("[gcu-ec-kbd] 键盘灯分流 ⇒ " + _kind + "（" + detail + "）");
         }
+        // EC 路由下没有 GCU 报文可等，灯带/Logo 证据只能本地采集一次，之后门控只读缓存。
+        IteLightingLocal.PrimeCaches();
     }
 
     private static GcuEcKeyboardKind Detect(out string detail)

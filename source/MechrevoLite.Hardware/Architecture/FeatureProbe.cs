@@ -25,7 +25,8 @@ internal sealed record FeatureProbe(
 	bool? LocalDimmingSupport = null,
 	bool? LcdOverdriveSupport = null,
 	bool? EcLocalDimmingSupport = null,
-	bool? EcLcdOverdriveSupport = null)
+	bool? EcLcdOverdriveSupport = null,
+	bool? EcKeyboardEvidence = null)
 {
 	internal static FeatureProbe From(MechrevoHw? hw)
 	{
@@ -56,6 +57,8 @@ internal sealed record FeatureProbe(
 			hw.LocalDimmingSupport,
 			hw.LcdOverdriveSupport,
 			AcpiDisplaySwitch.LocalDimmingSupportCached,
-			AcpiDisplaySwitch.LcdOverdriveSupportCached);
+			AcpiDisplaySwitch.LcdOverdriveSupportCached,
+			// EC 实验模式已接管时才给出键盘灯结论；否则 null = 不表态（回退旧判据）。
+			GcuEcKeyboard.Active ? GcuEcKeyboard.HasControllableKeyboard : (bool?)null);
 	}
 }

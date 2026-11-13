@@ -216,6 +216,24 @@ internal static class FeatureGate
 			FeatureAvailability.Supported, BackendChannel.WmiMailbox, FeatureId.FanBoost);
 		Check(lines, "ec-fanboost", Facts(BackendKind.TongfangEc), new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.FanBoost);
+		Check(lines, "ec-keyboard-single-zone", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, null, EcKeyboardEvidence: true),
+			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.KeyboardLight);
+		Check(lines, "ec-keyboard-none", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, null, EcKeyboardEvidence: false),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.KeyboardLight);
+		Check(lines, "ec-logo-none", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.LogoLight);
+		Check(lines, "ec-lightbar-none", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, null, EcLightbarEvidence: false),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.Lightbar);
+		Check(lines, "ec-hinge-none", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, null),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.HingeLight);
+		Check(lines, "ec-sync-none", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, null),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.SyncLight);
 		Check(lines, "mifs-fanboost", Facts(BackendKind.TongfangMifs), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.FanBoost);
 		Check(lines, "gcu-refresh", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
