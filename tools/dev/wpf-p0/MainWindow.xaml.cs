@@ -88,7 +88,6 @@ public partial class MainWindow : Window
     private TextBlock? _chargeSliderText;
     private readonly List<ToggleButton> _igpuSavingButtons = new();
     private TextBlock? _igpuSavingState;
-    private CheckBox? _ecDirect;
     private bool _syncingChargeSlider;
     private readonly List<(ToggleButton Button, int Hz)> _displayRefreshButtons = new();
     private string _refreshRatesSignature = "";
@@ -735,13 +734,12 @@ public partial class MainWindow : Window
             if (_screenView != null) BuildScreenFeatures();
             UpdateScreenBackendGating();
             ApplyHomeCapabilities();
-            // ⭐ 2026-10-26（task-18）：宽屏若在“后端就绪前”打开，充电阈值卡片（含实验行/EC 直写）
+            // ⭐ 2026-10-26（task-18）：宽屏若在“后端就绪前”打开，充电阈值卡片（含实验行）
             //   当时因能力位读不到而**未建**；后端就绪后补建一次（不支持机型 Visible=false，不会建）。
             //   ⚠️ 只在“卡片还没建且现在支持”时补建，避免每次重连都重建整张电池卡。
             if (_owner != null
                 && ((_chargeLimitText == null && _owner.WideChargeLimitVisible)
                     || (_chargeSlider == null && _owner.WideChargeExperimentSupported)
-                    || (_ecDirect == null && _owner.WideEcDirectSupported)
                     || (_autoRefresh == null && _owner.SupportsAutoRefresh)
                     || (!_miniledRowAdded && _owner.SupportsMiniled)))
             {
@@ -1423,7 +1421,7 @@ public partial class MainWindow : Window
             _chargeLimitText = new TextBlock { Text = charge, Style = (Style)FindResource("MutedText"), Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap };
             battery.Children.Add(_chargeLimitText);
 
-            (bool limitEnabled, string lowText, string highText, string limitStatus, bool experiment, bool ecDirect) = _owner.WideChargeLimit();
+            (bool limitEnabled, string lowText, string highText, string limitStatus, bool experiment) = _owner.WideChargeLimit();
             _chargeLimitSwitch = new CheckBox { Content = WpfStrings.MainWindow_xaml_Content, Style = (Style)FindResource("HeaderSwitch"), IsChecked = limitEnabled, Margin = new Thickness(0, 8, 8, 0) };
             _chargeLimitSwitch.Click += (_, _) => _owner.WideSetChargeLimitEnabled(_chargeLimitSwitch.IsChecked == true);
             _chargeLow = new TextBox { Text = lowText, Width = 46, Height = 26, Margin = new Thickness(0, 8, 6, 0), VerticalContentAlignment = VerticalAlignment.Center };
@@ -1441,42 +1439,21 @@ public partial class MainWindow : Window
             _chargeStatus = new TextBlock { Text = limitStatus, Style = (Style)FindResource("MutedText"), Margin = new Thickness(0, 6, 0, 0), TextWrapping = TextWrapping.Wrap };
             battery.Children.Add(_chargeStatus);
 
-            // ⭐⭐ 2026-10-26（task-18 · 电池实验行能力位门控）：这两行旧实现放在
-            //   `if (_owner.WideChargeLimitVisible)` **之外** ⇒ 不支持的机型（非宝龙达白名单 /
-            //   10/16/20/30 系 / 无界非 8040 / Gen30）也会出现「可点但无下发」的控件 ❌
-            //   ⇒ 现在按各自能力位**分别**创建：不支持就一个控件都不建（不是建好再隐藏）。
+            // ⭐⭐ 2026-10-26（task-18 · 电池实验行能力位门控）：旧实现放在 `if (_owner.WideChargeLimitVisible)`
+            //   **之外** ⇒ 不支持的机型（非宝龙达白名单 / 10/16/20/30 系 / 无界非 8040 / Gen30）
+            //   也会出现「可点但无下发」的控件 ❌ ⇒ 现在按能力位**创建**：不支持就一个控件都不建。
             bool experimentSupported = _owner.WideChargeExperimentSupported;
-            bool ecDirectSupported = _owner.WideEcDirectSupported;
-            if (experimentSupported || ecDirectSupported)
+            if (experimentSupported)
             {
                 StackPanel extraLimitRow = new() { Orientation = Orientation.Horizontal };
-                if (experimentSupported)
+                CheckBox experimentBox = new() { Content = WpfStrings.MainWindow_xaml_Content_3, Style = (Style)FindResource("HeaderSwitch"), IsChecked = experiment, Margin = new Thickness(0, 8, 16, 0) };
+                experimentBox.Click += (_, _) =>
                 {
-                    CheckBox experimentBox = new() { Content = WpfStrings.MainWindow_xaml_Content_3, Style = (Style)FindResource("HeaderSwitch"), IsChecked = experiment, Margin = new Thickness(0, 8, 16, 0) };
-                    experimentBox.Click += (_, _) =>
-                    {
-                        _owner.WideSetChargeExperiment(experimentBox.IsChecked == true);
-                        if (experimentBox.IsChecked == true && _ecDirect != null) _ecDirect.IsChecked = false;
-                        UpdateChargeSliderVisibility();
-                    };
-                    _chargeExperiment = experimentBox;
-                    extraLimitRow.Children.Add(experimentBox);
-                }
-                if (ecDirectSupported)
-                {
-                    CheckBox ecDirectBox = new() { Content = WpfStrings.MainWindow_xaml_Content_4, Style = (Style)FindResource("HeaderSwitch"), IsChecked = ecDirect, Margin = new Thickness(0, 8, 0, 0) };
-                    ecDirectBox.Click += (_, _) =>
-                    {
-                        _owner.WideSetEcDirect(ecDirectBox.IsChecked == true);
-                        if (ecDirectBox.IsChecked == true && _chargeExperiment != null)
-                        {
-                            _chargeExperiment.IsChecked = false;
-                            UpdateChargeSliderVisibility();
-                        }
-                    };
-                    _ecDirect = ecDirectBox;
-                    extraLimitRow.Children.Add(ecDirectBox);
-                }
+                    _owner.WideSetChargeExperiment(experimentBox.IsChecked == true);
+                    UpdateChargeSliderVisibility();
+                };
+                _chargeExperiment = experimentBox;
+                extraLimitRow.Children.Add(experimentBox);
                 battery.Children.Add(extraLimitRow);
             }
 
@@ -1521,41 +1498,21 @@ public partial class MainWindow : Window
                 battery.Children.Add(sliderRow);
             }
         }
-        // GCU 没有宝龙达阈值面板，但「无极限充 / 关闭 EC 直写」属于 EC 传输，必须单独显示。
+        // GCU 没有宝龙达阈值面板，但「无极限充」属于 EC 传输，必须单独显示。
         if (!_owner.WideChargeLimitVisible)
         {
             bool gcuExperiment = _owner.WideChargeExperimentSupported;
-            bool gcuEcDirect = _owner.WideEcDirectSupported;
-            if (gcuExperiment || gcuEcDirect)
+            if (gcuExperiment)
             {
                 StackPanel gcuExtraRow = new() { Orientation = Orientation.Horizontal };
-                if (gcuExperiment)
+                CheckBox gcuExperimentBox = new() { Content = WpfStrings.MainWindow_xaml_Content_3, Style = (Style)FindResource("HeaderSwitch"), IsChecked = _owner.WideBatteryLimitSlider().Toggle, Margin = new Thickness(0, 8, 16, 0) };
+                gcuExperimentBox.Click += (_, _) =>
                 {
-                    CheckBox gcuExperimentBox = new() { Content = WpfStrings.MainWindow_xaml_Content_3, Style = (Style)FindResource("HeaderSwitch"), IsChecked = _owner.WideBatteryLimitSlider().Toggle, Margin = new Thickness(0, 8, 16, 0) };
-                    gcuExperimentBox.Click += (_, _) =>
-                    {
-                        _owner.WideSetChargeExperiment(gcuExperimentBox.IsChecked == true);
-                        if (gcuExperimentBox.IsChecked == true && _ecDirect != null) _ecDirect.IsChecked = false;
-                        UpdateChargeSliderVisibility();
-                    };
-                    _chargeExperiment = gcuExperimentBox;
-                    gcuExtraRow.Children.Add(gcuExperimentBox);
-                }
-                if (gcuEcDirect)
-                {
-                    CheckBox gcuEcDirectBox = new() { Content = WpfStrings.MainWindow_xaml_Content_4, Style = (Style)FindResource("HeaderSwitch"), IsChecked = _owner.WideEcDirectSupported && !AppConfig.Is("ec_charge_limit"), Margin = new Thickness(0, 8, 0, 0) };
-                    gcuEcDirectBox.Click += (_, _) =>
-                    {
-                        _owner.WideSetEcDirect(gcuEcDirectBox.IsChecked == true);
-                        if (gcuEcDirectBox.IsChecked == true && _chargeExperiment != null)
-                        {
-                            _chargeExperiment.IsChecked = false;
-                            UpdateChargeSliderVisibility();
-                        }
-                    };
-                    _ecDirect = gcuEcDirectBox;
-                    gcuExtraRow.Children.Add(gcuEcDirectBox);
-                }
+                    _owner.WideSetChargeExperiment(gcuExperimentBox.IsChecked == true);
+                    UpdateChargeSliderVisibility();
+                };
+                _chargeExperiment = gcuExperimentBox;
+                gcuExtraRow.Children.Add(gcuExperimentBox);
                 battery.Children.Add(gcuExtraRow);
             }
             if (gcuExperiment)
@@ -2399,13 +2356,12 @@ public partial class MainWindow : Window
         if (_autoRefresh != null) _autoRefresh.IsChecked = auto;
         RefreshLiquidCooling();
         RefreshScreenControls();
-        (bool limitEnabled2, string lowText2, string highText2, string limitStatus2, bool experiment2, bool ecDirect2) = _owner.WideChargeLimit();
+        (bool limitEnabled2, string lowText2, string highText2, string limitStatus2, bool experiment2) = _owner.WideChargeLimit();
         if (_chargeLimitSwitch != null) _chargeLimitSwitch.IsChecked = limitEnabled2;
         if (_chargeLow != null && !_chargeLow.IsKeyboardFocusWithin) _chargeLow.Text = lowText2;
         if (_chargeHigh != null && !_chargeHigh.IsKeyboardFocusWithin) _chargeHigh.Text = highText2;
         if (_chargeStatus != null) _chargeStatus.Text = limitStatus2;
         if (_chargeExperiment != null) _chargeExperiment.IsChecked = experiment2;
-        if (_ecDirect != null) _ecDirect.IsChecked = ecDirect2;
         (bool sliderOn, int sliderValue) = _owner.WideBatteryLimitSlider();
         if (_chargeSlider != null)
         {

@@ -1304,8 +1304,7 @@ public partial class OriginalStyleWindow : Window
     /// <item>⭐ 无界只有 **8040 系**开放（其它无界如 7040 系不建此开关/滑块）；</item>
     /// <item>⭐ 显卡代际 **Gen30 / Unknown** ⇒ 不建行；Gen40 / Gen50 / NoDgpu ⇒ 开放。</item>
     /// </list>
-    /// <para>⚠️ 这里**不读** <c>ec_charge_limit</c> 当前值：那是「关闭 EC 直写」开关自己的状态，
-    /// 不能反过来决定本行是否存在（否则勾上就丢掉撤销入口）。</para>
+    /// <para>⚠️ 这里**不读**任何“关闭 EC 直写”配置：该逃生开关已移除，EC 直写只由机型/代际判据决定。</para>
     /// <para>⚠️ P0 首页充电阈值卡片本身只对宝龙达白名单板开放（<see cref="WideChargeLimitVisible" />）⇒
     /// 非宝龙达 GCU 机型连卡片都不建，实验行自然一并隐藏（保留 GCU 三档按钮，行为不变）。</para>
     /// </summary>
@@ -1344,30 +1343,6 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    /// <summary>
-    /// ⭐⭐ 2026-10-26（task-18）：电池「关闭 EC 直写」逃生口是否应显示/创建 ✅
-    /// <para>⭐ 判据：⭐ 充电阈值卡片可见（宝龙达白名单板，见 <see cref="WideChargeLimitVisible" />）**且**
-    /// 不是 10/16/20/30 系（<see cref="EcChargeLimit.IsLegacyGenerationBlocked" />）—— 老代际 EC 直写整条被禁，
-    /// 留着开关只会给出「可点但无下发」的控件。</para>
-    /// <para>⚠️ 刻意**不读** <c>ec_charge_limit</c> 当前值：用户勾上“关闭 EC 直写”后该行若消失，就失去撤销入口
-    /// （旧 WinForms 明确要求这一行永不参与收放）；判据只回答「这台机器该不该有 EC 直写这件事」。</para>
-    /// </summary>
-    internal bool WideEcDirectSupported
-    {
-        get
-        {
-            try
-            {
-                return (WideChargeLimitVisible || WideEcTransportSupported)
-                    && !MechrevoLite.Hardware.EcChargeLimit.IsLegacyGenerationBlocked();
-            }
-            catch
-            {
-                return false;
-            }
-        }
-    }
-
     /// <summary>⭐ task-18：无界 8040 系判定（与旧 WinForms IsWujie8040Series 同一判据：WujieSmuApu + CPU 名 8xxx）。</summary>
     private static bool IsWujie8040Series()
     {
@@ -1382,10 +1357,10 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    internal (bool LimitEnabled, string Low, string High, string Status, bool Experiment, bool EcDirect) WideChargeLimit()
+    internal (bool LimitEnabled, string Low, string High, string Status, bool Experiment) WideChargeLimit()
     {
         return (ChargeLimitSwitch.IsChecked == true, ChargeLimitLowBox.Text, ChargeLimitHighBox.Text,
-            ChargeLimitStatus.Text, ChargeSliderToggle.IsChecked == true, EcDirectOffToggle.IsChecked == true);
+            ChargeLimitStatus.Text, ChargeSliderToggle.IsChecked == true);
     }
 
     internal void WideSetChargeLimitEnabled(bool enabled)
@@ -1405,12 +1380,6 @@ public partial class OriginalStyleWindow : Window
     {
         ChargeSliderToggle.IsChecked = enabled;
         ChargeSliderToggle_Click(ChargeSliderToggle, new RoutedEventArgs());
-    }
-
-    internal void WideSetEcDirect(bool enabled)
-    {
-        EcDirectOffToggle.IsChecked = enabled;
-        EcDirectOffToggle_Click(EcDirectOffToggle, new RoutedEventArgs());
     }
 
     internal void WideEditQuickTiles()
@@ -1886,7 +1855,7 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    /// <summary>EC 通道硬件是否存在；⛔ 不读 ec_charge_limit 开关状态。</summary>
+    /// <summary>EC 通道硬件是否存在；⛔ 不读任何“关闭 EC 直写”配置。</summary>
     private bool EcTransportHardwareAvailable()
     {
         try
@@ -2847,7 +2816,6 @@ public partial class OriginalStyleWindow : Window
     {
         ApplyBatteryLimitVisibility();
         ChargeSliderToggle.IsChecked = AppConfig.Is("charge_limit_slider");
-        EcDirectOffToggle.IsChecked = string.Equals(AppConfig.GetString("ec_charge_limit"), "0", StringComparison.Ordinal);
         BatteryLimitSlider.Visibility = ChargeSliderToggle.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         if (BatteryLimitSliderText != null) BatteryLimitSliderText.Visibility = ChargeSliderToggle.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         _syncingBatteryLimit = true;
@@ -2865,10 +2833,6 @@ public partial class OriginalStyleWindow : Window
 
     private void ApplyBatterySliderStage()
     {
-        bool on = ChargeSliderToggle.IsChecked == true;
-        // “关闭 EC 直写”必须始终可点：即使“无极限充”开着，用户也要能切换；
-        // 点击时 EcDirectOffToggle_Click 会先把无极限充关掉。
-        EcDirectOffToggle.IsEnabled = true;
         ToggleButton[] buttons = { BatteryLongButton, BatteryBalancedButton, BatteryWorkButton };
         foreach (ToggleButton button in buttons)
         {
@@ -2914,7 +2878,6 @@ public partial class OriginalStyleWindow : Window
         ChargeLimitInputRow.Visibility = thresholdRows;
         ChargeLimitStatus.Visibility = visibility;
         ChargeSliderToggle.Visibility = (visibility == Visibility.Visible && !baolongda) ? Visibility.Visible : Visibility.Collapsed;
-        EcDirectOffToggle.Visibility = (visibility == Visibility.Visible && !baolongda) ? Visibility.Visible : Visibility.Collapsed;
         RefreshXingyaoChargeLimitUi();
         if (!supported)
         {
@@ -3303,11 +3266,6 @@ public partial class OriginalStyleWindow : Window
     private async void ChargeSliderToggle_Click(object sender, RoutedEventArgs e)
     {
         bool on = ChargeSliderToggle.IsChecked == true;
-        if (on && EcDirectOffToggle.IsChecked == true)
-        {
-            EcDirectOffToggle.IsChecked = false;
-            if (_services != null) { _services.ChargeLimit.SetEcDirectWrite(false); } else { AppConfig.Remove("ec_charge_limit"); }
-        }
         if (_services != null) { _services.ChargeLimit.SetSliderEnabled(on); } else { AppConfig.Set("charge_limit_slider", on ? 1 : 0); }
         BatteryLimitSlider.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (BatteryLimitSliderText != null) BatteryLimitSliderText.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
@@ -3324,35 +3282,6 @@ public partial class OriginalStyleWindow : Window
         BatteryLimitSlider.Value = BatteryControl.ResolveDisplayLimitPercent();
         _syncingBatteryLimit = false;
     }
-
-    private async void EcDirectOffToggle_Click(object sender, RoutedEventArgs e)
-    {
-        bool on = EcDirectOffToggle.IsChecked == true;
-        if (on && ChargeSliderToggle.IsChecked == true)
-        {
-            ChargeSliderToggle.IsChecked = false;
-            if (_services != null) { _services.ChargeLimit.SetSliderEnabled(false); } else { AppConfig.Set("charge_limit_slider", 0); }
-            BatteryLimitSlider.Visibility = Visibility.Collapsed;
-            if (BatteryLimitSliderText != null) BatteryLimitSliderText.Visibility = Visibility.Collapsed;
-            ApplyBatterySliderStage();
-            await WriteBackFullChargeAfterSliderOffAsync();
-            ApplyBatteryModeHighlight(0);
-        }
-        if (on)
-        {
-            if (_services != null) { _services.ChargeLimit.SetEcDirectWrite(true); } else { AppConfig.Set("ec_charge_limit", "0"); }
-            // 关闭 EC 直写时必须真实清掉硬件限充，不能只改配置。
-            await ChargeLimitApplyService.ClearLimitForEcDirectOffAsync();
-            ApplyBatteryModeHighlight(0);
-        }
-        else
-        {
-            if (_services != null) { _services.ChargeLimit.SetEcDirectWrite(false); } else { AppConfig.Remove("ec_charge_limit"); }
-        }
-        ChargeSliderToggle.IsEnabled = !on;
-        StatusText.Text = on ? WpfStrings.ChargeEcDirectOff : WpfStrings.ChargeEcAuto;
-    }
-
 
     private void BatteryLimitSlider_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
@@ -7941,12 +7870,10 @@ public partial class OriginalStyleWindow : Window
         MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogSyncLight(hw, legacySync, "wide");
         InitPerfConfigRow();
         RefreshPerfConfigVisibility(_services?.Performance.CurrentMode ?? _backendProbe?.CurrentMode ?? -1);
-        // ⭐⭐ 2026-10-26（task-18）：实验行/EC 直写按**能力位**显隐（Gen30 / 宝龙达 / 无界 / GCU），
-        //   不再只看“显卡是不是 Gen30”。不支持 ⇒ 连行都不留（与旧 WinForms ChargeSliderSupported / IsEcDirectWriteAllowed 同源）。
+        // ⭐⭐ 2026-10-26（task-18）：实验行按**能力位**显隐（Gen30 / 宝龙达 / 无界 / GCU），
+        //   不再只看“显卡是不是 Gen30”。不支持 ⇒ 连行都不留（与旧 WinForms ChargeSliderSupported 同源）。
         bool chargeExperimentSupported = WideChargeExperimentSupported;
-        bool ecDirectSupported = WideEcDirectSupported;
         ChargeSliderToggle.Visibility = chargeExperimentSupported ? Visibility.Visible : Visibility.Collapsed;
-        EcDirectOffToggle.Visibility = ecDirectSupported ? Visibility.Visible : Visibility.Collapsed;
         if (!chargeExperimentSupported)
         {
             BatteryLimitSlider.Visibility = Visibility.Collapsed;

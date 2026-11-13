@@ -122,7 +122,6 @@ internal sealed record ChargeLimitState(
     int LowPercent,
     int HighPercent,
     int Mode,
-    bool EcDirectWriteDisabled,
     bool SliderEnabled,
     int DisplayLimitPercent,
     int SelectedModePercent);

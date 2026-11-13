@@ -489,9 +489,6 @@
   <data name="OriginalStyleWindow_Text_9" xml:space="preserve">
     <value>Liquid cooling system</value>
   </data>
-  <data name="EcDirectOffToggle_Content" xml:space="preserve">
-    <value>Turn off EC direct charging limit (use if writes fail)</value>
-  </data>
   <data name="ChargeSliderToggle_Content" xml:space="preserve">
     <value>Enable stepless charge limit (experimental)</value>
   </data>
@@ -1281,9 +1278,6 @@
   <data name="MainWindow_xaml_Content_3" xml:space="preserve">
     <value>Unlimited charge (experimental)</value>
   </data>
-  <data name="MainWindow_xaml_Content_4" xml:space="preserve">
-    <value>EC direct write off</value>
-  </data>
   <data name="MainWindow_xaml_Content_5" xml:space="preserve">
     <value>Auto Refresh</value>
   </data>
@@ -1700,9 +1694,6 @@
   </data>
   <data name="ChargeExperimental" xml:space="preserve">
     <value>Unlimited charge (experimental)</value>
-  </data>
-  <data name="EcDirectOff" xml:space="preserve">
-    <value>EC direct write off</value>
   </data>
   <data name="LiquidConnected" xml:space="preserve">
     <value>Liquid cooling connected</value>
@@ -2255,9 +2246,6 @@
 
 Continue?</value>
   </data>
-  <data name="ChargeEcAuto" xml:space="preserve">
-    <value>EC direct write restored to automatic</value>
-  </data>
   <data name="LightLogoFailed" xml:space="preserve">
     <value>Failed to apply Logo lighting</value>
   </data>
@@ -2569,9 +2557,6 @@ If the screen stays black, you will have to force shutdown and restart.</value>
   </data>
   <data name="SavedPrefix" xml:space="preserve">
     <value>Saved: </value>
-  </data>
-  <data name="ChargeEcDirectOff" xml:space="preserve">
-    <value>EC direct charge limit disabled</value>
   </data>
   <data name="LightOffOnBatteryOffShort" xml:space="preserve">
     <value>Turn off lighting on battery disabled</value>

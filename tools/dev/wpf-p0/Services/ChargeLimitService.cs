@@ -39,15 +39,11 @@ internal interface IChargeLimitService
 
     /// <summary>无极限充滑块开关（只落盘；关闭后的“写回满充”仍在窗口）。</summary>
     ServiceResult SetSliderEnabled(bool on);
-
-    /// <summary>EC 直写开关（<c>on=true</c> ⇒ 关闭 EC 直写，config 记 <c>ec_charge_limit="0"</c>）。</summary>
-    ServiceResult SetEcDirectWrite(bool on);
 }
 
 /// <inheritdoc />
 internal sealed class ChargeLimitService : IChargeLimitService
 {
-    private const string EcDirectWriteKey = "ec_charge_limit";
     private const string SliderKey = "charge_limit_slider";
 
     private readonly BackendAccessor _backend;
@@ -135,7 +131,6 @@ internal sealed class ChargeLimitService : IChargeLimitService
             LowPercent: low,
             HighPercent: high,
             Mode: mode,
-            EcDirectWriteDisabled: string.Equals(AppConfig.GetString(EcDirectWriteKey), "0", StringComparison.Ordinal),
             SliderEnabled: AppConfig.Is(SliderKey),
             DisplayLimitPercent: SafeCall(BatteryControl.ResolveDisplayLimitPercent, 100),
             SelectedModePercent: SafeCall(BatteryControl.SelectedModePercent, 80));
@@ -260,17 +255,6 @@ internal sealed class ChargeLimitService : IChargeLimitService
     {
         AppConfig.Set(SliderKey, on ? 1 : 0);
         return ServiceResult.Success(on ? WpfStrings.ChargeSliderOn : WpfStrings.ChargeSliderOff);
-    }
-
-    public ServiceResult SetEcDirectWrite(bool on)
-    {
-        if (on)
-        {
-            AppConfig.Set(EcDirectWriteKey, "0");
-            return ServiceResult.Success(WpfStrings.ChargeEcDirectOff);
-        }
-        AppConfig.Remove(EcDirectWriteKey);
-        return ServiceResult.Success(WpfStrings.ChargeEcAuto);
     }
 
     private static int SafeCall(Func<int> read, int fallback)

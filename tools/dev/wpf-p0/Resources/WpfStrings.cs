@@ -183,8 +183,6 @@ public static class WpfStrings
     public static string OriginalStyleWindow_Text_8 => Get("OriginalStyleWindow_Text_8");
     public static string LiquidStatusButton_Content => Get("LiquidStatusButton_Content");
     public static string OriginalStyleWindow_Text_9 => Get("OriginalStyleWindow_Text_9");
-    public static string EcDirectOff => Get("EcDirectOff");
-    public static string EcDirectOffToggle_Content => Get("EcDirectOffToggle_Content");
     public static string ChargeSliderToggle_Content => Get("ChargeSliderToggle_Content");
     public static string ChargeLimitStatus_Text => Get("ChargeLimitStatus_Text");
     public static string OriginalStyleWindow_Text_10 => Get("OriginalStyleWindow_Text_10");
@@ -449,7 +447,6 @@ public static class WpfStrings
     public static string MainWindow_xaml_Text_12 => Get("MainWindow_xaml_Text_12");
     public static string MainWindow_xaml_Text_13 => Get("MainWindow_xaml_Text_13");
     public static string MainWindow_xaml_Content_3 => Get("MainWindow_xaml_Content_3");
-    public static string MainWindow_xaml_Content_4 => Get("MainWindow_xaml_Content_4");
     public static string MainWindow_xaml_Content_5 => Get("MainWindow_xaml_Content_5");
     public static string MainWindow_xaml_Text_14 => Get("MainWindow_xaml_Text_14");
     public static string MainWindow_xaml_Content_6 => Get("MainWindow_xaml_Content_6");
@@ -793,7 +790,6 @@ public static class WpfStrings
     public static string ModeSeparatorSuffix => Get("ModeSeparatorSuffix");
     public static string UpdateAvailableSuffix => Get("UpdateAvailableSuffix");
     public static string ContinuePromptSuffix => Get("ContinuePromptSuffix");
-    public static string ChargeEcAuto => Get("ChargeEcAuto");
     public static string LightLogoFailed => Get("LightLogoFailed");
     public static string LightLogoSentPrefix => Get("LightLogoSentPrefix");
     public static string LightLogoOff => Get("LightLogoOff");
@@ -897,7 +893,6 @@ public static class WpfStrings
     public static string LiquidColorFailed => Get("LiquidColorFailed");
     public static string LiquidColorSent => Get("LiquidColorSent");
     public static string SavedPrefix => Get("SavedPrefix");
-    public static string ChargeEcDirectOff => Get("ChargeEcDirectOff");
     public static string LightOffOnBatteryOffShort => Get("LightOffOnBatteryOffShort");
     public static string ChargeSliderOff => Get("ChargeSliderOff");
     public static string LightOffOnBatteryOnLong => Get("LightOffOnBatteryOnLong");

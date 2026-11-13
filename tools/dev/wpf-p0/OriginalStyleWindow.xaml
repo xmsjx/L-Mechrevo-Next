@@ -1,4 +1,4 @@
-﻿<Window xmlns:loc="clr-namespace:L_Mechrevo.WpfP0.Resources" x:Class="L_Mechrevo.WpfP0.OriginalStyleWindow"
+<Window xmlns:loc="clr-namespace:L_Mechrevo.WpfP0.Resources" x:Class="L_Mechrevo.WpfP0.OriginalStyleWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
@@ -685,7 +685,6 @@
                         </StackPanel>
                         <TextBlock x:Name="ChargeLimitStatus" Text="{x:Static loc:WpfStrings.ChargeLimitStatus_Text}" Style="{StaticResource MutedText}" FontSize="10" TextWrapping="Wrap" />
                         <CheckBox x:Name="ChargeSliderToggle" Content="{x:Static loc:WpfStrings.ChargeSliderToggle_Content}" Style="{StaticResource RowSwitch}" Click="ChargeSliderToggle_Click" />
-                        <CheckBox x:Name="EcDirectOffToggle" Content="{x:Static loc:WpfStrings.EcDirectOffToggle_Content}" Style="{StaticResource RowSwitch}" Click="EcDirectOffToggle_Click" />
                         <Grid Margin="0,8,0,0">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />

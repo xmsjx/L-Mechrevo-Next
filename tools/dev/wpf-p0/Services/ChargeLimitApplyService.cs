@@ -85,8 +85,7 @@ internal static class ChargeLimitApplyService
                 }
                 return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_31);
             }
-            bool ecAllowed = !string.Equals(AppConfig.GetString("ec_charge_limit"), "0", StringComparison.Ordinal)
-                && MechrevoLite.Hardware.EcChargeLimit.IsEcDirectWriteAllowed();
+            bool ecAllowed = MechrevoLite.Hardware.EcChargeLimit.IsEcDirectWriteAllowed();
             if (ecAllowed)
             {
                 int current = await Task.Run(() => MechrevoLite.Hardware.EcChargeLimit.ReadPercent());
@@ -129,18 +128,6 @@ internal static class ChargeLimitApplyService
         {
             return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_15 + ex.Message);
         }
-    }
-
-    /// <summary>关闭 EC 直写前真实清掉硬件限充（只改配置不算清除）。</summary>
-    internal static async Task<ServiceResult> ClearLimitForEcDirectOffAsync()
-    {
-        (bool cleared, string detail) = await Task.Run(() =>
-        {
-            bool ok = MechrevoLite.Hardware.EcChargeLimitOverride.TrySetNoSmartHint(100, out string clearDetail);
-            return (ok, clearDetail);
-        });
-        Logger.WriteError("[battery-ec-off] 清除限充=" + cleared + " " + detail);
-        return cleared ? ServiceResult.Success(detail) : ServiceResult.Fail(detail);
     }
 
     private static void MarkFullCharge()

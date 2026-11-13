@@ -25,7 +25,6 @@ internal interface IDashboardCommands
     ServiceResult EnableChargeLimitRaw(int lowPercent, int highPercent);
     ServiceResult DisableChargeLimitRaw();
     Task<ServiceResult> SetChargeSliderEnabledAsync(bool on);
-    Task<ServiceResult> SetEcDirectWriteAsync(bool on);
     Task<ServiceResult> SetLightPowerAsync(string topic, bool on);
     Task<ServiceResult> SetKeyboardEffectAsync(string effect);
     Task<ServiceResult> SetLightbarEffectAsync(string effect);
@@ -137,9 +136,6 @@ internal sealed class DashboardCommands : IDashboardCommands
 
     public Task<ServiceResult> SetChargeSliderEnabledAsync(bool on) =>
         Task.FromResult(_services != null ? _services.ChargeLimit.SetSliderEnabled(on) : ServiceResult.Fail(WpfStrings.L("服务未就绪", "Service not ready")));
-
-    public Task<ServiceResult> SetEcDirectWriteAsync(bool on) =>
-        Task.FromResult(_services != null ? _services.ChargeLimit.SetEcDirectWrite(on) : ServiceResult.Fail(WpfStrings.L("服务未就绪", "Service not ready")));
 
     public Task<ServiceResult> SetLightPowerAsync(string topic, bool on) =>
         _services != null ? _services.Lighting.SetLightPowerAsync(topic, on) : Task.FromResult(ServiceResult.Fail(WpfStrings.L("服务未就绪", "Service not ready")));

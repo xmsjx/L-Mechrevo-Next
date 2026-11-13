@@ -489,9 +489,6 @@
   <data name="OriginalStyleWindow_Text_9" xml:space="preserve">
     <value>水冷系统</value>
   </data>
-  <data name="EcDirectOffToggle_Content" xml:space="preserve">
-    <value>关闭 EC 直写充电上限（写入异常时用）</value>
-  </data>
   <data name="ChargeSliderToggle_Content" xml:space="preserve">
     <value>启用无极限充功能(实验性)</value>
   </data>
@@ -1281,9 +1278,6 @@
   <data name="MainWindow_xaml_Content_3" xml:space="preserve">
     <value>无极限充（实验性）</value>
   </data>
-  <data name="MainWindow_xaml_Content_4" xml:space="preserve">
-    <value>关闭 EC 直写</value>
-  </data>
   <data name="MainWindow_xaml_Content_5" xml:space="preserve">
     <value>自动刷新率</value>
   </data>
@@ -1700,9 +1694,6 @@
   </data>
   <data name="ChargeExperimental" xml:space="preserve">
     <value>无极限充（实验性）</value>
-  </data>
-  <data name="EcDirectOff" xml:space="preserve">
-    <value>关闭 EC 直写</value>
   </data>
   <data name="LiquidConnected" xml:space="preserve">
     <value>水冷已连接</value>
@@ -2255,9 +2246,6 @@
 
 继续？</value>
   </data>
-  <data name="ChargeEcAuto" xml:space="preserve">
-    <value>EC 直写恢复自动判定</value>
-  </data>
   <data name="LightLogoFailed" xml:space="preserve">
     <value>Logo 灯效下发失败</value>
   </data>
@@ -2569,9 +2557,6 @@
   </data>
   <data name="SavedPrefix" xml:space="preserve">
     <value>已保存：</value>
-  </data>
-  <data name="ChargeEcDirectOff" xml:space="preserve">
-    <value>已关闭 EC 直写充电上限</value>
   </data>
   <data name="LightOffOnBatteryOffShort" xml:space="preserve">
     <value>已关闭离电关灯</value>
