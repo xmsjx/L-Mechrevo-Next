@@ -1788,28 +1788,8 @@ public partial class CustomModeWindow : Window
             if (nucDirect)
             {
                 if (_current?.Id != null) MechrevoLite.Mode.PerfModeStore.SaveSettings(_current.Id, edited);
-                string gpuDetail = "";
-                // NUC 自定义：cTGP / Dynamic Boost / GPU 超频统一走 NucGpuPower；
-                // 旧版这里只做 NVAPI 偏移，导致“GPU 动态加速/功耗上限”保存了但没下发。
-                bool gpuOk = MechrevoLite.Hardware.NucGpuPower.TryApply(
-                    edited.GpuTgp ?? 0,
-                    edited.GpuDynamicBoostOn == true,
-                    edited.GpuDynamicBoost ?? 0,
-                    edited.GpuOverclockOn == true ? edited.GpuCoreOffset : null,
-                    edited.GpuOverclockOn == true ? edited.GpuMemoryOffset : null,
-                    out gpuDetail,
-                    force: true);
-                bool ok = MechrevoLite.Hardware.NucPerformanceMode.TryApplyCustom(
-                    edited.Pl1, edited.Pl2, edited.Pl4,
-                    edited.TccOn == true ? edited.TccTarget : null,
-                    out string detail);
-                bool rampOk = MechrevoLite.Hardware.NucFanTable.TrySetFanRamp(
-                    edited.FanSwitchSpeedOn == true, edited.FanSwitchSpeedMs ?? 300, out string rampDetail);
-                bool curveOn = edited.FanCurveOn != false
-                    && (edited.CpuFanDuty != null || edited.GpuFanDuty != null);
-                bool isolatedOk = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(curveOn, out string isolatedDetail);
-                ok = ok && rampOk && isolatedOk && gpuOk;
-                detail += " " + rampDetail + " " + isolatedDetail + " " + gpuDetail;
+                (bool ok, string detail) = L_Mechrevo.WpfP0.Services.NucPerfApplyService
+                    .ApplyCustom(CurrentHw, edited);
                 _settings = MechrevoLite.Mode.PerfModeStore.LoadSettings(_current.Id);
                 StatusText.Text = ok
                     ? WpfStrings.L("自定义功耗墙已应用：", "Custom power limits applied: ") + detail
