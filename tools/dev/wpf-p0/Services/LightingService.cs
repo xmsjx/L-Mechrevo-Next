@@ -106,6 +106,12 @@ internal interface ILightingService
     /// 镜像也没有时按"用户是否显式关过"决定（⛔ 不把"读不到"显示成关）。</para>
     /// </summary>
     bool? ResolveKeyboardSwitchState();
+
+    /// <summary>
+    /// 键盘灯**真实回读**（只读）：只有 EC 单区/白光有回读通道。
+    /// <para>EC 模式的 HID 单键没有回读，返回 false（调用方据此跳过"保活"，⛔ 不拿镜像当硬件真值）。</para>
+    /// </summary>
+    bool TryReadKeyboardPowerReadback(out bool on);
 }
 
 /// <inheritdoc />
@@ -522,6 +528,23 @@ internal sealed class LightingService : ILightingService
             return fallback;
         }
         return GcuEcKeyboard.TryReadPower(out bool on) ? on : (bool?)null;
+    }
+
+    /// <inheritdoc />
+    public bool TryReadKeyboardPowerReadback(out bool on)
+    {
+        on = false;
+        if (!GcuEcKeyboard.Active)
+        {
+            return false;
+        }
+        if (GcuEcKeyboard.IsHid)
+        {
+            Logger.WriteLineIfChanged("kbd-keepalive-hid",
+                "[light] 保活：HID 单键键盘没有回读通道 ⇒ 不做自动补点（灯灭需 Fn 或界面重新开）。");
+            return false;
+        }
+        return GcuEcKeyboard.TryReadPower(out on);
     }
 
     public async Task<ServiceResult> ApplyKeyboardIntentAsync(SetKeyboardIntent intent)

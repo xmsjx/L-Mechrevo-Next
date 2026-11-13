@@ -9531,31 +9531,10 @@ public partial class OriginalStyleWindow : Window
 
     private static bool IsHidKeyboard(MechrevoHw? hw)
     {
-        if (MechrevoLite.Hardware.GcuEcKeyboard.Active)
-        {
-            // EC 实验模式：以实际探测为准，不用注册表 KeyboardType / GCU 回退策略。
-            return MechrevoLite.Hardware.GcuEcKeyboard.IsHid;
-        }
-        if (hw == null
-            || hw.UsesBaolongda
-            || hw.WujieSmuApu
-            || MechrevoLite.Hardware.KeyboardFirmwareEffects.IsGcuZoneKeyboardPath(hw.Capabilities.KeyboardType))
-        {
-            return false;
-        }
-        // 与原版 ShouldUseGcuKeyboardFallback 一致：HID 不可用/亮度未生效时回 GCU 固件面板。
-        KeyboardRgb? rgb = L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
-        if (rgb != null
-            && MechrevoLite.Hardware.KeyboardLightPathPolicy.ShouldUseGcuKeyboardFallback(
-                rgb.ControllerAvailability,
-                rgb.IsConnected,
-                L_Mechrevo.WpfP0.Services.WpfBackend.Service != null && hw.IsConnected,
-                hidBrightnessTookEffect: true))
-        {
-            return false;
-        }
-        return true;
+        // 判据在服务层（Services/KeyboardChannelPolicy）：窗口只转发，⛔ 不判断硬件类型。
+        return KeyboardChannelPolicy.IsHidKeyboard(hw);
     }
+
 
     private void ApplyLightChannelBackendVisibility()
     {
@@ -9958,17 +9937,9 @@ public partial class OriginalStyleWindow : Window
             _lightingKeepAliveLastOn = null;
             return;
         }
-        if (MechrevoLite.Hardware.GcuEcKeyboard.IsHid)
+        if (_services?.Lighting.TryReadKeyboardPowerReadback(out bool on) != true)
         {
-            if (!_lightingKeepAliveHidLogged)
-            {
-                _lightingKeepAliveHidLogged = true;
-                Logger.WriteLine("[light] 保活：HID 单键键盘没有回读通道 ⇒ 不做自动补点（灯灭需 Fn 或界面重新开）。");
-            }
-            return;
-        }
-        if (!MechrevoLite.Hardware.GcuEcKeyboard.TryReadPower(out bool on))
-        {
+            // 没有真实回读（HID 单键 / 非 EC）：⛔ 不拿镜像当硬件真值，跳过保活。
             return;
         }
         bool? lastOn = _lightingKeepAliveLastOn;
