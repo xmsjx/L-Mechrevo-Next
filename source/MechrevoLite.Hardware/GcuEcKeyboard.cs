@@ -92,7 +92,7 @@ internal static class GcuEcKeyboard
                         continue;
                     }
                     // 单键 RGB 仅 ITE 0x6000-0x600B，且排除标准键盘接口。
-                    if (device.ProductID < 0x6000 || device.ProductID > 0x600B)
+                    if (!HidKeyboardScoring.IsPerKeyKeyboard(device.ProductID))
                     {
                         continue;
                     }

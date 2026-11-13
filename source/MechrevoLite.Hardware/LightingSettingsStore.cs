@@ -125,6 +125,36 @@ internal static class LightingSettingsStore
 		return settings;
 	}
 
+	/// <summary>诊断用：灯光设置快照（只读；⛔ 不下发任何硬件命令）。</summary>
+	internal static string DescribeForDiagnostics()
+	{
+		(string Topic, string Label)[] channels = new (string, string)[5]
+		{
+			("Keyboard/Ctrl", "键盘"),
+			("HidLightbar/Ctrl", "灯带"),
+			("HidLightbar_Logo/Ctrl", "Logo"),
+			("HidLightbar_Hinge/Ctrl", "铰链"),
+			("HidLightbar_Sync/Ctrl", "同步")
+		};
+		StringBuilder sb = new StringBuilder();
+		sb.Append("用户意图标记=").Append(HasUserLightingIntent() ? "有" : "无");
+		foreach ((string topic, string label) in channels)
+		{
+			if (!TryLoad(topic, out LightChannelSettings settings))
+			{
+				sb.Append(" · ").Append(label).Append("=无配置");
+				continue;
+			}
+			sb.Append(" · ").Append(label)
+				.Append("={效果:").Append(string.IsNullOrEmpty(settings.Effect) ? "?" : settings.Effect)
+				.Append(" 亮度:").Append(settings.Light)
+				.Append(" 电源:").Append(settings.PowerOn ? "on" : "off")
+				.Append(settings.PowerExplicit ? "(显式)" : "(默认)")
+				.Append('}');
+		}
+		return sb.ToString();
+	}
+
 	internal static void Save(string topic, LightChannelSettings settings)
 	{
 		string path = GetPath(topic);

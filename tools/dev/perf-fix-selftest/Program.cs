@@ -36,6 +36,10 @@ internal static class Program
 		//   F = 强冷步骤只看声明出来的能力位（不再有 `|| UsesBaolongda` 兜底）：
 		//       声明支持 + 档里配了值 ⇒ 生成；声明不支持 ⇒ 不生成。
 		CheckPlannerFanBoostFollowsDeclaration();
+		// ⭐⭐ 2026-11-13（耀世机主：「自动关灯关闭，键盘灯还是自己熄灭」）：
+		//   H = HID 键盘设备选择：灯带/Logo/铰链（0x7000~0x7002）永远不是键盘候选，
+		//       单键键盘 0x6000~0x600B 加权 ⇒ 键盘帧不会再发到灯带上。
+		CheckHidDeviceScore();
 		// ⭐⭐ 2026-10-19（机主：「显卡超频设置了但频率没变化」· 根因②）：
 		//   D = "应用"是否走硬件下发的纯判据：宝龙达自定义档**不是当前激活档也要下发**；
 		//       非宝龙达保持旧口径（只有当前激活档才下发）⇒ GCU 行为逐位不变。
@@ -268,6 +272,41 @@ internal static class Program
 			}
 		}
 		return -1;
+	}
+
+	private static void CheckHidDeviceScore()
+	{
+		// H：HID 键盘设备打分（耀世机主「自动关灯关闭，键盘灯还是自己熄灭」）：
+		//   H1 = 灯带/Logo/铰链（0x7000~0x7002）永远不是键盘候选（打分 0）；
+		//   H2 = 单键键盘（0x6000~0x600B）在任何报告长度组合下都压过灯带设备（不靠枚举顺序）；
+		//   H3 = 判据口径：只有 0xFF03 / 接口 1 这类控制接口才算候选。
+		Expect("H1 lightbar 7001 excluded", MechrevoLite.Hardware.HidKeyboardScoring.Score(0x7001, 0xFF03, 1, 65, 9) == 0,
+			MechrevoLite.Hardware.HidKeyboardScoring.Score(0x7001, 0xFF03, 1, 65, 9));
+		Expect("H1 logo 7000 excluded", MechrevoLite.Hardware.HidKeyboardScoring.Score(0x7000, 0xFF03, 1, 65, 9) == 0,
+			MechrevoLite.Hardware.HidKeyboardScoring.Score(0x7000, 0xFF03, 1, 65, 9));
+		Expect("H1 hinge 7002 excluded", MechrevoLite.Hardware.HidKeyboardScoring.Score(0x7002, 0xFF03, 1, 65, 9) == 0,
+			MechrevoLite.Hardware.HidKeyboardScoring.Score(0x7002, 0xFF03, 1, 65, 9));
+
+		int keyboardBest = MechrevoLite.Hardware.HidKeyboardScoring.Score(0x600B, 0xFF03, 1, 65, 9);
+		int keyboardPlain = MechrevoLite.Hardware.HidKeyboardScoring.Score(0x600B, 0xFF03, 1, 0, 0);
+		Expect("H2 keyboard candidate usable", keyboardPlain > 0, keyboardPlain);
+		Expect("H2 keyboard beats bare lightbar", keyboardPlain > 0, keyboardPlain);
+		Expect("H2 keyboard scores above every lightbar length combo",
+			keyboardPlain > MechrevoLite.Hardware.HidKeyboardScoring.Score(0x7001, 0xFF03, 1, 0, 0), keyboardPlain);
+		Expect("H2 per-key range 0x6000..0x600B", keyboardBest > 0
+			&& MechrevoLite.Hardware.HidKeyboardScoring.Score(0x6000, 0xFF03, 1, 0, 0) > 0
+			&& MechrevoLite.Hardware.HidKeyboardScoring.Score(0x600A, 0xFF03, 1, 0, 0) > 0, keyboardBest);
+		Expect("H2 keyboard above four-zone keyboard",
+			MechrevoLite.Hardware.HidKeyboardScoring.Score(0x600B, 0xFF03, 1, 0, 0)
+			> MechrevoLite.Hardware.HidKeyboardScoring.Score(0xCE00, 0xFF03, 1, 0, 0));
+		Expect("H3 non-control interface scores 0", MechrevoLite.Hardware.HidKeyboardScoring.Score(0x600B, 0x0001, 0, 8, 0) == 0);
+		Expect("H3 per-key predicate", MechrevoLite.Hardware.HidKeyboardScoring.IsPerKeyKeyboard(0x6000)
+			&& MechrevoLite.Hardware.HidKeyboardScoring.IsPerKeyKeyboard(0x600B)
+			&& !MechrevoLite.Hardware.HidKeyboardScoring.IsPerKeyKeyboard(0x7001));
+		Expect("H3 auxiliary predicate", MechrevoLite.Hardware.HidKeyboardScoring.IsLightingAuxiliary(0x7001)
+			&& MechrevoLite.Hardware.HidKeyboardScoring.IsLightingAuxiliary(0x7000)
+			&& MechrevoLite.Hardware.HidKeyboardScoring.IsLightingAuxiliary(0x7002)
+			&& !MechrevoLite.Hardware.HidKeyboardScoring.IsLightingAuxiliary(0x600B));
 	}
 
 	private static void CheckPlannerFanBoostFollowsDeclaration()

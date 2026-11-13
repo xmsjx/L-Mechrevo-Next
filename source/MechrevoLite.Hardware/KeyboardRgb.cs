@@ -587,29 +587,21 @@ public class KeyboardRgb : IDisposable
 				result = item;
 			}
 		}
+		if (result != null)
+		{
+			Logger.WriteLineIfChanged("kbd-hid-device", "[kbd-hid] 选用设备：" + result.DeviceInfo
+				+ " out=" + result.OutputReportLength + " feature=" + result.FeatureReportLength + " score=" + num);
+		}
+		else
+		{
+			Logger.WriteLineIfChanged("kbd-hid-device", "[kbd-hid] 没有可用的键盘 HID 设备（灯带/铰链设备已排除）");
+		}
 		return result;
 	}
 
 	internal static int ScoreCandidate(ushort productId, ushort usagePage, int interfaceNumber, ushort outputReportLength, ushort featureReportLength)
 	{
-		int num = ((usagePage == 65283) ? 30 : ((interfaceNumber == 1) ? 20 : 0));
-		if (num == 0)
-		{
-			return 0;
-		}
-		if (productId == 24587)
-		{
-			num += 4;
-		}
-		if (outputReportLength == 65)
-		{
-			num += 2;
-		}
-		if (featureReportLength == 9)
-		{
-			num += 2;
-		}
-		return num;
+		return HidKeyboardScoring.Score(productId, usagePage, interfaceNumber, outputReportLength, featureReportLength);
 	}
 
 	internal static int MapHardwareBrightnessLevel(int level)
