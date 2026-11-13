@@ -32,6 +32,10 @@ internal static class Program
 		CheckSmuPowerRowOrderAndNoIndependentFppt();
 		CheckPlannerEmitsGpuOverclockOnFirmwareSlotForBaolongda();
 		CheckPlannerKeepsGcuStepsUnchanged();
+		// ⭐⭐ 2026-11-13（机主：「宝龙达声明支持，强冷走自己路」）：
+		//   F = 强冷步骤只看声明出来的能力位（不再有 `|| UsesBaolongda` 兜底）：
+		//       声明支持 + 档里配了值 ⇒ 生成；声明不支持 ⇒ 不生成。
+		CheckPlannerFanBoostFollowsDeclaration();
 		// ⭐⭐ 2026-10-19（机主：「显卡超频设置了但频率没变化」· 根因②）：
 		//   D = "应用"是否走硬件下发的纯判据：宝龙达自定义档**不是当前激活档也要下发**；
 		//       非宝龙达保持旧口径（只有当前激活档才下发）⇒ GCU 行为逐位不变。
@@ -264,6 +268,36 @@ internal static class Program
 			}
 		}
 		return -1;
+	}
+
+	private static void CheckPlannerFanBoostFollowsDeclaration()
+	{
+		// F：强冷步骤的唯一下发判据 = `PerfModeCapabilities.SupportsFanBoost`（由后端声明得出），
+		//    不再有「宝龙达特判」。声明支持 ⇒ 生成步骤；声明不支持 ⇒ 不生成。
+		PerfModeDefinition onMode = new PerfModeDefinition("custom1", PerfModeKind.Custom, null,
+			new PerfModeSettings { FanBoost = true });
+		PerfModeDefinition offMode = onMode.With(new PerfModeSettings { FanBoost = false });
+		PerfModeCapabilities declared = new PerfModeCapabilities { SupportsFanBoost = true };
+		PerfModeCapabilities unsupported = new PerfModeCapabilities { SupportsFanBoost = false };
+		FirmwareSlotPlan plan = new FirmwareSlotPlan(0, NeedsParameterWrite: false, "test");
+
+		PerfApplyStep? on = PerfModeApplyPlanner.Build(onMode, plan, declared, includeSwitch: false)
+			.FirstOrDefault((PerfApplyStep s) => s.Kind == PerfApplyStepKind.ApplyFanBoost);
+		Expect("F1 step exists when declared supported", (object?)on != null);
+		if ((object?)on != null)
+		{
+			Expect("F1 number", on.Number == 1, on.Number);
+		}
+		PerfApplyStep? off = PerfModeApplyPlanner.Build(offMode, plan, declared, includeSwitch: false)
+			.FirstOrDefault((PerfApplyStep s) => s.Kind == PerfApplyStepKind.ApplyFanBoost);
+		Expect("F2 off step exists (writes 0)", (object?)off != null);
+		if ((object?)off != null)
+		{
+			Expect("F2 number", off.Number == 0, off.Number);
+		}
+		bool anyWhenUnsupported = PerfModeApplyPlanner.Build(onMode, plan, unsupported, includeSwitch: false)
+			.Any((PerfApplyStep s) => s.Kind == PerfApplyStepKind.ApplyFanBoost);
+		Expect("F3 no step when declaration says unsupported", !anyWhenUnsupported);
 	}
 
 	private static void CheckLocalApplyGateForBaolongdaCustom()

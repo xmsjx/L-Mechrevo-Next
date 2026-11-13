@@ -213,7 +213,7 @@ internal static class FeatureGate
 		Check(lines, "nuc-charge", Facts(BackendKind.NucUmiLocal), new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.ChargeLimit);
 		Check(lines, "baolongda-fanboost", Facts(BackendKind.BaolongdaWmi), new FeatureProbe(false, true, false, null, false),
-			FeatureAvailability.Supported, BackendChannel.WmiMailbox, FeatureId.FanBoost);
+			FeatureAvailability.Supported, BackendChannel.Ec, FeatureId.FanBoost);
 		Check(lines, "ec-fanboost", Facts(BackendKind.TongfangEc), new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.FanBoost);
 		Check(lines, "ec-keyboard-single-zone", Facts(BackendKind.TongfangEc),

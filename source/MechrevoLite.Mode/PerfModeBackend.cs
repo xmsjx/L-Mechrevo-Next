@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using MechrevoLite.Display;
 using MechrevoLite.Gpu;
 using MechrevoLite.Hardware;
+using MechrevoLite.Hardware.Architecture;
 
 namespace MechrevoLite.Mode;
 
@@ -80,7 +81,8 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			SupportsGpuOverclock = hw.SupportsGpuOverclock,
 			// 无界 APU：强冷走 GCU 同通道 ⇒ 先按支持处理（曲线窗口再用 IsGcuConnected 兜底）
 			SupportsFanCurve = hw.FanCurveSeen || hw.WujieSmuApu,
-			SupportsFanBoost = hw.SupportsFanBoost || hw.UsesBaolongda,
+			// 强冷是否支持由后端声明决定；具体走哪一路由 SwitchFanBoost 按后端分派。
+			SupportsFanBoost = FeatureGate.ResolveSupportOrLegacy(FeatureId.FanBoost, hw, hw.SupportsFanBoost),
 			SupportsFanSwitchSpeed = hw.SupportsFanSwitchSpeed,
 			// 2026-10-15（用户拍板：刷新率这条**整个改走 Windows API**，不再依赖 GCU）：
 			// 原来判的是 GCU 能力位 + 固件的「自动刷新率」字段（`hw.SupportsDisplayRefresh && !hw.DcHz`）

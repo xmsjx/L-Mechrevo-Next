@@ -21,7 +21,7 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
 		FeatureDeclaration fanCurve = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.WmiMailbox, "宝龙达软件闭环风扇曲线", new[] { "wmi:Baolongda.FanCurve" });
 		FeatureDeclaration fanBoost = new FeatureDeclaration(FeatureAvailability.Supported,
-			BackendChannel.WmiMailbox, "宝龙达本机强冷通道", new[] { "wmi:Baolongda.FanBoost" });
+			BackendChannel.Ec, "宝龙达本地 EC 强冷（目标 + 掩码）", new[] { "ec:FanTargets+0xB20" });
 		FeatureDeclaration chargeLimit = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.WmiMailbox, "宝龙达限充通道", new[] { "wmi:Baolongda.ChargeLimit" });
 		FeatureDeclaration performanceMode = new FeatureDeclaration(FeatureAvailability.Supported,
