@@ -85,6 +85,11 @@ internal static class DiagnosticBackendRouteInfo
 				+ (string.IsNullOrEmpty(BackendRouter.RuleLoadError) ? "" : " · 错误=" + BackendRouter.RuleLoadError));
 			sb.AppendLine("  生效规则：");
 			sb.AppendLine(Indent(BackendRouter.DescribeRules(), "    "));
+			MechrevoHw? hw = MechrevoLite.Program.hw;
+			sb.AppendLine("  功能通道："
+				+ " 限充=" + FeatureGate.Get(FeatureId.ChargeLimit, hw).Channel
+				+ " · 强冷=" + FeatureGate.Get(FeatureId.FanBoost, hw).Channel
+				+ " · 风扇曲线=" + FeatureGate.Get(FeatureId.FanCurve, hw).Channel);
 			sb.AppendLine("  说明：路由只读机型事实、首条命中；不做“探测失败换后端”。");
 			sb.AppendLine("  机型分流自测（纯函数矩阵，只读）：");
 			sb.AppendLine(Indent(BackendRouter.RunSelfTest(), "    "));
