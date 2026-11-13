@@ -438,49 +438,10 @@ public partial class FanCurveWindow : Window
         }
         try
         {
-            int[] cpu = CpuCurve.Duties;
-            int[] gpu = GpuCurve.Duties;
-            bool push = PushFanCurveCheck?.IsChecked != false;
-            if (!push)
-            {
-                PerfModeService.Instance?.RecordFanCurves(_modeId, cpu, gpu);
-                PerfModeService.Instance?.RecordFanCurveEnabled(_modeId, false);
-                _dirty = false;
-                StatusText.Text = WpfStrings.FanCurveWindow_xaml_Text_4;
-                return;
-            }
-            PerfModeService.Instance?.RecordFanCurveEnabled(_modeId, true);
-            await _hw.SetFanCurve(0, cpu).ConfigureAwait(true);
-            await _hw.SetFanCurve(1, gpu).ConfigureAwait(true);
-            await _hw.Publish("Fan/Control", new Dictionary<string, object> { ["Action"] = "GET_FAN_SPEED_CURVE_SETTING" }).ConfigureAwait(true);
-            await Task.Delay(700).ConfigureAwait(true);
-            bool confirmed = CurveMatches(cpu, _hw.CpuCurveDuty, _hw.CpuCurveUpT)
-                && CurveMatches(gpu, _hw.GpuCurveDuty, _hw.GpuCurveUpT);
-            if (confirmed)
-            {
-                if (_modeId.StartsWith("fw", StringComparison.Ordinal)
-                    || _modeId.StartsWith("custom", StringComparison.Ordinal))
-                {
-                    MechrevoLite.Mode.PerfModeSettings settings = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId) with
-                    {
-                        CpuFanDuty = cpu,
-                        GpuFanDuty = gpu,
-                        FanCurveOn = PushFanCurveCheck?.IsChecked != false
-                    };
-                    MechrevoLite.Mode.PerfModeStore.SaveSettings(_modeId, settings);
-                }
-                else
-                {
-                    PerfModeService.Instance?.RecordFanCurves(_modeId, cpu, gpu);
-                    PerfModeService.Instance?.RecordFanCurveEnabled(_modeId, true);
-                }
-                _dirty = false;
-                StatusText.Text = WpfStrings.FanCurveWindow_xaml_Text_5;
-            }
-            else
-            {
-                StatusText.Text = WpfStrings.FanCurveWindow_xaml_Text_6;
-            }
+            FanCurveSaveResult result = await FanCurveSaveService.SaveGcuAsync(_hw, _modeId,
+                CpuCurve.Duties, GpuCurve.Duties, PushFanCurveCheck?.IsChecked != false);
+            _dirty = result.Dirty;
+            StatusText.Text = result.Detail;
         }
         catch (Exception ex)
         {
