@@ -99,6 +99,13 @@ internal interface ILightingService
 
     /// <summary>灯光电源意图：能力判定 + 单通道开关。</summary>
     Task<ServiceResult> ApplyLightPowerIntentAsync(SetLightPowerIntent intent);
+
+    /// <summary>
+    /// 键盘灯开关的**界面状态**（只读）：<c>null</c> = 该后端没有可用的读数来源。
+    /// <para>EC 单区/白光回读寄存器；EC 模式的 HID 单键没有回读通道 ⇒ 用 HID 电源镜像，
+    /// 镜像也没有时按"用户是否显式关过"决定（⛔ 不把"读不到"显示成关）。</para>
+    /// </summary>
+    bool? ResolveKeyboardSwitchState();
 }
 
 /// <inheritdoc />
@@ -489,6 +496,32 @@ internal sealed class LightingService : ILightingService
         {
             return ServiceResult.Fail(WpfStrings.ExceptionPrefix + ex.GetType().Name);
         }
+    }
+
+    /// <inheritdoc />
+    public bool? ResolveKeyboardSwitchState()
+    {
+        if (!GcuEcKeyboard.Active)
+        {
+            return null;
+        }
+        if (GcuEcKeyboard.IsHid)
+        {
+            // HID 单键没有回读通道：先用 HID 侧电源镜像，取不到就按"是否显式关过"决定。
+            KeyboardRgb? rgb = L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
+            if (rgb != null)
+            {
+                Logger.WriteLineIfChanged("ec-kbd-switch",
+                    "[gcu-ec-kbd] 键盘灯开关：HID 单键无回读 ⇒ 按电源镜像显示=" + rgb.KbPowerOn);
+                return rgb.KbPowerOn;
+            }
+            LightChannelSettings saved = LightingSettingsStore.Load(LightingTopics.Keyboard, "Single");
+            bool fallback = LightingState.ResolveSwitchWithoutReadback(saved.PowerExplicit, saved.PowerOn);
+            Logger.WriteLineIfChanged("ec-kbd-switch", "[gcu-ec-kbd] 键盘灯开关：HID 单键未连接 ⇒ 按保存设置显示=" + fallback
+                + "（显式=" + saved.PowerExplicit + " · 保存值=" + saved.PowerOn + "）");
+            return fallback;
+        }
+        return GcuEcKeyboard.TryReadPower(out bool on) ? on : (bool?)null;
     }
 
     public async Task<ServiceResult> ApplyKeyboardIntentAsync(SetKeyboardIntent intent)

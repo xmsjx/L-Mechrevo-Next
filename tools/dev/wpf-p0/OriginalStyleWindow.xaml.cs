@@ -9512,7 +9512,9 @@ public partial class OriginalStyleWindow : Window
     /// <summary>EC 实验模式：键盘灯开关按 EC 实际状态回填（HID 由 KeyboardRgb 自己维护）。</summary>
     private void SyncEcKeyboardSwitch()
     {
-        if (!MechrevoLite.Hardware.GcuEcKeyboard.TryReadPower(out bool on))
+        // 开关状态由服务层按后端决定（EC 单区/白光回读寄存器；HID 单键用电源镜像/显式开关），
+        // ⛔ 这里不判断硬件类型：没有可读来源时服务层返回 null，开关保持原样。
+        if (_services?.Lighting.ResolveKeyboardSwitchState() is not bool on)
         {
             return;
         }
@@ -9676,10 +9678,18 @@ public partial class OriginalStyleWindow : Window
             }
             else
             {
-                bool keyboardOn = hw.UsesBaolongda
-                    ? hardwareKeyboardPower
-                    : MechrevoLite.KeyboardLightingDecision.ShouldWrite(hw.IsConnected, hardwareKeyboardPower);
-                KeyboardLightSwitch.IsChecked = MechrevoLite.Hardware.LightingState.IsLightSwitchOn(keyboardOn, suspended);
+                // EC 模式的 HID 单键键盘没有回读通道：不能拿 GCU 电源位（在 EC 下恒为 false）压成"关"。
+                if (_services?.Lighting.ResolveKeyboardSwitchState() is bool ecOn && IsHidKeyboard(hw))
+                {
+                    KeyboardLightSwitch.IsChecked = ecOn && !suspended;
+                }
+                else
+                {
+                    bool keyboardOn = hw.UsesBaolongda
+                        ? hardwareKeyboardPower
+                        : MechrevoLite.KeyboardLightingDecision.ShouldWrite(hw.IsConnected, hardwareKeyboardPower);
+                    KeyboardLightSwitch.IsChecked = MechrevoLite.Hardware.LightingState.IsLightSwitchOn(keyboardOn, suspended);
+                }
             }
             SetSwitchFromQuick(hw, "lightbar", LightStripSwitch, suspended, 0);
             SetSwitchFromQuick(hw, "logolight", LogoLightSwitch, suspended, 1);

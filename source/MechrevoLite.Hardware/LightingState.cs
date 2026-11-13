@@ -51,6 +51,16 @@ internal static class LightingState
 	}
 
 	/// <summary>
+	/// 没有硬件回读通道时（EC 模式的 HID 单键键盘）的**界面开关**取值：
+	/// 只有用户显式关过才显示成关，其余一律显示成开。
+	/// <para>理由："读不到"不等于"灯是关的"。把缺失的回读当成关，会让界面开关与真实状态相反。</para>
+	/// </summary>
+	internal static bool ResolveSwitchWithoutReadback(bool powerExplicit, bool savedPowerOn)
+	{
+		return !powerExplicit || savedPowerOn;
+	}
+
+	/// <summary>
 	/// 2026-10-12（键盘灯「有时候控制不了」根因①：门控背离）：把「LM 缓存的键盘灯电源」
 	/// 与「硬件/GCU 当时报的电源」合成为**有效电源**。
 	/// <para>

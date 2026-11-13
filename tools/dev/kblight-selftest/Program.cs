@@ -269,6 +269,19 @@ internal static class Program
 		CheckInt("声明值 0 => 保守回退下限 1", KeyboardLightingCalibration.Conservative(0, "x").BrightnessMax, 1);
 		// ⑥ 只能写到 1 档也如实（不拿声明值冒充实测值）
 		KeyboardLightingCalibration onlyOne = KeyboardLightingCalibration.FromProbe(3, 1, "t");
+		Console.WriteLine();
+		Console.WriteLine("== 2026-11-13 EC 模式 HID 单键：没有回读时的界面开关（LightingState.ResolveSwitchWithoutReadback）==");
+		Console.WriteLine("机主口径：EC 模式启动后开关显示成关，但键盘灯其实是亮的；GCU 模式不复现");
+
+		// ① 从未显式设置过 ⇒ 显示开（不能把"读不到"当成"关"）
+		Check("从未显式设置 ⇒ 显示开", LightingState.ResolveSwitchWithoutReadback(false, false), true);
+		// ② 用户显式设开 ⇒ 显示开
+		Check("显式开 ⇒ 显示开", LightingState.ResolveSwitchWithoutReadback(true, true), true);
+		// ③ 用户显式关过 ⇒ 显示关（尊重用户意图）
+		Check("显式关 ⇒ 显示关", LightingState.ResolveSwitchWithoutReadback(true, false), false);
+		// ④ 幂等
+		Check("判据是纯函数（幂等）",
+			LightingState.ResolveSwitchWithoutReadback(true, false) == LightingState.ResolveSwitchWithoutReadback(true, false), true);
 		Check("只能写到 1 => BrightnessProbed", onlyOne.BrightnessProbed, true);
 		CheckInt("只能写到 1 => 上限 1", onlyOne.BrightnessMax, 1);
 
@@ -277,3 +290,4 @@ internal static class Program
 		return (_fail == 0) ? 0 : 1;
 	}
 }
+
