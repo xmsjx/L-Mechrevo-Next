@@ -11,6 +11,7 @@ using MechrevoLite.Hardware.FanCurve;
 using MechrevoLite.Mode;
 
 using L_Mechrevo.WpfP0.Resources;
+using L_Mechrevo.WpfP0.Services;
 namespace L_Mechrevo.WpfP0;
 
 public partial class FanCurveWindow : Window
@@ -598,58 +599,31 @@ public partial class FanCurveWindow : Window
         if (confirm != MessageBoxResult.Yes) return;
         try
         {
-            if (BackendKind == FanCurveBackendKind.Baolongda)
-            {
-                PerfModeService.Instance?.ResetBaolongdaFanToFirmwareDefault();
-                ClearSavedFanCurve();
-                LoadFromHardware();
-                _dirty = false;
-                StatusText.Text = WpfStrings.L("已恢复默认：宝龙达软件闭环已关闭，曲线回到固件默认", "Restored: Baolongda software loop disabled; curve returned to firmware default");
-            }
-            else if (BackendKind == FanCurveBackendKind.NucUmi)
-            {
-                bool restored = MechrevoLite.Hardware.NucFanTable.TryRestoreDefault(out string nucDetail);
-                bool isolatedRestore = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(false, out string isolatedDetail);
-                restored &= isolatedRestore;
-                nucDetail += " " + isolatedDetail;
-                LoadFromHardware();
-                _dirty = false;
-                StatusText.Text = restored
-                    ? WpfStrings.L("已恢复默认：NUC/UMI 风扇表已还原", "Restored: NUC/UMI fan table restored")
-                    : WpfStrings.L("恢复默认失败：", "Restore default failed: ") + nucDetail;
-            }
-            else if (BackendKind == FanCurveBackendKind.Ec)
-            {
-                bool restored = MechrevoLite.Hardware.NucFanTable.TryRestoreDefault(out string nucDetail);
-                bool isolatedRestore = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(false, out string isolatedDetail);
-                restored &= isolatedRestore;
-                nucDetail += " " + isolatedDetail;
-                ClearSavedFanCurve();
-                LoadFromHardware();
-                _dirty = false;
-                StatusText.Text = restored
-                    ? WpfStrings.L("已恢复默认：同方 EC 风扇表已还原", "Restored: Tongfang EC fan table restored")
-                    : WpfStrings.L("恢复默认失败：", "Restore default failed: ") + nucDetail;
-            }
-            else if (BackendKind == FanCurveBackendKind.Gcu)
-            {
-                if (!_hw.TryGetBuiltInDefaultFanCurve(out byte[] cpuTemps, out byte[] cpuDuties,
-                        out byte[] gpuTemps, out byte[] gpuDuties))
-                {
-                    throw new InvalidOperationException(WpfStrings.L("找不到内置默认曲线资源", "Built-in default curve resource not found"));
-                }
-                await _hw.SetFanCurve(0, cpuDuties.Select(v => (int)v).ToArray());
-                await _hw.SetFanCurve(1, gpuDuties.Select(v => (int)v).ToArray());
-                ClearSavedFanCurve();
-                CpuCurve.Load(cpuTemps, cpuDuties);
-                GpuCurve.Load(gpuTemps, gpuDuties);
-                _dirty = false;
-                StatusText.Text = WpfStrings.L("已恢复默认：已写回内置默认风扇曲线", "Restored: built-in default fan curve written");
-            }
-            else
+            FanCurveRestoreOutcome outcome = await L_Mechrevo.WpfP0.Services.FanCurveRestoreService
+                .RestoreAsync(BackendKind, _hw);
+            if (!outcome.Handled)
             {
                 StatusText.Text = WpfStrings.L("本机不支持恢复默认曲线", "Restoring the default curve is not supported on this machine");
+                return;
             }
+            if (outcome.ClearSaved)
+            {
+                ClearSavedFanCurve();
+            }
+            if (outcome.CpuTemps != null && outcome.CpuDuties != null
+                && outcome.GpuTemps != null && outcome.GpuDuties != null)
+            {
+                CpuCurve.Load(outcome.CpuTemps, outcome.CpuDuties);
+                GpuCurve.Load(outcome.GpuTemps, outcome.GpuDuties);
+            }
+            else if (outcome.ReloadFromHardware)
+            {
+                LoadFromHardware();
+            }
+            _dirty = false;
+            StatusText.Text = outcome.Success
+                ? outcome.Detail
+                : WpfStrings.L("恢复默认失败：", "Restore default failed: ") + outcome.Detail;
         }
         catch (Exception ex)
         {
