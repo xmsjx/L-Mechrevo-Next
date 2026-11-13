@@ -2876,80 +2876,11 @@ public partial class OriginalStyleWindow : Window
 
     private async Task WriteBackFullChargeAfterSliderOffAsync()
     {
-        try
+        ServiceResult result = await ChargeLimitApplyService.WriteBackFullChargeAsync(_backendProbe?.Hw);
+        // 空说明表示“已满充、无需提示”，保持状态栏原文案。
+        if (result.Detail.Length > 0)
         {
-            MechrevoHw? nucHw = _backendProbe?.Hw;
-            if (nucHw?.IsNucUmiFamily == true)
-            {
-                bool nucOk = await Task.Run(() => MechrevoLite.Hardware.NucBatteryMode.TrySetPercent(100, out _));
-                if (nucOk)
-                {
-                    AppConfig.Set("charge_limit", 100);
-                    AppConfig.Flush();
-                    BatteryControl.chargeFull = true;
-                    StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_30;
-                }
-                else
-                {
-                    StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_31;
-                }
-                return;
-            }
-            bool ecAllowed = !string.Equals(AppConfig.GetString("ec_charge_limit"), "0", StringComparison.Ordinal)
-                && EcChargeLimit.IsEcDirectWriteAllowed();
-            if (ecAllowed)
-            {
-                int current = await Task.Run(() => EcChargeLimit.ReadPercent());
-                if (current == 100)
-                {
-                    AppConfig.Set("charge_limit", 100);
-                    AppConfig.Flush();
-                    BatteryControl.chargeFull = true;
-                    return;
-                }
-                (bool ok, int readback) = await Task.Run(() =>
-                {
-                    bool written = EcChargeLimit.TrySet(100, out _, out _);
-                    return (written, EcChargeLimit.ReadPercent());
-                });
-                if (readback == 100)
-                {
-                    AppConfig.Set("charge_limit", 100);
-                    AppConfig.Flush();
-                    BatteryControl.chargeFull = true;
-                    StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_10;
-                    return;
-                }
-                StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_11 + ok + WpfStrings.StatusReadbackSuffix + readback + "%" + WpfStrings.ClosingParen;
-                return;
-            }
-            MechrevoHw? hw = _backendProbe?.Hw;
-            if (hw != null && hw.IsConnected)
-            {
-                if (hw.BatteryProtection == 0)
-                {
-                    AppConfig.Set("charge_limit", 100);
-                    AppConfig.Flush();
-                    BatteryControl.chargeFull = true;
-                    return;
-                }
-                bool confirmed = await hw.SetBatteryProtection(0);
-                if (confirmed && hw.BatteryProtection == 0)
-                {
-                    AppConfig.Set("charge_limit", 100);
-                    AppConfig.Flush();
-                    BatteryControl.chargeFull = true;
-                    StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_12;
-                    return;
-                }
-                StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_13;
-                return;
-            }
-            StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_14;
-        }
-        catch (Exception ex)
-        {
-            StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_15 + ex.Message;
+            StatusText.Text = result.Detail;
         }
     }
 
@@ -3275,28 +3206,10 @@ public partial class OriginalStyleWindow : Window
     }
 
     private static ServiceResult EnableChargeLimitDirect(int low, int high)
-    {
-        if (MechrevoLite.Hardware.EcChargeLimit.IsEcDirectWriteAllowed())
-        {
-            bool ecOk = MechrevoLite.Hardware.EcChargeLimit.TrySet(high, out int applied);
-            string ecDetail = "EC 限充 high=" + high + "%" + (applied > 0 ? " 回读=" + applied + "%" : "");
-            return ecOk ? ServiceResult.Success(ecDetail) : ServiceResult.Fail(ecDetail);
-        }
-        bool ok = BatteryLimitWriter.TryEnable(low, high, allowInitialDischarge: true, out string detail);
-        return ok ? ServiceResult.Success(detail) : ServiceResult.Fail(detail);
-    }
+        => ChargeLimitApplyService.ApplyThreshold(low, high);
 
     private static ServiceResult DisableChargeLimitDirect()
-    {
-        if (MechrevoLite.Hardware.EcChargeLimit.IsEcDirectWriteAllowed())
-        {
-            bool ecOk = MechrevoLite.Hardware.EcChargeLimit.TrySet(100, out int applied);
-            string ecDetail = "EC 限充恢复 100%" + (applied > 0 ? " 回读=" + applied + "%" : "");
-            return ecOk ? ServiceResult.Success(ecDetail) : ServiceResult.Fail(ecDetail);
-        }
-        bool ok = BatteryLimitWriter.TryDisable(out string detail);
-        return ok ? ServiceResult.Success(detail) : ServiceResult.Fail(detail);
-    }
+        => ChargeLimitApplyService.DisableThreshold();
 
     private async Task<bool> SetKeyboardEffectServiceAsync(string effect)
     {
@@ -3428,13 +3341,8 @@ public partial class OriginalStyleWindow : Window
         {
             if (_services != null) { _services.ChargeLimit.SetEcDirectWrite(true); } else { AppConfig.Set("ec_charge_limit", "0"); }
             // 关闭 EC 直写时必须真实清掉硬件限充，不能只改配置。
-            (bool cleared, string clearDetail) = await Task.Run(() =>
-            {
-                bool ok = MechrevoLite.Hardware.EcChargeLimitOverride.TrySetNoSmartHint(100, out string detail);
-                return (ok, detail);
-            });
+            await ChargeLimitApplyService.ClearLimitForEcDirectOffAsync();
             ApplyBatteryModeHighlight(0);
-            Logger.WriteError("[battery-ec-off] 清除限充=" + cleared + " " + clearDetail);
         }
         else
         {
@@ -3453,38 +3361,20 @@ public partial class OriginalStyleWindow : Window
         }
         int value = (int)Math.Round(e.NewValue);
         if (BatteryLimitSliderText != null) BatteryLimitSliderText.Text = value + "%";
-        MechrevoHw? hw = _backendProbe?.Hw;
-        if (hw?.IsNucUmiFamily == true)
+        ChargeSliderOutcome outcome = ChargeLimitApplyService.ApplySliderPercent(_backendProbe?.Hw, value);
+        if (!outcome.Ok)
         {
-            if (!MechrevoLite.Hardware.NucBatteryMode.TrySetPercent(value, out string nucDetail))
+            StatusText.Text = outcome.Detail;
+            if (outcome.ReadbackPercent >= 0)
             {
-                StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_28;
                 _syncingBatteryLimit = true;
-                if (MechrevoLite.Hardware.NucBatteryMode.TryReadPercent(out int nucNow))
-                {
-                    BatteryLimitSlider.Value = nucNow;
-                }
+                BatteryLimitSlider.Value = outcome.ReadbackPercent;
                 _syncingBatteryLimit = false;
-                Logger.WriteLine("[nuc-battery] 滑块 EC 0x07B9 失败：" + nucDetail);
-                return;
             }
-            BatteryControl.SetSelectedModePercent(value);
-            ApplyBatterySliderHighlight(value);
-            StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_29 + value + "%";
-            Logger.WriteLine("[nuc-battery] 滑块 EC 0x07B9 = " + value + "%");
             return;
         }
-        if (!BatteryControl.CaptureChargeLimitGesture() || !BatteryControl.ApplyChargeLimitFromUserGesture(value))
-        {
-            StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_28;
-            _syncingBatteryLimit = true;
-            BatteryLimitSlider.Value = BatteryControl.ResolveDisplayLimitPercent();
-            _syncingBatteryLimit = false;
-            return;
-        }
-        BatteryControl.SetSelectedModePercent(value);
         ApplyBatterySliderHighlight(value);
-        StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_29 + value + "%";
+        StatusText.Text = outcome.Detail;
     }
 
     private void RefreshBrightness()
@@ -9462,12 +9352,27 @@ public partial class OriginalStyleWindow : Window
         bool on = DisplayEffectSwitch.IsChecked == true;
         DisplayEffectSwitch.IsEnabled = false;
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_60;
-        bool ok = await _backendProbe.ApplyDisplayEffectAsync(on, SelectedDisplayEffectMode());
+        bool ok;
+        string okText;
+        if (_services != null)
+        {
+            ServiceResult result = await _services.Display.ApplyDisplayEffectAsync(on, SelectedDisplayEffectMode());
+            ok = result.Ok;
+            okText = result.Detail;
+        }
+        else
+        {
+            ok = await _backendProbe.ApplyDisplayEffectAsync(on, SelectedDisplayEffectMode());
+            okText = on ? WpfStrings.DisplayColorEnhancementOn : WpfStrings.DisplayColorEnhancementOff;
+            if (ok)
+            {
+                AppConfig.Set("display_effect", on ? 1 : 0);
+                AppConfig.Flush();
+            }
+        }
         if (ok)
         {
-            AppConfig.Set("display_effect", on ? 1 : 0);
-            AppConfig.Flush();
-            StatusText.Text = on ? WpfStrings.DisplayColorEnhancementOn : WpfStrings.DisplayColorEnhancementOff;
+            StatusText.Text = okText;
         }
         else
         {
@@ -9497,6 +9402,19 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         string mode = SelectedDisplayEffectMode();
+        if (_services != null)
+        {
+            // 服务内部先落盘档位再按开关状态决定是否下发。
+            ServiceResult result = await _services.Display.SetDisplayEffectModeAsync(mode);
+            if (DisplayEffectSwitch.IsChecked != true)
+            {
+                return;
+            }
+            StatusText.Text = result.Ok
+                ? WpfStrings.OriginalStyleWindow_xaml_Text_62 + (DisplayEffectCombo.SelectedItem as ComboBoxItem)?.Content
+                : WpfStrings.OriginalStyleWindow_xaml_Text_63;
+            return;
+        }
         // 用户的档位选择必须先记忆：即使当前后端档位表缺失/下发失败，
         // 下一次刷新也不能把下拉重置回“多彩”。
         if (!string.IsNullOrWhiteSpace(mode))
@@ -11421,6 +11339,10 @@ public partial class OriginalStyleWindow : Window
 
     internal async Task<bool> SetLcdOverdriveAsync(bool on)
     {
+        if (_services != null)
+        {
+            return (await _services.Display.SetLcdOverdriveAsync(on)).Ok;
+        }
         return _backendProbe != null && await _backendProbe.SetLcdOverdriveAsync(on);
     }
 

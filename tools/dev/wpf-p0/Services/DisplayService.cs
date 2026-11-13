@@ -59,6 +59,9 @@ internal interface IDisplayService
 
     /// <summary>切换色彩增强档位（已开启时立即应用；未开启只落盘）。</summary>
     Task<ServiceResult> SetDisplayEffectModeAsync(string mode);
+
+    /// <summary>只记住用户选择的档位（未开启时用；⛔ 不下发硬件）。</summary>
+    ServiceResult RememberDisplayEffectMode(string mode);
 }
 
 /// <inheritdoc />
@@ -341,6 +344,10 @@ internal sealed class DisplayService : IDisplayService
         {
             return ServiceResult.Fail(WpfStrings.DisplayColorProfileEmpty);
         }
+        if (!DisplayEffectOn)
+        {
+            return RememberDisplayEffectMode(mode);
+        }
         try
         {
             bool ok = await probe.ApplyDisplayEffectProfileAsync(mode).ConfigureAwait(false);
@@ -357,6 +364,17 @@ internal sealed class DisplayService : IDisplayService
         {
             return ServiceResult.Fail(WpfStrings.DisplayColorProfileExceptionPrefix + ex.GetType().Name);
         }
+    }
+
+    public ServiceResult RememberDisplayEffectMode(string mode)
+    {
+        if (string.IsNullOrWhiteSpace(mode))
+        {
+            return ServiceResult.Fail(WpfStrings.DisplayColorProfileEmpty);
+        }
+        AppConfig.Set("display_effect_mode", mode);
+        AppConfig.Flush();
+        return ServiceResult.Success(WpfStrings.DisplayColorProfileSwitched);
     }
 
     private static bool CustomCalibrationAvailable()
