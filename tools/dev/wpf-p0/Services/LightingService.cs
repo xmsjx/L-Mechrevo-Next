@@ -129,6 +129,38 @@ internal interface ILightingService
 
     /// <summary>通道保存的效果是否等于给定值（大小写不敏感）。</summary>
     bool ChannelEffectIs(string topic, string effect);
+
+    // ── EC 实验模式的键盘通道（只读事实 + 下发入口）：界面层只问这里，⛔ 不直接引用 EC 键盘驱动类型 ──
+
+    /// <summary>EC 实验模式（无 GCU）是否接管键盘灯。</summary>
+    bool EcKeyboardActive { get; }
+
+    /// <summary>EC 模式键盘灯是否为 HID 单键（有些机型是 EC 单区/白光）。</summary>
+    bool EcKeyboardHid { get; }
+
+    /// <summary>EC 模式键盘灯是否为白光单色键盘。</summary>
+    bool EcKeyboardWhite { get; }
+
+    /// <summary>EC 模式键盘灯是否为单分区 RGB。</summary>
+    bool EcKeyboardSingleZone { get; }
+
+    /// <summary>EC 模式是否存在可控制的键盘灯通道。</summary>
+    bool EcKeyboardControllable { get; }
+
+    /// <summary>EC 模式键盘灯种类（日志/状态行展示用）。</summary>
+    string EcKeyboardKind { get; }
+
+    /// <summary>标记 EC 键盘通道已就绪（探测完成后调用一次；幂等）。</summary>
+    void EnsureEcKeyboardReady();
+
+    /// <summary>按保存的设置下发 EC 键盘灯（effect=效果名；<paramref name="light"/> 为空则用保存值）。</summary>
+    bool ApplyEcKeyboard(string effect, bool on, int? light = null);
+
+    /// <summary>EC 白光键盘（0~2 档；0 = 关）。</summary>
+    bool ApplyEcWhiteKeyboard(int level);
+
+    /// <summary>EC 键盘 Fn 亮度键（0~4 档）。</summary>
+    bool ApplyEcHotkeyBrightness(int level);
 }
 
 /// <inheritdoc />
@@ -597,6 +629,49 @@ internal sealed class LightingService : ILightingService
     public bool ChannelEffectIs(string topic, string effect)
     {
         return string.Equals(LightingSettingsStore.Load(topic, effect).Effect, effect, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <inheritdoc />
+    public bool EcKeyboardActive => EcKeyboardFacts.Active;
+
+    /// <inheritdoc />
+    public bool EcKeyboardHid => EcKeyboardFacts.Hid;
+
+    /// <inheritdoc />
+    public bool EcKeyboardWhite => EcKeyboardFacts.White;
+
+    /// <inheritdoc />
+    public bool EcKeyboardSingleZone => EcKeyboardFacts.SingleZone;
+
+    /// <inheritdoc />
+    public bool EcKeyboardControllable => EcKeyboardFacts.Controllable;
+
+    /// <inheritdoc />
+    public string EcKeyboardKind => EcKeyboardFacts.Kind;
+
+    /// <inheritdoc />
+    public void EnsureEcKeyboardReady()
+    {
+        GcuEcKeyboard.MarkActive();
+    }
+
+    /// <inheritdoc />
+    public bool ApplyEcKeyboard(string effect, bool on, int? light = null)
+    {
+        return GcuEcKeyboard.ApplyFromSettings(effect, on, light);
+    }
+
+    /// <inheritdoc />
+    public bool ApplyEcWhiteKeyboard(int level)
+    {
+        int clamped = Math.Clamp(level, 0, 2);
+        return GcuEcKeyboard.ApplyWhite(clamped > 0, clamped);
+    }
+
+    /// <inheritdoc />
+    public bool ApplyEcHotkeyBrightness(int level)
+    {
+        return GcuEcKeyboard.ApplyHotkeyBrightness(level);
     }
 
     public async Task<ServiceResult> ApplyKeyboardIntentAsync(SetKeyboardIntent intent)

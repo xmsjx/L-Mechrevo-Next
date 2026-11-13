@@ -844,7 +844,7 @@ public partial class OriginalStyleWindow : Window
                     .Select(item => ("hid:" + item.Mode, item.Name))
                     .ToArray();
             }
-            if (MechrevoLite.Hardware.GcuEcKeyboard.Active)
+            if (EcKeyboardActive)
             {
                 return EcKeyboardEffects();
             }
@@ -876,9 +876,9 @@ public partial class OriginalStyleWindow : Window
 
     internal async Task<bool> WideApplyWhiteBacklightAsync(int level, bool on)
     {
-        if (MechrevoLite.Hardware.GcuEcKeyboard.IsEcWhite)
+        if (EcKeyboardWhite)
         {
-            return MechrevoLite.Hardware.GcuEcKeyboard.ApplyWhite(on, level >= 2 ? 2 : 1);
+            return ApplyEcWhiteKeyboard(on ? (level >= 2 ? 2 : 1) : 0);
         }
         MechrevoService? service = _backendProbe?.Service ?? WpfBackend.Service;
         if (service == null)
@@ -910,9 +910,9 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            if (MechrevoLite.Hardware.GcuEcKeyboard.Active)
+            if (EcKeyboardActive)
             {
-                return MechrevoLite.Hardware.GcuEcKeyboard.IsEcWhite;
+                return EcKeyboardWhite;
             }
             if (hw == null || !hw.SupportsKeyboard || hw.UsesBaolongda || IsHidKeyboard(hw))
             {
@@ -4018,10 +4018,10 @@ public partial class OriginalStyleWindow : Window
         ShowKeyboardBrightnessOsd(clamped);
         try
         {
-            if (MechrevoLite.Hardware.GcuEcKeyboard.Active && !MechrevoLite.Hardware.GcuEcKeyboard.IsHid)
+            if (EcKeyboardActive && !EcKeyboardHid)
             {
                 // EC 实验模式的单区/白光：没有 GCU 代写亮度，直接写 EC。
-                bool ecOk = MechrevoLite.Hardware.GcuEcKeyboard.ApplyHotkeyBrightness(clamped);
+                bool ecOk = ApplyEcHotkeyBrightness(clamped);
                 Logger.WriteError("[kbd-osd] ACPI 亮度走 EC " + clamped + (white ? "/2" : "/4") + " ⇒ " + ecOk);
                 return;
             }
@@ -4711,7 +4711,7 @@ public partial class OriginalStyleWindow : Window
                 Logger.WriteError("[gcu-ec] EC-only 本地传感器采样启用失败：" + ex.GetType().Name + " " + ex.Message);
             }
             // 键盘灯分流必须在 ApplyCapabilities 之前确定，灯效列表/编辑入口按探测结果生成。
-            MechrevoLite.Hardware.GcuEcKeyboard.MarkActive();
+            EnsureEcKeyboardReady();
             ApplyCapabilities();
             SyncEcKeyboardSwitch();
             SetBackendStatus(WpfStrings.BackendNonGcuReady, "#4ADE80",
@@ -7674,8 +7674,8 @@ public partial class OriginalStyleWindow : Window
             bool hasWindowsRefresh = platform.WindowsRefreshAvailable;
             ScreenSection.Visibility = (hasWindowsRefresh || platform.WmiBrightnessAvailable || caps.DisplayRefresh || _backendProbe?.Hw?.SupportsDisplayRefresh == true || SupportsOemCalibration || SupportsLcdOverdrive || SupportsMiniled || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
             AutoRefreshSwitch.Visibility = platform.AutoRefreshVisible ? Visibility.Visible : Visibility.Collapsed;
-            bool hasKeyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
-                ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
+            bool hasKeyboard = EcKeyboardActive
+                ? EcKeyboardControllable
                 : caps.Keyboard || (hw?.SupportsKeyboard ?? false)
                     || hw?.IsNucUmiFamily == true;
             bool hasLightbar = caps.Lightbar || (hw?.SupportsLightbar ?? false)
@@ -7829,8 +7829,8 @@ public partial class OriginalStyleWindow : Window
         {
             GpuSection.Visibility = Visibility.Visible;
         }
-        bool keyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
-            ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
+        bool keyboard = EcKeyboardActive
+            ? EcKeyboardControllable
             : (caps?.Keyboard ?? false) || (hw?.SupportsKeyboard ?? false)
                 || hw?.IsNucUmiFamily == true;
         bool legacyKeyboard = keyboard;
@@ -9401,7 +9401,7 @@ public partial class OriginalStyleWindow : Window
     private static (string Effect, string Name)[] KeyboardEffectsForCurrent()
     {
         MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
-        if (MechrevoLite.Hardware.GcuEcKeyboard.Active)
+        if (EcKeyboardActive)
         {
             return EcKeyboardEffects();
         }
@@ -9419,11 +9419,11 @@ public partial class OriginalStyleWindow : Window
     /// <summary>EC 实验模式的固件键盘灯效：单区 4 项；白光只有电源/亮度；其它类型无本地灯效。</summary>
     private static (string Effect, string Name)[] EcKeyboardEffects()
     {
-        if (MechrevoLite.Hardware.GcuEcKeyboard.IsEcSingleZone)
+        if (EcKeyboardSingleZone)
         {
             return MechrevoLite.Hardware.KeyboardFirmwareEffects.SingleZone;
         }
-        if (MechrevoLite.Hardware.GcuEcKeyboard.IsEcWhite)
+        if (EcKeyboardWhite)
         {
             return new[] { ("Single", WpfStrings.LightSingleWhiteBacklight) };
         }
@@ -9507,6 +9507,29 @@ public partial class OriginalStyleWindow : Window
     }
 
     /// <summary>EC 实验模式：键盘灯开关按 EC 实际状态回填（HID 由 KeyboardRgb 自己维护）。</summary>
+    // ── EC 键盘通道：状态与下发都问服务层（⛔ 界面层不引用 EC 键盘驱动类型） ──
+
+    private static bool EcKeyboardActive => EcKeyboardFacts.Active;
+
+    private static bool EcKeyboardHid => EcKeyboardFacts.Hid;
+
+    private static bool EcKeyboardWhite => EcKeyboardFacts.White;
+
+    private static bool EcKeyboardSingleZone => EcKeyboardFacts.SingleZone;
+
+    private static bool EcKeyboardControllable => EcKeyboardFacts.Controllable;
+
+    private static string EcKeyboardKind => EcKeyboardFacts.Kind;
+
+    private void EnsureEcKeyboardReady() => _services?.Lighting.EnsureEcKeyboardReady();
+
+    private bool ApplyEcKeyboard(string effect, bool on, int? light = null) =>
+        _services?.Lighting.ApplyEcKeyboard(effect, on, light) == true;
+
+    private bool ApplyEcWhiteKeyboard(int level) => _services?.Lighting.ApplyEcWhiteKeyboard(level) == true;
+
+    private bool ApplyEcHotkeyBrightness(int level) => _services?.Lighting.ApplyEcHotkeyBrightness(level) == true;
+
     private void SyncEcKeyboardSwitch()
     {
         // 开关状态由服务层按后端决定（EC 单区/白光回读寄存器；HID 单键用电源镜像/显式开关），
@@ -9804,18 +9827,18 @@ public partial class OriginalStyleWindow : Window
         }
         L_Mechrevo.WpfP0.Services.WpfBackend.Attach(_backendProbe.Hw, _backendProbe.Service);
         MechrevoHw? hw = _backendProbe.Hw;
-        if (MechrevoLite.Hardware.GcuEcKeyboard.Active && !MechrevoLite.Hardware.GcuEcKeyboard.IsHid)
+        if (EcKeyboardActive && !EcKeyboardHid)
         {
-            if (!MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard)
+            if (!EcKeyboardControllable)
             {
                 StatusText.Text = WpfStrings.L("EC 实验模式暂不支持本机键盘灯（", "EC experiment: keyboard light not supported (")
-                    + MechrevoLite.Hardware.GcuEcKeyboard.Kind + ")";
+                    + EcKeyboardKind + ")";
                 return;
             }
             try
             {
                 new LightEditorWindow("Keyboard/Ctrl", WpfStrings.HidKeyboardWindow_Text_9, EcKeyboardEffects(),
-                    whiteBacklightOnly: MechrevoLite.Hardware.GcuEcKeyboard.IsEcWhite,
+                    whiteBacklightOnly: EcKeyboardWhite,
                     applyIntent: (applyTopic, applyEffect, applyLight, applySpeed, applyColor, applyOn) =>
                         WideApplyLightAsync(applyTopic, applyEffect, applyLight, applySpeed, applyColor, applyOn))
                 { Owner = this }.ShowDialog();
@@ -10362,15 +10385,15 @@ public partial class OriginalStyleWindow : Window
             await TriggerWelcomeChannelAsync("HidLightbar_Hinge/Ctrl");
 
             // 键盘
-            if (MechrevoLite.Hardware.GcuEcKeyboard.Active)
+            if (EcKeyboardActive)
             {
-                if (MechrevoLite.Hardware.GcuEcKeyboard.IsEcWhite)
+                if (EcKeyboardWhite)
                 {
-                    MechrevoLite.Hardware.GcuEcKeyboard.ApplyWhite(true, 2);
+                    ApplyEcWhiteKeyboard(2);
                 }
                 else
                 {
-                    MechrevoLite.Hardware.GcuEcKeyboard.ApplyFromSettings("Rainbow", true, 4);
+                    ApplyEcKeyboard("Rainbow", true, 4);
                 }
             }
             else if (IsHidKeyboard(_backendProbe.Hw))
@@ -11078,14 +11101,14 @@ public partial class OriginalStyleWindow : Window
             int hidMode = int.TryParse(effect.AsSpan(4), out int parsedHidMode) ? parsedHidMode : 1;
             return await ApplyHidKeyboardAsync(hidMode, on, showStatus: showStatus);
         }
-        if (MechrevoLite.Hardware.GcuEcKeyboard.Active)
+        if (EcKeyboardActive)
         {
             // EC 实验模式：没有 GCU 的 KeyboardPower 回读，开/关和灯效都直接按保存的设置写 EC。
             if (on)
             {
                 EnsureKeyboardBrightnessOnPowerOn();
             }
-            bool ecOk = MechrevoLite.Hardware.GcuEcKeyboard.ApplyFromSettings(effect, on);
+            bool ecOk = ApplyEcKeyboard(effect, on);
             if (ecOk && on && !powerOnly)
             {
                 _services?.Lighting.SaveChannelEffect("Keyboard/Ctrl", effect);

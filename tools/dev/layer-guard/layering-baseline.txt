@@ -9,6 +9,6 @@ FanCurveWindow.xaml.cs	6
 HidKeyboardWindow.xaml.cs	2
 LightEditorWindow.xaml.cs	30
 MainWindow.xaml.cs	64
-OriginalStyleWindow.xaml.cs	285
+OriginalStyleWindow.xaml.cs	260
 OverlayWindow.xaml.cs	8
 SettingsWindow.xaml.cs	4

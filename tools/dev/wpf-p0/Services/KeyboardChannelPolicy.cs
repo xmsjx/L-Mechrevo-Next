@@ -11,7 +11,7 @@ namespace L_Mechrevo.WpfP0.Services;
 /// </summary>
 internal static class KeyboardChannelPolicy
 {
-    internal static bool IsHidKeyboard(MechrevoHw hw)
+    internal static bool IsHidKeyboard(MechrevoHw? hw)
     {
         if (GcuEcKeyboard.Active)
         {
@@ -26,7 +26,7 @@ internal static class KeyboardChannelPolicy
             return false;
         }
         // 与原版 ShouldUseGcuKeyboardFallback 一致：HID 不可用/亮度未生效时回 GCU 固件面板。
-        KeyboardRgb rgb = WpfBackend.rgb;
+        KeyboardRgb? rgb = WpfBackend.rgb;
         if (rgb != null
             && KeyboardLightPathPolicy.ShouldUseGcuKeyboardFallback(
                 rgb.ControllerAvailability,
