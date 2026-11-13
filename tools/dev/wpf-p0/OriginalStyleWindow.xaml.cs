@@ -9410,12 +9410,13 @@ public partial class OriginalStyleWindow : Window
         string mode = SelectedDisplayEffectMode();
         if (_services != null)
         {
-            // 服务内部先落盘档位再按开关状态决定是否下发。
-            ServiceResult result = await _services.Display.SetDisplayEffectModeAsync(mode);
+            // 开关状态由界面决定：未开启只记住档位，不打扰硬件。
             if (DisplayEffectSwitch.IsChecked != true)
             {
+                _services.Display.RememberDisplayEffectMode(mode);
                 return;
             }
+            ServiceResult result = await _services.Display.SetDisplayEffectModeAsync(mode);
             StatusText.Text = result.Ok
                 ? WpfStrings.OriginalStyleWindow_xaml_Text_62 + (DisplayEffectCombo.SelectedItem as ComboBoxItem)?.Content
                 : WpfStrings.OriginalStyleWindow_xaml_Text_63;
