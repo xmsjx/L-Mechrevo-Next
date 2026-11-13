@@ -372,20 +372,6 @@ public partial class FanCurveWindow : Window
         MechrevoLite.Mode.PerfModeStore.SaveSettings(_modeId, settings);
     }
 
-    private static bool CurveMatches(int[] request, byte[] actual, byte[] temps)
-    {
-        int valid = Array.IndexOf(temps, (byte)255);
-        valid = valid < 2 ? Math.Min(11, Math.Max(2, request.Length)) : valid;
-        for (int i = 0; i < valid; i++)
-        {
-            if (i < actual.Length && actual[i] != 255 && Math.Clamp((int)actual[i], 0, 100) != request[i])
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
     private async void RestoreDefault_Click(object sender, RoutedEventArgs e)
     {
         if (_hw == null) return;
@@ -441,67 +427,6 @@ public partial class FanCurveWindow : Window
     }
 
 
-    private void SaveWujieTemps(byte[] cpuTemps, byte[] gpuTemps)
-    {
-        try
-        {
-            string key = string.IsNullOrWhiteSpace(_modeId) ? "active" : _modeId;
-            MechrevoLite.AppConfig.Set("wujie_fan_cputemps_" + key, string.Join(",", cpuTemps));
-            MechrevoLite.AppConfig.Set("wujie_fan_gputemps_" + key, string.Join(",", gpuTemps));
-        }
-        catch
-        {
-        }
-    }
-
-    /// <summary>表异常/错乱时回退默认 16 点轴：温度必须 0..120 或尾部 255，占空比 0..100 且单调不减。</summary>
-    private static bool FanTableLooksSane(byte[] temps, byte[] duties)
-    {
-        if (temps == null || duties == null || temps.Length < 16 || duties.Length < 16)
-        {
-            return false;
-        }
-        bool ended = false;
-        int previousTemp = -1;
-        int previousDuty = -1;
-        bool hasActive = false;
-        for (int i = 0; i < 16; i++)
-        {
-            int temp = temps[i];
-            if (temp == 255)
-            {
-                ended = true;
-                continue;
-            }
-            if (ended || temp < 0 || temp > 120 || temp < previousTemp)
-            {
-                return false;
-            }
-            previousTemp = temp;
-            int duty = duties[i];
-            if (duty < 0 || duty > 100 || duty < previousDuty)
-            {
-                return false;
-            }
-            previousDuty = duty;
-            if (i > 0 && temp > 0 && duty > 0)
-            {
-                hasActive = true;
-            }
-        }
-        return hasActive;
-    }
-
-    private static byte[] TempsToBytes(int[] temps)
-    {
-        byte[] bytes = new byte[16];
-        for (int i = 0; i < bytes.Length && i < temps.Length; i++)
-        {
-            bytes[i] = (byte)Math.Clamp(temps[i], 0, 255);
-        }
-        return bytes;
-    }
-
     private static int[] TempsToInts(byte[] temps)
     {
         int[] ints = new int[16];
@@ -510,27 +435,6 @@ public partial class FanCurveWindow : Window
             ints[i] = temps[i];
         }
         return ints;
-    }
-
-    private static byte[] RpmsToPercent(int[] rpms, int maxRpm)
-    {
-        byte[] duties = new byte[16];
-        int max = Math.Max(1, maxRpm);
-        for (int i = 0; i < duties.Length && i < rpms.Length; i++)
-        {
-            duties[i] = (byte)Math.Clamp((int)Math.Round(rpms[i] * 100.0 / max), 0, 100);
-        }
-        return duties;
-    }
-
-    private static int[] PercentToRpms(int[] duties, int maxRpm)
-    {
-        int[] rpms = new int[16];
-        for (int i = 0; i < rpms.Length && i < duties.Length; i++)
-        {
-            rpms[i] = (int)Math.Round(duties[i] * maxRpm / 100.0);
-        }
-        return rpms;
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)
