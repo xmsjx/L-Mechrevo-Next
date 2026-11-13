@@ -271,27 +271,11 @@ public partial class FanCurveWindow : Window
         {
             try
             {
-                int[] cpu = CpuCurve.Duties;
-                int[] gpu = GpuCurve.Duties;
-                if (PushFanCurveCheck?.IsChecked == false)
-                {
-                    PerfModeService.Instance?.RecordFanCurves(_modeId, cpu, gpu);
-                    PerfModeService.Instance?.RecordFanCurveEnabled(_modeId, false);
-                    _dirty = false;
-                    StatusText.Text = WpfStrings.FanCurveWindow_xaml_Text_4;
-                    return;
-                }
-                bool ok = MechrevoLite.Hardware.NucFanTable.TryApply(
-                    CpuCurve.Temperatures, cpu, GpuCurve.Temperatures, gpu, out string detail);
-                bool rampOk = MechrevoLite.Hardware.NucFanTable.TrySetFanRamp(true, 300, out string rampDetail);
-                bool isolatedOk = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(true, out string isolatedDetail);
-                ok = ok && rampOk && isolatedOk;
-                detail += " " + rampDetail + " " + isolatedDetail;
-                Logger.WriteLine("[nuc-fan] 自定义风扇应用 ok=" + ok + " detail=" + detail);
-                PerfModeService.Instance?.RecordFanCurves(_modeId, cpu, gpu);
-                PerfModeService.Instance?.RecordFanCurveEnabled(_modeId, true);
-                _dirty = false;
-                StatusText.Text = ok ? WpfStrings.L("NUC/UMI 风扇曲线已写入：", "NUC/UMI fan curve written: ") + detail : WpfStrings.L("NUC/UMI 风扇曲线写入失败：", "Failed to write NUC/UMI fan curve: ") + detail;
+                FanCurveSaveResult result = FanCurveSaveService.SaveNuc(_modeId,
+                    CpuCurve.Duties, GpuCurve.Duties, CpuCurve.Temperatures, GpuCurve.Temperatures,
+                    PushFanCurveCheck?.IsChecked != false);
+                _dirty = result.Dirty;
+                StatusText.Text = result.Detail;
             }
             catch (Exception ex)
             {
@@ -301,54 +285,14 @@ public partial class FanCurveWindow : Window
         }
         if (BackendKind == FanCurveBackendKind.Baolongda)
         {
-            // 强冷期间曲线存档被临时标成 disabled；此时保存会结束强冷并覆盖快照，直接拒绝。
-            if (MechrevoLite.Hardware.MechrevoHw.FanBoostActive)
-            {
-                StatusText.Text = WpfStrings.L("强冷进行中，请先关闭强冷再保存曲线",
-                    "Fan boost is active; turn it off before saving the fan curve");
-                return;
-            }
             try
             {
-                int[] cpu = CpuCurve.Duties.Take(BaolongdaFanCurveSettings.PointCount).ToArray();
-                int[] gpu = GpuCurve.Duties.Take(BaolongdaFanCurveSettings.PointCount).ToArray();
-                int maxRpm = Math.Max(1, _hw.FanRpmMaxForPercent);
-                bool pushCurve = PushFanCurveCheck?.IsChecked != false;
-                bool loopOn = BaolongdaLoopCheck.IsChecked == true;
-                bool previousEnabled = _hw.LoadBaolongdaFanCurve(_modeId).Enabled;
-                BaolongdaFanCurveSettings curve = new()
-                {
-                    // 关闭“随档位下发”时只保存点位，不破坏已有闭环启用状态。
-                    Enabled = pushCurve ? loopOn : previousEnabled,
-                    FormatVersion = BaolongdaFanCurveSettings.CurrentFormatVersion,
-                    SyncEnabled = BaolongdaSyncCheck.IsChecked == true,
-                    HysteresisC = FanCurveEngine.DefaultHysteresisC,
-                    IntervalMs = BaolongdaFanCurveSettings.DefaultIntervalMs,
-                    MinRpm = BaolongdaFanCurveSettings.DefaultMinRpm,
-                    MaxRpm = maxRpm,
-                    Channel1Temperatures = TempsToInts(CpuCurve.Temperatures).Take(BaolongdaFanCurveSettings.PointCount).ToArray(),
-                    Channel1Rpms = PercentToRpms(cpu, maxRpm),
-                    Channel0Temperatures = TempsToInts(GpuCurve.Temperatures).Take(BaolongdaFanCurveSettings.PointCount).ToArray(),
-                    Channel0Rpms = PercentToRpms(gpu, maxRpm)
-                };
-                bool ok = _hw.SaveBaolongdaFanCurve(_modeId, curve);
-                if (ok)
-                {
-                    PerfModeService.Instance?.RecordFanCurves(_modeId, cpu, gpu);
-                    MechrevoLite.Mode.PerfModeStore.SaveSettings(_modeId,
-                        MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId) with { FanCurveOn = pushCurve });
-                }
-                _dirty = false;
-                string? activeModeId = PerfModeService.Instance?.ActiveModeId;
-                // 与服务侧 IsFanCurveModeActive 一致：启动期 ActiveModeId 为空时按活动档处理。
-                bool activeMode = string.IsNullOrWhiteSpace(activeModeId)
-                    || string.Equals(activeModeId, _modeId, StringComparison.Ordinal);
-                string okText = !pushCurve
-                    ? WpfStrings.L("宝龙达风扇曲线已保存（未随档位下发）", "Baolongda fan curve saved (not pushed with profile)")
-                    : (activeMode
-                        ? WpfStrings.L("宝龙达风扇曲线已保存并应用", "Baolongda fan curve saved and applied")
-                        : WpfStrings.L("宝龙达风扇曲线已保存，切到该档后应用", "Baolongda fan curve saved; applies when this profile is active"));
-                StatusText.Text = ok ? okText : WpfStrings.L("宝龙达风扇曲线保存失败", "Failed to save Baolongda fan curve");
+                FanCurveSaveResult result = FanCurveSaveService.SaveBaolongda(_hw, _modeId,
+                    CpuCurve.Duties, GpuCurve.Duties, TempsToInts(CpuCurve.Temperatures),
+                    TempsToInts(GpuCurve.Temperatures), PushFanCurveCheck?.IsChecked != false,
+                    BaolongdaLoopCheck.IsChecked == true, BaolongdaSyncCheck.IsChecked == true);
+                _dirty = result.Dirty;
+                StatusText.Text = result.Detail;
             }
             catch (Exception ex)
             {
@@ -389,41 +333,11 @@ public partial class FanCurveWindow : Window
         {
             try
             {
-                int[] cpu = CpuCurve.Duties;
-                int[] gpu = GpuCurve.Duties;
-                bool push = PushFanCurveCheck?.IsChecked != false;
-                if (!push)
-                {
-                    MechrevoLite.Mode.PerfModeStore.SaveSettings(_modeId, MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId) with
-                    {
-                        CpuFanDuty = cpu,
-                        GpuFanDuty = gpu,
-                        FanCurveOn = false
-                    });
-                    _dirty = false;
-                    StatusText.Text = WpfStrings.FanCurveWindow_xaml_Text_4;
-                    return;
-                }
-                bool ok = MechrevoLite.Hardware.NucFanTable.TryApply(
-                    CpuCurve.Temperatures, cpu, GpuCurve.Temperatures, gpu, out string detail);
-                bool isolated = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(true, out string isoDetail);
-                MechrevoLite.Mode.PerfModeSettings savedSettings = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId);
-                bool ramp = MechrevoLite.Hardware.NucFanTable.TrySetFanRamp(
-                    savedSettings.FanSwitchSpeedOn == true,
-                    savedSettings.FanSwitchSpeedMs ?? 300, out string rampDetail);
-                MechrevoLite.Mode.PerfModeStore.SaveSettings(_modeId, MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId) with
-                {
-                    CpuFanDuty = cpu,
-                    GpuFanDuty = gpu,
-                    FanCurveOn = true
-                });
-                _dirty = false;
-                ok = ok && isolated && ramp;
-                detail += " " + isoDetail + " " + rampDetail;
-                StatusText.Text = ok
-                    ? WpfStrings.L("风扇曲线已写入 EC：", "Fan curve written to EC: ") + detail
-                    : WpfStrings.L("风扇曲线写入失败：", "Failed to write fan curve: ") + detail;
-                Logger.WriteError("[gcu-ec] 自定义风扇应用 ok=" + ok + " " + detail);
+                FanCurveSaveResult result = FanCurveSaveService.SaveEc(_modeId,
+                    CpuCurve.Duties, GpuCurve.Duties, CpuCurve.Temperatures, GpuCurve.Temperatures,
+                    PushFanCurveCheck?.IsChecked != false);
+                _dirty = result.Dirty;
+                StatusText.Text = result.Detail;
             }
             catch (Exception ex)
             {
