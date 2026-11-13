@@ -91,6 +91,22 @@ internal static class DiagnosticBackendRouteInfo
 				+ " · 强冷=" + FeatureGate.Get(FeatureId.FanBoost, hw).Channel
 				+ " · 风扇曲线=" + FeatureGate.Get(FeatureId.FanCurve, hw).Channel);
 			sb.AppendLine("  门控影子对比（应用运行期累计，按调用点去重）：" + FeatureGateShadow.Describe());
+			sb.AppendLine("  功能声明表（只读）：");
+			if (hw == null)
+			{
+				sb.AppendLine("    (诊断进程未挂载硬件 ⇒ 仅应用运行期能给出真实声明)");
+			}
+			else
+			{
+				foreach (FeatureId feature in Enum.GetValues<FeatureId>())
+				{
+					FeatureDecision decision = FeatureGate.Get(feature, hw);
+					sb.AppendLine("    " + feature.ToString().PadRight(18)
+						+ decision.State.ToString().PadRight(12)
+						+ decision.Channel.ToString().PadRight(12)
+						+ decision.Reason);
+				}
+			}
 			sb.AppendLine("  说明：路由只读机型事实、首条命中；不做“探测失败换后端”。");
 			sb.AppendLine("  机型分流自测（纯函数矩阵，只读）：");
 			sb.AppendLine(Indent(BackendRouter.RunSelfTest(), "    "));
