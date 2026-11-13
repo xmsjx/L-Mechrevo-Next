@@ -112,6 +112,23 @@ internal interface ILightingService
     /// <para>EC 模式的 HID 单键没有回读，返回 false（调用方据此跳过"保活"，⛔ 不拿镜像当硬件真值）。</para>
     /// </summary>
     bool TryReadKeyboardPowerReadback(out bool on);
+
+    // ── 灯光设置读写：界面层只通过这里取/存，⛔ 不直接摸硬件侧的设置存储 ──
+
+    /// <summary>读取通道保存的效果名（无配置 ⇒ 返回 <paramref name="defaultEffect"/>）。</summary>
+    string LoadChannelEffect(string topic, string defaultEffect);
+
+    /// <summary>读取通道保存的电源状态：当前值 + 是否用户显式设置过。</summary>
+    (bool PowerOn, bool PowerExplicit) LoadChannelPower(string topic);
+
+    /// <summary>保存通道效果（只改 Effect，其余字段保留）。</summary>
+    void SaveChannelEffect(string topic, string effect);
+
+    /// <summary>亮度被压成 0 时抬到 1（只改 Light）。</summary>
+    void EnsureChannelVisible(string topic, string defaultEffect);
+
+    /// <summary>通道保存的效果是否等于给定值（大小写不敏感）。</summary>
+    bool ChannelEffectIs(string topic, string effect);
 }
 
 /// <inheritdoc />
@@ -545,6 +562,41 @@ internal sealed class LightingService : ILightingService
             return false;
         }
         return GcuEcKeyboard.TryReadPower(out on);
+    }
+
+    /// <inheritdoc />
+    public string LoadChannelEffect(string topic, string defaultEffect)
+    {
+        return LightingSettingsStore.Load(topic, defaultEffect).Effect;
+    }
+
+    /// <inheritdoc />
+    public (bool PowerOn, bool PowerExplicit) LoadChannelPower(string topic)
+    {
+        LightChannelSettings settings = LightingSettingsStore.Load(topic, "Single");
+        return (settings.PowerOn, settings.PowerExplicit);
+    }
+
+    /// <inheritdoc />
+    public void SaveChannelEffect(string topic, string effect)
+    {
+        LightingSettingsStore.Save(topic, LightingSettingsStore.Load(topic, effect) with { Effect = effect });
+    }
+
+    /// <inheritdoc />
+    public void EnsureChannelVisible(string topic, string defaultEffect)
+    {
+        LightChannelSettings settings = LightingSettingsStore.Load(topic, defaultEffect);
+        if (settings.Light <= 0)
+        {
+            LightingSettingsStore.Save(topic, settings with { Light = 1 });
+        }
+    }
+
+    /// <inheritdoc />
+    public bool ChannelEffectIs(string topic, string effect)
+    {
+        return string.Equals(LightingSettingsStore.Load(topic, effect).Effect, effect, StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<ServiceResult> ApplyKeyboardIntentAsync(SetKeyboardIntent intent)

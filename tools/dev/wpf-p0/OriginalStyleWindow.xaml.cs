@@ -9430,10 +9430,10 @@ public partial class OriginalStyleWindow : Window
         return Array.Empty<(string, string)>();
     }
 
-    private static void FillEffects(ComboBox combo, (string Effect, string Name)[] effects, string topic)
+    private void FillEffects(ComboBox combo, (string Effect, string Name)[] effects, string topic)
     {
         combo.Items.Clear();
-        string selected = MechrevoLite.Hardware.LightingSettingsStore.Load(topic, effects[0].Effect).Effect;
+        string selected = _services?.Lighting.LoadChannelEffect(topic, effects[0].Effect) ?? effects[0].Effect;
         int selectedIndex = 0;
         bool effectFound = false;
         for (int i = 0; i < effects.Length; i++)
@@ -9450,10 +9450,7 @@ public partial class OriginalStyleWindow : Window
         {
             try
             {
-                MechrevoLite.Hardware.LightChannelSettings migrated =
-                    MechrevoLite.Hardware.LightingSettingsStore.Load(topic, effects[0].Effect);
-                MechrevoLite.Hardware.LightingSettingsStore.Save(topic,
-                    migrated with { Effect = effects[0].Effect });
+                _services?.Lighting.SaveChannelEffect(topic, effects[0].Effect);
             }
             catch
             {
@@ -9465,11 +9462,11 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    private static bool LoadChannelPower(string topic, string defaultEffect)
+    private bool LoadChannelPower(string topic, string defaultEffect)
     {
         try
         {
-            return MechrevoLite.Hardware.LightingSettingsStore.Load(topic, defaultEffect).PowerOn;
+            return _services?.Lighting.LoadChannelPower(topic).PowerOn ?? false;
         }
         catch
         {
@@ -9602,7 +9599,8 @@ public partial class OriginalStyleWindow : Window
                 return;
             }
             (string Effect, string Name)[] effects = KeyboardEffectsForCurrent();
-            string selected = MechrevoLite.Hardware.LightingSettingsStore.Load("Keyboard/Ctrl", effects.Length > 0 ? effects[0].Effect : "Single").Effect;
+            string keyboardDefaultEffect = effects.Length > 0 ? effects[0].Effect : "Single";
+            string selected = _services?.Lighting.LoadChannelEffect("Keyboard/Ctrl", keyboardDefaultEffect) ?? keyboardDefaultEffect;
             int selectedIndex = 0;
             for (int i = 0; i < effects.Length; i++)
             {
@@ -10102,7 +10100,7 @@ public partial class OriginalStyleWindow : Window
         _lastLightingRestoreTick = now;
         _ = MaybeAutoWelcomeAsync(wake: false);
         if (_backendProbe == null
-            || !MechrevoLite.Hardware.LightingSettingsStore.HasUserLightingIntent()
+            || _services?.Lighting.HasUserLightingIntent != true
             || L_Mechrevo.WpfP0.Services.WpfBackend.IsLightingTemporarilySuspended
             || _lightingPowerSuspended
             || _lightingIdleSuspended)
@@ -10136,13 +10134,13 @@ public partial class OriginalStyleWindow : Window
         }
         try
         {
-            LightChannelSettings keyboard = MechrevoLite.Hardware.LightingSettingsStore.Load("Keyboard/Ctrl", "Single");
-            if (keyboard.PowerExplicit && !IsNucLike(_backendProbe.Hw))
+            (bool savedKeyboardOn, bool savedKeyboardExplicit) = _services?.Lighting.LoadChannelPower("Keyboard/Ctrl") ?? (false, false);
+            if (savedKeyboardExplicit && !IsNucLike(_backendProbe.Hw))
             {
                 _syncingLighting = true;
-                KeyboardLightSwitch.IsChecked = keyboard.PowerOn;
+                KeyboardLightSwitch.IsChecked = savedKeyboardOn;
                 _syncingLighting = false;
-                if (keyboard.PowerOn)
+                if (savedKeyboardOn)
                 {
                     await ApplyKeyboardLightAsync(showStatus: false);
                 }
@@ -10186,8 +10184,7 @@ public partial class OriginalStyleWindow : Window
     {
         MechrevoHw? hw = _backendProbe?.Hw;
         if (hw == null || !hw.UsesBaolongda || hw.IsKeyboardRainbowRunning) return;
-        if (!MechrevoLite.Hardware.LightingSettingsStore.TryLoad("Keyboard/Ctrl", out LightChannelSettings settings)) return;
-        if (!string.Equals(settings.Effect, "Rainbow", StringComparison.OrdinalIgnoreCase)) return;
+        if (_services?.Lighting.ChannelEffectIs("Keyboard/Ctrl", "Rainbow") != true) return;
         KeyboardRgb? rgb = EnsureKeyboardRgb();
         if (rgb != null && rgb.KbPowerExplicitOff) return;
         if (!hw.TryReadKeyboardLightingViaBackend(out bool hardwareOn, out int _, out int brightness, out string _) || !hardwareOn) return;
@@ -10218,33 +10215,34 @@ public partial class OriginalStyleWindow : Window
             "HidLightbar_Hinge/Ctrl" => LightingCatalog.HingeEffects[0].Effect,
             _ => LightingCatalog.SyncEffects[0].Effect
         };
-        LightChannelSettings saved = MechrevoLite.Hardware.LightingSettingsStore.Load(topic, defaultEffect);
-        if (!saved.PowerExplicit)
+        (bool savedPowerOn, bool savedPowerExplicit) = _services?.Lighting.LoadChannelPower(topic) ?? (false, false);
+        if (!savedPowerExplicit)
         {
             return;
         }
         _syncingLighting = true;
-        powerSwitch.IsChecked = saved.PowerOn;
+        powerSwitch.IsChecked = savedPowerOn;
         _syncingLighting = false;
-        if (!saved.PowerOn)
+        if (!savedPowerOn)
         {
             await SetLightPowerServiceAsync(topic, false);
             return;
         }
         await SetLightPowerServiceAsync(topic, true);
+        string savedEffect = _services?.Lighting.LoadChannelEffect(topic, defaultEffect) ?? defaultEffect;
         switch (topic)
         {
             case "HidLightbar/Ctrl":
-                await SetLightbarEffectServiceAsync(saved.Effect);
+                await SetLightbarEffectServiceAsync(savedEffect);
                 break;
             case "HidLightbar_Logo/Ctrl":
-                await SetLogoEffectServiceAsync(saved.Effect);
+                await SetLogoEffectServiceAsync(savedEffect);
                 break;
             case "HidLightbar_Hinge/Ctrl":
-                await SetHingeEffectServiceAsync(saved.Effect);
+                await SetHingeEffectServiceAsync(savedEffect);
                 break;
             default:
-                await SetSyncEffectServiceAsync(saved.Effect);
+                await SetSyncEffectServiceAsync(savedEffect);
                 break;
         }
     }
@@ -10583,7 +10581,7 @@ public partial class OriginalStyleWindow : Window
         }
         if (_backendProbe.Hw?.IsConnected == true)
         {
-            MechrevoLite.Hardware.LightingSettingsStore.SavePower("HidLightbar/Ctrl", requested, "用户点击「灯光」开关");
+            _services?.Lighting.SaveChannelPower("HidLightbar/Ctrl", requested, "用户点击「灯光」开关");
             OsdService.Show(LightChannelGlyph("HidLightbar/Ctrl"), LightChannelTitle("HidLightbar/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
         }
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_69;
@@ -10684,7 +10682,7 @@ public partial class OriginalStyleWindow : Window
         }
         if (_backendProbe.Hw?.IsConnected == true)
         {
-            MechrevoLite.Hardware.LightingSettingsStore.SavePower("HidLightbar_Hinge/Ctrl", requested, "用户点击「灯光」开关");
+            _services?.Lighting.SaveChannelPower("HidLightbar_Hinge/Ctrl", requested, "用户点击「灯光」开关");
             OsdService.Show(LightChannelGlyph("HidLightbar_Hinge/Ctrl"), LightChannelTitle("HidLightbar_Hinge/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
         }
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_73;
@@ -10754,7 +10752,7 @@ public partial class OriginalStyleWindow : Window
         }
         if (_backendProbe.Hw?.IsConnected == true)
         {
-            MechrevoLite.Hardware.LightingSettingsStore.SavePower("HidLightbar_Sync/Ctrl", requested, "用户点击「灯光」开关");
+            _services?.Lighting.SaveChannelPower("HidLightbar_Sync/Ctrl", requested, "用户点击「灯光」开关");
             OsdService.Show(LightChannelGlyph("HidLightbar_Sync/Ctrl"), LightChannelTitle("HidLightbar_Sync/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
         }
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_76;
@@ -10847,18 +10845,17 @@ public partial class OriginalStyleWindow : Window
         _keyboardLightUiLockUntil = Environment.TickCount64 + 2500;
         if (_backendProbe?.Hw?.IsConnected == true)
         {
-            MechrevoLite.Hardware.LightingSettingsStore.SavePower("Keyboard/Ctrl", requested, "用户点击键盘灯光开关");
+            _services?.Lighting.SaveChannelPower("Keyboard/Ctrl", requested, "用户点击键盘灯光开关");
         }
         OsdService.Show(LightChannelGlyph("Keyboard/Ctrl"), LightChannelTitle("Keyboard/Ctrl"),
             requested ? WpfStrings.StateOn : WpfStrings.StateOff);
     }
 
-    private static void SaveChannelEffect(string topic, string effect)
+    private void SaveChannelEffect(string topic, string effect)
     {
         try
         {
-            LightChannelSettings current = MechrevoLite.Hardware.LightingSettingsStore.Load(topic, effect);
-            MechrevoLite.Hardware.LightingSettingsStore.Save(topic, current with { Effect = effect });
+            _services?.Lighting.SaveChannelEffect(topic, effect);
         }
         catch
         {
@@ -11061,11 +11058,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             string currentEffect = (KeyboardEffectCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "Single";
-            LightChannelSettings settings = MechrevoLite.Hardware.LightingSettingsStore.Load("Keyboard/Ctrl", currentEffect);
-            if (settings.Light <= 0)
-            {
-                MechrevoLite.Hardware.LightingSettingsStore.Save("Keyboard/Ctrl", settings with { Light = 1 });
-            }
+            _services?.Lighting.EnsureChannelVisible("Keyboard/Ctrl", currentEffect);
         }
         catch
         {
@@ -11095,8 +11088,7 @@ public partial class OriginalStyleWindow : Window
             bool ecOk = MechrevoLite.Hardware.GcuEcKeyboard.ApplyFromSettings(effect, on);
             if (ecOk && on && !powerOnly)
             {
-                MechrevoLite.Hardware.LightingSettingsStore.Save("Keyboard/Ctrl",
-                    MechrevoLite.Hardware.LightingSettingsStore.Load("Keyboard/Ctrl", effect) with { Effect = effect });
+                _services?.Lighting.SaveChannelEffect("Keyboard/Ctrl", effect);
             }
             if (showStatus)
             {
@@ -11143,8 +11135,7 @@ public partial class OriginalStyleWindow : Window
         bool ok = await SetKeyboardEffectServiceAsync(effect);
         if (ok)
         {
-            MechrevoLite.Hardware.LightingSettingsStore.Save("Keyboard/Ctrl",
-                MechrevoLite.Hardware.LightingSettingsStore.Load("Keyboard/Ctrl", effect) with { Effect = effect });
+            _services?.Lighting.SaveChannelEffect("Keyboard/Ctrl", effect);
         }
         if (showStatus) StatusText.Text = ok ? WpfStrings.LightKeyboardSentPrefix + effect : WpfStrings.LightKeyboardFailed;
         return ok;
@@ -11179,7 +11170,7 @@ public partial class OriginalStyleWindow : Window
         }
         if (_backendProbe?.Hw?.IsConnected == true)
         {
-            MechrevoLite.Hardware.LightingSettingsStore.SavePower("HidLightbar_Logo/Ctrl", requested, "用户点击「灯光」开关");
+            _services?.Lighting.SaveChannelPower("HidLightbar_Logo/Ctrl", requested, "用户点击「灯光」开关");
             OsdService.Show(LightChannelGlyph("HidLightbar_Logo/Ctrl"), LightChannelTitle("HidLightbar_Logo/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
         }
     }
