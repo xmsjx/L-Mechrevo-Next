@@ -1,0 +1,14 @@
+# UI 层 / 后端分层基线（棘轮）：<相对路径>\t<允许的越界行数上限>
+# 生成命令：dotnet run --project tools/dev/layer-guard -c Release -- --update
+# 只会向下收紧：删掉引用后可再次 --update 降低上限；新增文件默认 0。
+App.xaml.cs	3
+BackendProbe.cs	91
+CustomModeWindow.xaml.cs	87
+DisplayEffectEditorWindow.xaml.cs	5
+FanCurveWindow.xaml.cs	6
+HidKeyboardWindow.xaml.cs	2
+LightEditorWindow.xaml.cs	30
+MainWindow.xaml.cs	64
+OriginalStyleWindow.xaml.cs	316
+OverlayWindow.xaml.cs	8
+SettingsWindow.xaml.cs	4

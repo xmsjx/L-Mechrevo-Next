@@ -44,4 +44,11 @@
       <HintPath>..\..\..\lm_pkg_files\{app}\System.Management.dll</HintPath>
     </Reference>
   </ItemGroup>
+
+  <!-- UI / 后端分层门禁（默认不跑）：dotnet build -p:RunLayerGuard=true 时校验界面层是否新增硬件直连。 -->
+  <Target Name="LayerGuard" AfterTargets="Build" Condition="'$(RunLayerGuard)' == 'true'">
+    <Exec Command="dotnet run --project &quot;$(MSBuildThisFileDirectory)..\layer-guard\LayerGuard.csproj&quot; -c Release"
+
+          ConsoleToMSBuild="true" />
+  </Target>
 </Project>
