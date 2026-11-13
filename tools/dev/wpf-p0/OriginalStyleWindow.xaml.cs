@@ -1625,7 +1625,9 @@ public partial class OriginalStyleWindow : Window
         {
             int mode = _services?.Battery.CurrentMode ?? _backendProbe?.BatteryMode ?? -1;
             MechrevoHw? hw = _backendProbe?.Hw;
-            bool thresholdBackend = hw?.UsesBaolongda == true;
+            bool thresholdBackend = MechrevoLite.Hardware.Architecture.FeatureGate
+                .Get(MechrevoLite.Hardware.Architecture.FeatureId.ChargeLimit, hw)
+                .Channel == MechrevoLite.Hardware.Architecture.BackendChannel.WmiMailbox;
             // 宝龙达三档是“写阈值”语义：高亮由上下限文本框反推；GCU 保持原固件三档逻辑。
             if (thresholdBackend && ChargeLimitInputRow.Visibility == Visibility.Visible
                 && int.TryParse(ChargeLimitHighBox.Text.Trim(), out int high))
@@ -2968,7 +2970,9 @@ public partial class OriginalStyleWindow : Window
         }
         Visibility visibility = supported ? Visibility.Visible : Visibility.Collapsed;
         MechrevoHw? batteryHw = _backendProbe?.Hw;
-        bool baolongda = batteryHw?.UsesBaolongda == true;
+        bool baolongda = MechrevoLite.Hardware.Architecture.FeatureGate
+            .Get(MechrevoLite.Hardware.Architecture.FeatureId.ChargeLimit, batteryHw)
+            .Channel == MechrevoLite.Hardware.Architecture.BackendChannel.WmiMailbox;
         BatteryModePanel.Visibility = Visibility.Visible;
         // 只有宝龙达的阈值行/文本框属于宝龙达；GCU 保持原来的固件三档逻辑。
         Visibility thresholdRows = (visibility == Visibility.Visible && baolongda)
