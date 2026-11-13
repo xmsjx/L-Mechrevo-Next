@@ -85,6 +85,10 @@ internal static class DiagnosticBackendRouteInfo
 				+ (string.IsNullOrEmpty(BackendRouter.RuleLoadError) ? "" : " · 错误=" + BackendRouter.RuleLoadError));
 			sb.AppendLine("  生效规则：");
 			sb.AppendLine(Indent(BackendRouter.DescribeRules(), "    "));
+			// 只读可视化：当前机型事实下逐条规则的条件取值与最终命中（与运行判定同一份 Evaluate）。
+			BackendRouter.ReloadRulesIfChanged();
+			sb.AppendLine("  规则命中解释（当前机型事实，只读）：");
+			sb.AppendLine(BackendRouter.Explain(freshIdentity));
 			MechrevoHw? hw = MechrevoLite.Program.hw;
 			sb.AppendLine("  功能通道："
 				+ " 限充=" + FeatureGate.Get(FeatureId.ChargeLimit, hw).Channel

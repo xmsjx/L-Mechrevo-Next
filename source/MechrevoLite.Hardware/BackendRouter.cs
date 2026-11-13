@@ -67,19 +67,55 @@ internal static class BackendRouter
 			new[] { new RuleCondition(RouteFact.TongfangFamily) })
 	};
 
-	private static readonly BackendRuleStore.RuleTable RuleTable = BackendRuleStore.Load(BuiltInRules, MechrevoBackendKind.Gcu);
+	/// <summary>当前生效规则表（可被 <see cref="ReloadRulesIfChanged" /> 原子替换）。</summary>
+	private static BackendRuleStore.RuleTable _table = BackendRuleStore.Load(BuiltInRules, MechrevoBackendKind.Gcu);
+
+	private static readonly object _reloadGate = new object();
+
+	private static BackendRuleStore.RuleTable Table => System.Threading.Volatile.Read(ref _table);
 
 	/// <summary>当前生效规则（内置或配置文件）。</summary>
-	private static readonly RuleSpec[] Rules = RuleTable.Rules;
+	private static RuleSpec[] Rules => Table.Rules;
 
 	/// <summary>规则来源：built-in / file。</summary>
-	internal static string RuleSource => RuleTable.Source;
+	internal static string RuleSource => Table.Source;
 
-	internal static string RulePath => RuleTable.Path;
+	internal static string RulePath => Table.Path;
 
-	internal static string RuleLoadError => RuleTable.Error;
+	internal static string RuleLoadError => Table.Error;
 
-	internal static int RuleCount => RuleTable.Rules.Length;
+	internal static int RuleCount => Table.Rules.Length;
+
+	/// <summary>规则文件是否已变化（新增/删除/改写）；变了才值得重载。</summary>
+	internal static bool RulesFileChanged => BackendRuleStore.HasChanged(Table);
+
+	/// <summary>
+	/// 热重载：规则文件变化时重新读取并原子替换当前表；失败保留旧表（只记一次日志）。
+	/// <para>调用点：路由入口（<see cref="DecideAndLog" />）、诊断采集。</para>
+	/// </summary>
+	/// <returns>本次是否真的重载了。</returns>
+	internal static bool ReloadRulesIfChanged()
+	{
+		if (!RulesFileChanged)
+		{
+			return false;
+		}
+		lock (_reloadGate)
+		{
+			BackendRuleStore.RuleTable before = Table;
+			if (!BackendRuleStore.HasChanged(before))
+			{
+				return false;
+			}
+			BackendRuleStore.RuleTable after = BackendRuleStore.Load(BuiltInRules, MechrevoBackendKind.Gcu);
+			System.Threading.Volatile.Write(ref _table, after);
+			Logger.WriteLineIfChanged("route-rules-reload",
+				"[route] 规则已重载：来源=" + after.Source + " · 条数=" + after.Rules.Length
+				+ (string.IsNullOrEmpty(after.Error) ? "" : " · 错误=" + after.Error)
+				+ " · 文件=" + (string.IsNullOrEmpty(after.Path) ? "(无)" : after.Path));
+			return true;
+		}
+	}
 
 	// 后端能力声明（第 3 步）：事实需求 + 支持的机型类别
 	private static readonly BackendDeclaration[] Declarations =
@@ -99,7 +135,7 @@ internal static class BackendRouter
 	};
 
 	/// <summary>兜底后端（默认 GCU；配置文件只允许与内置一致）。</summary>
-	private static MechrevoBackendKind Fallback => RuleTable.Fallback;
+	private static MechrevoBackendKind Fallback => Table.Fallback;
 
 	// ⭐ 运行期最近一次路由结果（供 [gate] 机型分类日志 / 诊断包 / ActiveRoute 对比复用同一份事实）。
 	private static BackendRouteDecision? _lastDecision;
@@ -165,7 +201,8 @@ internal static class BackendRouter
 
 	internal static BackendRouteDecision Decide(MachineIdentity identity)
 	{
-		return Decide(identity, Rules, Fallback);
+		BackendRuleStore.RuleTable table = Table;
+		return Decide(identity, table.Rules, table.Fallback);
 	}
 
 	private static BackendRouteDecision Decide(MachineIdentity identity, RuleSpec[] rules, MechrevoBackendKind fallback)
@@ -194,27 +231,68 @@ internal static class BackendRouter
 			DeclarationPassed: DeclarationFor(fallback)?.Supports(identity) ?? true);
 	}
 
+	/// <summary>单条事实在当前机型下的取值（路由判定与诊断解释共用同一实现，避免两套判据）。</summary>
+	internal static bool Evaluate(MachineIdentity identity, RouteFact fact)
+	{
+		return fact switch
+		{
+			RouteFact.BaolongdaWhitelisted => identity.BaolongdaWhitelisted,
+			RouteFact.BaolongdaEnabled => !BaolongdaBackend.IsDisabledByEnv,
+			RouteFact.GcuServiceInstalled => identity.GcuServiceInstalled,
+			RouteFact.GcuGenerationSupported => IsGcuGeneration(identity.GpuGeneration),
+			RouteFact.MifsLegacyCompatible => identity.MifsLegacyCompatible,
+			RouteFact.TongfangFamily => identity.TongfangFamily,
+			_ => false
+		};
+	}
+
 	private static bool Matches(MachineIdentity identity, RuleSpec rule)
 	{
 		for (int i = 0; i < rule.Conditions.Length; i++)
 		{
 			RuleCondition condition = rule.Conditions[i];
-			bool actual = condition.Fact switch
-			{
-				RouteFact.BaolongdaWhitelisted => identity.BaolongdaWhitelisted,
-				RouteFact.BaolongdaEnabled => !BaolongdaBackend.IsDisabledByEnv,
-				RouteFact.GcuServiceInstalled => identity.GcuServiceInstalled,
-				RouteFact.GcuGenerationSupported => IsGcuGeneration(identity.GpuGeneration),
-				RouteFact.MifsLegacyCompatible => identity.MifsLegacyCompatible,
-				RouteFact.TongfangFamily => identity.TongfangFamily,
-				_ => false
-			};
-			if (actual != condition.Expected)
+			if (Evaluate(identity, condition.Fact) != condition.Expected)
 			{
 				return false;
 			}
 		}
 		return true;
+	}
+
+	/// <summary>
+	/// 只读可视化：逐条规则列出**每个条件的实际取值**、是否命中（★ = 最终采用）、以及兜底后端。
+	/// <para>⛔ 只读：不路由、不探测、不写任何东西；诊断包与 UI 只读页共用这一份文本。</para>
+	/// </summary>
+	internal static string Explain(MachineIdentity identity)
+	{
+		if (identity == null)
+		{
+			return "  (无机型事实，无法解释规则命中)";
+		}
+		BackendRuleStore.RuleTable table = Table;
+		StringBuilder sb = new StringBuilder();
+		sb.AppendLine("  规则表：来源=" + table.Source + " · 条数=" + table.Rules.Length
+			+ " · 文件=" + (string.IsNullOrEmpty(table.Path) ? "(无)" : table.Path)
+			+ (string.IsNullOrEmpty(table.Error) ? "" : " · 错误=" + table.Error));
+		bool matched = false;
+		for (int i = 0; i < table.Rules.Length; i++)
+		{
+			RuleSpec rule = table.Rules[i];
+			bool hit = Matches(identity, rule);
+			bool declarationPassed = DeclarationFor(rule.Backend)?.Supports(identity) ?? true;
+			string conditions = string.Join(" && ", Array.ConvertAll(rule.Conditions,
+				c => (c.Expected ? "" : "!") + c.Fact + "=" + (Evaluate(identity, c.Fact) ? "真" : "假")));
+			string verdict = !hit
+				? "未命中"
+				: (!declarationPassed ? "命中但声明不支持 ⇒ 落兜底" : (matched ? "命中（已被更前面的规则抢先）" : "★ 采用"));
+			sb.AppendLine("    #" + rule.Index + " " + rule.Backend + " ← " + conditions + " · " + verdict);
+			if (hit && declarationPassed && !matched)
+			{
+				matched = true;
+			}
+		}
+		sb.AppendLine("    兜底 → " + table.Fallback + (matched ? "" : "（★ 采用）"));
+		return sb.ToString().TrimEnd();
 	}
 
 	/// <summary>仅 UI 探针/离线预览用：把合成机型事实落到 LastDecision，让 UI 按 NUC 渲染；不触碰真实后端。</summary>
@@ -226,6 +304,7 @@ internal static class BackendRouter
 
 	internal static BackendRouteDecision DecideAndLog()
 	{
+		ReloadRulesIfChanged();
 		BackendRouteDecision decision = Decide(MachineIdentity.Collect());
 		System.Threading.Volatile.Write(ref _lastDecision, decision);
 		Logger.WriteLine("[强化机型分流] 规则来源=" + RuleSource + " · 条数=" + RuleCount
@@ -292,6 +371,19 @@ internal static class BackendRouter
 		CheckDeclaration(MachineIdentity.ForTest(board: "MRID6-23", whitelisted: true, mifsClass: true), pass, fail);
 		CheckDeclaration(MachineIdentity.ForTest(board: "GM5HG0A", generation: "Gen40", gcuInstalled: true), pass, fail);
 		CheckDeclaration(MachineIdentity.ForTest(board: "GM6IX8B", generation: "Gen30", mifsClass: true), pass, fail);
+		// ⑩ 规则文件解析（热重载的解析层）：合法 ⇒ file；version 非 1 / fact 非法 / backend 非法 ⇒ 整份回退内置
+		CheckRuleParse("规则文件：单条合法 ⇒ file", ValidRuleJson, expectFile: true, null, 1, pass, fail);
+		CheckRuleParse("规则文件：condition expected=false 可解析", NegatedRuleJson, expectFile: true, null, 1, pass, fail);
+		CheckRuleParse("规则文件：version=2 ⇒ 回退内置", "{\"version\":2,\"rules\":[]}", expectFile: false, "version=", 5, pass, fail);
+		CheckRuleParse("规则文件：fact 非法 ⇒ 回退内置", "{\"version\":1,\"rules\":[{\"index\":1,\"backend\":\"Gcu\",\"conditions\":[{\"fact\":\"NoSuchFact\"}]}]}",
+			expectFile: false, "fact 非法", 5, pass, fail);
+		CheckRuleParse("规则文件：backend 非法 ⇒ 回退内置", "{\"version\":1,\"rules\":[{\"index\":1,\"backend\":\"Nope\",\"conditions\":[{\"fact\":\"TongfangFamily\"}]}]}",
+			expectFile: false, "backend 非法", 5, pass, fail);
+		CheckRuleParse("规则文件：空 rules ⇒ 回退内置", "{\"version\":1,\"rules\":[]}", expectFile: false, "rules 为空", 5, pass, fail);
+		// ⑪ 只读可视化：当前事实下恰好一条「★ 采用」，并列出条件实际取值
+		CheckExplain("规则解释：白名单机型", MachineIdentity.ForTest(board: "MRID6-23", whitelisted: true, gcuInstalled: true), pass, fail);
+		CheckExplain("规则解释：同方无 GCU", MachineIdentity.ForTest(board: "GM5HG0A", generation: "Gen40", gcuInstalled: false), pass, fail);
+		CheckExplain("规则解释：无任何事实", MachineIdentity.ForTest(), pass, fail);
 
 		StringBuilder sb = new StringBuilder();
 		sb.AppendLine("[机型分流自测] PASS=" + pass.Count + " FAIL=" + fail.Count);
@@ -331,6 +423,51 @@ internal static class BackendRouter
 		else
 		{
 			fail.Add("能力声明 fail：" + decision.Backend + " rule=#" + decision.RuleIndex + " machine=" + identity.Summary);
+		}
+	}
+
+	private const string ValidRuleJson =
+		"{\"version\":1,\"rules\":[{\"index\":1,\"backend\":\"Baolongda\",\"description\":\"t\",\"conditions\":[{\"fact\":\"BaolongdaWhitelisted\"}]}]}";
+
+	private const string NegatedRuleJson =
+		"{\"version\":1,\"rules\":[{\"index\":1,\"backend\":\"Gcu\",\"conditions\":[{\"fact\":\"GcuServiceInstalled\",\"expected\":false}]}]}";
+
+	private static void CheckRuleParse(string scenario, string json, bool expectFile, string expectErrorFragment,
+		int expectRuleCount, List<string> pass, List<string> fail)
+	{
+		BackendRuleStore.RuleTable table = BackendRuleStore.Parse(json, BuiltInRules, MechrevoBackendKind.Gcu, "");
+		string expectedSource = expectFile ? "file" : "built-in";
+		bool ok = string.Equals(table.Source, expectedSource, StringComparison.Ordinal)
+			&& table.Rules.Length == expectRuleCount
+			&& (expectErrorFragment == null || (table.Error ?? "").Contains(expectErrorFragment, StringComparison.Ordinal));
+		string line = scenario + " ⇒ 来源=" + table.Source + " 条数=" + table.Rules.Length
+			+ (string.IsNullOrEmpty(table.Error) ? "" : " 错误=" + table.Error)
+			+ " · 期望 来源=" + expectedSource + " 条数=" + expectRuleCount;
+		if (ok)
+		{
+			pass.Add(line);
+		}
+		else
+		{
+			fail.Add(line);
+		}
+	}
+
+	private static void CheckExplain(string scenario, MachineIdentity identity, List<string> pass, List<string> fail)
+	{
+		string text = Explain(identity);
+		int stars = (text.Length - text.Replace("★ 采用", "").Length) / "★ 采用".Length;
+		bool factValuesShown = text.Contains("BaolongdaWhitelisted=", StringComparison.Ordinal)
+			&& text.Contains("GcuServiceInstalled=", StringComparison.Ordinal);
+		string line = scenario + " ⇒ 采用标记=" + stars + " 次 · 条件取值=" + (factValuesShown ? "有" : "缺")
+			+ " · 期望 采用标记=1 次 · 条件取值=有";
+		if (stars == 1 && factValuesShown)
+		{
+			pass.Add(line);
+		}
+		else
+		{
+			fail.Add(line + " · 实际文本=" + text.Replace("\r", "").Replace("\n", " / "));
 		}
 	}
 }

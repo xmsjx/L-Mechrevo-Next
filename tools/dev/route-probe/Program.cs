@@ -23,7 +23,9 @@ internal static class Program
     private static int Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
-        string corePath = args.Length > 0 ? Path.GetFullPath(args[0]) : DefaultCorePath();
+        bool hotReload = args.Any(a => string.Equals(a, "--hotreload", StringComparison.OrdinalIgnoreCase));
+        string? pathArg = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
+        string corePath = pathArg != null ? Path.GetFullPath(pathArg) : DefaultCorePath();
         Console.WriteLine("=== 机型分流只读探针（task-41）===");
         Console.WriteLine("Core = " + corePath);
         Console.WriteLine("身份 = " + (IsElevated() ? "管理员（本探针不需要）" : "普通用户（非管理员）") + " · 只读");
@@ -49,6 +51,10 @@ internal static class Program
         try
         {
             core = AssemblyLoadContext.Default.LoadFromAssemblyPath(corePath);
+            if (hotReload)
+            {
+                return RunHotReload(core);
+            }
             Type identityType = RequireType(core, "MechrevoLite.Hardware.MachineIdentity");
             Type routerType = RequireType(core, "MechrevoLite.Hardware.BackendRouter");
             Type orderType = RequireType(core, "MechrevoLite.Hardware.MechrevoBackendOrder");
@@ -257,6 +263,86 @@ internal static class Program
     private static Type RequireType(Assembly assembly, string fullName)
     {
         return assembly.GetType(fullName, throwOnError: true)!;
+    }
+
+    /// <summary>
+    /// 规则表热重载实测（同一进程内 A→B→C→D）：
+    /// A 1 条合法规则 ⇒ file；B 改成 2 条 ⇒ 进程内真的重载；C 写坏 ⇒ 整份回退内置且留错误；D 删文件 ⇒ 回落内置。
+    /// ⛔ 只读路由，不探测硬件、不写任何设备。
+    /// </summary>
+    private static int RunHotReload(Assembly core)
+    {
+        Console.WriteLine();
+        Console.WriteLine("--- 规则表热重载（进程内，只读路由）---");
+        Type routerType = RequireType(core, "MechrevoLite.Hardware.BackendRouter");
+        string path = Path.Combine(Path.GetTempPath(), "lm-rules-hotreload-" + Environment.ProcessId + ".json");
+        string? previous = Environment.GetEnvironmentVariable("LM_BACKEND_RULES_JSON");
+        int pass = 0;
+        int fail = 0;
+        try
+        {
+            Environment.SetEnvironmentVariable("LM_BACKEND_RULES_JSON", path);
+            File.WriteAllText(path, RulesJson(1));
+            Check("A 1 条合法规则 ⇒ file/1", 1, "file", expectError: false);
+            File.WriteAllText(path, RulesJson(2));
+            Check("B 改为 2 条 ⇒ 进程内重载 file/2", 2, "file", expectError: false);
+            File.WriteAllText(path, "{\"version\":1,\"rules\":[{\"index\":1,\"backend\":\"Nope\",\"conditions\":[{\"fact\":\"TongfangFamily\"}]}]}");
+            Check("C 非法 backend ⇒ 回退内置/5", 5, "built-in", expectError: true);
+            File.Delete(path);
+            Check("D 删除文件 ⇒ 回落内置/5", 5, "built-in", expectError: true);
+        }
+        catch (Exception ex)
+        {
+            fail++;
+            Console.WriteLine("  ✗ 热重载实测异常：" + ex.GetType().Name + ": " + ex.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("LM_BACKEND_RULES_JSON", previous);
+            try
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
+            }
+            catch
+            {
+            }
+        }
+        Console.WriteLine();
+        Console.WriteLine($"[hotreload] PASS={pass} FAIL={fail}");
+        return fail == 0 && pass == 4 ? 0 : 1;
+
+        void Check(string name, int expectCount, string expectSource, bool expectError)
+        {
+            InvokeStatic(routerType, "DecideAndLog");
+            int count = Convert.ToInt32(GetStaticProperty(routerType, "RuleCount"));
+            string source = Convert.ToString(GetStaticProperty(routerType, "RuleSource")) ?? "";
+            string error = Convert.ToString(GetStaticProperty(routerType, "RuleLoadError")) ?? "";
+            bool errorOk = expectError ? error.Length > 0 : error.Length == 0;
+            bool ok = count == expectCount && source == expectSource && errorOk;
+            string detail = "来源=" + source + " 条数=" + count + (error.Length > 0 ? " 错误=" + error : "");
+            if (ok)
+            {
+                pass++;
+                Console.WriteLine("  ✓ " + name + "：" + detail);
+            }
+            else
+            {
+                fail++;
+                Console.WriteLine("  ✗ " + name + "：实际 " + detail
+                    + " · 期望 来源=" + expectSource + " 条数=" + expectCount + " 错误=" + (expectError ? "有" : "无"));
+            }
+        }
+    }
+
+    private static string RulesJson(int count)
+    {
+        const string rule1 = "{\"index\":1,\"backend\":\"Gcu\",\"description\":\"hotreload-1\",\"conditions\":[{\"fact\":\"GcuServiceInstalled\"}]}";
+        const string rule2 = "{\"index\":2,\"backend\":\"Baolongda\",\"description\":\"hotreload-2\",\"conditions\":[{\"fact\":\"BaolongdaWhitelisted\"}]}";
+        string rules = count <= 1 ? rule1 : rule1 + "," + rule2;
+        return "{\"version\":1,\"rules\":[" + rules + "]}";
     }
 
     private static object InvokeStatic(Type type, string methodName)

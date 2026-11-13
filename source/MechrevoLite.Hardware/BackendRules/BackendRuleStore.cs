@@ -18,7 +18,38 @@ internal static class BackendRuleStore
 		MechrevoBackendKind Fallback,
 		string Source,
 		string Path,
-		string Error);
+		string Error,
+		long StampTicks = 0,
+		long StampLength = -1);
+
+	/// <summary>文件戳（末次写入 ticks + 长度）；用于判断是否需要热重载。</summary>
+	internal static (long Ticks, long Length) Stamp(string path)
+	{
+		try
+		{
+			if (string.IsNullOrEmpty(path))
+			{
+				return (0L, -1L);
+			}
+			FileInfo info = new FileInfo(path);
+			if (!info.Exists)
+			{
+				return (0L, -1L);
+			}
+			return (info.LastWriteTimeUtc.Ticks, info.Length);
+		}
+		catch
+		{
+			return (0L, -2L);
+		}
+	}
+
+	/// <summary>当前生效表所对应的文件是否已变化（新增/删除/改写）。</summary>
+	internal static bool HasChanged(RuleTable table)
+	{
+		(long ticks, long length) = Stamp(table.Path);
+		return ticks != table.StampTicks || length != table.StampLength;
+	}
 
 	internal static RuleTable Load(BackendRouter.RuleSpec[] builtIn, MechrevoBackendKind builtInFallback)
 	{
@@ -34,11 +65,25 @@ internal static class BackendRuleStore
 		if (!File.Exists(path))
 		{
 			string error = HasCustomPath() ? "文件不存在：" + path : "";
-			return new RuleTable(builtIn, builtInFallback, "built-in", path, error);
+			(long ticks0, long length0) = Stamp(path);
+			return new RuleTable(builtIn, builtInFallback, "built-in", path, error, ticks0, length0);
 		}
 		try
 		{
-			string json = File.ReadAllText(path);
+			return Parse(File.ReadAllText(path), builtIn, builtInFallback, path);
+		}
+		catch (Exception ex)
+		{
+			return Fallback(builtIn, builtInFallback, path, ex.GetType().Name + " " + ex.Message);
+		}
+	}
+
+	/// <summary>JSON → 规则表（纯函数，可离线断言；任何非法内容整份回退内置规则）。</summary>
+	internal static RuleTable Parse(string json, BackendRouter.RuleSpec[] builtIn, MechrevoBackendKind builtInFallback, string path)
+	{
+		(long ticks, long length) = Stamp(path);
+		try
+		{
 			BackendRuleConfig? config = JsonSerializer.Deserialize<BackendRuleConfig>(json,
 				new JsonSerializerOptions
 				{
@@ -106,7 +151,7 @@ internal static class BackendRuleStore
 					: entry.Description;
 				rules.Add(new BackendRouter.RuleSpec(entry.Index, description, backend, conditions));
 			}
-			return new RuleTable(rules.ToArray(), fallback, "file", path, "");
+			return new RuleTable(rules.ToArray(), fallback, "file", path, "", ticks, length);
 		}
 		catch (Exception ex)
 		{
@@ -129,8 +174,10 @@ internal static class BackendRuleStore
 	private static RuleTable Fallback(BackendRouter.RuleSpec[] builtIn, MechrevoBackendKind fallback,
 		string path, string error)
 	{
-		Logger.WriteError("[route] 规则文件不可用 ⇒ 回退内置规则：" + path + " · " + error);
-		return new RuleTable(builtIn, fallback, "built-in", path, error);
+		// 每次热重载检查都失败时不要刷屏：同一份内容只记一次。
+		Logger.WriteLineIfChanged("route-rules-fallback", "[route] 规则文件不可用 ⇒ 回退内置规则：" + path + " · " + error);
+		(long ticks, long length) = Stamp(path);
+		return new RuleTable(builtIn, fallback, "built-in", path, error, ticks, length);
 	}
 
 	private static bool HasCustomPath()
