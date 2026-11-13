@@ -547,7 +547,25 @@ internal sealed class LightingService : ILightingService
             MechrevoService? service = probe.Service;
             if (service == null)
             {
-                return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
+                // ⭐ EC/本地模式（没有 GCU 服务）：灯带/Logo/铰链的灯效走本地 HID 通道。
+                // 以前这里直接判失败 ⇒ 界面显示"已保存，但设备未确认"，而灯带其实完全没下发。
+                bool localSupported = intent.Topic switch
+                {
+                    LightingTopics.Lightbar => LocalLightbarSupported,
+                    LightingTopics.Logo => LocalLogoSupported,
+                    LightingTopics.Hinge => GcuEcExperimental.LocalHingeLight,
+                    _ => false
+                };
+                if (!localSupported)
+                {
+                    return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_51);
+                }
+                bool localOk = TryApplyLocalLightChannel(intent.Topic, intent.Effect, true, intent.Light,
+                    intent.Speed, intent.ColorArgb, out string localDetail);
+                Logger.WriteError("[local-light] " + intent.Topic + " effect=" + intent.Effect
+                    + " light=" + intent.Light + " speed=" + intent.Speed
+                    + " ⇒ " + (localOk ? "已下发" : "失败：" + localDetail));
+                return localOk ? ServiceResult.Success(WpfStrings.LightSavedApplied) : ServiceResult.Fail(WpfStrings.LightSavedUnconfirmed);
             }
             Color? color = KeyboardFirmwareEffects.IsSingleColorEffect(intent.Effect)
                 ? Color.FromArgb(intent.ColorArgb)
