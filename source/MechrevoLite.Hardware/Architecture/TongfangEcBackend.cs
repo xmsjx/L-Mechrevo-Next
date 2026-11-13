@@ -111,16 +111,22 @@ internal sealed class TongfangEcBackend : IBackendModule
 					"EC 未上报键盘能力", new string[0]);
 		}
 
-		FeatureDeclaration hinge = probe.HingeCapability
-			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
-				"EC 本地铰链灯通道", new[] { "usb:IteLightingLocal.HasHinge" })
-			: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
-				"EC 没有铰链灯通道", new string[0]);
-		FeatureDeclaration sync = probe.SyncCapability
-			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
-				"EC 本地同步灯带通道", new[] { "usb:IteLightingLocal.HasHinge" })
-			: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
-				"EC 没有同步灯带通道", new string[0]);
+		FeatureDeclaration hinge = probe.GcuConnected
+			? new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"GCU 已连接，EC 路未接管", new string[0])
+			: probe.HingeCapability
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+					"EC 本地铰链灯通道", new[] { "usb:IteLightingLocal.HasHinge" })
+				: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+					"EC 没有铰链灯通道", new string[0]);
+		FeatureDeclaration sync = probe.GcuConnected
+			? new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+				"GCU 已连接，EC 路未接管", new string[0])
+			: probe.SyncCapability
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+					"EC 本地同步灯带通道", new[] { "usb:IteLightingLocal.HasHinge" })
+				: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+					"EC 没有同步灯带通道", new string[0]);
 
 		FeatureDeclaration localDimming;
 		if (probe.EcLocalDimmingSupport == true)
