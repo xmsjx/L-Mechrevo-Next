@@ -452,7 +452,7 @@ public partial class CustomModeWindow : Window
         try
         {
             MechrevoLite.Hardware.MechrevoHw? hw = CurrentHw;
-            if (hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true)
+            if (hw?.IsNucUmiFamily == true)
             {
                 // 本地 ACPI/EC 自定义档：不走 GCU 固件槽，直接标记 ActiveModeId。
                 MechrevoLite.Mode.PerfModeStore.ActiveModeId = id;
@@ -776,8 +776,7 @@ public partial class CustomModeWindow : Window
             .IsSupported(CurrentHw, MechrevoLite.Hardware.Architecture.NucUmiOperation.GpuMode);
         bool intelMsrRows = CurrentHw is MechrevoHw intelHw
             && MechrevoLite.Hardware.CpuVendor.IsIntel
-            && !intelHw.IsIntelNucMachine
-            && !intelHw.IsUmiMachine;
+            && !intelHw.IsNucUmiFamily;
         bool locked = CurrentHw is MechrevoHw lockHw
             && lockHw.IsGcuConnected
             && PerfModeCapabilities.IsGen40Plus(lockHw)
@@ -798,7 +797,7 @@ public partial class CustomModeWindow : Window
         bool intelXingyaoMsr = hwForRows != null
             && MechrevoLite.Hardware.CpuVendor.IsIntel
             && MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
-            && !hwForRows.IsIntelNucMachine && !hwForRows.IsUmiMachine;
+            && !hwForRows.IsNucUmiFamily;
         bool wujieApu = hwForRows?.WujieSmuApu == true;
         bool smuCustomApu = hwForRows?.SmuCustomApu == true;
         bool smuPowerRows = hwForRows != null && MechrevoLite.Mode.PerfModeCapabilities.UsesSmuForCustomPower(
@@ -812,8 +811,7 @@ public partial class CustomModeWindow : Window
         bool forceEcPl4 = MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig
             && hwForRows != null
             && !hwForRows.UsesBaolongda
-            && !hwForRows.IsIntelNucMachine
-            && !hwForRows.IsUmiMachine
+            && !hwForRows.IsNucUmiFamily
             && !apuOrNoDgpu;
         Pl4Row.Visibility = !intelXingyaoMsr && !apuOrNoDgpu && (pl4Supported || gcuTongfangMachine || forceEcPl4)
             ? Visibility.Visible : Visibility.Collapsed;
@@ -824,8 +822,7 @@ public partial class CustomModeWindow : Window
         // PL4 口径属于同方模具的 EC 通道，EC 模式也要能显示；不再要求 GCU 服务在位。
         bool tongfangMoldIntel = hwForRows != null
             && !hwForRows.UsesBaolongda
-            && !hwForRows.IsIntelNucMachine
-            && !hwForRows.IsUmiMachine
+            && !hwForRows.IsNucUmiFamily
             && MechrevoLite.Hardware.CpuVendor.IsIntel
             && (hwForRows.IsTongfangFamily
                 || MechrevoLite.Hardware.MachineIdentity.Collect().TongfangFamily);
@@ -1828,8 +1825,7 @@ public partial class CustomModeWindow : Window
             // PerfModeService 走 FirmwareSlot 时返回空结果（界面显示“没有返回下发结果”）。
             bool xingyaoIntelMsr = CurrentHw is MechrevoHw xyHw
                 && MechrevoLite.Hardware.CpuVendor.IsIntel
-                && !xyHw.IsIntelNucMachine
-                && !xyHw.IsUmiMachine
+                && !xyHw.IsNucUmiFamily
                 && MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
             if (xingyaoIntelMsr && _current?.IsCustom == true && WpfBackend.Service != null)
             {

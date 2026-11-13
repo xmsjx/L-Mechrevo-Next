@@ -222,7 +222,7 @@ internal sealed class DisplayService : IDisplayService
     public IReadOnlyList<CalibrationOption> CalibrationOptions()
     {
         int level = _backend.Probe?.ColorCalibrationLevel ?? 1;
-        bool nuc = _backend.Hw?.IsIntelNucMachine == true || _backend.Hw?.IsUmiMachine == true;
+        bool nuc = _backend.Hw?.IsNucUmiFamily == true;
         List<CalibrationOption> options = new()
         {
             new(1, WpfStrings.OriginalStyleWindow_Content_9, false)
@@ -260,7 +260,7 @@ internal sealed class DisplayService : IDisplayService
         try
         {
             bool ok;
-            bool nuc = _backend.Hw?.IsIntelNucMachine == true || _backend.Hw?.IsUmiMachine == true;
+            bool nuc = _backend.Hw?.IsNucUmiFamily == true;
             if (on && mode == 999)
             {
                 ok = await ApplyCustomIccAsync().ConfigureAwait(false);

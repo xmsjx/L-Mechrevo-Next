@@ -2438,7 +2438,8 @@ public partial class MainWindow : Window
         {
             return;
         }
-        bool nucUmi = _probe?.Hw?.IsIntelNucMachine == true || _probe?.Hw?.IsUmiMachine == true;
+        bool nucUmi = MechrevoLite.Hardware.Architecture.NucUmiCapabilityMap
+            .IsSupported(_probe?.Hw, MechrevoLite.Hardware.Architecture.NucUmiOperation.GpuMode);
         bool nucNoGpu = _probe?.Hw?.IsIntelNucMachine == true;
         bool ecLocal = MechrevoLite.Hardware.GcuEcExperimental.Enabled
             && MechrevoLite.Hardware.GcuEcMode.IsEcMode;
@@ -3085,7 +3086,7 @@ public partial class MainWindow : Window
             ("HidLightbar_Sync/Ctrl", WpfStrings.LightingSync, LightingCatalog.SyncEffects)
         };
         bool hasKeyboard = hw?.SupportsKeyboard ?? false;
-        if (hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true)
+        if (hw?.IsNucUmiFamily == true)
         {
             // NUC/UMI：HID 单键 RGB 优先；没有 HID 时看 EC 单区支持位（0x766 bit2）。
             hasKeyboard = (hw?.SupportsKeyboard ?? false)

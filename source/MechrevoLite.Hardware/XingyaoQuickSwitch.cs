@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Management;
 
@@ -20,8 +20,7 @@ internal static class XingyaoQuickSwitch
     internal static bool IsApplicable(MechrevoHw? hw)
     {
         return hw != null
-            && !hw.IsIntelNucMachine
-            && !hw.IsUmiMachine
+            && !hw.IsNucUmiFamily
             && XingyaoPmc2.IsXingyaoPlatform();
     }
 

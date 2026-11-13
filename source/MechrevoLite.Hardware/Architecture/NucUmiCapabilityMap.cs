@@ -121,8 +121,46 @@ internal static class NucUmiCapabilityMap
 		Check(sb, "unknown-logo", new NucUmiFacts(false, false, false, false, false, false,
 			false, false, false, false, false, false, false, false, false),
 			NucUmiOperation.LogoLight, NucUmiOperationSupport.Unknown, ref pass, ref fail);
+		Check(sb, "nuc-fanboost", F(nuc: true), NucUmiOperation.FanBoost,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "nuc-charge", F(nuc: true), NucUmiOperation.ChargeLimit,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "nuc-perf", F(nuc: true), NucUmiOperation.PerformanceMode,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "nuc-keyboard", F(nuc: true), NucUmiOperation.KeyboardLight,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "nuc-power", F(nuc: true), NucUmiOperation.PowerLimit,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "umi-fan", F(umi: true), NucUmiOperation.FanCurve,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "wujie-fan", F(wujie: true), NucUmiOperation.FanCurve,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "wujie-power", F(wujie: true), NucUmiOperation.PowerLimit,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "ec-perf", F(ec: true), NucUmiOperation.PerformanceMode,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "gcu-power", F(gcu: true), NucUmiOperation.PowerLimit,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "umi-power", F(umi: true), NucUmiOperation.PowerLimit,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "nuc-logo", F(nuc: true, logo: true), NucUmiOperation.LogoLight,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "nuc-hinge", F(nuc: true, hinge: true), NucUmiOperation.HingeLight,
+			NucUmiOperationSupport.Supported, ref pass, ref fail);
+		Check(sb, "unknown-power", F(), NucUmiOperation.PowerLimit,
+			NucUmiOperationSupport.Unknown, ref pass, ref fail);
+		Check(sb, "unknown-fan", F(), NucUmiOperation.FanCurve,
+			NucUmiOperationSupport.Unknown, ref pass, ref fail);
 		sb.Insert(0, "[nuc-umi 能力矩阵] PASS=" + pass + " FAIL=" + fail + Environment.NewLine);
 		return sb.ToString().TrimEnd();
+	}
+
+	private static NucUmiFacts F(bool nuc = false, bool umi = false, bool wujie = false,
+		bool ec = false, bool gcu = false, bool logo = false, bool hinge = false)
+	{
+		return new NucUmiFacts(nuc, umi, wujie, ec, false, gcu,
+			false, false, logo, hinge, false, nuc || umi, nuc || umi || ec,
+			nuc || umi || wujie || ec, nuc || umi || wujie || ec || gcu);
 	}
 
 	private static void Check(StringBuilder sb, string scenario, NucUmiFacts facts,

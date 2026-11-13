@@ -899,11 +899,11 @@ public class MechrevoService
 		}
 		// （机主：PL1/PL2 不可调 · 日志 WriteFirmwareField:PL1=120 -> Failed）
 		bool intelXingyaoMsr = _hw != null && MechrevoLite.Hardware.CpuVendor.IsIntel
-			&& !_hw.IsIntelNucMachine && !_hw.IsUmiMachine
+			&& !_hw.IsNucUmiFamily
 			&& MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
 		bool intelMsrPower = intelXingyaoMsr
 			|| (_hw != null && MechrevoLite.Hardware.CpuVendor.IsIntel
-				&& !_hw.IsIntelNucMachine && !_hw.IsUmiMachine && !MechrevoHw.IsGcuServiceInstalled);
+				&& !_hw.IsNucUmiFamily && !MechrevoHw.IsGcuServiceInstalled);
 		if (_hw != null && (_hw.UsesBaolongda || _hw.SmuCustomApu || intelMsrPower) && fields != null && fields.Count > 0)
 		{
 			List<string> consumedKeys = new List<string>();
@@ -3135,8 +3135,7 @@ public class MechrevoService
 				// 非 50 系仍走纯 Windows 电源 Overlay。
 				bool preferGcu = _hw.IsGcuConnected
 					&& !_hw.UsesBaolongda
-					&& !_hw.IsIntelNucMachine
-					&& !_hw.IsUmiMachine
+					&& !_hw.IsNucUmiFamily
 					&& _hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
 				preferGcuHighPerf = preferGcu;
 				if (!preferGcu)

@@ -66,7 +66,7 @@ internal sealed class SensorService : ISensorService
                 gpuPower = NvidiaSmiSensor.GetPowerWatts();
             }
             bool preferLocalTemp = hw?.SmuCustomApu == true || hw?.WujieSmuApu == true
-                || hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true
+                || hw?.IsNucUmiFamily == true
                 || hw?.IsYaoshiMachine == true;
             int cpuTemp = preferLocalTemp && HardwareControl.cpuTemp > 0
                 ? HardwareControl.cpuTemp

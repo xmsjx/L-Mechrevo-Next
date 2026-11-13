@@ -80,7 +80,7 @@ internal sealed class ChargeLimitService : IChargeLimitService
                 mode = ecMode;
                 enabled = ecMode == BatteryLimitWriter.ModeActive;
             }
-            else if (_backend.Hw is { IsIntelNucMachine: true } or { IsUmiMachine: true })
+            else if (_backend.Hw is { IsNucUmiFamily: true })
             {
                 if (MechrevoLite.Hardware.NucBatteryMode.TryReadPercent(out int nucPercent))
                 {
@@ -134,7 +134,7 @@ internal sealed class ChargeLimitService : IChargeLimitService
     {
         try
         {
-            if (_backend.Hw is { IsIntelNucMachine: true } or { IsUmiMachine: true })
+            if (_backend.Hw is { IsNucUmiFamily: true })
             {
                 bool nucOk = MechrevoLite.Hardware.NucBatteryMode.TrySetPercent(highPercent, out string nucDetail);
                 return nucOk ? ServiceResult.Success(nucDetail) : ServiceResult.Fail(nucDetail);
@@ -166,7 +166,7 @@ internal sealed class ChargeLimitService : IChargeLimitService
     {
         try
         {
-            if (_backend.Hw is { IsIntelNucMachine: true } or { IsUmiMachine: true })
+            if (_backend.Hw is { IsNucUmiFamily: true })
             {
                 bool nucOk = MechrevoLite.Hardware.NucBatteryMode.TrySetPercent(100, out string nucDetail);
                 return nucOk ? ServiceResult.Success(nucDetail) : ServiceResult.Fail(nucDetail);

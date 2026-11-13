@@ -1223,8 +1223,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     return true;
                 }
-                bool legacy = _backendProbe?.Hw?.IsIntelNucMachine == true
-                    || _backendProbe?.Hw?.IsUmiMachine == true
+                bool legacy = _backendProbe?.Hw?.IsNucUmiFamily == true
                     || _backendProbe?.Hw?.DisplayEffectProfiles.Count > 0
                     || _backendProbe?.Capabilities?.ColorCalibration == true
                     || (IsEcModeActive
@@ -1894,8 +1893,7 @@ public partial class OriginalStyleWindow : Window
         {
             MechrevoHw? hw = _backendProbe?.Hw;
             return hw != null && !hw.UsesBaolongda
-                && (hw.IsIntelNucMachine
-                    || hw.IsUmiMachine
+                && (hw.IsNucUmiFamily
                     || MechrevoLite.Hardware.RuntimeModelSupport.Current().IsSupported
                     || MechrevoLite.BatteryLimitPanel.IsSupportedBoard(hw)
                     || MechrevoLite.Hardware.EcChargeLimit.ProbeChannelAvailable());
@@ -2879,7 +2877,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             MechrevoHw? nucHw = _backendProbe?.Hw;
-            if (nucHw?.IsIntelNucMachine == true || nucHw?.IsUmiMachine == true)
+            if (nucHw?.IsNucUmiFamily == true)
             {
                 bool nucOk = await Task.Run(() => MechrevoLite.Hardware.NucBatteryMode.TrySetPercent(100, out _));
                 if (nucOk)
@@ -3452,7 +3450,7 @@ public partial class OriginalStyleWindow : Window
         int value = (int)Math.Round(e.NewValue);
         if (BatteryLimitSliderText != null) BatteryLimitSliderText.Text = value + "%";
         MechrevoHw? hw = _backendProbe?.Hw;
-        if (hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true)
+        if (hw?.IsNucUmiFamily == true)
         {
             if (!MechrevoLite.Hardware.NucBatteryMode.TrySetPercent(value, out string nucDetail))
             {
@@ -3594,8 +3592,7 @@ public partial class OriginalStyleWindow : Window
 
     private async void ModeButton_Click(object sender, RoutedEventArgs e)
     {
-        bool nucDirect = _backendProbe?.Hw?.IsIntelNucMachine == true
-            || _backendProbe?.Hw?.IsUmiMachine == true;
+        bool nucDirect = _backendProbe?.Hw?.IsNucUmiFamily == true;
         if (nucDirect)
         {
             // 控制台以 CurrentProfile 事件/回读为准，不在点击瞬间改按钮。
@@ -3851,8 +3848,7 @@ public partial class OriginalStyleWindow : Window
                 if (IsEcLocalRoute
                     && _backendProbe?.Hw != null
                     && _backendProbe.Hw.UsesBaolongda == false
-                    && _backendProbe.Hw.IsIntelNucMachine == false
-                    && _backendProbe.Hw.IsUmiMachine == false
+                    && _backendProbe.Hw.IsNucUmiFamily == false
                     && GcuEcExperimental.TryApplyMode(mode, out string ecDetail))
                 {
                     // GCU 内置档由固件表接管：不要套用 NUC/UMI 的 NucPerformanceMode 默认表，
@@ -4053,7 +4049,8 @@ public partial class OriginalStyleWindow : Window
                 PollFnLockOsd(hw);
                 PollMicOsd(hw);
             }
-            bool nucPerf = hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
+            bool nucPerf = MechrevoLite.Hardware.Architecture.NucUmiCapabilityMap
+            .IsSupported(hw, MechrevoLite.Hardware.Architecture.NucUmiOperation.GpuMode);
             bool gcuPerf = hw != null
                 && hw.IsGcuConnected
                 && !hw.UsesBaolongda
@@ -4100,7 +4097,7 @@ public partial class OriginalStyleWindow : Window
         {
             long now = Environment.TickCount64;
             MechrevoHw? nucHw = _backendProbe?.Hw;
-            bool nucKeyboard = nucHw?.IsIntelNucMachine == true || nucHw?.IsUmiMachine == true;
+            bool nucKeyboard = nucHw?.IsNucUmiFamily == true;
             if (nucKeyboard && (code == 177 || code == 178 || code == 185 || code == 193
                 || (code >= 59 && code <= 63)))
             {
@@ -4160,7 +4157,8 @@ public partial class OriginalStyleWindow : Window
             }
             _lastBrightnessHotkeyTick = now;
             MechrevoHw? hw = _backendProbe?.Hw;
-            bool nucCycle = hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
+            bool nucCycle = MechrevoLite.Hardware.Architecture.NucUmiCapabilityMap
+            .IsSupported(hw, MechrevoLite.Hardware.Architecture.NucUmiOperation.GpuMode);
             int current = hw?.KeyboardBrightness ?? -1;
             int hwLevel = current <= 4 ? current : (current < 0 ? 1 : Math.Clamp((int)Math.Round(current / 25.0), 0, 4));
             // ⚠️ HID 写入后 hw.KeyboardBrightness 不一定会立刻回读；
@@ -4741,7 +4739,7 @@ public partial class OriginalStyleWindow : Window
         }
         MechrevoHw keyHw = _backendProbe.Hw;
         bool hasPerformanceKey = IsNucLike(keyHw)
-            || (keyHw.IsGcuConnected && !keyHw.UsesBaolongda && !keyHw.IsIntelNucMachine && !keyHw.IsUmiMachine)
+            || (keyHw.IsGcuConnected && !keyHw.UsesBaolongda && !keyHw.IsNucUmiFamily)
             || IsEcLocalRoute;
         if (!hasPerformanceKey)
         {
@@ -4926,8 +4924,7 @@ public partial class OriginalStyleWindow : Window
                 // 没有 GCU 且 EC 模式未开启时没有可恢复的后端。
                 || (!hw.IsGcuConnected && !IsEcModeActive)
                 || hw.UsesBaolongda
-                || hw.IsIntelNucMachine
-                || hw.IsUmiMachine)
+                || hw.IsNucUmiFamily)
             {
                 return;
             }
@@ -5539,8 +5536,7 @@ public partial class OriginalStyleWindow : Window
         bool gcuEcGpuExperiment = IsEcLocalRoute
             && _backendProbe.Hw != null
             && _backendProbe.Hw.UsesBaolongda == false
-            && _backendProbe.Hw.IsIntelNucMachine == false
-            && _backendProbe.Hw.IsUmiMachine == false;
+            && _backendProbe.Hw.IsNucUmiFamily == false;
         bool localColdGpu = _backendProbe.Hw?.IsGcuConnected != true
             && MechrevoLite.Hardware.UefiGpuMux.HasMuxVariable;
         if (!gcuEcGpuExperiment && !localColdGpu
@@ -5753,8 +5749,7 @@ public partial class OriginalStyleWindow : Window
             && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
         bool modeLocalEc = !modeBaolongda
             && modeHw?.IsGcuConnected != true
-            && modeHw?.IsIntelNucMachine != true
-            && modeHw?.IsUmiMachine != true
+            && modeHw?.IsNucUmiFamily != true
             && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
         if (modeBaolongda && _services != null)
         {
@@ -5843,7 +5838,7 @@ public partial class OriginalStyleWindow : Window
         if (ChargeSliderToggle.IsChecked == true)
         {
             bool sliderOk;
-            if (_backendProbe.Hw?.IsIntelNucMachine == true || _backendProbe.Hw?.IsUmiMachine == true)
+            if (_backendProbe.Hw?.IsNucUmiFamily == true)
             {
                 sliderOk = MechrevoLite.Hardware.NucBatteryMode.TrySetPercent(percentForMode, out string nucDetail);
                 Logger.WriteLine("[nuc-battery] 三档→EC 0x07B9 " + (sliderOk ? "OK" : "FAIL") + "：" + nucDetail);
@@ -5879,8 +5874,7 @@ public partial class OriginalStyleWindow : Window
         // 不因 _services 存在就改走 DashboardCommands/EC 侧。
         bool modeEcThree = (modeGcu || modeLocalEc || IsEcLocalRoute)
             && !modeBaolongda
-            && modeHw?.IsIntelNucMachine != true
-            && modeHw?.IsUmiMachine != true
+            && modeHw?.IsNucUmiFamily != true
             && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
             && !MechrevoLite.Hardware.EcChargeLimit.IsLegacyGenerationBlocked();
         if (modeEcThree)
@@ -6850,7 +6844,7 @@ public partial class OriginalStyleWindow : Window
         BackendLine.Text = probe.Snapshot();
         UpdateTraySensorTooltip(probe);
         HookHardwareState(probe.Hw);
-        if (probe.Hw.IsIntelNucMachine || probe.Hw.IsUmiMachine)
+        if (probe.Hw.IsNucUmiFamily)
         {
             MechrevoLite.Hardware.NucQuickSwitches.Sync(probe.Hw);
         }
@@ -7068,8 +7062,7 @@ public partial class OriginalStyleWindow : Window
         if (ChargeSliderToggle.IsChecked != true
             && probe.Hw?.IsGcuConnected != true
             && probe.Hw?.UsesBaolongda != true
-            && probe.Hw?.IsIntelNucMachine != true
-            && probe.Hw?.IsUmiMachine != true)
+            && probe.Hw?.IsNucUmiFamily != true)
         {
             batteryMode = ModeForPercent(MechrevoLite.Battery.BatteryControl.SelectedModePercent());
         }
@@ -7612,7 +7605,7 @@ public partial class OriginalStyleWindow : Window
         }
         // NUC/UMI 的多数功能走本地 ACPI/EC，不依赖 GCU；GCU 未连接也按“已就绪”显示。
         if (!probe.IsGcuConnected
-            && (probe.Hw?.IsIntelNucMachine == true || probe.Hw?.IsUmiMachine == true))
+            && (probe.Hw?.IsNucUmiFamily == true))
         {
             SetBackendStatus(WpfStrings.BackendNonGcuReady, "#4ADE80", WpfStrings.L("NUC/UMI 直接 ACPI/EC 模式已就绪（无需 GCU）", "NUC/UMI direct ACPI/EC mode ready (GCU not required)"));
             return;
@@ -7867,10 +7860,10 @@ public partial class OriginalStyleWindow : Window
             bool hasKeyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
                 ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
                 : caps.Keyboard || (hw?.SupportsKeyboard ?? false)
-                    || hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
+                    || hw?.IsNucUmiFamily == true;
             bool hasLightbar = caps.Lightbar || (hw?.SupportsLightbar ?? false)
                 || (MechrevoLite.Hardware.GcuEcExperimental.LocalLightbar)
-                || hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
+                || hw?.IsNucUmiFamily == true;
             bool hasLogo = caps.LogoLight || (hw?.SupportsLogoLight ?? false)
                 || (MechrevoLite.Hardware.GcuEcExperimental.LocalLogoLight);
             bool hasHinge = _backendProbe?.SupportsHingeLight == true;
@@ -7887,7 +7880,7 @@ public partial class OriginalStyleWindow : Window
   _services?.Lighting.ApplyHardwareLightIdleTimer();
   L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.ApplyKeyboardAutoOffSetting();
   SyncLightSwitchesFromHardware();
-  bool nucUmiModeUi = _backendProbe?.Hw?.IsIntelNucMachine == true || _backendProbe?.Hw?.IsUmiMachine == true;
+  bool nucUmiModeUi = _backendProbe?.Hw?.IsNucUmiFamily == true;
             // Intel 星耀暂时屏蔽自定义模式；AMD 星耀/无界走本机 SMU 自定义。
             bool smuCustom = hw?.SmuCustomApu == true;
             // EC 实验模式/无 GCU 的同方独显机：本地 EC 也能跑自定义档，
@@ -8023,7 +8016,7 @@ public partial class OriginalStyleWindow : Window
         bool keyboard = MechrevoLite.Hardware.GcuEcKeyboard.Active
             ? MechrevoLite.Hardware.GcuEcKeyboard.HasControllableKeyboard
             : (caps?.Keyboard ?? false) || (hw?.SupportsKeyboard ?? false)
-                || hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true;
+                || hw?.IsNucUmiFamily == true;
         bool legacyKeyboard = keyboard;
         keyboard = ResolveKeyboardSupport(hw, keyboard);
         MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogKeyboardLight(hw, legacyKeyboard, "wide");
@@ -8696,7 +8689,7 @@ public partial class OriginalStyleWindow : Window
         // 只看「GCU 本身是 30 系」：显卡是 30 系但 GCU 不是 30 系时不显示模式×配置。
         bool gcu30 = hw?.IsGcuConnected == true && MechrevoService.IsGcu30;
         bool profileConfig = gcu30
-                && !(hw?.IsIntelNucMachine == true || hw?.IsUmiMachine == true);
+                && !(hw?.IsNucUmiFamily == true);
         bool show = profileConfig && currentMode >= 0 && currentMode <= 2;
         // 30 系配置下拉必须和对应性能模式按钮一起显隐；部分 30 系只有静音/平衡两档。
         PerfConfigSilentGroup.Visibility = SilentModeButton.Visibility;
@@ -10176,8 +10169,7 @@ public partial class OriginalStyleWindow : Window
                 if (probe == null || hw == null
                     || !hw.IsGcuConnected
                     || hw.UsesBaolongda
-                    || hw.IsIntelNucMachine
-                    || hw.IsUmiMachine)
+                    || hw.IsNucUmiFamily)
                 {
                     return;
                 }
@@ -11156,7 +11148,7 @@ public partial class OriginalStyleWindow : Window
                 // 0.293.5.1：HID 关灯后同时走固件键盘电源关（NUC/UMI 自带通道，不走 GCU）。
                 MechrevoHw? offHw = _backendProbe?.Hw;
                 if (_backendProbe?.Service != null && offHw is { IsConnected: true }
-                    && offHw.IsIntelNucMachine != true && offHw.IsUmiMachine != true)
+                    && offHw.IsNucUmiFamily != true)
                 {
                     await SetKeyboardPowerServiceAsync(false).ConfigureAwait(true);
                 }
@@ -11184,7 +11176,7 @@ public partial class OriginalStyleWindow : Window
             // 否则部分机型 HID 帧在线但背光仍不亮（NUC/UMI 不走这条 GCU 分流）。
             MechrevoHw? onHw = _backendProbe?.Hw;
             if (_backendProbe?.Service != null && onHw is { IsConnected: true, KeyboardPower: false }
-                && onHw.IsIntelNucMachine != true && onHw.IsUmiMachine != true)
+                && onHw.IsNucUmiFamily != true)
             {
                 await SetKeyboardPowerServiceAsync(true).ConfigureAwait(true);
             }

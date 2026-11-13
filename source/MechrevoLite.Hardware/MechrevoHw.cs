@@ -5489,7 +5489,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		confirmed = false;
 		BaolongdaWmi wmi = _baolongda?.Wmi;
-		if (wmi == null && !_disposed && CpuVendor.IsIntel && !IsIntelNucMachine && !IsUmiMachine)
+		if (wmi == null && !_disposed && CpuVendor.IsIntel && !IsNucUmiFamily)
 		{
 			return TryApplyIntelMsrPowerLimit(enable, pl1Watts, pl2Watts, tempWallC, out confirmed);
 		}

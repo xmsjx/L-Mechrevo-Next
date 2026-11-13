@@ -187,7 +187,7 @@ internal sealed class BackendProbe : IDisposable
     {
         get
         {
-            if (_hw?.IsIntelNucMachine == true || _hw?.IsUmiMachine == true)
+            if (_hw?.IsNucUmiFamily == true)
             {
                 if (NucBatteryMode.TryReadMode(out int mode))
                 {
@@ -332,7 +332,7 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            if (_hw?.IsIntelNucMachine == true || _hw?.IsUmiMachine == true)
+            if (_hw?.IsNucUmiFamily == true)
             {
                 return SoftwareColorEnhancement.Apply(mode);
             }
@@ -355,7 +355,7 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            if (_hw?.IsIntelNucMachine == true || _hw?.IsUmiMachine == true) return;
+            if (_hw?.IsNucUmiFamily == true) return;
             if (_service != null)
             {
                 await _service.RequestDisplayEffectStatus().ConfigureAwait(false);
@@ -368,7 +368,7 @@ internal sealed class BackendProbe : IDisposable
 
     internal void SyncNucQuickSwitches()
     {
-        if (_hw?.IsIntelNucMachine == true || _hw?.IsUmiMachine == true)
+        if (_hw?.IsNucUmiFamily == true)
         {
             NucQuickSwitches.Sync(_hw);
         }
@@ -376,7 +376,7 @@ internal sealed class BackendProbe : IDisposable
 
     internal void SyncEcExperimentalQuickSwitches()
     {
-        if (_hw != null && !_hw.UsesBaolongda && !_hw.IsIntelNucMachine && !_hw.IsUmiMachine)
+        if (_hw != null && !_hw.UsesBaolongda && !_hw.IsNucUmiFamily)
         {
             NucQuickSwitches.Sync(_hw);
             if (AcpiDriverEc.TryReadByte(1873, out byte clamp))
@@ -507,7 +507,7 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            if (_hw?.IsIntelNucMachine == true || _hw?.IsUmiMachine == true)
+            if (_hw?.IsNucUmiFamily == true)
             {
                 return MechrevoLite.Hardware.NucPerformanceMode.TryReadVisualMode(out int nucMode) ? nucMode : -1;
             }
@@ -549,7 +549,7 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            if (_hw?.IsIntelNucMachine == true || _hw?.IsUmiMachine == true)
+            if (_hw?.IsNucUmiFamily == true)
             {
                 bool ok = NucBatteryMode.TrySet(mode, out string detail);
                 Logger.WriteLine("[nuc-battery] " + detail);
@@ -691,7 +691,7 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            if (_hw?.IsIntelNucMachine == true || _hw?.IsUmiMachine == true)
+            if (_hw?.IsNucUmiFamily == true)
             {
                 // NUC/UMI 没有 GCU 校色通道：原生/关闭只清本地 ICC，不做任何 MQTT。
                 if (mode <= 1)
@@ -857,7 +857,7 @@ internal sealed class BackendProbe : IDisposable
     internal async Task<bool> ApplyDisplayEffectAsync(bool on, string? mode)
     {
         // NUC/UMI 没有 GCU Display/Control；色彩增强是本地软件 gamma/matrix，不能走 GCU 状态请求。
-        if (_hw?.IsIntelNucMachine == true || _hw?.IsUmiMachine == true)
+        if (_hw?.IsNucUmiFamily == true)
         {
             string target = string.IsNullOrWhiteSpace(mode)
                 ? (MechrevoLite.AppConfig.GetString("display_effect_mode") ?? "")
@@ -911,7 +911,7 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            if (_hw?.IsIntelNucMachine == true || _hw?.IsUmiMachine == true)
+            if (_hw?.IsNucUmiFamily == true)
             {
                 return on
                     ? SoftwareColorEnhancement.Apply(MechrevoLite.AppConfig.GetString("display_effect_mode"))
@@ -970,7 +970,7 @@ internal sealed class BackendProbe : IDisposable
             {
                 return await SetKeyboardPowerAsync(on).ConfigureAwait(false);
             }
-            if (_hw?.IsIntelNucMachine == true && string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal))
+            if (_hw?.IsNucUmiFamily == true && string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal))
             {
                 bool local = UmiLightbar.SetPower(on);
                 bool? state = UmiLightbar.TryReadStatus(out bool readOn, out _, out _, out _) ? readOn : (bool?)null;
@@ -1125,7 +1125,7 @@ internal sealed class BackendProbe : IDisposable
 
     internal bool ApplyIntelNucLightbar(string effect, int light, System.Drawing.Color? color)
     {
-        return _hw?.IsIntelNucMachine == true && UmiLightbar.SetEffect(effect, color, light);
+        return _hw?.IsNucUmiFamily == true && UmiLightbar.SetEffect(effect, color, light);
     }
 
     internal async Task<bool> SetLightbarEffectAsync(string effect)
@@ -1133,7 +1133,7 @@ internal sealed class BackendProbe : IDisposable
         try
         {
             (int light, int speed, Color? color) = ReadLightArgs("HidLightbar/Ctrl", effect, keyboard: false);
-            if (_hw?.IsIntelNucMachine == true)
+            if (_hw?.IsNucUmiFamily == true)
             {
                 // 灯带 Monocolor / Rainbow 都会写 RGB；不是单色效果也要带颜色，
                 // 否则彩虹模式的亮度和混色不会变。
@@ -1509,8 +1509,7 @@ internal sealed class BackendProbe : IDisposable
             // 50 系 GCU：状态来自 GCU 的 HighPerformancePowerModeSwitch 回包。
             if (_hw?.IsGcuConnected == true
                 && !_hw.UsesBaolongda
-                && !_hw.IsIntelNucMachine
-                && !_hw.IsUmiMachine
+                && !_hw.IsNucUmiFamily
                 && _hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50
                 && _hw.QuickSwitches.TryGetValue("highperf", out bool gcuHighPerf))
             {
