@@ -200,6 +200,12 @@ internal static class FeatureGate
 			FeatureAvailability.Supported, BackendChannel.WmiMailbox, FeatureId.FanCurve);
 		Check(lines, "mifs-fancurve", Facts(BackendKind.TongfangMifs), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.FanCurve);
+		Check(lines, "ec-charge", Facts(BackendKind.TongfangEc), new FeatureProbe(false, false, false, null, false),
+			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.ChargeLimit);
+		Check(lines, "baolongda-fanboost", Facts(BackendKind.BaolongdaWmi), new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Supported, BackendChannel.WmiMailbox, FeatureId.FanBoost);
+		Check(lines, "mifs-fanboost", Facts(BackendKind.TongfangMifs), new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.FanBoost);
 		Check(lines, "gcu-refresh", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.RefreshRate);
 		Check(lines, "undeclared-feature", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),

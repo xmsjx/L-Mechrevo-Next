@@ -57,10 +57,21 @@ internal sealed class ChargeLimitService : IChargeLimitService
         _backend = backend;
     }
 
-    public bool Supported => _backend.Hw is { } hw
-        && (BatteryLimitPanel.IsSupportedBoard(hw)
-            || hw.IsNucUmiFamily
-            || MechrevoLite.Hardware.EcChargeLimit.IsEcDirectWriteAllowed());
+    public bool Supported
+    {
+        get
+        {
+            if (_backend.Hw is not { } hw)
+            {
+                return false;
+            }
+            bool legacy = BatteryLimitPanel.IsSupportedBoard(hw)
+                || hw.IsNucUmiFamily
+                || MechrevoLite.Hardware.EcChargeLimit.IsEcDirectWriteAllowed();
+            return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+                MechrevoLite.Hardware.Architecture.FeatureId.ChargeLimit, hw, legacy);
+        }
+    }
 
     public ChargeLimitState Read()
     {

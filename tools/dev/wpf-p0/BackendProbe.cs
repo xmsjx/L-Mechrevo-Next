@@ -147,9 +147,11 @@ internal sealed class BackendProbe : IDisposable
                 case "copilot":
                     return GcuEcExperimental.LocalQuickSwitch || _hw.SupportsQuickSwitch(key);
                 case "fanboost":
-                    return _hw.Capabilities.FanBoost || _hw.UsesBaolongda
+                    bool legacyFanBoost = _hw.Capabilities.FanBoost || _hw.UsesBaolongda
                         || _hw.IsNucUmiFamily
                         || GcuEcExperimental.LocalQuickSwitch;
+                    return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
+                        MechrevoLite.Hardware.Architecture.FeatureId.FanBoost, _hw, legacyFanBoost);
                 case "winkey":
                 case "fnkey":
                 case "touchpad":

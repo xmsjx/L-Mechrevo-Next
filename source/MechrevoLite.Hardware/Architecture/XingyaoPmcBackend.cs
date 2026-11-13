@@ -32,7 +32,8 @@ internal sealed class XingyaoPmcBackend : IBackendModule
 				[FeatureId.LcdOverdrive] = noOemDisplay,
 				[FeatureId.ColorCalibration] = noOemDisplay,
 				[FeatureId.FanCurve] = unsupported,
-				[FeatureId.FanBoost] = unsupported,
+				[FeatureId.FanBoost] = new FeatureDeclaration(FeatureAvailability.Unknown,
+					BackendChannel.None, "星耀未声明强冷通道，回退旧判据", new string[0]),
 				[FeatureId.ChargeLimit] = unsupported,
 				[FeatureId.PerformanceMode] = perf,
 				[FeatureId.RefreshRate] = refreshRate
