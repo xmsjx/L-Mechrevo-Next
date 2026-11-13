@@ -6086,6 +6086,12 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 				Logger.WriteLine($"SwitchFanBoost({enable}) NUC/UMI EC ⇒ ok={ok} confirmed={confirmed}");
 				return ok;
 			}
+			// 同方 EC-only（无 GCU 连接）同样只有本地 EC 0x751，没有 Fan/Control 话题可用。
+			if (!_hw.IsGcuConnected && _hw.TrySetEcFanBoost(enable, out bool ecConfirmed))
+			{
+				Logger.WriteLine($"SwitchFanBoost({enable}) 同方 EC ⇒ ok=True confirmed={ecConfirmed}");
+				return true;
+			}
 			// ⭐⭐ 无界（GCU 后端）恢复强冷入口：能力位刷新前也允许走 GCU 话题；GCU 未连接则如实失败 ✅
 			if (!_hw.SupportsFanBoost && !_hw.WujieSmuApu)
 			{
