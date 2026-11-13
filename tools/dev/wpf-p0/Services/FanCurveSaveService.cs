@@ -8,7 +8,7 @@ using L_Mechrevo.WpfP0.Resources;
 
 namespace L_Mechrevo.WpfP0.Services;
 
-internal sealed record FanCurveSaveResult(bool Success, bool Dirty, string Detail);
+internal sealed record FanCurveSaveResult(bool Success, bool Dirty, string Detail, bool PreserveDirty = false);
 
 /// <summary>GCU 风扇曲线保存执行适配器。</summary>
 internal static class FanCurveSaveService
@@ -142,7 +142,8 @@ internal static class FanCurveSaveService
 		{
 			return new FanCurveSaveResult(false, true,
 				WpfStrings.L("强冷进行中，请先关闭强冷再保存曲线",
-					"Fan boost is active; turn it off before saving the fan curve"));
+					"Fan boost is active; turn it off before saving the fan curve"),
+				PreserveDirty: true);
 		}
 		int[] cpuPoints = cpu.Take(BaolongdaFanCurveSettings.PointCount).ToArray();
 		int[] gpuPoints = gpu.Take(BaolongdaFanCurveSettings.PointCount).ToArray();

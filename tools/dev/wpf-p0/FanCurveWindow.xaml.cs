@@ -274,7 +274,10 @@ public partial class FanCurveWindow : Window
                 FanCurveSaveResult result = FanCurveSaveService.SaveNuc(_modeId,
                     CpuCurve.Duties, GpuCurve.Duties, CpuCurve.Temperatures, GpuCurve.Temperatures,
                     PushFanCurveCheck?.IsChecked != false);
-                _dirty = result.Dirty;
+                if (!result.PreserveDirty)
+                {
+                    _dirty = result.Dirty;
+                }
                 StatusText.Text = result.Detail;
             }
             catch (Exception ex)
@@ -291,7 +294,10 @@ public partial class FanCurveWindow : Window
                     CpuCurve.Duties, GpuCurve.Duties, TempsToInts(CpuCurve.Temperatures),
                     TempsToInts(GpuCurve.Temperatures), PushFanCurveCheck?.IsChecked != false,
                     BaolongdaLoopCheck.IsChecked == true, BaolongdaSyncCheck.IsChecked == true);
-                _dirty = result.Dirty;
+                if (!result.PreserveDirty)
+                {
+                    _dirty = result.Dirty;
+                }
                 StatusText.Text = result.Detail;
             }
             catch (Exception ex)
@@ -308,7 +314,10 @@ public partial class FanCurveWindow : Window
                 FanCurveSaveResult result = FanCurveSaveService.SaveWujie(_wujieController, _modeId,
                     CpuCurve.Duties, GpuCurve.Duties, CpuCurve.Temperatures, GpuCurve.Temperatures,
                     WujieIndependentCheck?.IsChecked == true);
-                _dirty = result.Dirty;
+                if (!result.PreserveDirty)
+                {
+                    _dirty = result.Dirty;
+                }
                 StatusText.Text = result.Detail;
             }
             catch (Exception ex)
@@ -324,7 +333,10 @@ public partial class FanCurveWindow : Window
                 FanCurveSaveResult result = FanCurveSaveService.SaveEc(_modeId,
                     CpuCurve.Duties, GpuCurve.Duties, CpuCurve.Temperatures, GpuCurve.Temperatures,
                     PushFanCurveCheck?.IsChecked != false);
-                _dirty = result.Dirty;
+                if (!result.PreserveDirty)
+                {
+                    _dirty = result.Dirty;
+                }
                 StatusText.Text = result.Detail;
             }
             catch (Exception ex)
