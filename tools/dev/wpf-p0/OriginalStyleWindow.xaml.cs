@@ -3369,7 +3369,8 @@ public partial class OriginalStyleWindow : Window
             if (outcome.RollbackPercent is int rollback)
             {
                 _syncingBatteryLimit = true;
-                BatteryLimitSlider.Value = rollback;
+                // -1 等越界值由控件范围夹回（旧代码同样靠 WPF 裁剪，这里显式化）。
+                BatteryLimitSlider.Value = Math.Clamp((double)rollback, BatteryLimitSlider.Minimum, BatteryLimitSlider.Maximum);
                 _syncingBatteryLimit = false;
             }
             return;

@@ -51,19 +51,17 @@ internal interface IDisplayService
     /// <summary>当前色彩增强档位（config <c>display_effect_mode</c>）。</summary>
     string CurrentDisplayEffectMode { get; }
 
-    /// <summary>色彩增强是否开启（config <c>display_effect</c>）。</summary>
-    bool DisplayEffectOn { get; }
-
     /// <summary>开/关色彩增强；开启时按 <paramref name="mode" />（null = 用已保存档位）应用一次。</summary>
     Task<ServiceResult> ApplyDisplayEffectAsync(bool on, string? mode);
 
     /// <summary>
     /// 切换色彩增强档位：档位**总是先落盘**（下发失败也不丢用户选择），
     /// <paramref name="applyNow" /> 为 true 时再下发硬件。
+    /// <para>⚠️ 空档位一律视为无效（不再下发空 profile），与旧窗口“空串仍下发”的行为不同。</para>
     /// </summary>
     Task<ServiceResult> SetDisplayEffectModeAsync(string mode, bool applyNow);
 
-    /// <summary>只记住用户选择的档位（未开启时用；⛔ 不下发硬件）。</summary>
+    /// <summary>只记住用户选择的档位（⛔ 不下发硬件；开关关闭时由窗口直接调用或经上面方法内部调用）。</summary>
     ServiceResult RememberDisplayEffectMode(string mode);
 }
 
@@ -304,8 +302,6 @@ internal sealed class DisplayService : IDisplayService
     public IReadOnlyList<DisplayEffectOption> DisplayEffectModes() => EffectModes;
 
     public string CurrentDisplayEffectMode => AppConfig.GetString("display_effect_mode") ?? "";
-
-    public bool DisplayEffectOn => AppConfig.Is("display_effect");
 
     public async Task<ServiceResult> ApplyDisplayEffectAsync(bool on, string? mode)
     {

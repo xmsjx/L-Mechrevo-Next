@@ -9,6 +9,8 @@ namespace L_Mechrevo.WpfP0.Services;
 /// <summary>
 /// 滑块执行结果：<see cref="RollbackPercent" /> = <c>null</c> 表示不需要回滚滑块
 /// （NUC 读不到回读值时同样为 <c>null</c>），<see cref="Detail" /> 为空串表示不覆盖状态栏文案。
+/// <para>⚠️ EC/WMI 失败分支会原样传出 <see cref="BatteryControl.ResolveDisplayLimitPercent" /> 的结果，
+/// 可能是 -1（未知）；由调用方按控件范围夹回，与旧代码“赋值 -1、WPF 自行夹到 Minimum”一致。</para>
 /// </summary>
 internal readonly record struct ChargeSliderOutcome(bool Ok, string Detail, int? RollbackPercent);
 
