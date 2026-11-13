@@ -234,6 +234,29 @@ internal static class FeatureGate
 		Check(lines, "ec-sync-none", Facts(BackendKind.TongfangEc),
 			new FeatureProbe(false, false, false, null, null),
 			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.SyncLight);
+		// ITE 7001 能力字节：0x0B（IDA/IDB 表）⇒ 灯带 + 铰链 + 新 Logo，无旧 Logo。
+		Check(lines, "ite-cap-0b-lightbar", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false, IteCapability: new IteLightingCapability(0x0B, false)),
+			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
+		Check(lines, "ite-cap-0b-hinge", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false, IteCapability: new IteLightingCapability(0x0B, false)),
+			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.HingeLight);
+		Check(lines, "ite-cap-0b-logo", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false, IteCapability: new IteLightingCapability(0x0B, false)),
+			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.LogoLight);
+		Check(lines, "ite-cap-00-lightbar", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false, IteCapability: new IteLightingCapability(0x00, false)),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.Lightbar);
+		// IDX/IDZ 表口径不同：1 = 铰链 + 旧 Logo（无灯带），8 = 什么都没有。
+		Check(lines, "ite-cap-01-idx-logo", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false, IteCapability: new IteLightingCapability(0x01, true)),
+			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.LogoLight);
+		Check(lines, "ite-cap-01-idx-lightbar", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false, IteCapability: new IteLightingCapability(0x01, true)),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.Lightbar);
+		Check(lines, "ite-cap-08-idx-logo", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false, IteCapability: new IteLightingCapability(0x08, true)),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.LogoLight);
 		Check(lines, "mifs-fanboost", Facts(BackendKind.TongfangMifs), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.FanBoost);
 		Check(lines, "gcu-refresh", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),

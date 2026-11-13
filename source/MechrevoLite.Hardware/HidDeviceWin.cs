@@ -118,6 +118,9 @@ public class HidDeviceWin : IDisposable
 	[DllImport("hid.dll", SetLastError = true)]
 	private static extern bool HidD_SetFeature(SafeFileHandle hidDeviceObject, byte[] reportBuffer, int reportBufferLength);
 
+	[DllImport("hid.dll", SetLastError = true)]
+	private static extern bool HidD_GetFeature(SafeFileHandle hidDeviceObject, byte[] reportBuffer, int reportBufferLength);
+
 	[DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
 	private static extern SafeFileHandle CreateFile(string fileName, uint desiredAccess, uint shareMode, nint securityAttributes, uint creationDisposition, uint flagsAndAttributes, nint templateFile);
 
@@ -278,6 +281,15 @@ public class HidDeviceWin : IDisposable
 		if (_handle != null)
 		{
 			return HidD_SetFeature(_handle, report, report.Length);
+		}
+		return false;
+	}
+
+	public virtual bool GetFeature(byte[] report)
+	{
+		if (_handle != null)
+		{
+			return HidD_GetFeature(_handle, report, report.Length);
 		}
 		return false;
 	}

@@ -1094,6 +1094,9 @@ public class MechrevoHw : IDisposable
 internal bool? EcLogoEvidence =>
     IteLightingLocal.TryGetUsbLogoCached(out bool value) ? value : (bool?)null;
 
+/// <summary>ITE 7001 的能力字节（灯带 / 铰链 / Logo 三路）；无该设备时 null。</summary>
+internal IteLightingCapability? IteCapability => IteCapabilityProbe.Get(BiosProjectId);
+
 /// <summary>铰链灯：灯条为 Lighbar4 代际 + BIOS 属 IDA/IDB/IDX/IDZ + GCU 上报 HingeSupport。</summary>
 public bool SupportsHingeLight => IsLighbar4Lightbar && IsZoneProbedBios && LightbarHingeSupport == true;
 

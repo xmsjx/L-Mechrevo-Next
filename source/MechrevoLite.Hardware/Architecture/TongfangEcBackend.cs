@@ -17,6 +17,15 @@ internal sealed class TongfangEcBackend : IBackendModule
 			logo = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				"GCU 已连接，EC 路未接管", new string[0]);
 		}
+		else if (probe.IteCapability is { } iteLogoCap)
+		{
+			// 有 7001 时以能力字节为准：设备在 ≠ Logo 通道在。
+			logo = iteLogoCap.AnyLogo
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+					"ITE 能力字节有 Logo 通道", new[] { "usb:IteCapability" })
+				: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+					"ITE 能力字节无 Logo 通道", new[] { "usb:IteCapability" });
+		}
 		else if (probe.EcLogoEvidence == true)
 		{
 			logo = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
@@ -58,6 +67,15 @@ internal sealed class TongfangEcBackend : IBackendModule
 		{
 			lightbar = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				"GCU 已连接，EC 路未接管", new string[0]);
+		}
+		else if (probe.IteCapability is { } iteBarCap)
+		{
+			// 有 7001 时以能力字节为准：设备在 ≠ 灯带通道在。
+			lightbar = iteBarCap.Lightbar
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+					"ITE 能力字节有灯带通道", new[] { "usb:IteCapability" })
+				: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+					"ITE 能力字节无灯带通道", new[] { "usb:IteCapability" });
 		}
 		else if (probe.EcLightbarEvidence == true)
 		{
@@ -114,11 +132,17 @@ internal sealed class TongfangEcBackend : IBackendModule
 		FeatureDeclaration hinge = probe.GcuConnected
 			? new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				"GCU 已连接，EC 路未接管", new string[0])
-			: probe.HingeCapability
-				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
-					"EC 本地铰链灯通道", new[] { "usb:IteLightingLocal.HasHinge" })
-				: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
-					"EC 没有铰链灯通道", new string[0]);
+			: probe.IteCapability is { } iteHingeCap
+				? iteHingeCap.Hinge
+					? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+						"ITE 能力字节有铰链灯通道", new[] { "usb:IteCapability" })
+					: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+						"ITE 能力字节无铰链灯通道", new[] { "usb:IteCapability" })
+				: probe.HingeCapability
+					? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+						"EC 本地铰链灯通道", new[] { "usb:IteLightingLocal.HasHinge" })
+					: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+						"EC 没有铰链灯通道", new string[0]);
 		FeatureDeclaration sync = probe.GcuConnected
 			? new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				"GCU 已连接，EC 路未接管", new string[0])

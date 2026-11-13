@@ -80,10 +80,68 @@ internal static class IteLightingLocal
             _ = HasLightbar;
             _ = HasUsbLogo;
             _ = HasHinge;
+            _ = ReadCapabilityByte();
         }
         catch (Exception ex)
         {
             Logger.WriteLine("[ite] 灯光证据预采集失败：" + ex.GetType().Name + " " + ex.Message);
+        }
+    }
+
+    private static readonly object CapGate = new();
+    private static byte? _capability;
+    private static bool _capabilityProbed;
+
+    /// <summary>
+    /// ITE 7001 的能力字节：写 [0,0xA2,...] 再读回 byte[2]，决定灯带 / 铰链 / Logo 是否具备。
+    /// 没有 7001 设备或读写失败返回 null；进程内只查一次。
+    /// </summary>
+    internal static byte? ReadCapabilityByte()
+    {
+        lock (CapGate)
+        {
+            if (_capabilityProbed)
+            {
+                return _capability;
+            }
+            _capabilityProbed = true;
+            try
+            {
+                using HidDeviceWin? device = FindDevice(LightbarPid, LightbarUsage);
+                if (device == null || !device.Open())
+                {
+                    _capability = null;
+                    return null;
+                }
+                if (!device.SetFeature(new byte[] { 0, 0xA2, 0, 0, 0, 0, 0, 0, 0 }))
+                {
+                    _capability = null;
+                    return null;
+                }
+                System.Threading.Thread.Sleep(1);
+                byte[] buffer = new byte[9];
+                _capability = device.GetFeature(buffer) ? buffer[2] : (byte?)null;
+                if (_capability != null)
+                {
+                    Logger.WriteLine("[ite] 能力字节回读：0x" + _capability.Value.ToString("X2"));
+                }
+                return _capability;
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("[ite] 能力字节读取失败：" + ex.GetType().Name + " " + ex.Message);
+                _capability = null;
+                return null;
+            }
+        }
+    }
+
+    internal static void ResetCapabilityCache()
+    {
+        lock (CapGate)
+        {
+            _capability = null;
+            _capabilityProbed = false;
         }
     }
 
@@ -113,6 +171,7 @@ internal static class IteLightingLocal
             _hasHinge = null;
             _hasUsbLogo = null;
         }
+        IteCapabilityProbe.Invalidate();
     }
 
     /// <summary>灯带：topic = HidLightbar/Ctrl。</summary>

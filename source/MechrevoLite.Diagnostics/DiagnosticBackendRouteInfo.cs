@@ -90,6 +90,11 @@ internal static class DiagnosticBackendRouteInfo
 				+ " 限充=" + FeatureGate.Get(FeatureId.ChargeLimit, hw).Channel
 				+ " · 强冷=" + FeatureGate.Get(FeatureId.FanBoost, hw).Channel
 				+ " · 风扇曲线=" + FeatureGate.Get(FeatureId.FanCurve, hw).Channel);
+			if (hw != null)
+			{
+				_ = hw.IteCapability;
+			}
+			sb.AppendLine("  ITE 能力字节：" + (hw == null ? "未查询（本次未挂载硬件）" : IteCapabilityProbe.Describe()));
 			sb.AppendLine("  门控影子对比（应用运行期，按调用点取最后一次）：" + FeatureGateShadow.Describe(hw));
 			sb.AppendLine("  功能声明表（只读）：");
 			if (hw == null)
