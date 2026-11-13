@@ -148,6 +148,21 @@ internal static class BackendRouter
 			+ " | decl=" + (declaration == null ? "(无)" : declaration.DisplayName + (decision.DeclarationPassed ? "=pass" : "=fail"));
 	}
 
+	/// <summary>当前生效规则的逐条描述（诊断用）。</summary>
+	internal static string DescribeRules()
+	{
+		StringBuilder sb = new StringBuilder();
+		for (int i = 0; i < Rules.Length; i++)
+		{
+			RuleSpec rule = Rules[i];
+			string conditions = string.Join(" && ", Array.ConvertAll(rule.Conditions,
+				c => (c.Expected ? "" : "!") + c.Fact));
+			sb.AppendLine("  #" + rule.Index + " " + rule.Backend + " ← " + conditions
+				+ " · " + rule.Description);
+		}
+		return sb.ToString().TrimEnd();
+	}
+
 	internal static BackendRouteDecision Decide(MachineIdentity identity)
 	{
 		return Decide(identity, Rules, Fallback);
@@ -213,6 +228,8 @@ internal static class BackendRouter
 	{
 		BackendRouteDecision decision = Decide(MachineIdentity.Collect());
 		System.Threading.Volatile.Write(ref _lastDecision, decision);
+		Logger.WriteLine("[强化机型分流] 规则来源=" + RuleSource + " · 条数=" + RuleCount
+			+ (string.IsNullOrEmpty(RuleLoadError) ? "" : " · 错误=" + RuleLoadError));
 		Logger.WriteLine("[强化机型分流] " + DescribeDecision(decision));
 		return decision;
 	}
