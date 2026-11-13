@@ -34,7 +34,8 @@ internal static class FanCurveSaveService
 			&& CurveMatches(gpu, hw.GpuCurveDuty, hw.GpuCurveUpT);
 		if (!confirmed)
 		{
-			return new FanCurveSaveResult(false, true, WpfStrings.FanCurveWindow_xaml_Text_6);
+			return new FanCurveSaveResult(false, true, WpfStrings.FanCurveWindow_xaml_Text_6,
+				PreserveDirty: true);
 		}
 		if (modeId.StartsWith("fw", StringComparison.Ordinal)
 			|| modeId.StartsWith("custom", StringComparison.Ordinal))
