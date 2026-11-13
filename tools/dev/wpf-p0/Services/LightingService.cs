@@ -161,6 +161,26 @@ internal interface ILightingService
 
     /// <summary>EC 键盘 Fn 亮度键（0~4 档）。</summary>
     bool ApplyEcHotkeyBrightness(int level);
+
+    // ── 本地（无 GCU）灯光通道与固件键盘面板：能力与下发都从这里走 ──
+
+    /// <summary>本地模式是否支持灯带（无 GCU 也能下发）。</summary>
+    bool LocalLightbarSupported { get; }
+
+    /// <summary>本地模式是否支持 Logo 灯。</summary>
+    bool LocalLogoSupported { get; }
+
+    /// <summary>刷新本地（HID）灯光证据：只读探测，幂等。</summary>
+    void RefreshLocalLightEvidence();
+
+    /// <summary>本地灯光通道下发（<c>detail</c> 为失败原因）。</summary>
+    bool TryApplyLocalLightChannel(string topic, string effect, bool on, int light, int speed, int colorArgb, out string detail);
+
+    /// <summary>固件键盘面板可见灯效（按键盘类型裁剪）。</summary>
+    IReadOnlyList<(string Id, string Label)> VisibleFirmwareKeyboardEffects(int keyboardType);
+
+    /// <summary>单区固件键盘灯效常量（1 常亮 / 2 硬件彩虹 / 3 硬件呼吸 / 4 软件六色轮播）。</summary>
+    IReadOnlyList<(string Id, string Label)> SingleZoneFirmwareKeyboardEffects { get; }
 }
 
 /// <inheritdoc />
@@ -673,6 +693,46 @@ internal sealed class LightingService : ILightingService
     {
         return GcuEcKeyboard.ApplyHotkeyBrightness(level);
     }
+
+    /// <inheritdoc />
+    public bool LocalLightbarSupported => GcuEcExperimental.LocalLightbar;
+
+    /// <inheritdoc />
+    public bool LocalLogoSupported => GcuEcExperimental.LocalLogoLight;
+
+    /// <inheritdoc />
+    public void RefreshLocalLightEvidence()
+    {
+        IteLightingLocal.RefreshFromHid();
+    }
+
+    /// <inheritdoc />
+    public bool TryApplyLocalLightChannel(string topic, string effect, bool on, int light, int speed, int colorArgb, out string detail)
+    {
+        if (string.Equals(topic, LightingTopics.Lightbar, StringComparison.Ordinal))
+        {
+            return IteLightingLocal.TryApplyLightbar(effect, on, light, speed, colorArgb, out detail);
+        }
+        if (string.Equals(topic, LightingTopics.Logo, StringComparison.Ordinal))
+        {
+            return IteLightingLocal.TryApplyLogo(effect, on, light, speed, colorArgb, out detail);
+        }
+        if (string.Equals(topic, LightingTopics.Hinge, StringComparison.Ordinal))
+        {
+            return IteLightingLocal.TryApplyHinge(effect, on, light, speed, colorArgb, out detail);
+        }
+        detail = "不支持的通道：" + topic;
+        return false;
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<(string Id, string Label)> VisibleFirmwareKeyboardEffects(int keyboardType)
+    {
+        return LightingFacts.VisibleFirmwareKeyboardEffects(keyboardType);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<(string Id, string Label)> SingleZoneFirmwareKeyboardEffects => LightingFacts.SingleZoneFirmwareKeyboardEffects;
 
     public async Task<ServiceResult> ApplyKeyboardIntentAsync(SetKeyboardIntent intent)
     {

@@ -853,12 +853,13 @@ public partial class OriginalStyleWindow : Window
                 && MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone())
             {
                 // 单区常量：1 常亮 / 2 硬件彩虹 / 3 硬件呼吸 / 4 软件六色轮播。
-                return MechrevoLite.Hardware.KeyboardFirmwareEffects.SingleZone
+                return (_services?.Lighting.SingleZoneFirmwareKeyboardEffects ?? Array.Empty<(string Id, string Label)>())
                     .Select(item => (item.Id, item.Label))
                     .ToArray();
             }
             int type = hw?.Capabilities.KeyboardType ?? 0;
-            (string Id, string Label)[] firmware = MechrevoLite.Hardware.KeyboardFirmwareEffects.Visible(type)
+            (string Id, string Label)[] firmware = (_services?.Lighting.VisibleFirmwareKeyboardEffects(type)
+                ?? Array.Empty<(string Id, string Label)>())
                 .Select(item => (item.Id, item.Label))
                 .ToArray();
             if (firmware.Length == 0)
@@ -922,7 +923,7 @@ public partial class OriginalStyleWindow : Window
             {
                 return true;
             }
-            return MechrevoLite.Hardware.KeyboardFirmwareEffects.Visible(hw.Capabilities.KeyboardType).Length == 0;
+            return LightingFacts.VisibleFirmwareKeyboardEffects(hw.Capabilities.KeyboardType).Count == 0;
         }
         catch
         {
@@ -4686,7 +4687,7 @@ public partial class OriginalStyleWindow : Window
             {
                 Logger.WriteLine("[gcu-ec] 路由声明读取失败（已忽略）：" + ex.Message);
             }
-            _ = System.Threading.Tasks.Task.Run(() => MechrevoLite.Hardware.IteLightingLocal.RefreshFromHid());
+            _ = System.Threading.Tasks.Task.Run(() => _services?.Lighting.RefreshLocalLightEvidence());
             MechrevoHw offlineHw = new();
             BackendProbe probe = new(offlineHw, null);
             _backendProbe = probe;
@@ -7679,10 +7680,10 @@ public partial class OriginalStyleWindow : Window
                 : caps.Keyboard || (hw?.SupportsKeyboard ?? false)
                     || hw?.IsNucUmiFamily == true;
             bool hasLightbar = caps.Lightbar || (hw?.SupportsLightbar ?? false)
-                || (MechrevoLite.Hardware.GcuEcExperimental.LocalLightbar)
+                || _services?.Lighting.LocalLightbarSupported == true
                 || hw?.IsNucUmiFamily == true;
             bool hasLogo = caps.LogoLight || (hw?.SupportsLogoLight ?? false)
-                || (MechrevoLite.Hardware.GcuEcExperimental.LocalLogoLight);
+                || _services?.Lighting.LocalLogoSupported == true;
             bool hasHinge = _backendProbe?.SupportsHingeLight == true;
             bool hasSync = _backendProbe?.SupportsSyncLight == true;
             bool xingyaoLightIdle = MechrevoLite.Hardware.XingyaoQuickSwitch.IsApplicable(hw);
@@ -7837,11 +7838,11 @@ public partial class OriginalStyleWindow : Window
         keyboard = ResolveKeyboardSupport(hw, keyboard);
         MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogKeyboardLight(hw, legacyKeyboard, "wide");
         bool hasStrip = (caps?.Lightbar ?? false) || (hw?.SupportsLightbar ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.LocalLightbar);
+            || _services?.Lighting.LocalLightbarSupported == true;
         bool legacyStrip = hasStrip;
         hasStrip = ResolveLightbarSupport(hw, hasStrip);
         bool hasLogo = (caps?.LogoLight ?? false) || (hw?.SupportsLogoLight ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.LocalLogoLight);
+            || _services?.Lighting.LocalLogoSupported == true;
         bool legacyLogo = hasLogo;
         hasLogo = ResolveLogoSupport(hw, hasLogo);
         bool hasHinge = _backendProbe?.SupportsHingeLight == true;
@@ -9413,7 +9414,7 @@ public partial class OriginalStyleWindow : Window
         {
             return new[] { ("Single", MechrevoLite.Properties.Strings.EffectSingle) };
         }
-        return MechrevoLite.Hardware.KeyboardFirmwareEffects.Visible(hw?.Capabilities.KeyboardType ?? 0);
+        return LightingFacts.VisibleFirmwareKeyboardEffects(hw?.Capabilities.KeyboardType ?? 0).ToArray();
     }
 
     /// <summary>EC 实验模式的固件键盘灯效：单区 4 项；白光只有电源/亮度；其它类型无本地灯效。</summary>
@@ -9421,7 +9422,7 @@ public partial class OriginalStyleWindow : Window
     {
         if (EcKeyboardSingleZone)
         {
-            return MechrevoLite.Hardware.KeyboardFirmwareEffects.SingleZone;
+            return LightingFacts.SingleZoneFirmwareKeyboardEffects.ToArray();
         }
         if (EcKeyboardWhite)
         {
@@ -10433,7 +10434,7 @@ public partial class OriginalStyleWindow : Window
             {
                 "HidLightbar/Ctrl" => _backendProbe.SupportsLightbar,
                 "HidLightbar_Logo/Ctrl" => _backendProbe.Hw?.SupportsLogoLight == true
-                    || (MechrevoLite.Hardware.GcuEcExperimental.LocalLogoLight),
+                    || _services?.Lighting.LocalLogoSupported == true,
                 "HidLightbar_Hinge/Ctrl" => _backendProbe.SupportsHingeLight,
                 _ => false
             };
@@ -10446,17 +10447,16 @@ public partial class OriginalStyleWindow : Window
 
             if (_backendProbe.Service == null && IsEcModeActive)
             {
-                string detail;
-                bool ok = topic switch
+                string welcomeEffect = topic switch
                 {
-                    "HidLightbar/Ctrl" => MechrevoLite.Hardware.IteLightingLocal.TryApplyLightbar(
-                        "Rainbow", true, 4, 2, unchecked((int)0xFFFFFFFF), out detail),
-                    "HidLightbar_Logo/Ctrl" => MechrevoLite.Hardware.IteLightingLocal.TryApplyLogo(
-                        "ColorMarquee", true, 4, 2, unchecked((int)0xFFFFFFFF), out detail),
-                    "HidLightbar_Hinge/Ctrl" => MechrevoLite.Hardware.IteLightingLocal.TryApplyHinge(
-                        "Rainbow", true, 4, 2, unchecked((int)0xFFFFFFFF), out detail),
-                    _ => false
+                    "HidLightbar/Ctrl" => "Rainbow",
+                    "HidLightbar_Logo/Ctrl" => "ColorMarquee",
+                    "HidLightbar_Hinge/Ctrl" => "Rainbow",
+                    _ => ""
                 };
+                bool ok = welcomeEffect.Length > 0
+                    && _services?.Lighting.TryApplyLocalLightChannel(topic, welcomeEffect, true, 4, 2,
+                        unchecked((int)0xFFFFFFFF), out string detail) == true;
                 if (ok)
                 {
                     Logger.WriteLine("[welcome] " + topic + " 本地迎宾已下发");
