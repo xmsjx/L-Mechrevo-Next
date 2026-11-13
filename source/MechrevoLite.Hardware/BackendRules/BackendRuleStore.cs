@@ -22,7 +22,15 @@ internal static class BackendRuleStore
 
 	internal static RuleTable Load(BackendRouter.RuleSpec[] builtIn, MechrevoBackendKind builtInFallback)
 	{
-		string path = GetPath();
+		string path;
+		try
+		{
+			path = GetPath();
+		}
+		catch (Exception ex)
+		{
+			return Fallback(builtIn, builtInFallback, "", "路径解析失败：" + ex.GetType().Name + " " + ex.Message);
+		}
 		if (!File.Exists(path))
 		{
 			return new RuleTable(builtIn, builtInFallback, "built-in", path, "");
@@ -52,7 +60,7 @@ internal static class BackendRuleStore
 			MechrevoBackendKind fallback = builtInFallback;
 			if (!string.IsNullOrWhiteSpace(config.Fallback))
 			{
-				if (!Enum.TryParse(config.Fallback, ignoreCase: true, out MechrevoBackendKind parsed)
+				if (!TryParseName(config.Fallback, out MechrevoBackendKind parsed)
 					|| parsed == MechrevoBackendKind.None)
 				{
 					return Fallback(builtIn, builtInFallback, path, "fallback=" + config.Fallback + " 非法");
@@ -72,7 +80,7 @@ internal static class BackendRuleStore
 				{
 					return Fallback(builtIn, builtInFallback, path, "第 " + (i + 1) + " 条 index 非法或重复");
 				}
-				if (!Enum.TryParse(entry.Backend, ignoreCase: true, out MechrevoBackendKind backend)
+				if (!TryParseName(entry.Backend, out MechrevoBackendKind backend)
 					|| backend == MechrevoBackendKind.None)
 				{
 					return Fallback(builtIn, builtInFallback, path, "第 " + (i + 1) + " 条 backend 非法");
@@ -85,7 +93,7 @@ internal static class BackendRuleStore
 				for (int j = 0; j < entry.Conditions.Count; j++)
 				{
 					BackendRuleConditionEntry condition = entry.Conditions[j];
-					if (!Enum.TryParse(condition.Fact, ignoreCase: true, out BackendRouter.RouteFact fact))
+					if (!TryParseName(condition.Fact, out BackendRouter.RouteFact fact))
 					{
 						return Fallback(builtIn, builtInFallback, path,
 							"第 " + (i + 1) + " 条第 " + (j + 1) + " 个 fact 非法：" + (condition.Fact ?? "(空)"));
@@ -103,6 +111,18 @@ internal static class BackendRuleStore
 		{
 			return Fallback(builtIn, builtInFallback, path, ex.GetType().Name + " " + ex.Message);
 		}
+	}
+
+	private static bool TryParseName<T>(string? text, out T value) where T : struct, Enum
+	{
+		value = default;
+		string name = (text ?? string.Empty).Trim();
+		if (name.Length == 0 || char.IsDigit(name[0]))
+		{
+			return false;
+		}
+		return Enum.TryParse(name, ignoreCase: true, out value)
+			&& Enum.IsDefined(typeof(T), value);
 	}
 
 	private static RuleTable Fallback(BackendRouter.RuleSpec[] builtIn, MechrevoBackendKind fallback,

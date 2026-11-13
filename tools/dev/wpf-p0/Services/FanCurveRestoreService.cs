@@ -41,10 +41,19 @@ internal static class FanCurveRestoreService
 						null, null, null, null);
 				case FanCurveBackendKind.NucUmi:
 					return RestoreNuc(WpfStrings.L("已恢复默认：NUC/UMI 风扇表已还原",
-						"Restored: NUC/UMI fan table restored"));
+						"Restored: NUC/UMI fan table restored"), clearSaved: false);
 				case FanCurveBackendKind.Ec:
 					return RestoreNuc(WpfStrings.L("已恢复默认：同方 EC 风扇表已还原",
-						"Restored: Tongfang EC fan table restored"));
+						"Restored: Tongfang EC fan table restored"), clearSaved: true);
+				case FanCurveBackendKind.Wujie:
+					if (GcuEcExperimental.LocalFanCurve)
+					{
+						return RestoreNuc(WpfStrings.L("已恢复默认：同方 EC 风扇表已还原",
+							"Restored: Tongfang EC fan table restored"), clearSaved: true);
+					}
+					return hw.IsGcuConnected
+						? await RestoreGcuAsync(hw).ConfigureAwait(false)
+						: NotHandled();
 				case FanCurveBackendKind.Gcu:
 					return await RestoreGcuAsync(hw).ConfigureAwait(false);
 				default:
@@ -53,18 +62,19 @@ internal static class FanCurveRestoreService
 		}
 		catch (Exception ex)
 		{
+			Logger.WriteLine("[fan] 恢复默认曲线失败：" + ex.GetType().Name + " " + ex.Message);
 			return new FanCurveRestoreOutcome(true, false, false, false,
 				ex.GetType().Name + " " + ex.Message, null, null, null, null);
 		}
 	}
 
-	private static FanCurveRestoreOutcome RestoreNuc(string successText)
+	private static FanCurveRestoreOutcome RestoreNuc(string successText, bool clearSaved)
 	{
 		bool restored = NucFanTable.TryRestoreDefault(out string detail);
 		bool isolatedRestore = NucFanTable.TrySetFanIsolated(false, out string isolatedDetail);
 		restored &= isolatedRestore;
 		detail += " " + isolatedDetail;
-		return new FanCurveRestoreOutcome(true, restored, false, true,
+		return new FanCurveRestoreOutcome(true, restored, clearSaved, true,
 			restored ? successText : detail, null, null, null, null);
 	}
 

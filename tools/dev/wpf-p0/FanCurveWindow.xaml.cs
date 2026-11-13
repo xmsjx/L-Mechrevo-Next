@@ -620,7 +620,7 @@ public partial class FanCurveWindow : Window
             {
                 LoadFromHardware();
             }
-            _dirty = false;
+            _dirty = !outcome.Success && !outcome.ReloadFromHardware;
             StatusText.Text = outcome.Success
                 ? outcome.Detail
                 : WpfStrings.L("恢复默认失败：", "Restore default failed: ") + outcome.Detail;

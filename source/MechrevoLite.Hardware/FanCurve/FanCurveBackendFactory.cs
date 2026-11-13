@@ -34,6 +34,10 @@ internal static class FanCurveBackendFactory
 		{
 			return FanCurveBackendKind.Wujie;
 		}
+		if (GcuEcExperimental.LocalFanCurve)
+		{
+			return FanCurveBackendKind.Ec;
+		}
 		if (hw.IsGcuConnected)
 		{
 			return FanCurveBackendKind.Gcu;
