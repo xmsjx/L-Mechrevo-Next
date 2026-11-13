@@ -99,6 +99,8 @@ internal static class DiagnosticBackendRouteInfo
 			sb.AppendLine(Indent(FeatureGate.RunSelfTest(), "    "));
 			sb.AppendLine("  NUC/UMI 目标能力矩阵（纯函数矩阵，只读）：");
 			sb.AppendLine(Indent(MechrevoLite.Hardware.Architecture.NucUmiCapabilityMap.RunSelfTest(), "    "));
+			sb.AppendLine("  后端声明一致性自测（纯函数，只读）：");
+			sb.AppendLine(Indent(FeatureGate.RunDeclarationAudit(), "    "));
 		}
 		catch (Exception ex)
 		{

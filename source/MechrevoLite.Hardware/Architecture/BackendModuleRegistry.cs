@@ -26,4 +26,7 @@ internal static class BackendModuleRegistry
 		}
 		return null;
 	}
+
+	/// <summary>已登记模块（只读；供一致性自测遍历）。</summary>
+	internal static IReadOnlyList<IBackendModule> All => Modules;
 }

@@ -217,6 +217,66 @@ internal static class FeatureGate
 		return string.Join(Environment.NewLine, lines);
 	}
 
+	/// <summary>声明一致性自测：只校验各后端声明表自身是否自洽，不比较旧判据。</summary>
+	internal static string RunDeclarationAudit()
+	{
+		List<string> lines = new List<string>();
+		FeatureProbe probe = new FeatureProbe(true, true, true, true, true, true, true, true,
+			true, true, true, true, true, true, true, true, true, true, true, true, true, true);
+		int pass = 0;
+		int fail = 0;
+		foreach (IBackendModule module in BackendModuleRegistry.All)
+		{
+			BackendFeatureDeclaration declaration;
+			try
+			{
+				declaration = module.Declare(Facts(module.Kind), probe);
+			}
+			catch (Exception ex)
+			{
+				fail++;
+				lines.Add("FAIL " + module.Kind + " 声明抛异常 ⇒ " + ex.GetType().Name + " " + ex.Message);
+				continue;
+			}
+			foreach (KeyValuePair<FeatureId, FeatureDeclaration> pair in declaration.Features)
+			{
+				FeatureDeclaration feature = pair.Value;
+				if (feature.State == FeatureAvailability.Supported && feature.Channel == BackendChannel.None)
+				{
+					fail++;
+					lines.Add("FAIL " + module.Kind + " " + pair.Key + " 声明可用但未给通道");
+					continue;
+				}
+				if (feature.State == FeatureAvailability.Unsupported && feature.Channel != BackendChannel.None)
+				{
+					fail++;
+					lines.Add("FAIL " + module.Kind + " " + pair.Key + " 声明不可用却给了通道 " + feature.Channel);
+					continue;
+				}
+				pass++;
+			}
+			foreach (FeatureId required in RequiredFeatures)
+			{
+				if (declaration.Features.ContainsKey(required))
+				{
+					pass++;
+					continue;
+				}
+				fail++;
+				lines.Add("FAIL " + module.Kind + " 缺声明 " + required);
+			}
+		}
+		lines.Add("PASS=" + pass + " FAIL=" + fail);
+		return string.Join(Environment.NewLine, lines);
+	}
+
+	private static readonly FeatureId[] RequiredFeatures =
+	{
+		FeatureId.FanCurve,
+		FeatureId.FanBoost,
+		FeatureId.ChargeLimit
+	};
+
 	private static MachineFacts Facts(BackendKind backend, string model = "")
 	{
 		MachineIdentity identity = MachineIdentity.ForTest(board: "TEST", generation: "Gen40",
