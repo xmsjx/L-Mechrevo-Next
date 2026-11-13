@@ -172,14 +172,10 @@ internal static class EcChargeLimit
 	{
 		ArgumentNullException.ThrowIfNull(support, "support");
 		ArgumentNullException.ThrowIfNull(matrix, "matrix");
-		string text = AppConfig.GetString("ec_charge_limit");
-		if (text == "1")
+		// 逃生口：ec_charge_limit=1 强制放行（界面已无“关闭 EC 直写”开关，不再支持 =0）。
+		if (AppConfig.GetString("ec_charge_limit") == "1")
 		{
 			return true;
-		}
-		if (text == "0")
-		{
-			return false;
 		}
 		return support.IsSupported;
 	}
@@ -191,7 +187,7 @@ internal static class EcChargeLimit
 	// ⚠️ 全程**只读**：只 CreateFile + CloseHandle，⛔ 不写任何寄存器。
 	// ⚠️ 带**缓存**（别每次调都开设备）：正/负结果都缓存 <see cref="ChannelProbeTtl"/>，过期自动重探 ——
 	//    这样「驱动尚未加载 ⇒ 判不支持」不会永久粘住（装好驱动后最多一个 TTL 就自愈）。
-	// ⚠️ 保留 ec_charge_limit=1/0 强制覆盖：覆盖值**不缓存**、每次现读（与改前 IsSupportedMachine 同款语义）。
+	// ⚠️ 保留 ec_charge_limit=1 强制放行：覆盖值**不缓存**、每次现读（与改前 IsSupportedMachine 同款语义）。
 	// ⚠️ ModelSupport 白名单**保留**（仍作为「已知支持机型」的信息源、界面侧仍用它决定整卡可见性），
 	//    但**不再作为唯一门**。⛔ 未删任何既有判据（IsSupportedMachine 原样保留、仍可被其它调用方使用）。
 	// ⚠️ 打开权限用与 TrySet 相同的 GENERIC_READ|GENERIC_WRITE：只有「能按写入方式打开」才真正预示
@@ -242,18 +238,13 @@ internal static class EcChargeLimit
 
 	public static bool IsAvailableOnThisMachine()
 	{
-		// 强制覆盖优先（且不缓存）：ec_charge_limit=1 放行 / =0 关闭。
-		string text = AppConfig.GetString("ec_charge_limit");
-		if (text == "1")
+		// 强制覆盖优先（且不缓存）：仅保留 ec_charge_limit=1 放行这一条逃生口。
+		if (AppConfig.GetString("ec_charge_limit") == "1")
 		{
 			return true;
 		}
-		if (text == "0")
-		{
-			return false;
-		}
 		// 2026-10-21（机主要求）：无界 Intel（LNL）与星耀（WJ 载荷）暂未验证 EC 限充位置 ⇒ 暂时隐藏。
-		// ⚠️ 只影响这两类机型的 EC 限充 UI 判定；其它同方/GCU 机型逐位不变；ec_charge_limit=1/0 强覆盖仍在上面优先生效。
+		// ⚠️ 只影响这两类机型的 EC 限充 UI 判定；其它同方/GCU 机型逐位不变；ec_charge_limit=1 强覆盖仍在上面优先生效。
 		if (IsTemporarilyHiddenModel(out string hiddenReason))
 		{
 			Logger.WriteLineIfChanged("charge-limit-hidden-model",
@@ -468,9 +459,9 @@ internal static class EcChargeLimit
 		// 而那道门已被证明三条都不是正面证据（详见 TrySet 内 2026-10-16 那段注释：门控非 4/5 是正常初值、
 		// 0x0770 的 0xFF 疑似未映射填充、0x087F 只在一次成功写入后才被固件抄写 ⇒ 循环论证）。
 		// ⇒ 写之前**没有**可靠证据可以否定，故这里一律返回 true（「可尝试」），把判定交给写后证据
-		//    （0x07B9 写后回读确认 ＋ 0x0742 bit2 效果证据）。⚠️ 唯一例外：ec_charge_limit=0 表示用户显式关闭。
+		//    （0x07B9 写后回读确认 ＋ 0x0742 bit2 效果证据）。
 		// ⛔ 只读：不发帧、不写 EC/config/注册表、不碰控件。
-		return AppConfig.GetString("ec_charge_limit") != "0";
+		return true;
 	}
 
 	/// <summary>
@@ -533,8 +524,8 @@ internal static class EcChargeLimit
 				//    0x07B9 写后回读确认（掩 bit7，见下面）＋ ChargeLimitEffectEvidence（门控还原后等 >=7s 读 0x0742 bit2）。
 				//    ⇒ 改为「按旧版口径先尝试写入，再用写后证据如实告知」：既不再放任「写进去也不生效」的静默无效
 				//    （那由写后证据与可见文案承担），也不再拿未经证实的判据把可用机型挡在门外（无极限充滑块 ⇒ 恢复可用）。
-				// ⚠️ 仍然保留的两道**真闸**：IsLegacyGenerationBlocked()（10/16/20/30 系，可能损坏硬件，见上面）
-				//    与 ec_charge_limit=0（用户显式关闭，见 IsAvailableOnThisMachine）。ec_charge_limit=1 依旧放行。
+				// ⚠️ 仍然保留的真闸：IsLegacyGenerationBlocked()（10/16/20/30 系，可能损坏硬件，见上面）。
+				//    ec_charge_limit=1 依旧作为逃生口放行。
 				// ⚠️ refusedByFirmware 现恒为 false（保留出参以不动调用方签名与 BatteryControl 侧那条可见文案分支）。
 				{
 					int romId = Read(num, RomIdRegister);
