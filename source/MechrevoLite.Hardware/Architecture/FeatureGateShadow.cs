@@ -38,19 +38,34 @@ internal static class FeatureGateShadow
 		Log(feature, hw, oldValue, origin, kind);
 	}
 
-	// 每个调用点（feature|origin）只保留最后一次对比结果：刷新循环会反复调用，按调用点去重才有意义。
-	private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> Seen = new();
+	// 每个调用点（feature|origin）记录最后一次对比结果与“是否曾经不一致”：刷新循环会反复调用，
+	// 只按调用点去重才不会把样本刷爆，同时不至于把“先不一致后一致”洗成完全一致。
+	private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Sample> Seen = new();
 	private static string _lastMismatch = "";
 
-	/// <summary>影子对比累计（诊断用：门控与旧判据是否已收敛）。</summary>
-	internal static string Describe()
+	private readonly record struct Sample(bool EverDisagreed, string LastAgree, BackendKind Backend);
+
+	/// <summary>影子对比收敛情况（诊断用；只看当前后端，避免旧后端条目混入）。</summary>
+	internal static string Describe(MechrevoHw? hw)
 	{
+		BackendKind current = MachineFacts.From(hw).Backend;
 		int agree = 0;
 		int disagree = 0;
+		int everDisagree = 0;
 		int undecided = 0;
-		foreach (System.Collections.Generic.KeyValuePair<string, string> pair in Seen)
+		int otherBackend = 0;
+		foreach (System.Collections.Generic.KeyValuePair<string, Sample> pair in Seen)
 		{
-			switch (pair.Value)
+			if (pair.Value.Backend != current)
+			{
+				otherBackend++;
+				continue;
+			}
+			if (pair.Value.EverDisagreed)
+			{
+				everDisagree++;
+			}
+			switch (pair.Value.LastAgree)
 			{
 				case "yes":
 					agree++;
@@ -64,13 +79,21 @@ internal static class FeatureGateShadow
 			}
 		}
 		string last = System.Threading.Volatile.Read(ref _lastMismatch) ?? "";
-		return "调用点=" + Seen.Count + " · 一致=" + agree + " · 不一致=" + disagree + " · 未决=" + undecided
+		return "当前后端=" + current
+			+ " · 调用点=" + (agree + disagree + undecided)
+			+ " · 当前一致=" + agree
+			+ " · 当前不一致=" + disagree
+			+ " · 曾经不一致=" + everDisagree
+			+ " · 未决=" + undecided
+			+ (otherBackend == 0 ? "" : " · 其它后端调用点=" + otherBackend)
 			+ (last.Length == 0 ? " · 最近不一致=(无)" : " · 最近不一致=" + last);
 	}
 
-	private static void Record(string key, string agree, string detail)
+	private static void Record(string key, string agree, string detail, BackendKind backend)
 	{
-		Seen[key] = agree;
+		Seen.AddOrUpdate(key,
+			_ => new Sample(agree == "no", agree, backend),
+			(_, previous) => new Sample(previous.EverDisagreed || agree == "no", agree, backend));
 		if (agree == "no")
 		{
 			System.Threading.Volatile.Write(ref _lastMismatch, detail);
@@ -93,7 +116,8 @@ internal static class FeatureGateShadow
 				agree = decision.IsSupported == oldValue ? "yes" : "no";
 			}
 			Record(feature + "|" + origin, agree,
-				feature + "@" + origin + " old=" + (oldValue ? "yes" : "no") + " gate=" + (decision.IsSupported ? "yes" : "no"));
+				feature + "@" + origin + " old=" + (oldValue ? "yes" : "no") + " gate=" + (decision.IsSupported ? "yes" : "no"),
+				facts.Backend);
 			string declaredMatches = facts.Backend == BackendKind.None && facts.DeclaredBackend == BackendKind.None
 				? "n/a"
 				: (facts.Backend == facts.DeclaredBackend ? "yes" : "no");

@@ -268,53 +268,107 @@ internal static class FeatureGate
 	internal static string RunDeclarationAudit()
 	{
 		List<string> lines = new List<string>();
-		FeatureProbe probe = new FeatureProbe(true, true, true, true, true, true, true, true,
-			true, true, true, true, true, true, true, true, true, true, true, true, true, true);
-		int pass = 0;
-		int fail = 0;
-		foreach (IBackendModule module in BackendModuleRegistry.All)
+		(string Label, FeatureProbe Probe)[] probes =
 		{
-			BackendFeatureDeclaration declaration;
-			try
+			("最大能力", ProbeMax()),
+			("仅能力位", ProbeCapability()),
+			("无证据", ProbeEmpty())
+		};
+		for (int i = 0; i < probes.Length; i++)
+		{
+			int pass = 0;
+			int fail = 0;
+			List<string> details = new List<string>();
+			foreach (IBackendModule module in BackendModuleRegistry.All)
 			{
-				declaration = module.Declare(Facts(module.Kind), probe);
-			}
-			catch (Exception ex)
-			{
-				fail++;
-				lines.Add("FAIL " + module.Kind + " 声明抛异常 ⇒ " + ex.GetType().Name + " " + ex.Message);
-				continue;
-			}
-			foreach (KeyValuePair<FeatureId, FeatureDeclaration> pair in declaration.Features)
-			{
-				FeatureDeclaration feature = pair.Value;
-				if (feature.State == FeatureAvailability.Supported && feature.Channel == BackendChannel.None)
+				BackendFeatureDeclaration declaration;
+				try
+				{
+					declaration = module.Declare(Facts(module.Kind), probes[i].Probe);
+				}
+				catch (Exception ex)
 				{
 					fail++;
-					lines.Add("FAIL " + module.Kind + " " + pair.Key + " 声明可用但未给通道");
+					details.Add("FAIL " + module.Kind + " 声明抛异常 ⇒ " + ex.GetType().Name + " " + ex.Message);
 					continue;
 				}
-				if (feature.State == FeatureAvailability.Unsupported && feature.Channel != BackendChannel.None)
+				foreach (KeyValuePair<FeatureId, FeatureDeclaration> pair in declaration.Features)
 				{
-					fail++;
-					lines.Add("FAIL " + module.Kind + " " + pair.Key + " 声明不可用却给了通道 " + feature.Channel);
-					continue;
-				}
-				pass++;
-			}
-			foreach (FeatureId required in RequiredFeatures)
-			{
-				if (declaration.Features.ContainsKey(required))
-				{
+					FeatureDeclaration feature = pair.Value;
+					if (feature.State == FeatureAvailability.Supported && feature.Channel == BackendChannel.None)
+					{
+						fail++;
+						details.Add("FAIL " + module.Kind + " " + pair.Key + " 声明可用但未给通道");
+						continue;
+					}
+					if (feature.State == FeatureAvailability.Unsupported && feature.Channel != BackendChannel.None)
+					{
+						fail++;
+						details.Add("FAIL " + module.Kind + " " + pair.Key + " 声明不可用却给了通道 " + feature.Channel);
+						continue;
+					}
 					pass++;
+				}
+				if (i != 0)
+				{
 					continue;
 				}
-				fail++;
-				lines.Add("FAIL " + module.Kind + " 缺声明 " + required);
+				// 核心三项只查一次：换探针不会改变“是否声明”。
+				foreach (FeatureId required in RequiredFeatures)
+				{
+					if (declaration.Features.ContainsKey(required))
+					{
+						pass++;
+						continue;
+					}
+					fail++;
+					details.Add("FAIL " + module.Kind + " 缺声明 " + required);
+				}
 			}
+			lines.Add("[" + probes[i].Label + "] PASS=" + pass + " FAIL=" + fail);
+			lines.AddRange(details);
 		}
-		lines.Add("PASS=" + pass + " FAIL=" + fail);
 		return string.Join(Environment.NewLine, lines);
+	}
+
+	// 三组探针都用具名实参：FeatureProbe 若增删/重排字段，编译器立刻报错，而不是静默错位。
+	private static FeatureProbe ProbeMax()
+	{
+		return new FeatureProbe(
+			GcuConnected: true, LogoLightCapability: true, LogoLightSeen: true,
+			LightbarMbLogoSupport: true, EcLogoEvidence: true, LightbarCapability: true,
+			LightbarSeen: true, EcLightbarEvidence: true, HingeCapability: true,
+			SyncCapability: true, KeyboardCapability: true, LocalDimmingCapability: true,
+			LocalDimmingSeen: true, LcdOverdriveCapability: true, LcdOverdriveSeen: true,
+			DisplayEffectProfile: true, ColorCalibrationCapability: true, ColorCalibrationSeen: true,
+			LocalDimmingSupport: true, LcdOverdriveSupport: true, EcLocalDimmingSupport: true,
+			EcLcdOverdriveSupport: true);
+	}
+
+	private static FeatureProbe ProbeCapability()
+	{
+		return new FeatureProbe(
+			GcuConnected: false, LogoLightCapability: true, LogoLightSeen: false,
+			LightbarMbLogoSupport: null, EcLogoEvidence: null, LightbarCapability: true,
+			LightbarSeen: false, EcLightbarEvidence: null, HingeCapability: true,
+			SyncCapability: true, KeyboardCapability: true, LocalDimmingCapability: true,
+			LocalDimmingSeen: false, LcdOverdriveCapability: true, LcdOverdriveSeen: false,
+			DisplayEffectProfile: true, ColorCalibrationCapability: true, ColorCalibrationSeen: false,
+			LocalDimmingSupport: null, LcdOverdriveSupport: null, EcLocalDimmingSupport: null,
+			EcLcdOverdriveSupport: null);
+	}
+
+	private static FeatureProbe ProbeEmpty()
+	{
+		return new FeatureProbe(
+			GcuConnected: false, LogoLightCapability: false, LogoLightSeen: false,
+			LightbarMbLogoSupport: null, EcLogoEvidence: null, LightbarCapability: false,
+			LightbarSeen: false, EcLightbarEvidence: null, HingeCapability: false,
+			SyncCapability: false, KeyboardCapability: false, LocalDimmingCapability: false,
+			LocalDimmingSeen: false, LcdOverdriveCapability: false, LcdOverdriveSeen: false,
+			DisplayEffectProfile: false, ColorCalibrationCapability: false, ColorCalibrationSeen: false,
+			LocalDimmingSupport: null, LcdOverdriveSupport: null, EcLocalDimmingSupport: null,
+			EcLcdOverdriveSupport: null);
 	}
 
 	private static readonly FeatureId[] RequiredFeatures =
