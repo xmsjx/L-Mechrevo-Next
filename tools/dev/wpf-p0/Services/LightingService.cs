@@ -128,6 +128,15 @@ internal interface ILightingService
     void EnsureChannelVisible(string topic, string defaultEffect);
 
     /// <summary>通道保存的效果是否等于给定值（大小写不敏感）。</summary>
+
+    /// <summary>
+    /// 灯光通道能力（门控：声明 → 探针 → 旧判据），并同步打一次门控影子日志。
+    /// <para>⭐ 界面层只问这一句，⛔ 不直接引用门控/能力位类型。</para>
+    /// </summary>
+    /// <param name="topic">灯光通道（见 <see cref="LightingTopics"/>）。</param>
+    /// <param name="legacySupport">旧判据的结果（门控 Unknown 时回退用）。</param>
+    /// <param name="callSite">影子日志的调用点标签（诊断包按它统计一致率）。</param>
+    bool ResolveChannelSupport(string topic, bool legacySupport, string callSite);
     bool ChannelEffectIs(string topic, string effect);
 
     // ── EC 实验模式的键盘通道（只读事实 + 下发入口）：界面层只问这里，⛔ 不直接引用 EC 键盘驱动类型 ──
@@ -674,6 +683,19 @@ internal sealed class LightingService : ILightingService
     public bool ChannelEffectIs(string topic, string effect)
     {
         return string.Equals(LightingSettingsStore.Load(topic, effect).Effect, effect, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <inheritdoc />
+    public bool ResolveChannelSupport(string topic, bool legacySupport, string callSite)
+    {
+        FeatureId? feature = FeatureForLightTopic(topic);
+        if (feature == null)
+        {
+            return legacySupport;
+        }
+        bool value = FeatureGate.ResolveSupportOrLegacy(feature.Value, _backend.Hw, legacySupport);
+        FeatureGateShadow.LogFeature(feature.Value, _backend.Hw, legacySupport, callSite);
+        return value;
     }
 
     /// <inheritdoc />

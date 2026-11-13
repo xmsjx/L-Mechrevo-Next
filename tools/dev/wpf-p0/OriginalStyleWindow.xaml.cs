@@ -7689,7 +7689,7 @@ public partial class OriginalStyleWindow : Window
             bool xingyaoLightIdle = MechrevoLite.Hardware.XingyaoQuickSwitch.IsApplicable(hw);
             LightingSection.Visibility = (hasKeyboard || hasLightbar || hasLogo || hasHinge || hasSync || xingyaoLightIdle) ? Visibility.Visible : Visibility.Collapsed;
             KeyboardLightRow.Visibility = hasKeyboard ? Visibility.Visible : Visibility.Collapsed;
-            LogoLightRow.Visibility = ResolveLogoSupport(hw, hasLogo) ? Visibility.Visible : Visibility.Collapsed;
+            LogoLightRow.Visibility = ResolveLightChannel(LightingTopics.Logo, hasLogo) ? Visibility.Visible : Visibility.Collapsed;
             LightHingeRow.Visibility = hasHinge ? Visibility.Visible : Visibility.Collapsed;
             LightSyncRow.Visibility = hasSync ? Visibility.Visible : Visibility.Collapsed;
             FillKeyboardEffects();
@@ -7770,40 +7770,9 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    /// <summary>Logo 行支持：门控明确时收敛，Unknown 时回退旧判据。</summary>
-    private bool ResolveLogoSupport(MechrevoHw? hw, bool legacySupport)
-    {
-        return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-            MechrevoLite.Hardware.Architecture.FeatureId.LogoLight, hw, legacySupport);
-    }
-
-    /// <summary>灯带行支持：门控明确时收敛，Unknown 时回退旧判据。</summary>
-    private bool ResolveLightbarSupport(MechrevoHw? hw, bool legacySupport)
-    {
-        return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-            MechrevoLite.Hardware.Architecture.FeatureId.Lightbar, hw, legacySupport);
-    }
-
-    /// <summary>铰链灯支持：门控明确时收敛，Unknown 时回退旧判据。</summary>
-    private bool ResolveHingeSupport(MechrevoHw? hw, bool legacySupport)
-    {
-        return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-            MechrevoLite.Hardware.Architecture.FeatureId.HingeLight, hw, legacySupport);
-    }
-
-    /// <summary>同步灯带支持：门控明确时收敛，Unknown 时回退旧判据。</summary>
-    private bool ResolveSyncSupport(MechrevoHw? hw, bool legacySupport)
-    {
-        return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-            MechrevoLite.Hardware.Architecture.FeatureId.SyncLight, hw, legacySupport);
-    }
-
-    /// <summary>键盘灯支持：门控明确时收敛，Unknown 时回退旧判据。</summary>
-    private bool ResolveKeyboardSupport(MechrevoHw? hw, bool legacySupport)
-    {
-        return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-            MechrevoLite.Hardware.Architecture.FeatureId.KeyboardLight, hw, legacySupport);
-    }
+    /// <summary>灯光通道能力：门控求值 + 影子日志都由服务层负责（界面只问结果）。</summary>
+    private bool ResolveLightChannel(string topic, bool legacySupport) =>
+        _services?.Lighting.ResolveChannelSupport(topic, legacySupport, "wide") ?? legacySupport;
 
     internal void ApplyUiVisibilityFromConfig()
     {
@@ -7835,31 +7804,31 @@ public partial class OriginalStyleWindow : Window
             : (caps?.Keyboard ?? false) || (hw?.SupportsKeyboard ?? false)
                 || hw?.IsNucUmiFamily == true;
         bool legacyKeyboard = keyboard;
-        keyboard = ResolveKeyboardSupport(hw, keyboard);
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogKeyboardLight(hw, legacyKeyboard, "wide");
+        keyboard = ResolveLightChannel(LightingTopics.Keyboard, legacyKeyboard);
+
         bool hasStrip = (caps?.Lightbar ?? false) || (hw?.SupportsLightbar ?? false)
             || _services?.Lighting.LocalLightbarSupported == true;
         bool legacyStrip = hasStrip;
-        hasStrip = ResolveLightbarSupport(hw, hasStrip);
+        hasStrip = ResolveLightChannel(LightingTopics.Lightbar, legacyStrip);
         bool hasLogo = (caps?.LogoLight ?? false) || (hw?.SupportsLogoLight ?? false)
             || _services?.Lighting.LocalLogoSupported == true;
         bool legacyLogo = hasLogo;
-        hasLogo = ResolveLogoSupport(hw, hasLogo);
+        hasLogo = ResolveLightChannel(LightingTopics.Logo, legacyLogo);
         bool hasHinge = _backendProbe?.SupportsHingeLight == true;
         bool hasSync = _backendProbe?.SupportsSyncLight == true;
         bool legacyHinge = hasHinge;
         bool legacySync = hasSync;
-        hasHinge = ResolveHingeSupport(hw, hasHinge);
-        hasSync = ResolveSyncSupport(hw, hasSync);
+        hasHinge = ResolveLightChannel(LightingTopics.Hinge, legacyHinge);
+        hasSync = ResolveLightChannel(LightingTopics.Sync, legacySync);
         KeyboardLightRow.Visibility = keyboard ? Visibility.Visible : Visibility.Collapsed;
         LightStripRow.Visibility = ResolveRowVisibility(AppConfig.GetString("light_strip_ui") ?? "auto", hasStrip);
         LogoLightRow.Visibility = ResolveRowVisibility(AppConfig.GetString("light_logo_ui") ?? "auto", hasLogo);
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, legacyLogo, "wide");
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLightbar(hw, legacyStrip, "wide");
+
+
         LightHingeRow.Visibility = hasHinge ? Visibility.Visible : Visibility.Collapsed;
         LightSyncRow.Visibility = hasSync ? Visibility.Visible : Visibility.Collapsed;
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogHingeLight(hw, legacyHinge, "wide");
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogSyncLight(hw, legacySync, "wide");
+
+
         InitPerfConfigRow();
         RefreshPerfConfigVisibility(_services?.Performance.CurrentMode ?? _backendProbe?.CurrentMode ?? -1);
         // ⭐⭐ 2026-10-26（task-18）：实验行按**能力位**显隐（Gen30 / 宝龙达 / 无界 / GCU），
