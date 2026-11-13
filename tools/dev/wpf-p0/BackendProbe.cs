@@ -312,18 +312,6 @@ internal sealed class BackendProbe : IDisposable
         }
     }
 
-    internal bool HasDisplayEffectProfile(string mode)
-    {
-        try
-        {
-            return !string.IsNullOrWhiteSpace(mode) && _hw != null && _hw.DisplayEffectProfiles.ContainsKey(mode);
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
     /// <summary>当前后端是否提供了 GCU 色彩档位表；没有时改用本地软件色彩增强。</summary>
     private bool HasGcuDisplayProfiles
     {
