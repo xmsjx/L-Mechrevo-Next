@@ -199,17 +199,7 @@ internal sealed class LightingService : ILightingService
     {
         get
         {
-            if (_backend.IsBaolongda)
-            {
-                try
-                {
-                    return MechrevoHw.GetKeyboardAutoOffSeconds();
-                }
-                catch
-                {
-                    return 0;
-                }
-            }
+            MigrateIdleSecondsKeyOnce();
             return AppConfig.Get(IdleSecondsKey, 0);
         }
     }
@@ -217,22 +207,9 @@ internal sealed class LightingService : ILightingService
     public ServiceResult SetLightIdleSeconds(int seconds)
     {
         int normalized = Math.Max(0, seconds);
-        if (_backend.IsBaolongda)
-        {
-            try
-            {
-                MechrevoHw.SetKeyboardAutoOffSeconds(normalized);
-                _backend.Hw?.ApplyKeyboardAutoOffSetting();
-                return ServiceResult.Success(WpfStrings.LightAutoOffWritten);
-            }
-            catch (Exception ex)
-            {
-                return ServiceResult.Fail(WpfStrings.LightAutoOffWriteExceptionPrefix + ex.GetType().Name);
-            }
-        }
         AppConfig.Set(IdleSecondsKey, normalized);
         AppConfig.Flush();
-        // 非宝龙达 GCU 的自动关灯在固件里；仅改 config 不会关掉固件计时器。
+        // GCU 固件侧的键盘计时（无 GCU 时自动 no-op）；真正的关灯由窗口空闲计时器对所有通道执行。
         ApplyHardwareLightIdleTimer();
         try
         {
@@ -247,6 +224,27 @@ internal sealed class LightingService : ILightingService
         {
         }
         return ServiceResult.Success(WpfStrings.LightAutoOffSaved);
+    }
+
+    private static bool _idleSecondsMigrated;
+
+    /// <summary>旧键 light_autooff_seconds 迁移到统一键一次（旧键只读不写，避免两个键并行）。</summary>
+    private static void MigrateIdleSecondsKeyOnce()
+    {
+        if (_idleSecondsMigrated)
+        {
+            return;
+        }
+        _idleSecondsMigrated = true;
+        if (AppConfig.Get(IdleSecondsKey, -1) >= 0)
+        {
+            return;
+        }
+        int legacy = AppConfig.Get("light_autooff_seconds", 0);
+        if (legacy > 0)
+        {
+            AppConfig.Set(IdleSecondsKey, legacy);
+        }
     }
 
     public void ApplyHardwareLightIdleTimer()

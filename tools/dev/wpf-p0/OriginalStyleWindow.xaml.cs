@@ -1510,20 +1510,12 @@ public partial class OriginalStyleWindow : Window
         {
             return _services.Lighting.LightIdleSeconds;
         }
-        return _backendProbe?.Hw?.UsesBaolongda == true
-            ? MechrevoHw.GetKeyboardAutoOffSeconds()
-            : AppConfig.Get("lighting_idle_seconds", 0);
+        return AppConfig.Get("lighting_idle_seconds", 0);
     }
 
     internal void WideSetLightIdleSeconds(int seconds)
     {
         if (_services != null) { DashboardCommands.SetLightIdleSeconds(seconds); return; }
-        if (_backendProbe?.Hw?.UsesBaolongda == true)
-        {
-            MechrevoHw.SetKeyboardAutoOffSeconds(seconds);
-            _backendProbe.Hw.ApplyKeyboardAutoOffSetting();
-            return;
-        }
         AppConfig.Set("lighting_idle_seconds", seconds);
         AppConfig.Flush();
         if (L_Mechrevo.WpfP0.Services.WpfBackend.rgb != null)
@@ -7703,7 +7695,6 @@ public partial class OriginalStyleWindow : Window
   FillLightChannelEffects();
   FillLightIdleOptions();
   _services?.Lighting.ApplyHardwareLightIdleTimer();
-  L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.ApplyKeyboardAutoOffSetting();
   SyncLightSwitchesFromHardware();
   bool nucUmiModeUi = _backendProbe?.Hw?.IsNucUmiFamily == true;
             // Intel 星耀暂时屏蔽自定义模式；AMD 星耀/无界走本机 SMU 自定义。
@@ -9750,37 +9741,16 @@ public partial class OriginalStyleWindow : Window
         try
         {
             LightIdleCombo.Items.Clear();
-            bool baolongda = L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.UsesBaolongda == true;
             bool xingyao = MechrevoLite.Hardware.XingyaoQuickSwitch.IsApplicable(L_Mechrevo.WpfP0.Services.WpfBackend.Hw);
-            int current;
-            if (baolongda)
-            {
-                current = MechrevoHw.GetKeyboardAutoOffSeconds();
-                foreach ((string Label, int Seconds) option in LightingCatalog.KeyboardAutoOffOptions)
-                {
-                    LightIdleCombo.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Seconds.ToString() });
-                }
-            }
-            else if (xingyao)
+            int current = _services?.Lighting.LightIdleSeconds ?? AppConfig.Get("lighting_idle_seconds", 0);
+            foreach ((string Label, int Seconds) option in LightingCatalog.KeyboardAutoOffOptions)
             {
                 // 星耀 WMAA 只有两档：[3,12,1,0] 常亮 / [3,12,0,0] 10 秒。
-                current = AppConfig.Get("lighting_idle_seconds", 0);
-                foreach ((string Label, int Seconds) option in LightingCatalog.KeyboardAutoOffOptions)
+                if (xingyao && option.Seconds != 0 && option.Seconds != 10)
                 {
-                    if (option.Seconds == 0 || option.Seconds == 10)
-                    {
-                        LightIdleCombo.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Seconds.ToString() });
-                    }
+                    continue;
                 }
-            }
-            else
-            {
-                current = AppConfig.Get("lighting_idle_seconds",
-                    Math.Max(0, L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.CloseTimerMinutes ?? 0) * 60);
-                foreach ((string Label, int Mins, int IdleSeconds) option in LightingCatalog.LightingCloseTimerOptions)
-                {
-                    LightIdleCombo.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.IdleSeconds.ToString() });
-                }
+                LightIdleCombo.Items.Add(new ComboBoxItem { Content = option.Label, Tag = option.Seconds.ToString() });
             }
             LightIdleCombo.SelectedIndex = 0;
             foreach (object item in LightIdleCombo.Items)
@@ -9824,24 +9794,12 @@ public partial class OriginalStyleWindow : Window
             Logger.WriteError("[xingyao-quick] " + xyDetail);
             return;
         }
-        if (L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.UsesBaolongda == true)
-        {
-            MechrevoHw.SetKeyboardAutoOffSeconds(seconds);
-            L_Mechrevo.WpfP0.Services.WpfBackend.Hw.ApplyKeyboardAutoOffSetting();
-            StatusText.Text = seconds <= 0 ? WpfStrings.LightBdKeyboardAutoOffOff : WpfStrings.LightBdKeyboardAutoOffPrefix + seconds + WpfStrings.UnitSecondsSuffix;
-            return;
-        }
-        AppConfig.Set("lighting_idle_seconds", seconds);
-        AppConfig.Flush();
-        if (L_Mechrevo.WpfP0.Services.WpfBackend.rgb != null)
-        {
-            L_Mechrevo.WpfP0.Services.WpfBackend.rgb.CloseTimerMinutes = seconds / 60;
-            L_Mechrevo.WpfP0.Services.WpfBackend.rgb.SaveConfig();
-        }
-        _ = ReconcileLightingPowerAsync();
-        StatusText.Text = seconds <= 0 ? WpfStrings.LightAutoOffOff : WpfStrings.LightAutoOffPrefix + (seconds >= 60 ? (seconds / 60) + WpfStrings.UnitMinutesSuffix : seconds + WpfStrings.UnitSecondsSuffix);
+        // 统一：所有后端都写同一个键，关灯由窗口空闲计时器对所有通道执行。
+        WideSetLightIdleSeconds(seconds);
+        StatusText.Text = seconds <= 0
+            ? WpfStrings.LightAutoOffOff
+            : WpfStrings.LightAutoOffPrefix + (seconds >= 60 ? (seconds / 60) + WpfStrings.UnitMinutesSuffix : seconds + WpfStrings.UnitSecondsSuffix);
     }
-
     private void LightOffOnBattery_Click(object sender, RoutedEventArgs e)
     {
         bool on = LightOffOnBatteryCheck.IsChecked == true;
@@ -9912,18 +9870,13 @@ public partial class OriginalStyleWindow : Window
     private void CheckLightingIdle()
     {
         _ = ReconcileLightingPowerAsync();
-        if (L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.UsesBaolongda == true)
-        {
-            return;
-        }
         BackendProbe? probe = _backendProbe;
         if (probe == null)
         {
             return;
         }
-        // 不要求 GCU/后端已连接：同方机器 GCU 断开时仍走本地空闲计时，
-        // 关灯优先使用 HID/legacy 路径；完全没有后端时后续写入会失败，但计时器仍保留。
-        int timeoutSeconds = AppConfig.Get("lighting_idle_seconds", 0);
+        // 统一配置：宝龙达/同方/EC/NUC 都走同一把开关与同一个计时器，关了就是全通道都不关灯。
+        int timeoutSeconds = _services?.Lighting.LightIdleSeconds ?? AppConfig.Get("lighting_idle_seconds", 0);
         // 亚分钟选项由 LM 软件计时；1s tick 保证“20秒”实际落在 20~21s，而不是 2s tick 拖到 22s+。
         TimeSpan desiredTick = timeoutSeconds > 0 && timeoutSeconds < 60
             ? TimeSpan.FromSeconds(1)
@@ -9937,8 +9890,11 @@ public partial class OriginalStyleWindow : Window
             if (_lightingIdleSuspended)
             {
                 _lightingIdleSuspended = false;
+                L_Mechrevo.WpfP0.Services.WpfBackend.LightingIdleSuspended = false;
+                // 关闭自动关灯时，把刚才因空闲熄灭的灯按快照恢复回来。
                 _ = RestoreAllLightsAsync();
             }
+            MaybeKeepAliveKeyboardLight();
             return;
         }
         double idleSeconds = NativeMethods.GetIdleTime().TotalSeconds;
@@ -9954,6 +9910,7 @@ public partial class OriginalStyleWindow : Window
                 LightHingeSwitch.IsChecked == true,
                 LightSyncSwitch.IsChecked == true
             };
+            Logger.WriteError($"[light] 空闲关灯：已空闲 {idleSeconds:0} 秒 ≥ {timeoutSeconds} 秒 ⇒ 关闭全部灯光（键盘/灯带/Logo/铰链/同步）");
             _ = TurnOffAllLightsAsync();
             return;
         }
@@ -9961,8 +9918,58 @@ public partial class OriginalStyleWindow : Window
         {
             _lightingIdleSuspended = false;
             L_Mechrevo.WpfP0.Services.WpfBackend.LightingIdleSuspended = false;
+            Logger.WriteError($"[light] 空闲关灯：检测到新输入（空闲 {idleSeconds:0} 秒）⇒ 恢复全部灯光");
             _ = RestoreAllLightsAsync();
         }
+    }
+
+    private int _lightingKeepAliveTicks;
+    private bool? _lightingKeepAliveLastOn;
+    private bool _lightingKeepAliveHidLogged;
+
+    /// <summary>
+    /// 自动关灯=关闭时的保活：只读检查可读通道，发现“原本是开、现在灭了”就重新点亮。
+    /// <para>只处理能回读的通道（EC 单区/白光键盘）；HID 单键键盘没有回读，无法判断，⛔ 不盲写。</para>
+    /// </summary>
+    private void MaybeKeepAliveKeyboardLight()
+    {
+        // 2s tick × 8 ≈ 16s 检查一次，避免频繁读写 EC。
+        if (++_lightingKeepAliveTicks < 8)
+        {
+            return;
+        }
+        _lightingKeepAliveTicks = 0;
+        if (_backendProbe == null || _lightingIdleSuspended)
+        {
+            return;
+        }
+        if (KeyboardLightSwitch.IsChecked != true)
+        {
+            _lightingKeepAliveLastOn = null;
+            return;
+        }
+        if (MechrevoLite.Hardware.GcuEcKeyboard.IsHid)
+        {
+            if (!_lightingKeepAliveHidLogged)
+            {
+                _lightingKeepAliveHidLogged = true;
+                Logger.WriteLine("[light] 保活：HID 单键键盘没有回读通道 ⇒ 不做自动补点（灯灭需 Fn 或界面重新开）。");
+            }
+            return;
+        }
+        if (!MechrevoLite.Hardware.GcuEcKeyboard.TryReadPower(out bool on))
+        {
+            return;
+        }
+        bool? lastOn = _lightingKeepAliveLastOn;
+        _lightingKeepAliveLastOn = on;
+        if (on || lastOn != true)
+        {
+            // 只处理“上次读到是开、这次读到是关”的跳变，避免和用户手动关灯/固件默认状态打架。
+            return;
+        }
+        Logger.WriteError("[light] 保活：键盘灯被外部关闭（自动关灯=关闭）⇒ 重新点亮");
+        _ = ApplyKeyboardLightAsync(showStatus: false);
     }
 
     private void HookHardwareState(MechrevoHw? hw)
