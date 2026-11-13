@@ -243,87 +243,20 @@ public partial class FanCurveWindow : Window
         {
             return;
         }
-        if (BackendKind == FanCurveBackendKind.Baolongda)
+        FanCurveLoadOutcome outcome = FanCurveLoadService.Load(BackendKind, _hw, _modeId);
+        if (outcome.BaolongdaLoop.HasValue)
         {
-            BaolongdaFanCurveSettings curve = _hw.LoadBaolongdaFanCurve(_modeId);
-            // 旧版本只有 PerfModeStore 的 16 点占空比：没有档位曲线文件时迁移前 10 点到新 10 点轴。
-            MechrevoLite.Mode.PerfModeSettings savedCurve = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId);
-            if (!BaolongdaFanCurveStore.ExistsForMode(_modeId)
-                && savedCurve.CpuFanDuty is { Length: >= BaolongdaFanCurveSettings.PointCount } legacyCpu
-                && savedCurve.GpuFanDuty is { Length: >= BaolongdaFanCurveSettings.PointCount } legacyGpu)
-            {
-                curve = BaolongdaFanCurveSettings.FromLegacyDuties(legacyCpu, legacyGpu, curve.MaxRpm, curve.Enabled);
-            }
-            bool pushCurveOn = savedCurve.FanCurveOn ?? true;
-            BaolongdaLoopCheck.IsChecked = curve.Enabled && pushCurveOn;
-            BaolongdaSyncCheck.IsChecked = curve.SyncEnabled;
-            CpuCurve.Load(TempsToBytes(curve.Channel1Temperatures),
-                RpmsToPercent(curve.Channel1Rpms, curve.MaxRpm));
-            GpuCurve.Load(TempsToBytes(curve.Channel0Temperatures),
-                RpmsToPercent(curve.Channel0Rpms, curve.MaxRpm));
-            return;
+            BaolongdaLoopCheck.IsChecked = outcome.BaolongdaLoop.Value;
         }
-        if (_hw.WujieSmuApu && FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
-            && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
+        if (outcome.BaolongdaSync.HasValue)
         {
-            // 无界也统一使用官方 10 点温度轴；EC 只接收最终占空比。
-            CpuCurve.Load(FanCurveDefaults.CpuTemperatures, _hw.CpuCurveDuty);
-            GpuCurve.Load(FanCurveDefaults.GpuTemperatures, _hw.GpuCurveDuty);
-            return;
+            BaolongdaSyncCheck.IsChecked = outcome.BaolongdaSync.Value;
         }
-        if (!_hw.IsGcuConnected
-            && MechrevoLite.Hardware.NucFanTable.TryReadCurrent(out byte[] ecCpuT, out byte[] ecCpuD, out byte[] ecGpuT, out byte[] ecGpuD)
-            && FanTableLooksSane(ecCpuT, ecCpuD) && FanTableLooksSane(ecGpuT, ecGpuD))
+        CpuCurve.Load(outcome.CpuTemps, outcome.CpuDuties);
+        GpuCurve.Load(outcome.GpuTemps, outcome.GpuDuties);
+        if (outcome.PersistIfMissing)
         {
-            CpuCurve.Load(ecCpuT, ecCpuD);
-            GpuCurve.Load(ecGpuT, ecGpuD);
-            return;
-        }
-        MechrevoLite.Mode.PerfModeSettings saved = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId);
-        int[]? cpuSaved = saved.CpuFanDuty is { Length: >= 2 } cpuDuty ? cpuDuty : null;
-        int[]? gpuSaved = saved.GpuFanDuty is { Length: >= 2 } gpuDuty ? gpuDuty : null;
-        if (cpuSaved != null && gpuSaved != null)
-        {
-            CpuCurve.Load(FanCurveDefaults.CpuTemperatures,
-                cpuSaved.Select(v => (byte)Math.Clamp(v, 0, 100)).ToArray());
-            GpuCurve.Load(FanCurveDefaults.GpuTemperatures,
-                gpuSaved.Select(v => (byte)Math.Clamp(v, 0, 100)).ToArray());
-        }
-        else if (_modeId.StartsWith("custom", StringComparison.Ordinal)
-            || _modeId.StartsWith("fw", StringComparison.Ordinal))
-        {
-            // 优先用当前固件/EC 实际读取到的 16 点表；读不到才退回默认 30..100°C 轴。
-            if (FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
-                && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
-            {
-                CpuCurve.Load(FanCurveDefaults.CpuTemperatures, _hw.CpuCurveDuty);
-                GpuCurve.Load(FanCurveDefaults.GpuTemperatures, _hw.GpuCurveDuty);
-                return;
-            }
-            CpuCurve.Load(FanCurveDefaults.CpuTemperatures, FanCurveDefaults.CpuDutyBytes);
-            GpuCurve.Load(FanCurveDefaults.GpuTemperatures, FanCurveDefaults.GpuDutyBytes);
-            // LegacyMifs 等无 GCU 机型不把默认曲线落盘，避免污染存档。
-            if (_hw.IsGcuConnected)
-            {
-                PersistHardwareCurveIfMissing(cpuSaved, gpuSaved);
-            }
-        }
-        else if (FanTableLooksSane(_hw.CpuCurveUpT, _hw.CpuCurveDuty)
-            && FanTableLooksSane(_hw.GpuCurveUpT, _hw.GpuCurveDuty))
-        {
-            CpuCurve.Load(FanCurveDefaults.CpuTemperatures, _hw.CpuCurveDuty);
-            GpuCurve.Load(FanCurveDefaults.GpuTemperatures, _hw.GpuCurveDuty);
-        }
-        else if (_hw.TryGetBuiltInDefaultFanCurve(out byte[] cpuTemps, out byte[] cpuDuties,
-                     out byte[] gpuTemps, out byte[] gpuDuties))
-        {
-            CpuCurve.Load(cpuTemps, cpuDuties);
-            GpuCurve.Load(gpuTemps, gpuDuties);
-        }
-        else
-        {
-            CpuCurve.Load(FanCurveDefaults.CpuTemperatures, FanCurveDefaults.CpuDutyBytes);
-            GpuCurve.Load(FanCurveDefaults.GpuTemperatures, FanCurveDefaults.GpuDutyBytes);
+            PersistHardwareCurveIfMissing(outcome.CpuSaved, outcome.GpuSaved);
         }
     }
 
