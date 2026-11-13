@@ -175,6 +175,9 @@ internal static class FeatureGate
 		Check(lines, "ec-local-icc-calibration", Facts(BackendKind.TongfangEc),
 			new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.ColorCalibration);
+		Check(lines, "ec-local-display-effect", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, false),
+			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.DisplayEffect);
 		Check(lines, "gcu-supported", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Gcu);
 		Check(lines, "gcu-no-evidence", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, false, false, null, false),

@@ -197,9 +197,9 @@ internal sealed class TongfangEcBackend : IBackendModule
 				"EC LCD Overdrive 证据未采集", new string[0]);
 		}
 
-		FeatureDeclaration displayEffect = new FeatureDeclaration(FeatureAvailability.Unknown,
-			BackendChannel.None, "EC 未声明色彩增强通道", new string[0]);
-		// 校色在 EC 模式下走 Windows 颜色管理（本地 ICC）：没有 GCU 也能真的应用/解除，
+		// 色彩增强有本地 Win32 gamma/矩阵通道：EC 没有 GCU 档位表时也真的能生效，⛔ 不能声明成不可用。
+		FeatureDeclaration displayEffect = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "EC 本地软件色彩增强（Win32 gamma/矩阵）", new[] { "win32:gamma" });
 		// ⛔ 不能因为"没有 OEM 通道"就把整块屏幕校色从界面藏掉。
 		FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.Local, "EC 本地 ICC 校色（Windows 颜色管理）", new[] { "win:icc" });
