@@ -17,7 +17,7 @@ public partial class FanCurveWindow : Window
 {
     private string _modeId;
     private readonly MechrevoHw? _hw;
-    private FanCurveBackendKind _fanBackendKind;
+    private FanCurveBackendKind BackendKind => FanCurveBackendFactory.Resolve(_hw);
     private bool _dirty;
     private WujieFanEcController? _wujieController;
     private readonly DispatcherTimer _activeModeRefreshTimer = new() { Interval = TimeSpan.FromMilliseconds(450) };
@@ -103,8 +103,7 @@ public partial class FanCurveWindow : Window
         CpuSection.Visibility = showCpu ? Visibility.Visible : Visibility.Collapsed;
         GpuSection.Visibility = showGpu ? Visibility.Visible : Visibility.Collapsed;
         _hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw ?? MechrevoLite.Program.hw;
-        _fanBackendKind = FanCurveBackendFactory.Resolve(_hw);
-        if (_fanBackendKind == FanCurveBackendKind.Baolongda)
+        if (BackendKind == FanCurveBackendKind.Baolongda)
         {
             BaolongdaLoopCheck.Visibility = Visibility.Visible;
             BaolongdaSyncCheck.Visibility = Visibility.Visible;
@@ -243,7 +242,7 @@ public partial class FanCurveWindow : Window
         {
             return;
         }
-        if (_fanBackendKind == FanCurveBackendKind.Baolongda)
+        if (BackendKind == FanCurveBackendKind.Baolongda)
         {
             BaolongdaFanCurveSettings curve = _hw.LoadBaolongdaFanCurve(_modeId);
             // 旧版本只有 PerfModeStore 的 16 点占空比：没有档位曲线文件时迁移前 10 点到新 10 点轴。
@@ -334,7 +333,7 @@ public partial class FanCurveWindow : Window
             StatusText.Text = WpfStrings.FanCurveWindow_xaml_Text_3;
             return;
         }
-        if (_fanBackendKind == FanCurveBackendKind.NucUmi)
+        if (BackendKind == FanCurveBackendKind.NucUmi)
         {
             try
             {
@@ -366,7 +365,7 @@ public partial class FanCurveWindow : Window
             }
             return;
         }
-        if (_fanBackendKind == FanCurveBackendKind.Baolongda)
+        if (BackendKind == FanCurveBackendKind.Baolongda)
         {
             // 强冷期间曲线存档被临时标成 disabled；此时保存会结束强冷并覆盖快照，直接拒绝。
             if (MechrevoLite.Hardware.MechrevoHw.FanBoostActive)
@@ -599,7 +598,7 @@ public partial class FanCurveWindow : Window
         if (confirm != MessageBoxResult.Yes) return;
         try
         {
-            if (_fanBackendKind == FanCurveBackendKind.Baolongda)
+            if (BackendKind == FanCurveBackendKind.Baolongda)
             {
                 PerfModeService.Instance?.ResetBaolongdaFanToFirmwareDefault();
                 ClearSavedFanCurve();
@@ -607,7 +606,7 @@ public partial class FanCurveWindow : Window
                 _dirty = false;
                 StatusText.Text = WpfStrings.L("已恢复默认：宝龙达软件闭环已关闭，曲线回到固件默认", "Restored: Baolongda software loop disabled; curve returned to firmware default");
             }
-            else if (_fanBackendKind == FanCurveBackendKind.NucUmi)
+            else if (BackendKind == FanCurveBackendKind.NucUmi)
             {
                 bool restored = MechrevoLite.Hardware.NucFanTable.TryRestoreDefault(out string nucDetail);
                 bool isolatedRestore = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(false, out string isolatedDetail);
@@ -619,7 +618,7 @@ public partial class FanCurveWindow : Window
                     ? WpfStrings.L("已恢复默认：NUC/UMI 风扇表已还原", "Restored: NUC/UMI fan table restored")
                     : WpfStrings.L("恢复默认失败：", "Restore default failed: ") + nucDetail;
             }
-            else if (_fanBackendKind == FanCurveBackendKind.Ec)
+            else if (BackendKind == FanCurveBackendKind.Ec)
             {
                 bool restored = MechrevoLite.Hardware.NucFanTable.TryRestoreDefault(out string nucDetail);
                 bool isolatedRestore = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(false, out string isolatedDetail);
@@ -632,7 +631,7 @@ public partial class FanCurveWindow : Window
                     ? WpfStrings.L("已恢复默认：同方 EC 风扇表已还原", "Restored: Tongfang EC fan table restored")
                     : WpfStrings.L("恢复默认失败：", "Restore default failed: ") + nucDetail;
             }
-            else if (_fanBackendKind == FanCurveBackendKind.Gcu)
+            else if (BackendKind == FanCurveBackendKind.Gcu)
             {
                 if (!_hw.TryGetBuiltInDefaultFanCurve(out byte[] cpuTemps, out byte[] cpuDuties,
                         out byte[] gpuTemps, out byte[] gpuDuties))
