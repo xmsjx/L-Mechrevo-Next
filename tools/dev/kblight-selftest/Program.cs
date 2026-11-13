@@ -284,6 +284,26 @@ internal static class Program
 			LightingState.ResolveSwitchWithoutReadback(true, false) == LightingState.ResolveSwitchWithoutReadback(true, false), true);
 		Check("只能写到 1 => BrightnessProbed", onlyOne.BrightnessProbed, true);
 		CheckInt("只能写到 1 => 上限 1", onlyOne.BrightnessMax, 1);
+		Console.WriteLine();
+		Console.WriteLine("== 2026-11-13 灯光意图通道判决（LightingChannelRouting）：EC 无服务时必须落到本地通道 ==");
+		Console.WriteLine("起因：耀世 EC 模式灯带改设置后显示「已保存，但设备未确认」，灯带实际没下发");
+
+		// ① 有服务 ⇒ 一律走后端（GCU 等），本地通道不抢
+		Check("有服务 + 本地可用 ⇒ RemoteService",
+			LightingChannelRouting.Decide(hasService: true, topicKnown: true, localSupported: true) == LightingChannelPlan.RemoteService, true);
+		// ② 无服务 + 已知通道 + 本地可用 ⇒ 本地通道（本次修复的核心）
+		Check("无服务 + 本地可用 ⇒ LocalChannel",
+			LightingChannelRouting.Decide(hasService: false, topicKnown: true, localSupported: true) == LightingChannelPlan.LocalChannel, true);
+		// ③ 无服务 + 本地不可用 ⇒ 诚实判不支持（不再假装成功）
+		Check("无服务 + 本地不可用 ⇒ Unsupported",
+			LightingChannelRouting.Decide(hasService: false, topicKnown: true, localSupported: false) == LightingChannelPlan.Unsupported, true);
+		// ④ 无服务 + 未知通道 ⇒ 不支持（不会被本地通道误接）
+		Check("无服务 + 未知通道 ⇒ Unsupported",
+			LightingChannelRouting.Decide(hasService: false, topicKnown: false, localSupported: true) == LightingChannelPlan.Unsupported, true);
+		// ⑤ 幂等
+		Check("判据是纯函数（幂等）",
+			LightingChannelRouting.Decide(false, true, true) == LightingChannelRouting.Decide(false, true, true), true);
+
 
 		Console.WriteLine();
 		Console.WriteLine(_fail == 0 ? $"== 全绿：键盘灯自检 {_total}/{_total} ==" : $"== 失败 {_fail}/{_total} 项 ==");
