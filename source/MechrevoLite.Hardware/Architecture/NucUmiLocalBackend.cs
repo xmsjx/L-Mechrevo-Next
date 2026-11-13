@@ -33,6 +33,11 @@ internal sealed class NucUmiLocalBackend : IBackendModule
 				"NUC/UMI 灯带证据未采集，回退旧判据", new string[0]);
 		FeatureDeclaration noOemDisplay = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "NUC/UMI 没有 OEM 显示能力通道", new string[0]);
+		// 色彩增强走 Windows 本地 gamma/矩阵（与后端无关），校色走 Windows 颜色管理的本地 ICC。
+		FeatureDeclaration displayEffect = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "本地软件色彩增强（Win32 gamma/矩阵）", new[] { "win32:gamma" });
+		FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "本地 ICC 校色（Windows 颜色管理）", new[] { "win:icc" });
 		FeatureDeclaration fanCurve = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.Local, "NUC/UMI 本地风扇表", new[] { "ec:FanTable" });
 		FeatureDeclaration fanBoost = new FeatureDeclaration(FeatureAvailability.Supported,
@@ -50,7 +55,8 @@ internal sealed class NucUmiLocalBackend : IBackendModule
 				[FeatureId.Lightbar] = lightbar,
 				[FeatureId.LocalDimming] = noOemDisplay,
 				[FeatureId.LcdOverdrive] = noOemDisplay,
-				[FeatureId.ColorCalibration] = noOemDisplay,
+				[FeatureId.DisplayEffect] = displayEffect,
+				[FeatureId.ColorCalibration] = colorCalibration,
 				[FeatureId.FanCurve] = fanCurve,
 				[FeatureId.FanBoost] = fanBoost,
 				[FeatureId.ChargeLimit] = chargeLimit,

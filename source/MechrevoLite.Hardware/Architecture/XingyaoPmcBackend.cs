@@ -17,6 +17,11 @@ internal sealed class XingyaoPmcBackend : IBackendModule
 			BackendChannel.None, "星耀后端没有独立灯带通道", new string[0]);
 		FeatureDeclaration noOemDisplay = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "星耀后端没有 OEM 显示能力通道", new string[0]);
+		// 色彩增强走 Windows 本地 gamma/矩阵（与后端无关），校色走 Windows 颜色管理的本地 ICC。
+		FeatureDeclaration displayEffect = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "本地软件色彩增强（Win32 gamma/矩阵）", new[] { "win32:gamma" });
+		FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "本地 ICC 校色（Windows 颜色管理）", new[] { "win:icc" });
 		FeatureDeclaration unsupported = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "星耀没有该下发通道", new string[0]);
 		FeatureDeclaration perf = new FeatureDeclaration(FeatureAvailability.Supported,
@@ -30,7 +35,8 @@ internal sealed class XingyaoPmcBackend : IBackendModule
 				[FeatureId.Lightbar] = lightbar,
 				[FeatureId.LocalDimming] = noOemDisplay,
 				[FeatureId.LcdOverdrive] = noOemDisplay,
-				[FeatureId.ColorCalibration] = noOemDisplay,
+				[FeatureId.DisplayEffect] = displayEffect,
+				[FeatureId.ColorCalibration] = colorCalibration,
 				[FeatureId.FanCurve] = unsupported,
 				[FeatureId.FanBoost] = new FeatureDeclaration(FeatureAvailability.Unknown,
 					BackendChannel.None, "星耀未声明强冷通道，回退旧判据", new string[0]),

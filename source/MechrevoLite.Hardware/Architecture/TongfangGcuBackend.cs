@@ -144,13 +144,15 @@ internal sealed class TongfangGcuBackend : IBackendModule
 		FeatureDeclaration displayEffect = probe.GcuConnected && probe.DisplayEffectProfile
 			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
 				"GCU 提供显示效果 Profile", new[] { "gcu:DisplayEffectProfiles" })
-			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-				probe.GcuConnected ? "GCU 未提供显示效果 Profile" : "GCU 未连接", new string[0]);
+			// 没有 GCU 档位表时走 Windows 本地 gamma/矩阵色彩增强，功能仍然可用。
+			: new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local,
+				probe.GcuConnected ? "GCU 未提供档位表，走本地软件色彩增强" : "GCU 未连接，走本地软件色彩增强", new[] { "win32:gamma" });
 		FeatureDeclaration colorCalibration;
 		if (!probe.GcuConnected)
 		{
-			colorCalibration = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-				"GCU 未连接", new string[0]);
+			// 没有 GCU 也还能用 Windows 颜色管理的本地 ICC 校色。
+			colorCalibration = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local,
+				"GCU 未连接，走本地 ICC 校色", new[] { "win:icc" });
 		}
 		else
 		{

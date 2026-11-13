@@ -114,6 +114,13 @@ internal static class FeatureGate
 		Check(lines, "gcu-lightbar-no-evidence", Facts(BackendKind.TongfangGcu),
 			new FeatureProbe(true, false, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
+		// 色彩增强与校色都是 Windows 本地通道（gamma 矩阵 / 颜色管理 ICC），与后端无关 ⇒ 各后端都声明本地可用。
+		Check(lines, "baolongda-local-display-effect", Facts(BackendKind.BaolongdaWmi),
+			new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.DisplayEffect);
+		Check(lines, "nuc-local-display-effect", Facts(BackendKind.NucUmiLocal),
+			new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.DisplayEffect);
 		Check(lines, "ec-lightbar-usb", Facts(BackendKind.TongfangEc),
 			new FeatureProbe(false, false, false, null, null, false, false, true),
 			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
@@ -168,9 +175,9 @@ internal static class FeatureGate
 		Check(lines, "baolongda-no-lightbar", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
-		Check(lines, "baolongda-no-oem-calibration", Facts(BackendKind.BaolongdaWmi),
+		Check(lines, "baolongda-local-icc-calibration", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, false, false, null, false),
-			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.ColorCalibration);
+			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.ColorCalibration);
 		// EC 没有 OEM 校色通道，但有本地 ICC（Windows 颜色管理）⇒ 声明 Supported/Local，界面不藏。
 		Check(lines, "ec-local-icc-calibration", Facts(BackendKind.TongfangEc),
 			new FeatureProbe(false, false, false, null, false),
