@@ -1055,7 +1055,7 @@ public class MechrevoHw : IDisposable
 		get
 		{
 			// NUC/UMI 30 系键盘是 HID 单键 RGB；GCU 不回报 KeyboardType，按 HID 能力补入口。
-			if (IsIntelNucMachine || IsUmiMachine)
+			if (IsNucUmiFamily)
 			{
 				return true;
 			}
@@ -2802,7 +2802,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		{
 			bool oldPredicate = SupportsFanBoost || UsesBaolongda;
 			// NUC/UMI 的强冷走本地 EC 0x751 bit6，不依赖 GCU 能力位。
-			bool visible = oldPredicate || WujieSmuApu || IsIntelNucMachine || IsUmiMachine;
+			bool visible = oldPredicate || WujieSmuApu || IsNucUmiFamily;
 			string message = "[fan] 强冷可见性：backend=" + ActiveBackend + " · caps.FanBoost=" + Capabilities.FanBoost
 				+ " · 旧判据=" + oldPredicate + " ⇒ visible=" + visible;
 			if (Logger.TryMarkChanged("fan-boost-visible", message))
@@ -6287,7 +6287,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		cpuRpm = -1;
 		gpuRpm = -1;
 		// 无 GCU 服务的同方机型也要能读 EC；只排除确实不走这套地址的机型。
-		if (UsesBaolongda || WujieSmuApu || IsIntelNucMachine || IsUmiMachine)
+		if (UsesBaolongda || WujieSmuApu || IsNucUmiFamily)
 		{
 			return false;
 		}
@@ -8249,7 +8249,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 				Logger.WriteLine($"Hardware backend: GCU (MQTT). IsGcuServiceInstalled={IsGcuServiceInstalled}, legacyProbe={kind}");
 			}
 			// NUC/UMI 直接走本地 ACPI/EC：不再尝试连接 GCU/MQTT。
-			if (IsIntelNucMachine || IsUmiMachine)
+			if (IsNucUmiFamily)
 			{
 				Logger.WriteLine("[backend] NUC/UMI 本地 ACPI 模式：跳过 GCU/MQTT");
 				MarkNucLocalReady();
