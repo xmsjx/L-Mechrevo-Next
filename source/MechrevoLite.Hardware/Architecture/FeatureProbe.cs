@@ -58,7 +58,7 @@ internal sealed record FeatureProbe(
 			hw.LcdOverdriveSupport,
 			AcpiDisplaySwitch.LocalDimmingSupportCached,
 			AcpiDisplaySwitch.LcdOverdriveSupportCached,
-			// EC 实验模式已接管时才给出键盘灯结论；否则 null = 不表态（回退旧判据）。
-			GcuEcKeyboard.Active ? GcuEcKeyboard.HasControllableKeyboard : (bool?)null);
+			// 键盘类型探测过就给出结论（不看 EC 实验开关）；否则 null = 不表态（回退旧判据）。
+			GcuEcKeyboard.KindProbed ? GcuEcKeyboard.ControllableProbed : (bool?)null);
 	}
 }

@@ -50,6 +50,13 @@ internal static class GcuEcKeyboard
     internal static bool HasControllableKeyboard => Active
         && _kind is GcuEcKeyboardKind.HidPerKey or GcuEcKeyboardKind.EcSingleZone or GcuEcKeyboardKind.EcWhite;
 
+    /// <summary>键盘类型已探测过（不看 EC 实验开关）⇒ 门控可据此给出确定结论。</summary>
+    internal static bool KindProbed => _active;
+
+    /// <summary>已探测且本程序能控制键盘灯（不看 EC 实验开关）。</summary>
+    internal static bool ControllableProbed => _active
+        && _kind is GcuEcKeyboardKind.HidPerKey or GcuEcKeyboardKind.EcSingleZone or GcuEcKeyboardKind.EcWhite;
+
     /// <summary>EC 实验首页启动时调用一次：探测键盘类型并打开分流。</summary>
     internal static void MarkActive()
     {
