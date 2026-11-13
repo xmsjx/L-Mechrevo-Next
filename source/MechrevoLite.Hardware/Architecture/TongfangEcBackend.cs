@@ -199,8 +199,10 @@ internal sealed class TongfangEcBackend : IBackendModule
 
 		FeatureDeclaration displayEffect = new FeatureDeclaration(FeatureAvailability.Unknown,
 			BackendChannel.None, "EC 未声明色彩增强通道", new string[0]);
-		FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Unsupported,
-			BackendChannel.None, "EC 没有 OEM 校色通道", new string[0]);
+		// 校色在 EC 模式下走 Windows 颜色管理（本地 ICC）：没有 GCU 也能真的应用/解除，
+		// ⛔ 不能因为"没有 OEM 通道"就把整块屏幕校色从界面藏掉。
+		FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Supported,
+			BackendChannel.Local, "EC 本地 ICC 校色（Windows 颜色管理）", new[] { "win:icc" });
 
 		FeatureDeclaration fanCurve = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.Local, "EC 本地风扇曲线", new[] { "ec:FanCurve" });
