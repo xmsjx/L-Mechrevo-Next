@@ -137,6 +137,9 @@ internal interface ILightingService
     /// <param name="legacySupport">旧判据的结果（门控 Unknown 时回退用）。</param>
     /// <param name="callSite">影子日志的调用点标签（诊断包按它统计一致率）。</param>
     bool ResolveChannelSupport(string topic, bool legacySupport, string callSite);
+
+    /// <summary>只补一条通道影子日志（不下发、不求值），用于迎宾等旁路。</summary>
+    void LogChannelShadow(string topic, bool legacySupport, string callSite, string kind = "visibility");
     bool ChannelEffectIs(string topic, string effect);
 
     // ── EC 实验模式的键盘通道（只读事实 + 下发入口）：界面层只问这里，⛔ 不直接引用 EC 键盘驱动类型 ──
@@ -696,6 +699,17 @@ internal sealed class LightingService : ILightingService
         bool value = FeatureGate.ResolveSupportOrLegacy(feature.Value, _backend.Hw, legacySupport);
         FeatureGateShadow.LogFeature(feature.Value, _backend.Hw, legacySupport, callSite);
         return value;
+    }
+
+    /// <inheritdoc />
+    public void LogChannelShadow(string topic, bool legacySupport, string callSite, string kind = "visibility")
+    {
+        FeatureId? feature = FeatureForLightTopic(topic);
+        if (feature == null)
+        {
+            return;
+        }
+        FeatureGateShadow.LogFeature(feature.Value, _backend.Hw, legacySupport, callSite, kind);
     }
 
     /// <inheritdoc />

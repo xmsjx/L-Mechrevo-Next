@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using MechrevoLite.Hardware;
+using MechrevoLite.Hardware.Architecture;
 
 using L_Mechrevo.WpfP0.Resources;
 namespace L_Mechrevo.WpfP0.Services;
@@ -21,11 +22,18 @@ internal interface IBatteryService
 
     /// <summary>设置电池保护档位（0=长效 / 1=平衡 / 2=工作站）。</summary>
     Task<ServiceResult> SetModeAsync(int mode);
+
+    /// <summary>限充是否由后端声明为宝龙达 WMI 邮箱通道（专属阈值面板，不走 EC 直写）。</summary>
+    bool ChargeLimitUsesWmiMailbox { get; }
 }
 
 /// <inheritdoc />
 internal sealed class BatteryService : IBatteryService
 {
+    /// <inheritdoc />
+    public bool ChargeLimitUsesWmiMailbox =>
+        FeatureGate.Get(FeatureId.ChargeLimit, _backend.Hw).Channel == BackendChannel.WmiMailbox;
+
     private readonly BackendAccessor _backend;
 
     internal BatteryService(BackendAccessor backend)

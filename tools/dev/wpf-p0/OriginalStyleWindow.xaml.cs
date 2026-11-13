@@ -1230,12 +1230,7 @@ public partial class OriginalStyleWindow : Window
                     || (IsEcModeActive
                         && _backendProbe?.Hw != null
                         && !_backendProbe.Hw.UsesBaolongda);
-                bool value = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-                    MechrevoLite.Hardware.Architecture.FeatureId.DisplayEffect, _backendProbe?.Hw, legacy);
-                MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(
-                    MechrevoLite.Hardware.Architecture.FeatureId.DisplayEffect,
-                    _backendProbe?.Hw, legacy, "wide-display-effect");
-                return value;
+                return _services?.Display.ResolveColorEnhancementSupport(legacy) ?? legacy;
             }
             catch
             {
@@ -1867,10 +1862,7 @@ public partial class OriginalStyleWindow : Window
     }
 
     /// <summary>限充由后端声明为宝龙达 WMI 邮箱通道（专属「限制充电」面板，不走 EC 直写/三档）。</summary>
-    private bool ChargeLimitUsesWmiMailbox
-        => MechrevoLite.Hardware.Architecture.FeatureGate
-            .Get(MechrevoLite.Hardware.Architecture.FeatureId.ChargeLimit, _backendProbe?.Hw)
-            .Channel == MechrevoLite.Hardware.Architecture.BackendChannel.WmiMailbox;
+    private bool ChargeLimitUsesWmiMailbox => _services?.Battery.ChargeLimitUsesWmiMailbox == true;
 
     /// <summary>GCU 机型的 EC 限充传输开关（与宝龙达阈值面板是两套）。</summary>
     internal bool WideEcTransportSupported => EcTransportHardwareAvailable();
@@ -1886,11 +1878,7 @@ public partial class OriginalStyleWindow : Window
             }
             bool legacy = _backendProbe?.Hw?.SupportsLocalDimming == true
                 || _backendProbe?.Capabilities?.LocalDimming == true;
-            bool value = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-                MechrevoLite.Hardware.Architecture.FeatureId.LocalDimming, _backendProbe?.Hw, legacy);
-            MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(
-                MechrevoLite.Hardware.Architecture.FeatureId.LocalDimming, _backendProbe?.Hw, legacy, "wide-miniled");
-            return value;
+            return _services?.Display.ResolveMiniLedSupport(legacy) ?? legacy;
         }
     }
 
@@ -3867,8 +3855,7 @@ public partial class OriginalStyleWindow : Window
                 PollFnLockOsd(hw);
                 PollMicOsd(hw);
             }
-            bool nucPerf = MechrevoLite.Hardware.Architecture.NucUmiCapabilityMap
-            .IsSupported(hw, MechrevoLite.Hardware.Architecture.NucUmiOperation.GpuMode);
+            bool nucPerf = _services?.Gpu.SupportsNucGpuMode == true;
             bool gcuPerf = hw != null
                 && hw.IsGcuConnected
                 && !hw.UsesBaolongda
@@ -3975,8 +3962,7 @@ public partial class OriginalStyleWindow : Window
             }
             _lastBrightnessHotkeyTick = now;
             MechrevoHw? hw = _backendProbe?.Hw;
-            bool nucCycle = MechrevoLite.Hardware.Architecture.NucUmiCapabilityMap
-            .IsSupported(hw, MechrevoLite.Hardware.Architecture.NucUmiOperation.GpuMode);
+            bool nucCycle = _services?.Gpu.SupportsNucGpuMode == true;
             int current = hw?.KeyboardBrightness ?? -1;
             int hwLevel = current <= 4 ? current : (current < 0 ? 1 : Math.Clamp((int)Math.Round(current / 25.0), 0, 4));
             // ⚠️ HID 写入后 hw.KeyboardBrightness 不一定会立刻回读；
@@ -10409,8 +10395,7 @@ public partial class OriginalStyleWindow : Window
             };
             if (string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
             {
-                MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(
-                    _backendProbe.Hw, supported, "wide-welcome", "dispatch");
+                _services?.Lighting.LogChannelShadow(LightingTopics.Logo, supported, "wide-welcome", "dispatch");
             }
             if (!supported) return;
 
@@ -11228,11 +11213,7 @@ public partial class OriginalStyleWindow : Window
                 return true;
             }
             bool legacy = _backendProbe?.SupportsLcdOverdrive == true;
-            bool value = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-                MechrevoLite.Hardware.Architecture.FeatureId.LcdOverdrive, _backendProbe?.Hw, legacy);
-            MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(
-                MechrevoLite.Hardware.Architecture.FeatureId.LcdOverdrive, _backendProbe?.Hw, legacy, "wide-overdrive");
-            return value;
+            return _services?.Display.ResolveLcdOverdriveSupport(legacy) ?? legacy;
         }
     }
 

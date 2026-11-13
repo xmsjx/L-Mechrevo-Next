@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using MechrevoLite;
 using MechrevoLite.Display;
 using MechrevoLite.Hardware;
+using MechrevoLite.Hardware.Architecture;
 using L_Mechrevo.WpfP0.Resources;
 
 namespace L_Mechrevo.WpfP0.Services;
@@ -63,6 +64,17 @@ internal interface IDisplayService
 
     /// <summary>只记住用户选择的档位（⛔ 不下发硬件；开关关闭时由窗口直接调用或经上面方法内部调用）。</summary>
     ServiceResult RememberDisplayEffectMode(string mode);
+
+    // ── 显示能力位（门控求值 + 影子日志都在服务层；界面只问结果）──
+
+    /// <summary>色彩增强是否可用（本地 Win32 gamma/矩阵通道，与后端无关）。</summary>
+    bool ResolveColorEnhancementSupport(bool legacySupport);
+
+    /// <summary>分区背光（MiniLED）是否可用。</summary>
+    bool ResolveMiniLedSupport(bool legacySupport);
+
+    /// <summary>LCD Overdrive 是否可用。</summary>
+    bool ResolveLcdOverdriveSupport(bool legacySupport);
 }
 
 /// <inheritdoc />
@@ -374,6 +386,25 @@ internal sealed class DisplayService : IDisplayService
         AppConfig.Set("display_effect_mode", mode);
         AppConfig.Flush();
         return ServiceResult.Success(WpfStrings.DisplayColorProfileSwitched);
+    }
+
+    /// <inheritdoc />
+    public bool ResolveColorEnhancementSupport(bool legacySupport) =>
+        ResolveFeature(FeatureId.DisplayEffect, legacySupport, "wide-display-effect");
+
+    /// <inheritdoc />
+    public bool ResolveMiniLedSupport(bool legacySupport) =>
+        ResolveFeature(FeatureId.LocalDimming, legacySupport, "wide-miniled");
+
+    /// <inheritdoc />
+    public bool ResolveLcdOverdriveSupport(bool legacySupport) =>
+        ResolveFeature(FeatureId.LcdOverdrive, legacySupport, "wide-overdrive");
+
+    private bool ResolveFeature(FeatureId feature, bool legacySupport, string callSite)
+    {
+        bool value = FeatureGate.ResolveSupportOrLegacy(feature, _backend.Hw, legacySupport);
+        FeatureGateShadow.LogFeature(feature, _backend.Hw, legacySupport, callSite);
+        return value;
     }
 
     private static bool CustomCalibrationAvailable()

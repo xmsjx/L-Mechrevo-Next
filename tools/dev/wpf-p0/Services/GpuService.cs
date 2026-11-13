@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using MechrevoLite.Hardware.Architecture;
 
 using L_Mechrevo.WpfP0.Resources;
 namespace L_Mechrevo.WpfP0.Services;
@@ -47,11 +48,18 @@ internal interface IGpuService
 
     /// <summary>当前核显省电模式（-1 = 读不到）。</summary>
     int IgpuSavingMode { get; }
+
+    /// <summary>NUC/UMI 机型是否支持走能力位的显卡模式切换。</summary>
+    bool SupportsNucGpuMode { get; }
 }
 
 /// <inheritdoc />
 internal sealed class GpuService : IGpuService
 {
+    /// <inheritdoc />
+    public bool SupportsNucGpuMode =>
+        NucUmiCapabilityMap.IsSupported(_backend.Hw, NucUmiOperation.GpuMode);
+
     private readonly BackendAccessor _backend;
 
     internal GpuService(BackendAccessor backend)
