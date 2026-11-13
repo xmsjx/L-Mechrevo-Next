@@ -304,24 +304,12 @@ public partial class FanCurveWindow : Window
         {
             try
             {
-                int[] cpu = CpuCurve.Duties;
-                int[] gpu = GpuCurve.Duties;
                 _wujieController ??= new WujieFanEcController();
-                byte[] cpuTemps = CpuCurve.Temperatures;
-                byte[] gpuTemps = GpuCurve.Temperatures;
-                bool independent = WujieIndependentCheck?.IsChecked == true;
-                try
-                {
-                    MechrevoLite.AppConfig.Set("wujie_fan_independent", independent ? 1 : 0);
-                }
-                catch
-                {
-                }
-                bool ok = _wujieController.Start(cpuTemps, cpu, independent, gpuTemps, gpu, out string detail);
-                PerfModeService.Instance?.RecordFanCurves(_modeId, cpu, gpu);
-                SaveWujieTemps(cpuTemps, gpuTemps);
-                _dirty = false;
-                StatusText.Text = ok ? WpfStrings.L("无界 EC 曲线已启动：", "Wujie EC curve started: ") + detail : WpfStrings.L("无界 EC 曲线启动失败：", "Failed to start Wujie EC curve: ") + detail;
+                FanCurveSaveResult result = FanCurveSaveService.SaveWujie(_wujieController, _modeId,
+                    CpuCurve.Duties, GpuCurve.Duties, CpuCurve.Temperatures, GpuCurve.Temperatures,
+                    WujieIndependentCheck?.IsChecked == true);
+                _dirty = result.Dirty;
+                StatusText.Text = result.Detail;
             }
             catch (Exception ex)
             {

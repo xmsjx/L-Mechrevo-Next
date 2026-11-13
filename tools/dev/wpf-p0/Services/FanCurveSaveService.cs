@@ -55,6 +55,32 @@ internal static class FanCurveSaveService
 		return new FanCurveSaveResult(true, false, WpfStrings.FanCurveWindow_xaml_Text_5);
 	}
 
+	internal static FanCurveSaveResult SaveWujie(WujieFanEcController controller, string modeId,
+		int[] cpu, int[] gpu, byte[] cpuTemps, byte[] gpuTemps, bool independent)
+	{
+		try
+		{
+			AppConfig.Set("wujie_fan_independent", independent ? 1 : 0);
+		}
+		catch
+		{
+		}
+		bool ok = controller.Start(cpuTemps, cpu, independent, gpuTemps, gpu, out string detail);
+		PerfModeService.Instance?.RecordFanCurves(modeId, cpu, gpu);
+		try
+		{
+			string key = string.IsNullOrWhiteSpace(modeId) ? "active" : modeId;
+			AppConfig.Set("wujie_fan_cputemps_" + key, string.Join(",", cpuTemps));
+			AppConfig.Set("wujie_fan_gputemps_" + key, string.Join(",", gpuTemps));
+		}
+		catch
+		{
+		}
+		return new FanCurveSaveResult(ok, false,
+			ok ? WpfStrings.L("无界 EC 曲线已启动：", "Wujie EC curve started: ") + detail
+				: WpfStrings.L("无界 EC 曲线启动失败：", "Failed to start Wujie EC curve: ") + detail);
+	}
+
 	internal static FanCurveSaveResult SaveNuc(string modeId, int[] cpu, int[] gpu,
 		byte[] cpuTemps, byte[] gpuTemps, bool push)
 	{
