@@ -18,12 +18,6 @@ internal static class GcuEcExperimental
     /// <summary>EC 控制模式是否生效；不再是实验开关。</summary>
     internal static bool Enabled => GcuEcMode.IsEcMode;
 
-    /// <summary>运行时已实际接管 EC（区别于仅配置强制）。</summary>
-    internal static bool TakenOverByRuntime => GcuEcMode.IsRuntimeActive;
-
-    /// <summary>用户配置强制走 EC（区别于运行时探测后接管）。</summary>
-    internal static bool ForcedByConfig => GcuEcMode.IsDirectConfigured;
-
     /// <summary>EC 本地灯带可用。</summary>
     internal static bool LocalLightbar => Enabled && IteLightingLocal.HasLightbar;
 
