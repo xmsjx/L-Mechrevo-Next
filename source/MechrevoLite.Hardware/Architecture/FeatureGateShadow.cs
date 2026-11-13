@@ -38,6 +38,45 @@ internal static class FeatureGateShadow
 		Log(feature, hw, oldValue, origin, kind);
 	}
 
+	// 每个调用点（feature|origin）只保留最后一次对比结果：刷新循环会反复调用，按调用点去重才有意义。
+	private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> Seen = new();
+	private static string _lastMismatch = "";
+
+	/// <summary>影子对比累计（诊断用：门控与旧判据是否已收敛）。</summary>
+	internal static string Describe()
+	{
+		int agree = 0;
+		int disagree = 0;
+		int undecided = 0;
+		foreach (System.Collections.Generic.KeyValuePair<string, string> pair in Seen)
+		{
+			switch (pair.Value)
+			{
+				case "yes":
+					agree++;
+					break;
+				case "no":
+					disagree++;
+					break;
+				default:
+					undecided++;
+					break;
+			}
+		}
+		string last = System.Threading.Volatile.Read(ref _lastMismatch) ?? "";
+		return "调用点=" + Seen.Count + " · 一致=" + agree + " · 不一致=" + disagree + " · 未决=" + undecided
+			+ (last.Length == 0 ? " · 最近不一致=(无)" : " · 最近不一致=" + last);
+	}
+
+	private static void Record(string key, string agree, string detail)
+	{
+		Seen[key] = agree;
+		if (agree == "no")
+		{
+			System.Threading.Volatile.Write(ref _lastMismatch, detail);
+		}
+	}
+
 	private static void Log(FeatureId feature, MechrevoHw? hw, bool oldValue, string origin, string kind)
 	{
 		try
@@ -53,6 +92,8 @@ internal static class FeatureGateShadow
 			{
 				agree = decision.IsSupported == oldValue ? "yes" : "no";
 			}
+			Record(feature + "|" + origin, agree,
+				feature + "@" + origin + " old=" + (oldValue ? "yes" : "no") + " gate=" + (decision.IsSupported ? "yes" : "no"));
 			string declaredMatches = facts.Backend == BackendKind.None && facts.DeclaredBackend == BackendKind.None
 				? "n/a"
 				: (facts.Backend == facts.DeclaredBackend ? "yes" : "no");

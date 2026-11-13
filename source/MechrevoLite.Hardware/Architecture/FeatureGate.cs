@@ -16,24 +16,30 @@ internal static class FeatureGate
 	{
 		try
 		{
-			FeatureDecision decision = Get(feature, hw);
-			if (decision.State == FeatureAvailability.Supported && decision.Channel != BackendChannel.None)
-			{
-				return true;
-			}
-			if (decision.State == FeatureAvailability.Unsupported)
-			{
-				return false;
-			}
-			if (decision.State == FeatureAvailability.Unknown && decision.Channel == BackendChannel.None
-				&& decision.Sources.Length > 0 && IsReportedOnly(decision.Sources))
-			{
-				return false;
-			}
+			return Resolve(Get(feature, hw), legacySupport);
 		}
 		catch (Exception ex)
 		{
 			global::Logger.WriteLine("[gate] ResolveSupportOrLegacy failed: " + ex.Message);
+		}
+		return legacySupport;
+	}
+
+	/// <summary>门控结果 → 布尔（纯函数；Unknown 按旧判据，只上报来源一律视为不支持）。</summary>
+	internal static bool Resolve(FeatureDecision decision, bool legacySupport)
+	{
+		if (decision.State == FeatureAvailability.Supported && decision.Channel != BackendChannel.None)
+		{
+			return true;
+		}
+		if (decision.State == FeatureAvailability.Unsupported)
+		{
+			return false;
+		}
+		if (decision.State == FeatureAvailability.Unknown && decision.Channel == BackendChannel.None
+			&& decision.Sources.Length > 0 && IsReportedOnly(decision.Sources))
+		{
+			return false;
 		}
 		return legacySupport;
 	}
@@ -214,7 +220,48 @@ internal static class FeatureGate
 			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.RefreshRate);
 		Check(lines, "undeclared-feature", Facts(BackendKind.TongfangGcu), new FeatureProbe(true, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.KeyboardLight);
+		foreach (FeatureId feature in Enum.GetValues<FeatureId>())
+		{
+			CheckResolve(lines, feature);
+		}
 		return string.Join(Environment.NewLine, lines);
+	}
+
+	/// <summary>逐个功能校验「声明 → 布尔」的六种取值组合。</summary>
+	private static void CheckResolve(List<string> lines, FeatureId feature)
+	{
+		int ok = 0;
+		if (Resolve(Decision(feature, FeatureAvailability.Supported, BackendChannel.Local), false))
+		{
+			ok++;
+		}
+		if (!Resolve(Decision(feature, FeatureAvailability.Unsupported, BackendChannel.None), true))
+		{
+			ok++;
+		}
+		if (Resolve(Decision(feature, FeatureAvailability.Unknown, BackendChannel.None), true))
+		{
+			ok++;
+		}
+		if (!Resolve(Decision(feature, FeatureAvailability.Unknown, BackendChannel.None, "gcu:test"), true))
+		{
+			ok++;
+		}
+		if (Resolve(Decision(feature, FeatureAvailability.Unknown, BackendChannel.None, "ec:test"), true))
+		{
+			ok++;
+		}
+		if (!Resolve(Decision(feature, FeatureAvailability.Supported, BackendChannel.None), false))
+		{
+			ok++;
+		}
+		lines.Add((ok == 6 ? "PASS " : "FAIL ") + feature + " 语义矩阵 " + ok + "/6");
+	}
+
+	private static FeatureDecision Decision(FeatureId feature, FeatureAvailability state, BackendChannel channel,
+		params string[] sources)
+	{
+		return new FeatureDecision(feature, state, BackendKind.TongfangGcu, channel, "自测合成", sources);
 	}
 
 	/// <summary>声明一致性自测：只校验各后端声明表自身是否自洽，不比较旧判据。</summary>
