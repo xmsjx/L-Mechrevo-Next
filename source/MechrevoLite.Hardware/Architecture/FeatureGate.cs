@@ -271,7 +271,9 @@ internal static class FeatureGate
 		(string Label, FeatureProbe Probe)[] probes =
 		{
 			("最大能力", ProbeMax()),
-			("仅能力位", ProbeCapability()),
+			("仅能力位（未连接）", ProbeCapability()),
+			("EC 本地证据", ProbeEcEvidence()),
+			("GCU 连接 + 仅能力位", ProbeGcuCapability()),
 			("无证据", ProbeEmpty())
 		};
 		for (int i = 0; i < probes.Length; i++)
@@ -309,29 +311,43 @@ internal static class FeatureGate
 					}
 					pass++;
 				}
-				if (i != 0)
-				{
-					continue;
-				}
-				// 核心三项只查一次：换探针不会改变“是否声明”。
-				foreach (FeatureId required in RequiredFeatures)
-				{
-					if (declaration.Features.ContainsKey(required))
-					{
-						pass++;
-						continue;
-					}
-					fail++;
-					details.Add("FAIL " + module.Kind + " 缺声明 " + required);
-				}
 			}
 			lines.Add("[" + probes[i].Label + "] PASS=" + pass + " FAIL=" + fail);
 			lines.AddRange(details);
 		}
+		// 核心三项单列：与探针无关，不计入上面各组的 PASS。
+		int requiredPass = 0;
+		int requiredFail = 0;
+		List<string> requiredDetails = new List<string>();
+		foreach (IBackendModule module in BackendModuleRegistry.All)
+		{
+			try
+			{
+				BackendFeatureDeclaration declaration = module.Declare(Facts(module.Kind), probes[0].Probe);
+				foreach (FeatureId required in RequiredFeatures)
+				{
+					if (declaration.Features.ContainsKey(required))
+					{
+						requiredPass++;
+						continue;
+					}
+					requiredFail++;
+					requiredDetails.Add("FAIL " + module.Kind + " 缺声明 " + required);
+				}
+			}
+			catch (Exception ex)
+			{
+				requiredFail++;
+				requiredDetails.Add("FAIL " + module.Kind + " 声明抛异常（核心三项）⇒ " + ex.GetType().Name + " " + ex.Message);
+			}
+		}
+		lines.Add("[核心三项] PASS=" + requiredPass + " FAIL=" + requiredFail);
+		lines.AddRange(requiredDetails);
 		return string.Join(Environment.NewLine, lines);
 	}
 
-	// 三组探针都用具名实参：FeatureProbe 若增删/重排字段，编译器立刻报错，而不是静默错位。
+	// 本文件新增的探针全部用具名实参：FeatureProbe 若增删/重排字段，编译器立刻报错，而不是静默错位
+	//（RunSelfTest 里的旧断言仍是位置实参）。
 	private static FeatureProbe ProbeMax()
 	{
 		return new FeatureProbe(
@@ -349,6 +365,32 @@ internal static class FeatureGate
 	{
 		return new FeatureProbe(
 			GcuConnected: false, LogoLightCapability: true, LogoLightSeen: false,
+			LightbarMbLogoSupport: null, EcLogoEvidence: null, LightbarCapability: true,
+			LightbarSeen: false, EcLightbarEvidence: null, HingeCapability: true,
+			SyncCapability: true, KeyboardCapability: true, LocalDimmingCapability: true,
+			LocalDimmingSeen: false, LcdOverdriveCapability: true, LcdOverdriveSeen: false,
+			DisplayEffectProfile: true, ColorCalibrationCapability: true, ColorCalibrationSeen: false,
+			LocalDimmingSupport: null, LcdOverdriveSupport: null, EcLocalDimmingSupport: null,
+			EcLcdOverdriveSupport: null);
+	}
+
+	private static FeatureProbe ProbeEcEvidence()
+	{
+		return new FeatureProbe(
+			GcuConnected: false, LogoLightCapability: true, LogoLightSeen: false,
+			LightbarMbLogoSupport: true, EcLogoEvidence: true, LightbarCapability: true,
+			LightbarSeen: false, EcLightbarEvidence: true, HingeCapability: true,
+			SyncCapability: true, KeyboardCapability: true, LocalDimmingCapability: true,
+			LocalDimmingSeen: false, LcdOverdriveCapability: true, LcdOverdriveSeen: false,
+			DisplayEffectProfile: true, ColorCalibrationCapability: true, ColorCalibrationSeen: false,
+			LocalDimmingSupport: null, LcdOverdriveSupport: null, EcLocalDimmingSupport: true,
+			EcLcdOverdriveSupport: true);
+	}
+
+	private static FeatureProbe ProbeGcuCapability()
+	{
+		return new FeatureProbe(
+			GcuConnected: true, LogoLightCapability: true, LogoLightSeen: false,
 			LightbarMbLogoSupport: null, EcLogoEvidence: null, LightbarCapability: true,
 			LightbarSeen: false, EcLightbarEvidence: null, HingeCapability: true,
 			SyncCapability: true, KeyboardCapability: true, LocalDimmingCapability: true,
