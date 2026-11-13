@@ -150,13 +150,18 @@ internal static class BackendRouter
 
 	internal static BackendRouteDecision Decide(MachineIdentity identity)
 	{
+		return Decide(identity, Rules, Fallback);
+	}
+
+	private static BackendRouteDecision Decide(MachineIdentity identity, RuleSpec[] rules, MechrevoBackendKind fallback)
+	{
 		if (identity == null)
 		{
 			throw new ArgumentNullException("identity");
 		}
-		for (int i = 0; i < Rules.Length; i++)
+		for (int i = 0; i < rules.Length; i++)
 		{
-			RuleSpec rule = Rules[i];
+			RuleSpec rule = rules[i];
 			if (!Matches(identity, rule))
 			{
 				continue;
@@ -170,8 +175,8 @@ internal static class BackendRouter
 			Logger.WriteLine("[强化机型分流] 规则 #" + rule.Index + " 命中 " + rule.Backend + "，但该后端声明不支持当前机型 ⇒ 落兜底规则");
 			break;
 		}
-		return new BackendRouteDecision(Rules.Length + 1, "fallback -> GCU（未识别机型；未连接则如实提示）", Fallback, identity,
-			DeclarationPassed: DeclarationFor(Fallback)?.Supports(identity) ?? true);
+		return new BackendRouteDecision(rules.Length + 1, "fallback -> GCU（未识别机型；未连接则如实提示）", fallback, identity,
+			DeclarationPassed: DeclarationFor(fallback)?.Supports(identity) ?? true);
 	}
 
 	private static bool Matches(MachineIdentity identity, RuleSpec rule)
@@ -286,7 +291,7 @@ internal static class BackendRouter
 
 	private static void Check(string scenario, MechrevoBackendKind expectedBackend, int expectedRule, MachineIdentity identity, List<string> pass, List<string> fail)
 	{
-		BackendRouteDecision decision = Decide(identity);
+		BackendRouteDecision decision = Decide(identity, BuiltInRules, MechrevoBackendKind.Gcu);
 		bool ok = decision.Backend == expectedBackend && decision.RuleIndex == expectedRule && decision.DeclarationPassed;
 		string line = scenario + " ⇒ 实际 " + decision.Backend + "(rule=#" + decision.RuleIndex + ", decl=" + (decision.DeclarationPassed ? "pass" : "fail") + ")";
 		if (ok)
@@ -301,7 +306,7 @@ internal static class BackendRouter
 
 	private static void CheckDeclaration(MachineIdentity identity, List<string> pass, List<string> fail)
 	{
-		BackendRouteDecision decision = Decide(identity);
+		BackendRouteDecision decision = Decide(identity, BuiltInRules, MechrevoBackendKind.Gcu);
 		if (decision.DeclarationPassed)
 		{
 			pass.Add("能力声明 pass：" + decision.Backend + " rule=#" + decision.RuleIndex);

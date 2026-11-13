@@ -33,7 +33,8 @@ internal static class BackendRuleStore
 		}
 		if (!File.Exists(path))
 		{
-			return new RuleTable(builtIn, builtInFallback, "built-in", path, "");
+			string error = HasCustomPath() ? "文件不存在：" + path : "";
+			return new RuleTable(builtIn, builtInFallback, "built-in", path, error);
 		}
 		try
 		{
@@ -130,6 +131,18 @@ internal static class BackendRuleStore
 	{
 		Logger.WriteError("[route] 规则文件不可用 ⇒ 回退内置规则：" + path + " · " + error);
 		return new RuleTable(builtIn, fallback, "built-in", path, error);
+	}
+
+	private static bool HasCustomPath()
+	{
+		try
+		{
+			return !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(PathEnvVar));
+		}
+		catch
+		{
+			return false;
+		}
 	}
 
 	private static string GetPath()
