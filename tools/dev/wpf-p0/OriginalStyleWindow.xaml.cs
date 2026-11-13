@@ -1329,7 +1329,7 @@ public partial class OriginalStyleWindow : Window
                 }
                 // 宝龙达使用专属「限制充电」面板（限制充电开关 + 充/停充阈值），
                 // 不再叠加 GCU 的三档/EC 滑块。
-                if (_backendProbe?.Hw?.UsesBaolongda == true)
+                if (ChargeLimitUsesWmiMailbox)
                 {
                     return false;
                 }
@@ -1894,7 +1894,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             MechrevoHw? hw = _backendProbe?.Hw;
-            return hw != null && !hw.UsesBaolongda
+            return hw != null && !ChargeLimitUsesWmiMailbox
                 && (hw.IsNucUmiFamily
                     || MechrevoLite.Hardware.RuntimeModelSupport.Current().IsSupported
                     || MechrevoLite.BatteryLimitPanel.IsSupportedBoard(hw)
@@ -1905,6 +1905,12 @@ public partial class OriginalStyleWindow : Window
             return false;
         }
     }
+
+    /// <summary>限充由后端声明为宝龙达 WMI 邮箱通道（专属「限制充电」面板，不走 EC 直写/三档）。</summary>
+    private bool ChargeLimitUsesWmiMailbox
+        => MechrevoLite.Hardware.Architecture.FeatureGate
+            .Get(MechrevoLite.Hardware.Architecture.FeatureId.ChargeLimit, _backendProbe?.Hw)
+            .Channel == MechrevoLite.Hardware.Architecture.BackendChannel.WmiMailbox;
 
     /// <summary>GCU 机型的 EC 限充传输开关（与宝龙达阈值面板是两套）。</summary>
     internal bool WideEcTransportSupported => EcTransportHardwareAvailable();
