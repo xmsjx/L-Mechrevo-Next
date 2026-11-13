@@ -54,10 +54,12 @@ internal static class IteCapabilityProbe
 				_detail = "无 ITE 7001 设备（不查询）";
 				return null;
 			}
-			string? family = ResolveFamily(biosProjectName);
+			string? family = ResolveFamily(biosProjectName, out string? rawProject);
 			if (family == null)
 			{
-				_detail = $"0xA2=0x{raw.Value:X2} · BIOS 项目码未知（不套表）";
+				_detail = rawProject == null
+					? $"0xA2=0x{raw.Value:X2} · 无项目码（不套表）"
+					: $"0xA2=0x{raw.Value:X2} · 项目码={rawProject}（不在灯带能力表内，不套表）";
 				return null;
 			}
 			_cache = new IteLightingCapability(raw.Value, family is "IDX" or "IDZ");
@@ -80,18 +82,23 @@ internal static class IteCapabilityProbe
 		}
 	}
 
-	private static string? ResolveFamily(string? reported)
+	private static string? ResolveFamily(string? reported, out string? rawProject)
 	{
-		if (Normalize(reported) is string direct)
+		rawProject = Clean(reported);
+		if (Normalize(rawProject) is string direct)
 		{
 			return direct;
 		}
 		try
 		{
 			Probe.IEcReadTransport? transport = MechrevoService.EcReadTransportFactory?.Invoke();
-			if (transport != null && Normalize(ModelRegistry.Read(transport).BiosProjectId) is string viaEc)
+			if (transport != null)
 			{
-				return viaEc;
+				rawProject = Clean(ModelRegistry.Read(transport).BiosProjectId) ?? rawProject;
+				if (Normalize(rawProject) is string viaEc)
+				{
+					return viaEc;
+				}
 			}
 		}
 		catch (Exception ex)
@@ -101,13 +108,19 @@ internal static class IteCapabilityProbe
 		return null;
 	}
 
-	private static string? Normalize(string? value)
+	private static string? Clean(string? value)
 	{
 		if (string.IsNullOrWhiteSpace(value))
 		{
 			return null;
 		}
 		string text = value.Trim().ToUpperInvariant();
+		return text is "UNKNOWN" or "NA" or "?" ? null : text;
+	}
+
+	private static string? Normalize(string? value)
+	{
+		string? text = Clean(value);
 		return text is "IDA" or "IDB" or "IDX" or "IDZ" ? text : null;
 	}
 }

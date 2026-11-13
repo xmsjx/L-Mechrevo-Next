@@ -112,8 +112,19 @@ internal sealed class TongfangEcBackend : IBackendModule
 		FeatureDeclaration keyboard;
 		if (probe.EcKeyboardEvidence == true)
 		{
-			keyboard = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local,
-				"EC 本地键盘灯通道", new[] { "ec:0x766" });
+			// 键盘灯可能走 USB 单键 HID，也可能走 EC 单区/白光，按探测到的类型如实标注。
+			bool hid = probe.EcKeyboardKind == "HidPerKey";
+			string reason = probe.EcKeyboardKind switch
+			{
+				"HidPerKey" => "本地单键 RGB 键盘灯通道",
+				"EcSingleZone" => "EC 单区键盘灯通道",
+				"EcWhite" => "EC 白光键盘灯通道",
+				_ => "本地键盘灯通道"
+			};
+			keyboard = new FeatureDeclaration(FeatureAvailability.Supported,
+				hid ? BackendChannel.LocalHid : BackendChannel.Local,
+				reason,
+				hid ? new[] { "usb:IteKeyboard" } : new[] { "ec:0x766" });
 		}
 		else if (probe.EcKeyboardEvidence == false)
 		{

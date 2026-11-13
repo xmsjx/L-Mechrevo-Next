@@ -222,6 +222,9 @@ internal static class FeatureGate
 		Check(lines, "ec-keyboard-none", Facts(BackendKind.TongfangEc),
 			new FeatureProbe(false, false, false, null, null, EcKeyboardEvidence: false),
 			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.KeyboardLight);
+		Check(lines, "ec-keyboard-hid", Facts(BackendKind.TongfangEc),
+			new FeatureProbe(false, false, false, null, null, EcKeyboardEvidence: true, EcKeyboardKind: "HidPerKey"),
+			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.KeyboardLight);
 		Check(lines, "ec-logo-none", Facts(BackendKind.TongfangEc),
 			new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.LogoLight);
