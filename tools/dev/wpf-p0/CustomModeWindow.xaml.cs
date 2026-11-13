@@ -772,8 +772,8 @@ public partial class CustomModeWindow : Window
             SmuSlowTimeRow.Visibility = smuPower ? Visibility.Visible : Visibility.Collapsed;
             SmuFastTimeRow.Visibility = smuPower ? Visibility.Visible : Visibility.Collapsed;
         }
-        bool nucDirectRows = CurrentHw?.IsIntelNucMachine == true
-            || CurrentHw?.IsUmiMachine == true;
+        bool nucDirectRows = MechrevoLite.Hardware.Architecture.NucUmiCapabilityMap
+            .IsSupported(CurrentHw, MechrevoLite.Hardware.Architecture.NucUmiOperation.GpuMode);
         bool intelMsrRows = CurrentHw is MechrevoHw intelHw
             && MechrevoLite.Hardware.CpuVendor.IsIntel
             && !intelHw.IsIntelNucMachine
@@ -1786,7 +1786,8 @@ public partial class CustomModeWindow : Window
                 StatusText.Text = WpfStrings.L("配置已保存：模式 ", "Configuration saved: mode ") + _firmwareVisualMode + WpfStrings.L(" · 配置 ", " · profile ") + (_firmwareProfileIndex + 1) + WpfStrings.L("（切到该模式后生效）", " (applies after switching to this mode)");
                 return;
             }
-            bool nucDirect = CurrentHw?.IsIntelNucMachine == true || CurrentHw?.IsUmiMachine == true;
+            bool nucDirect = MechrevoLite.Hardware.Architecture.NucUmiCapabilityMap
+                .IsSupported(CurrentHw, MechrevoLite.Hardware.Architecture.NucUmiOperation.GpuMode);
             if (nucDirect)
             {
                 if (_current?.Id != null) MechrevoLite.Mode.PerfModeStore.SaveSettings(_current.Id, edited);
