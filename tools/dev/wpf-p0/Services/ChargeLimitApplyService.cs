@@ -7,10 +7,10 @@ using L_Mechrevo.WpfP0.Resources;
 namespace L_Mechrevo.WpfP0.Services;
 
 /// <summary>
-/// 滑块执行结果：<see cref="ReadbackPercent" /> &lt; 0 表示无需回滚滑块，
-/// <see cref="Detail" /> 为空串表示不覆盖状态栏文案。
+/// 滑块执行结果：<see cref="RollbackPercent" /> = <c>null</c> 表示不需要回滚滑块
+/// （NUC 读不到回读值时同样为 <c>null</c>），<see cref="Detail" /> 为空串表示不覆盖状态栏文案。
 /// </summary>
-internal readonly record struct ChargeSliderOutcome(bool Ok, string Detail, int ReadbackPercent);
+internal readonly record struct ChargeSliderOutcome(bool Ok, string Detail, int? RollbackPercent);
 
 /// <summary>
 /// 充电上限**执行**适配器（EC 直写 / WMI 阈值 / NUC 0x07B9 / 无极限充回写满充）。
@@ -53,19 +53,19 @@ internal static class ChargeLimitApplyService
             if (!MechrevoLite.Hardware.NucBatteryMode.TrySetPercent(percent, out string nucDetail))
             {
                 Logger.WriteLine("[nuc-battery] 滑块 EC 0x07B9 失败：" + nucDetail);
-                int readback = MechrevoLite.Hardware.NucBatteryMode.TryReadPercent(out int nucNow) ? nucNow : -1;
+                int? readback = MechrevoLite.Hardware.NucBatteryMode.TryReadPercent(out int nucNow) ? nucNow : null;
                 return new ChargeSliderOutcome(false, WpfStrings.OriginalStyleWindow_xaml_Text_28, readback);
             }
             BatteryControl.SetSelectedModePercent(percent);
             Logger.WriteLine("[nuc-battery] 滑块 EC 0x07B9 = " + percent + "%");
-            return new ChargeSliderOutcome(true, WpfStrings.OriginalStyleWindow_xaml_Text_29 + percent + "%", -1);
+            return new ChargeSliderOutcome(true, WpfStrings.OriginalStyleWindow_xaml_Text_29 + percent + "%", null);
         }
         if (!BatteryControl.CaptureChargeLimitGesture() || !BatteryControl.ApplyChargeLimitFromUserGesture(percent))
         {
             return new ChargeSliderOutcome(false, WpfStrings.OriginalStyleWindow_xaml_Text_28, BatteryControl.ResolveDisplayLimitPercent());
         }
         BatteryControl.SetSelectedModePercent(percent);
-        return new ChargeSliderOutcome(true, WpfStrings.OriginalStyleWindow_xaml_Text_29 + percent + "%", -1);
+        return new ChargeSliderOutcome(true, WpfStrings.OriginalStyleWindow_xaml_Text_29 + percent + "%", null);
     }
 
     /// <summary>关闭无极限充 / 关闭 EC 直写后回写满充。</summary>

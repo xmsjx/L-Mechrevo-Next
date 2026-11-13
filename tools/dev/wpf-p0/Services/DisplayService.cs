@@ -57,8 +57,11 @@ internal interface IDisplayService
     /// <summary>开/关色彩增强；开启时按 <paramref name="mode" />（null = 用已保存档位）应用一次。</summary>
     Task<ServiceResult> ApplyDisplayEffectAsync(bool on, string? mode);
 
-    /// <summary>切换色彩增强档位（已开启时立即应用；未开启只落盘）。</summary>
-    Task<ServiceResult> SetDisplayEffectModeAsync(string mode);
+    /// <summary>
+    /// 切换色彩增强档位：档位**总是先落盘**（下发失败也不丢用户选择），
+    /// <paramref name="applyNow" /> 为 true 时再下发硬件。
+    /// </summary>
+    Task<ServiceResult> SetDisplayEffectModeAsync(string mode, bool applyNow);
 
     /// <summary>只记住用户选择的档位（未开启时用；⛔ 不下发硬件）。</summary>
     ServiceResult RememberDisplayEffectMode(string mode);
@@ -333,7 +336,7 @@ internal sealed class DisplayService : IDisplayService
         }
     }
 
-    public async Task<ServiceResult> SetDisplayEffectModeAsync(string mode)
+    public async Task<ServiceResult> SetDisplayEffectModeAsync(string mode, bool applyNow)
     {
         BackendProbe? probe = _backend.Probe;
         if (probe == null)
@@ -344,9 +347,11 @@ internal sealed class DisplayService : IDisplayService
         {
             return ServiceResult.Fail(WpfStrings.DisplayColorProfileEmpty);
         }
-        if (!DisplayEffectOn)
+        // 档位先落盘：下发失败时下次刷新也不能把下拉重置回旧档位。
+        RememberDisplayEffectMode(mode);
+        if (!applyNow)
         {
-            return RememberDisplayEffectMode(mode);
+            return ServiceResult.Success(WpfStrings.DisplayColorProfileSwitched);
         }
         try
         {
@@ -355,8 +360,6 @@ internal sealed class DisplayService : IDisplayService
             {
                 return ServiceResult.Fail(WpfStrings.OriginalStyleWindow_xaml_Text_63);
             }
-            AppConfig.Set("display_effect_mode", mode);
-            AppConfig.Flush();
             await probe.RequestDisplayEffectStatusAsync().ConfigureAwait(false);
             return ServiceResult.Success(WpfStrings.DisplayColorProfileSwitched);
         }

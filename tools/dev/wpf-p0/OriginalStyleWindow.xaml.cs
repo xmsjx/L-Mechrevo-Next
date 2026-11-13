@@ -1625,9 +1625,7 @@ public partial class OriginalStyleWindow : Window
         {
             int mode = _services?.Battery.CurrentMode ?? _backendProbe?.BatteryMode ?? -1;
             MechrevoHw? hw = _backendProbe?.Hw;
-            bool thresholdBackend = MechrevoLite.Hardware.Architecture.FeatureGate
-                .Get(MechrevoLite.Hardware.Architecture.FeatureId.ChargeLimit, hw)
-                .Channel == MechrevoLite.Hardware.Architecture.BackendChannel.WmiMailbox;
+            bool thresholdBackend = ChargeLimitUsesWmiMailbox;
             // 宝龙达三档是“写阈值”语义：高亮由上下限文本框反推；GCU 保持原固件三档逻辑。
             if (thresholdBackend && ChargeLimitInputRow.Visibility == Visibility.Visible
                 && int.TryParse(ChargeLimitHighBox.Text.Trim(), out int high))
@@ -2906,10 +2904,7 @@ public partial class OriginalStyleWindow : Window
             supported = false;
         }
         Visibility visibility = supported ? Visibility.Visible : Visibility.Collapsed;
-        MechrevoHw? batteryHw = _backendProbe?.Hw;
-        bool baolongda = MechrevoLite.Hardware.Architecture.FeatureGate
-            .Get(MechrevoLite.Hardware.Architecture.FeatureId.ChargeLimit, batteryHw)
-            .Channel == MechrevoLite.Hardware.Architecture.BackendChannel.WmiMailbox;
+        bool baolongda = ChargeLimitUsesWmiMailbox;
         BatteryModePanel.Visibility = Visibility.Visible;
         // 只有宝龙达的阈值行/文本框属于宝龙达；GCU 保持原来的固件三档逻辑。
         Visibility thresholdRows = (visibility == Visibility.Visible && baolongda)
@@ -3371,10 +3366,10 @@ public partial class OriginalStyleWindow : Window
         if (!outcome.Ok)
         {
             StatusText.Text = outcome.Detail;
-            if (outcome.ReadbackPercent >= 0)
+            if (outcome.RollbackPercent is int rollback)
             {
                 _syncingBatteryLimit = true;
-                BatteryLimitSlider.Value = outcome.ReadbackPercent;
+                BatteryLimitSlider.Value = rollback;
                 _syncingBatteryLimit = false;
             }
             return;
@@ -9411,12 +9406,12 @@ public partial class OriginalStyleWindow : Window
         if (_services != null)
         {
             // 开关状态由界面决定：未开启只记住档位，不打扰硬件。
-            if (DisplayEffectSwitch.IsChecked != true)
+            bool applyNow = DisplayEffectSwitch.IsChecked == true;
+            ServiceResult result = await _services.Display.SetDisplayEffectModeAsync(mode, applyNow);
+            if (!applyNow)
             {
-                _services.Display.RememberDisplayEffectMode(mode);
                 return;
             }
-            ServiceResult result = await _services.Display.SetDisplayEffectModeAsync(mode);
             StatusText.Text = result.Ok
                 ? WpfStrings.OriginalStyleWindow_xaml_Text_62 + (DisplayEffectCombo.SelectedItem as ComboBoxItem)?.Content
                 : WpfStrings.OriginalStyleWindow_xaml_Text_63;
