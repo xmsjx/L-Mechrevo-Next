@@ -209,6 +209,9 @@ internal static class WpfBackend
     /// <summary>就绪判定的可读说明（缺什么一眼可见）。</summary>
     internal static string GcuPayloadDetail => MachineIdentity.Collect().GcuPayloadSource;
 
+    /// <summary>本地控制端口是否可连（只探测，不发数据）。</summary>
+    internal static bool GcuControlPortReachable => GcuPayloadProbe.IsPortReachable("127.0.0.1", 13688);
+
     /// <summary>限充状态回读是否可读（通道探测用）。</summary>
     internal static bool ChargeLimitChannelReadable() => BatteryLimitWriter.TryReadState(out _, out _, out _, out _);
 

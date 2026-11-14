@@ -140,7 +140,8 @@ public partial class App : Application
         try
         {
             Logger.WriteError("[gcu-ready] 载荷=" + (L_Mechrevo.WpfP0.Services.WpfBackend.GcuPayloadMissing ? "缺失" : "存在")
-                + " · " + L_Mechrevo.WpfP0.Services.WpfBackend.GcuPayloadDetail);
+                + " · " + L_Mechrevo.WpfP0.Services.WpfBackend.GcuPayloadDetail
+                + " · 控制端口 13688=" + (L_Mechrevo.WpfP0.Services.WpfBackend.GcuControlPortReachable ? "通" : "不通"));
         }
         catch (Exception ex)
         {

@@ -58,6 +58,25 @@ internal static class GcuPayloadProbe
 		}
 	}
 
+    /// <summary>本地控制端口的连通性（只做一次 TCP 连接，200 ms 超时，不发任何数据）。</summary>
+    internal static bool IsPortReachable(string host, int port, int timeoutMs = 200)
+    {
+        try
+        {
+            using var client = new System.Net.Sockets.TcpClient();
+            System.Threading.Tasks.Task task = client.ConnectAsync(host, port);
+            if (!task.Wait(timeoutMs))
+            {
+                return false;
+            }
+            return client.Connected;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
 	/// <summary>把 ImagePath 里的引号/环境变量/参数去掉，得到可判断存在的文件路径。</summary>
 	private static string ResolvePath(string imagePath)
 	{
