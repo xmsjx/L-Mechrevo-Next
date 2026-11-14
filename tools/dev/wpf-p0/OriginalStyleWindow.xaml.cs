@@ -2394,7 +2394,11 @@ public partial class OriginalStyleWindow : Window
 
     private async Task RestoreKeyboardLightAfterWakeAsync()
     {
-        if (!_sleepKeyboardLightWasOn || _backendProbe == null)
+        // 唤醒重放条件以"用户意图"为准（0.290.6 同口径：HID 键盘看 KbPowerOn），
+        // ⛔ 不能只看 Suspend 当时的开关控件状态——它可能被空闲关灯/状态同步改成关。
+        bool wakeIntentOn = _sleepKeyboardLightWasOn
+            || L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.KbPowerOn == true;
+        if (!wakeIntentOn || _backendProbe == null)
         {
             return;
         }
