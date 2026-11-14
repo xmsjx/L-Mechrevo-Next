@@ -615,6 +615,32 @@ internal static class WpfBackend
         FeatureGate.ResolveSupportOrLegacy(FeatureId.Lightbar, HwOrProgram, legacySupported);
     internal static Task<(bool Ok, string Detail)> SetEcModeAsync(bool ecMode) => GcuEcMode.SetModeAsync(ecMode);
 
+    /// <summary>
+    /// 把本地通道证据接进门控：后端声明 Unknown 时，本地 HID/EC 通道可用即视为支持。
+    /// <para>⚠️ 只在**确实探到**时返回 true；探不到一律 null（未知），交给旧判据，避免误否。</para>
+    /// <summary>
+    private static bool KeyboardLightLocalEvidence() => IteLightingLocal.HasLightbar || EcKeyboardActiveNow;
+    internal static void AttachLocalChannelEvidence()
+    {
+        FeatureGate.LocalChannelEvidenceProvider = feature =>
+        {
+            try
+            {
+                return feature switch
+                {
+                    FeatureId.Lightbar => IteHasLightbar || LocalLightbarSupported ? true : null,
+                    FeatureId.LogoLight => IteHasUsbLogo || LocalLogoSupported ? true : null,
+                    FeatureId.KeyboardLight => (EcKeyboardActiveNow || KeyboardLightLocalEvidence()) ? true : null,
+                    _ => null
+                };
+            }
+            catch
+            {
+                return null;
+            }
+        };
+    }
+
     internal static int PowerInputKindBarrel => (int)PowerInputKind.Barrel;
 
     internal static int PowerInputKindTypeC => (int)PowerInputKind.TypeC;

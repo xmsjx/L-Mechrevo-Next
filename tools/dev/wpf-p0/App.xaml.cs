@@ -133,6 +133,8 @@ public partial class App : Application
         L_Mechrevo.WpfP0.Services.VirtualDisplayBlankService.InitializeStartupCleanup();
         L_Mechrevo.WpfP0.Services.VirtualDisplayBlankService.AttachPowerEvents();
         // 后端控制组件的就绪分解：服务键在但载荷缺失时，写失败要给可执行的提示，而不是让人反复点。
+        // 门控的本地通道证据：后端声明 Unknown 时，本地 HID/EC 通道可用即视为支持。
+        L_Mechrevo.WpfP0.Services.WpfBackend.AttachLocalChannelEvidence();
         MechrevoLite.Mode.PerfModeRunner.RejectedDetailProvider = () =>
             L_Mechrevo.WpfP0.Services.WpfBackend.GcuPayloadMissing
                 ? "未安装或缺少控制组件（载荷缺失），请重装控制组件后再试"

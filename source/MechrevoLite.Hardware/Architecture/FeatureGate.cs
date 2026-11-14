@@ -7,6 +7,8 @@ namespace MechrevoLite.Hardware.Architecture;
 /// <summary>统一门控求值：只读事实、声明和探测快照，不触碰硬件。</summary>
 internal static class FeatureGate
 {
+    /// <summary>本地通道证据提供者（Lightbar/KeyboardLight/LogoLight）：true=本地探测可用，null=不知道。</summary>
+    internal static Func<FeatureId, bool?>? LocalChannelEvidenceProvider { get; set; }
 	internal static FeatureDecision Get(FeatureId feature, MechrevoHw? hw)
 	{
 		return Get(feature, MachineFacts.From(hw), FeatureProbe.From(hw));
@@ -83,8 +85,19 @@ internal static class FeatureGate
 				return new FeatureDecision(feature, FeatureAvailability.Unknown, backend,
 					BackendChannel.None, "该功能尚未纳入后端声明", Array.Empty<string>());
 			}
-			return new FeatureDecision(feature, featureDeclaration.State, backend,
+            FeatureDecision decided = new FeatureDecision(feature, featureDeclaration.State, backend,
 				featureDeclaration.Channel, featureDeclaration.Reason, featureDeclaration.Sources);
+            // 后端声明 Unknown 时，先看本地通道探测（同一功能可能由本地 HID/EC 通道提供）。
+            if (decided.State == FeatureAvailability.Unknown)
+            {
+                bool? local = LocalChannelEvidenceProvider?.Invoke(feature);
+                if (local == true)
+                {
+                    return new FeatureDecision(feature, FeatureAvailability.Supported, backend,
+                        BackendChannel.LocalHid, "本地通道探测可用", new[] { "local:probe" });
+                }
+            }
+            return decided;
 		}
 		catch (Exception ex)
 		{
@@ -285,6 +298,18 @@ internal static class FeatureGate
 		{
 			CheckResolve(lines, feature);
 		}
+        // 本地通道证据：声明 Unknown 时由本地探测补位；声明 Unsupported 时不许被补位。
+        LocalChannelEvidenceProvider = f => f == FeatureId.Lightbar ? true : null;
+        Check(lines, "local-evidence-fills-unknown", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, true, false, null, false), FeatureAvailability.Supported,
+            BackendChannel.LocalHid, FeatureId.Lightbar);
+        Check(lines, "local-evidence-not-for-unsupported", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, true, false, null, false), FeatureAvailability.Unsupported,
+            BackendChannel.None, FeatureId.LocalDimming);
+        LocalChannelEvidenceProvider = null;
+        Check(lines, "no-local-evidence-stays-unknown", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, true, false, null, false), FeatureAvailability.Unknown,
+            BackendChannel.None, FeatureId.Lightbar);
 		return string.Join(Environment.NewLine, lines);
 	}
 
