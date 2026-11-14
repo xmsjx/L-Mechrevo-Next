@@ -144,4 +144,49 @@ internal static class WpfBackend
 
     /// <summary>清掉 NUC 极致狂暴的本地标记（回读不一致时用）。</summary>
     internal static void NucClearExtremeMarker() => NucPerformanceMode.ClearExtremeMarker();
+
+    // ── 同方 EC 通道（无 GCU 时由本地 EC 接管；界面层只经这里问） ──
+
+    /// <summary>当前是否由本地 EC 接管（EC 模式）。</summary>
+    internal static bool EcModeActive => GcuEcMode.IsEcMode;
+
+    /// <summary>EC 模式的判定来源（诊断展示用）。</summary>
+    internal static string EcModeReason => GcuEcMode.Reason;
+
+    /// <summary>标记 EC 通道已启用。</summary>
+    internal static void EcMarkActive() => GcuEcMode.MarkActive();
+
+    /// <summary>本机限充通道是否可用。</summary>
+    internal static bool EcChargeAvailable => EcChargeLimit.IsAvailableOnThisMachine();
+
+    /// <summary>限充是否被代际规则判为危险（10/16/20/30 系）。</summary>
+    internal static bool EcChargeLegacyBlocked => EcChargeLimit.IsLegacyGenerationBlocked();
+
+    /// <summary>限充通道探测是否可用。</summary>
+    internal static bool EcChargeProbeChannelAvailable => EcChargeLimit.ProbeChannelAvailable();
+
+    // ── 核显直连/静音（ACPI 本机通道） ──
+
+    /// <summary>本机是否支持核显直连切换。</summary>
+    internal static bool IgpuSwitchSupported => AcpiGpuHotSwitch.IsSupported;
+
+    /// <summary>本机是否能走本地静音通道。</summary>
+    internal static bool IgpuLocalSilenceAvailable => AcpiGpuHotSwitch.CanUseLocalSilence;
+
+    /// <summary>结束占用核显的设备（可关闭的进程/容器）。</summary>
+    internal static int IgpuKillClosableOccupants(out string detail) => AcpiGpuHotSwitch.KillClosableOccupants(out detail);
+
+    /// <summary>切换核显直连。</summary>
+    internal static bool IgpuTrySetOnly(bool on, bool stopDisplayContainer, out string detail)
+        => AcpiGpuHotSwitch.TrySetIgpuOnly(on, stopDisplayContainer, out detail);
+
+    /// <summary>标记"强制静音"状态。</summary>
+    internal static void IgpuMarkForcedSilence() => AcpiGpuHotSwitch.MarkForcedSilence();
+
+    /// <summary>清除"强制静音"状态。</summary>
+    internal static void IgpuClearForcedSilence() => AcpiGpuHotSwitch.ClearForcedSilence();
+
+    /// <summary>开机恢复被强制静音的显卡状态。</summary>
+    internal static bool IgpuRecoverForcedSilenceOnStartup(out string detail)
+        => AcpiGpuHotSwitch.TryRecoverForcedSilenceOnStartup(out detail);
 }

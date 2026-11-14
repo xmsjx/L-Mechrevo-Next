@@ -661,7 +661,7 @@ public partial class OriginalStyleWindow : Window
     /// <summary>电脑实体性能模式按键的替代行为：快捷开关 / 轮换自定义配置；只在 EC 模式生效。</summary>
     private async Task<bool> TryHandlePerformanceKeyOverrideAsync()
     {
-        if (!MechrevoLite.Hardware.GcuEcMode.IsEcMode)
+        if (!L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive)
         {
             return false;
         }
@@ -1255,7 +1255,7 @@ public partial class OriginalStyleWindow : Window
             {
                 return true;
             }
-            if (!MechrevoLite.Hardware.EcChargeLimit.IsAvailableOnThisMachine())
+            if (!L_Mechrevo.WpfP0.Services.WpfBackend.EcChargeAvailable)
             {
                 return false;
             }
@@ -1314,7 +1314,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     return false;
                 }
-                if (MechrevoLite.Hardware.EcChargeLimit.IsLegacyGenerationBlocked())
+                if (L_Mechrevo.WpfP0.Services.WpfBackend.EcChargeLegacyBlocked)
                 {
                     return false;
                 }
@@ -1853,7 +1853,7 @@ public partial class OriginalStyleWindow : Window
                 && (hw.IsNucUmiFamily
                     || MechrevoLite.Hardware.RuntimeModelSupport.Current().IsSupported
                     || MechrevoLite.BatteryLimitPanel.IsSupportedBoard(hw)
-                    || MechrevoLite.Hardware.EcChargeLimit.ProbeChannelAvailable());
+                    || L_Mechrevo.WpfP0.Services.WpfBackend.EcChargeProbeChannelAvailable);
         }
         catch
         {
@@ -4660,7 +4660,7 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            MechrevoLite.Hardware.GcuEcMode.MarkActive();
+            L_Mechrevo.WpfP0.Services.WpfBackend.EcMarkActive();
             try
             {
                 // EC-only 不经过后端探测；这里只读记录一次路由声明，供诊断包解释当前机型。
@@ -4708,7 +4708,7 @@ public partial class OriginalStyleWindow : Window
             _backendRetryTimer.Stop();
             _backendTimer.Start();
             Logger.WriteError("[gcu-ec] GCU 不可用 ⇒ 启动 EC-only 实验首页"
-                + "（来源=" + MechrevoLite.Hardware.GcuEcMode.Reason + "）");
+                + "（来源=" + L_Mechrevo.WpfP0.Services.WpfBackend.EcModeReason + "）");
             return true;
         }
         catch (Exception ex)
@@ -4790,7 +4790,7 @@ public partial class OriginalStyleWindow : Window
                 }
             }
             string gpuRecoveryDetail;
-            if (MechrevoLite.Hardware.AcpiGpuHotSwitch.TryRecoverForcedSilenceOnStartup(out gpuRecoveryDetail))
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.IgpuRecoverForcedSilenceOnStartup(out gpuRecoveryDetail))
             {
                 Logger.WriteError("[acpi-igpu] " + gpuRecoveryDetail);
             }
@@ -5052,7 +5052,7 @@ public partial class OriginalStyleWindow : Window
         IgpuSavingPreviewRow.Visibility = igpuSavingVisible ? Visibility.Visible : Visibility.Collapsed;
         if (_igpuSavingLabel != null)
         {
-            _igpuSavingLabel.Text = MechrevoLite.Hardware.AcpiGpuHotSwitch.IsSupported
+            _igpuSavingLabel.Text = L_Mechrevo.WpfP0.Services.WpfBackend.IgpuSwitchSupported
                 ? "核显省电（热切）" : "静默独显";
         }
         int mode = MechrevoLite.AppConfig.Get("acpi_igpu_auto", 0) != 0
@@ -5202,21 +5202,21 @@ public partial class OriginalStyleWindow : Window
                         StatusText.Text = "已取消：未强制开启核显省电";
                         return;
                     }
-                    MechrevoLite.Hardware.AcpiGpuHotSwitch.KillClosableOccupants(out _);
+                    L_Mechrevo.WpfP0.Services.WpfBackend.IgpuKillClosableOccupants(out _);
                     forcedSilence = true;
                     await Task.Delay(500);
                 }
             }
             string detail = "";
             bool ok = await Task.Run(() =>
-                MechrevoLite.Hardware.AcpiGpuHotSwitch.TrySetIgpuOnly(on, stopDisplayContainer: true, out detail));
+                L_Mechrevo.WpfP0.Services.WpfBackend.IgpuTrySetOnly(on, stopDisplayContainer: true, out detail));
             if (ok)
             {
                 _backendProbe?.Hw?.SetAcpiIgpuOnlyState(on);
                 MechrevoLite.AppConfig.Set("acpi_igpu_auto", autoMode ? 1 : 0);
                 MechrevoLite.AppConfig.Flush();
-                if (on && forcedSilence) MechrevoLite.Hardware.AcpiGpuHotSwitch.MarkForcedSilence();
-                if (!on) MechrevoLite.Hardware.AcpiGpuHotSwitch.ClearForcedSilence();
+                if (on && forcedSilence) L_Mechrevo.WpfP0.Services.WpfBackend.IgpuMarkForcedSilence();
+                if (!on) L_Mechrevo.WpfP0.Services.WpfBackend.IgpuClearForcedSilence();
                 StatusText.Text = autoMode ? "核显省电自动模式已启用" : (on ? "核显省电已开启" : "独显已恢复");
             }
             else
@@ -5250,7 +5250,7 @@ public partial class OriginalStyleWindow : Window
                 // EC 模式可在 GCU 未连接时走本地静音/GPU 切换。
                 || (IsEcModeActive && !hardware.IsGcuConnected)
                 || hardware.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
-            && MechrevoLite.Hardware.AcpiGpuHotSwitch.CanUseLocalSilence)
+            && L_Mechrevo.WpfP0.Services.WpfBackend.IgpuLocalSilenceAvailable)
         {
             await SwitchAcpiIgpuSavingAsync(mode);
             return;
@@ -5680,7 +5680,7 @@ public partial class OriginalStyleWindow : Window
             && !modeBaolongda
             && modeHw?.IsNucUmiFamily != true
             && !IsXingyaoPlatform
-            && !MechrevoLite.Hardware.EcChargeLimit.IsLegacyGenerationBlocked();
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.EcChargeLegacyBlocked;
         if (modeEcThree)
         {
             (bool gcuOk, string gcuDetail) = await Task.Run(() =>
@@ -7114,7 +7114,7 @@ public partial class OriginalStyleWindow : Window
         {
             // 只有 GCU 控制模式才允许从状态按钮导入 GCU 包；
             // EC 模式下已是本地后端，再导入 GCU 会重新拉起服务、破坏当前路由。
-            if (!MechrevoLite.Hardware.GcuEcMode.IsEcMode && GcuPackageImport.ShouldOffer())
+            if (!L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive && GcuPackageImport.ShouldOffer())
             {
                 using GcuOwnerWindow owner = new(this);
                 await GcuPackageImport.OfferAsync(owner);
@@ -9041,7 +9041,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_58;
-        bool ecLocalMode = MechrevoLite.Hardware.GcuEcMode.IsEcMode
+        bool ecLocalMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive
             || _backendProbe.Hw?.IsGcuConnected != true;
         bool gcuCalibrationPath = !ecLocalMode
             && mode != 999
@@ -9051,14 +9051,14 @@ public partial class OriginalStyleWindow : Window
             ? await MechrevoLite.Display.GcuIccProfileAssociator.CaptureAsync("ui-calib-on").ConfigureAwait(true)
             : null;
         bool ok;
-        if (!on && (MechrevoLite.Hardware.GcuEcMode.IsEcMode || _backendProbe.Hw?.IsGcuConnected != true))
+        if (!on && (L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive || _backendProbe.Hw?.IsGcuConnected != true))
         {
             // EC 关闭校色必须真正解除本地 ICC；不能走 SetColorCalibrationAsync(0)，
             // 那里默认档会重新应用默认 ICC。
             await Task.Run(IccHelper.ClearAllIcc);
             ok = true;
         }
-        else if (on && mode != 999 && (MechrevoLite.Hardware.GcuEcMode.IsEcMode || _backendProbe.Hw?.IsGcuConnected != true))
+        else if (on && mode != 999 && (L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive || _backendProbe.Hw?.IsGcuConnected != true))
         {
             // EC 默认档：走与自定义完全相同的 IccHelper.ApplyIcc 关联路径。
             string selected = mode <= 1
@@ -9155,7 +9155,7 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        bool ecLocalMode = MechrevoLite.Hardware.GcuEcMode.IsEcMode
+        bool ecLocalMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive
             || _backendProbe.Hw?.IsGcuConnected != true;
         if (mode != 999 && ecLocalMode)
         {
