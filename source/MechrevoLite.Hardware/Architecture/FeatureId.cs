@@ -25,5 +25,14 @@ internal enum FeatureId
     GpuHotSwap,
 
     /// <summary>仅集显输出。</summary>
-    IgpuOnly
+    IgpuOnly,
+
+    /// <summary>是否有可编辑的自定义性能档。</summary>
+    PerformanceProfile,
+
+    /// <summary>能否切换到涡轮/狂暴档。</summary>
+    TurboMode,
+
+    /// <summary>静音↔狂暴 三态支持结论。</summary>
+    SilentTurbo
 }

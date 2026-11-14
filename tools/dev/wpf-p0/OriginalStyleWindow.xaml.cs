@@ -619,8 +619,8 @@ public partial class OriginalStyleWindow : Window
         // 星耀 PTL 的三档由 WMAA 提供；GCU WJXY 的 TurboModeSupport=0 不能拿来做 UI 判据。
         if (XingyaoPerfApplicable()) return true;
         if (caps == null) return true;
-        if (!caps.ProfileAvailable) return true;
-        if (caps.TurboMode) return true;
+        if (!L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerformanceProfile", "ProfileAvailable")) return true;
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("TurboMode", "TurboMode")) return true;
         // 宝龙达/特殊机型仍按已有能力位处理
         return hw?.UsesBaolongda == true;
     }
@@ -636,10 +636,11 @@ public partial class OriginalStyleWindow : Window
         }
         if (caps == null) return hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
         bool gen50 = hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
-        return caps.SilentTurboAvailability switch
+        bool silentDeclared = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("SilentTurbo", "SilentTurboAvailability");
+        return L_Mechrevo.WpfP0.Services.WpfBackend.SilentTurboState switch
         {
-            L_Mechrevo.WpfP0.Services.WpfBackend.FeatureSupported => true,
-            L_Mechrevo.WpfP0.Services.WpfBackend.FeatureUnsupported => false,
+            1 => silentDeclared,
+            0 => false,
             _ => gen50
         };
     }
@@ -7619,7 +7620,7 @@ public partial class OriginalStyleWindow : Window
                 && System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
                     != System.Windows.Forms.PowerLineStatus.Online;
             bool customAllowed = nucUmiModeUi || smuCustom || ecLocalCustom || allowPerfOnBattery
-                || ((caps.CpuPerformanceTuning || caps.FanSettings)
+            || ((L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerformanceProfile", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("FanCurve", "FanSettings"))
                     && !(_backendProbe?.Hw?.SupportsModeProfileConfig ?? false));
             CustomModeButton.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
             ExtremeModeButton.Visibility = hw?.IsIntelNucMachine == true ? Visibility.Visible : Visibility.Collapsed;

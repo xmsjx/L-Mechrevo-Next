@@ -236,7 +236,13 @@ internal sealed class TongfangEcBackend : IBackendModule
         [FeatureId.GpuHotSwap] = new FeatureDeclaration(FeatureAvailability.Unknown,
             BackendChannel.None, "免重启热切换：本后端未声明，交由门控回退旧判据", new string[0]),
         [FeatureId.IgpuOnly] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "仅集显输出：本后端未声明，交由门控回退旧判据", new string[0])
+            BackendChannel.None, "仅集显输出：本后端未声明，交由门控回退旧判据", new string[0]),
+        [FeatureId.PerformanceProfile] = new FeatureDeclaration(FeatureAvailability.Unknown,
+            BackendChannel.None, "自定义档：本后端未声明，交由门控回退旧判据", new string[0]),
+        [FeatureId.TurboMode] = new FeatureDeclaration(FeatureAvailability.Unknown,
+            BackendChannel.None, "涡轮档：本后端未声明，交由门控回退旧判据", new string[0]),
+        [FeatureId.SilentTurbo] = new FeatureDeclaration(FeatureAvailability.Unknown,
+            BackendChannel.None, "静音↔狂暴：本后端未声明，交由门控回退旧判据", new string[0])
 			});
 	}
 }

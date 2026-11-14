@@ -656,6 +656,54 @@ internal static class WpfBackend
 
     /// <summary>是否有摄像头设备（有缓存读缓存，否则探测一次并缓存）。</summary>
     /// <summary>按特征名读门控结论；后端未就绪或名字未知时退回调用方给的 legacy 判定。</summary>
+    /// <summary>按特征名读门控；legacy 用"能力位名字"给出，由桥内部取值（界面不直接读能力位）。</summary>
+    internal static bool SupportsFeatureWithCapability(string feature, string capability)
+    {
+        bool legacy = false;
+        try
+        {
+            MechrevoDeviceCapabilities? caps = Hw?.Capabilities;
+            if (caps != null)
+            {
+                legacy = capability switch
+                {
+                    "CpuPerformanceTuning" => caps.CpuPerformanceTuning,
+                    "FanSettings" => caps.FanSettings,
+                    "ProfileAvailable" => caps.ProfileAvailable,
+                    "TurboMode" => caps.TurboMode,
+                    "SilentTurboAvailability" => caps.SilentTurboAvailability == FeatureSupported,
+                    _ => false
+                };
+            }
+        }
+        catch
+        {
+        }
+        return SupportsFeature(feature, legacy);
+    }
+
+    /// <summary>静音↔狂暴三态：1=支持 · 0=不支持 · 2=未知（供界面选择分支，不读能力位）。</summary>
+    internal static int SilentTurboState
+    {
+        get
+        {
+            try
+            {
+                MechrevoDeviceCapabilities? caps = Hw?.Capabilities;
+                if (caps == null)
+                {
+                    return 2;
+                }
+                return caps.SilentTurboAvailability == FeatureSupported ? 1
+                    : caps.SilentTurboAvailability == FeatureUnsupported ? 0 : 2;
+            }
+            catch
+            {
+                return 2;
+            }
+        }
+    }
+
     internal static bool SupportsFeature(string feature, bool legacy)
     {
         try
