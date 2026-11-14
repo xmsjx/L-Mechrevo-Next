@@ -42,6 +42,11 @@ internal sealed record MachineIdentity(
 
 	internal string TongfangFamilySource { get; init; } = "";
 
+    /// <summary>后端控制组件的可执行载荷是否存在（服务登记残留时为 false）。</summary>
+    internal bool GcuPayloadPresent { get; init; } = true;
+
+    internal string GcuPayloadSource { get; init; } = "";
+
 	/// <summary>UMI 机器：型号名包含 Umi。</summary>
 	public bool IsUmi => (Model ?? "").Contains("Umi", StringComparison.OrdinalIgnoreCase);
 
@@ -138,6 +143,20 @@ internal sealed record MachineIdentity(
 		{
 		}
 
+        bool gcuPayloadPresent = true;
+        string gcuPayloadSource = "";
+        if (gcuInstalled)
+        {
+            try
+            {
+                GcuPayloadProbe.TryDetect(out gcuPayloadPresent, out gcuPayloadSource);
+            }
+            catch
+            {
+                gcuPayloadPresent = true;
+            }
+        }
+
 		string mifsClass;
 		bool mifsPresent;
 		bool mifsLegacyCompatible;
@@ -210,10 +229,12 @@ internal sealed record MachineIdentity(
 			wujieApu, wujieApuSource, string.Empty)
 		{
 			TongfangFamily = tongfangFamily,
+            GcuPayloadPresent = gcuPayloadPresent,
+            GcuPayloadSource = gcuPayloadSource,
 			TongfangFamilySource = tongfangSource,
 			Summary = BuildSummary(board, boardSource, whitelisted, generation, gcuInstalled,
 				model, modelSource, mifsClass, projectId, projectIdSource, gcuVariant, gcuVariantFamily,
-				wujieApu, wujieApuSource)
+				wujieApu, wujieApuSource, gcuPayloadPresent, gcuPayloadSource)
 				+ " · tongfang=" + tongfangFamily + "(" + tongfangSource + ")"
 		};
 	}
@@ -231,7 +252,8 @@ internal sealed record MachineIdentity(
 		string model = "",
 		string projectId = "",
 		string gcuVariant = "",
-		bool wujieApu = false)
+        bool wujieApu = false,
+        bool gcuPayload = true)
 	{
 		string boardText = board ?? string.Empty;
 		string generationText = string.IsNullOrEmpty(generation) ? "Unknown" : generation;
@@ -252,11 +274,12 @@ internal sealed record MachineIdentity(
 			wujieApu, "test", string.Empty)
 		{
 			TongfangFamily = tongfangFamily,
+            GcuPayloadPresent = gcuPayload,
 			TongfangFamilySource = tongfangSource,
 			Summary = BuildSummary(boardText, boardSource, whitelisted, generationText, gcuInstalled,
 				modelText, modelSource, mifsText, projectIdText,
 				projectIdText.Length == 0 ? "unknown" : "test", variantText, variantFamily,
-				wujieApu, "test")
+            wujieApu, "test", gcuPayload, "")
 		};
 	}
 
@@ -338,7 +361,8 @@ internal sealed record MachineIdentity(
 	private static string BuildSummary(
 		string board, string boardSource, bool whitelisted, string generation, bool gcuInstalled,
 		string model, string modelSource, string mifsClass, string projectId, string projectIdSource,
-		string gcuVariant, string gcuVariantFamily, bool wujieApu, string wujieApuSource)
+        string gcuVariant, string gcuVariantFamily, bool wujieApu, string wujieApuSource,
+        bool gcuPayloadPresent, string gcuPayloadSource)
 	{
 		return "board=" + (board.Length == 0 ? "?" : board) + "(" + boardSource + ")"
 			+ " · whitelist=" + whitelisted
@@ -349,7 +373,8 @@ internal sealed record MachineIdentity(
 			+ " · projectId=" + (projectId.Length == 0 ? "?" : projectId) + "(" + projectIdSource + ")"
 			+ " · gcuVariant=" + (gcuVariant.Length == 0 ? "?" : gcuVariant)
 			+ (gcuVariantFamily.Length == 0 ? "" : "(family=" + gcuVariantFamily + ")")
-			+ " · wujieApu=" + wujieApu + "(" + wujieApuSource + ")";
+            + " · wujieApu=" + wujieApu + "(" + wujieApuSource + ")"
+            + " · payload=" + gcuPayloadPresent + (gcuPayloadSource.Length == 0 ? "" : "(" + gcuPayloadSource + ")");
 	}
 
 	private readonly record struct MifsProbeResult(bool Present, bool LegacyCompatible, string Text);

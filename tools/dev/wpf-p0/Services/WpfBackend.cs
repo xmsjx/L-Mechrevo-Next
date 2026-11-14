@@ -203,6 +203,12 @@ internal static class WpfBackend
     /// <summary>是否属同方家族（只读事实）。</summary>
     internal static bool IsTongfangFamily => MachineIdentity.Collect().TongfangFamily;
 
+    /// <summary>GCU 服务登记在、但可执行载荷缺失（登记残留，写入无人应答）。</summary>
+    internal static bool GcuPayloadMissing => !MachineIdentity.Collect().GcuPayloadPresent;
+
+    /// <summary>就绪判定的可读说明（缺什么一眼可见）。</summary>
+    internal static string GcuPayloadDetail => MachineIdentity.Collect().GcuPayloadSource;
+
     /// <summary>限充状态回读是否可读（通道探测用）。</summary>
     internal static bool ChargeLimitChannelReadable() => BatteryLimitWriter.TryReadState(out _, out _, out _, out _);
 

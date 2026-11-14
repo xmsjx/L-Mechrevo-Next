@@ -5,12 +5,17 @@ using System.Threading.Tasks;
 
 namespace MechrevoLite.Mode;
 
+
 public static class PerfModeRunner
 {
 	// F3（2026-10-09）：状态行文案改直白。写调用真的被拒（IssueAsync 返回 false）时用它，替换原来的"命令下发失败"。
 	// ⚠️ 该文案不只用于 GPU 超频：WriteFirmwareField/开关步写失败都走同一分支，所以用通用短句；
 	//    GPU 超频那一步渲染出来就是「未生效：GPU 超频（这次没写进去，可以再点一次『应用』）」。
-	private const string WriteRejectedDetail = "这次没写进去，可以再点一次『应用』";
+    private const string WriteRejectedDetail = "这次没写进去，可以再点一次『应用』";
+    /// <summary>写失败短句的替换源（例如后端组件缺失时给出可执行的提示）；为空则用默认短句。</summary>
+    public static Func<string?>? RejectedDetailProvider { get; set; }
+
+    private static string RejectedDetail() => RejectedDetailProvider?.Invoke() ?? WriteRejectedDetail;
 
 	// F3：下发过程抛异常时的状态行短句（异常原文只进日志，见下方 catch）。
 	private const string StepErrorDetail = "下发时报错，详见日志";
@@ -66,7 +71,7 @@ public static class PerfModeRunner
 			{
 				// F3：写调用被拒。⚠️ 这行不只用于 GPU 超频（任何 WriteFirmwareField/开关步写失败都走这里），
 				// 故用通用短句；界面会渲染成「未生效：GPU 超频（这次没写进去，可以再点一次『应用』）」。
-				outcomes.Add(new PerfApplyStepOutcome(step, PerfApplyResult.Failed, WriteRejectedDetail));
+				outcomes.Add(new PerfApplyStepOutcome(step, PerfApplyResult.Failed, RejectedDetail()));
 				if (IsSwitch(step))
 				{
 					break;

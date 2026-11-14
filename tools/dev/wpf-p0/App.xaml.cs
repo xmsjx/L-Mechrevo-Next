@@ -132,6 +132,21 @@ public partial class App : Application
         //   启动后台清 usbmmidd 虚拟屏残留 + 挂电源事件；退出恢复在 OnExit（不阻塞启动）。
         L_Mechrevo.WpfP0.Services.VirtualDisplayBlankService.InitializeStartupCleanup();
         L_Mechrevo.WpfP0.Services.VirtualDisplayBlankService.AttachPowerEvents();
+        // 后端控制组件的就绪分解：服务键在但载荷缺失时，写失败要给可执行的提示，而不是让人反复点。
+        MechrevoLite.Mode.PerfModeRunner.RejectedDetailProvider = () =>
+            L_Mechrevo.WpfP0.Services.WpfBackend.GcuPayloadMissing
+                ? "未安装或缺少控制组件（载荷缺失），请重装控制组件后再试"
+                : null;
+        try
+        {
+            Logger.WriteError("[gcu-ready] 载荷=" + (L_Mechrevo.WpfP0.Services.WpfBackend.GcuPayloadMissing ? "缺失" : "存在")
+                + " · " + L_Mechrevo.WpfP0.Services.WpfBackend.GcuPayloadDetail);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteError("[gcu-ready] 就绪判定失败：" + ex.Message);
+        }
+
         ApplyFont();
         // ⭐ task-22：与旧 Program 一致，后台核对/修复启动计划任务（失败只记日志，不阻塞 UI）✅
         _ = System.Threading.Tasks.Task.Run(() => global::Startup.StartupCheck());

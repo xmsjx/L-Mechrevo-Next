@@ -38,6 +38,7 @@ internal static class BackendRouter
 		BaolongdaWhitelisted,
 		BaolongdaEnabled,
 		GcuServiceInstalled,
+        GcuPayloadPresent,
 		GcuGenerationSupported,
 		MifsLegacyCompatible,
 		TongfangFamily
@@ -50,21 +51,21 @@ internal static class BackendRouter
 	/// <summary>内置规则表（顺序 = 优先级；首条命中即选中）。</summary>
 	private static readonly RuleSpec[] BuiltInRules =
 	{
-		// ① 板号白名单是硬机型证据；排障开关=0 时让给后续规则。
-		new RuleSpec(1, "board in Baolongda whitelist -> Baolongda", MechrevoBackendKind.Baolongda,
-			new[] { new RuleCondition(RouteFact.BaolongdaWhitelisted), new RuleCondition(RouteFact.BaolongdaEnabled) }),
-		// ② 代际只能佐证，必须已装 GCU 服务才声明 GCU。
-		new RuleSpec(2, "gpu gen 30/40/50 && GCU service installed -> Gcu", MechrevoBackendKind.Gcu,
-			new[] { new RuleCondition(RouteFact.GcuServiceInstalled), new RuleCondition(RouteFact.GcuGenerationSupported) }),
-		// ③ 装了 GCU 服务（代际未知也走这一条）。
-		new RuleSpec(3, "GCU service installed -> Gcu", MechrevoBackendKind.Gcu,
-			new[] { new RuleCondition(RouteFact.GcuServiceInstalled) }),
-		// ④ MICommonInterface 存在且 GUID 与老同方一致，且未装 GCU。
-		new RuleSpec(4, "MICommonInterface(legacy GUID) && no GCU service -> LegacyMifs", MechrevoBackendKind.LegacyMifs,
-			new[] { new RuleCondition(RouteFact.MifsLegacyCompatible), new RuleCondition(RouteFact.GcuServiceInstalled, false) }),
-		// ⑤ 同方族即使当前没装 GCU 服务，也归到同方通道。
-		new RuleSpec(5, "Tongfang family -> Gcu（无 GCU 时由本地 EC 接管）", MechrevoBackendKind.Gcu,
-			new[] { new RuleCondition(RouteFact.TongfangFamily) })
+        // ① 板号白名单是硬机型证据；排障开关=0 时让给后续规则。
+        new RuleSpec(1, "board in Baolongda whitelist -> Baolongda", MechrevoBackendKind.Baolongda,
+            new[] { new RuleCondition(RouteFact.BaolongdaWhitelisted), new RuleCondition(RouteFact.BaolongdaEnabled) }),
+        // ② 代际只能佐证；服务已装且载荷真的在，才声明 GCU。
+        new RuleSpec(2, "gpu gen 30/40/50 && GCU service installed && payload present -> Gcu", MechrevoBackendKind.Gcu,
+            new[] { new RuleCondition(RouteFact.GcuServiceInstalled), new RuleCondition(RouteFact.GcuPayloadPresent), new RuleCondition(RouteFact.GcuGenerationSupported) }),
+        // ③ 服务已装 + 载荷在（代际未知也走这一条）。
+        new RuleSpec(3, "GCU service installed && payload present -> Gcu", MechrevoBackendKind.Gcu,
+            new[] { new RuleCondition(RouteFact.GcuServiceInstalled), new RuleCondition(RouteFact.GcuPayloadPresent) }),
+        // ④ MICommonInterface 存在且 GUID 与老同方一致，且未装 GCU。
+        new RuleSpec(4, "MICommonInterface(legacy GUID) && no GCU service -> LegacyMifs", MechrevoBackendKind.LegacyMifs,
+            new[] { new RuleCondition(RouteFact.MifsLegacyCompatible), new RuleCondition(RouteFact.GcuServiceInstalled, false) }),
+        // ⑤ 同方族即使当前没装 GCU 服务，也归到同方通道。
+        new RuleSpec(5, "Tongfang family -> Gcu（无 GCU 时由本地 EC 接管）", MechrevoBackendKind.Gcu,
+            new[] { new RuleCondition(RouteFact.TongfangFamily) })
 	};
 
 	/// <summary>当前生效规则表（可被 <see cref="ReloadRulesIfChanged" /> 原子替换）。</summary>
@@ -239,6 +240,7 @@ internal static class BackendRouter
 			RouteFact.BaolongdaWhitelisted => identity.BaolongdaWhitelisted,
 			RouteFact.BaolongdaEnabled => !BaolongdaBackend.IsDisabledByEnv,
 			RouteFact.GcuServiceInstalled => identity.GcuServiceInstalled,
+            RouteFact.GcuPayloadPresent => identity.GcuPayloadPresent,
 			RouteFact.GcuGenerationSupported => IsGcuGeneration(identity.GpuGeneration),
 			RouteFact.MifsLegacyCompatible => identity.MifsLegacyCompatible,
 			RouteFact.TongfangFamily => identity.TongfangFamily,
@@ -359,6 +361,11 @@ internal static class BackendRouter
 		Check("MICommonInterface + 已装 GCU ⇒ Gcu（老接口不得抢）", MechrevoBackendKind.Gcu, 3,
 			MachineIdentity.ForTest(board: "GM5HG0A", generation: "Unknown", gcuInstalled: true, mifsClass: true), pass, fail);
 		// ⑥ 同方板号、没有 GCU、没有 MIFS ⇒ 同方族规则（本地 EC 回退）
+        // ⑥ 服务键在、但载荷 exe 缺失（登记残留）⇒ 不得声明 GCU，交给同方/回落通道
+        Check("已装 GCU 但载荷缺失 ⇒ 不选 GCU 规则", MechrevoBackendKind.Gcu, 5,
+            MachineIdentity.ForTest(board: "GM7ZG8S", generation: "Gen30", gcuInstalled: true, gcuPayload: false), pass, fail);
+        Check("已装 GCU 且载荷在 ⇒ 仍选规则 2（不误降级）", MechrevoBackendKind.Gcu, 2,
+            MachineIdentity.ForTest(board: "GM7ZG8S", generation: "Gen30", gcuInstalled: true, gcuPayload: true), pass, fail);
 		Check("GM 板号 + 无 GCU/MIFS ⇒ 同方族 Gcu", MechrevoBackendKind.Gcu, 5,
 			MachineIdentity.ForTest(board: "GM5HG0A", generation: "Gen40", gcuInstalled: false), pass, fail);
 		// ⑦ 什么都没识别到 ⇒ 兜底 Gcu（不误判成宝龙达/老接口）
