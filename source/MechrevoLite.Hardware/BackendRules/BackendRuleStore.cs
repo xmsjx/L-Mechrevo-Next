@@ -79,7 +79,7 @@ internal static class BackendRuleStore
 	}
 
 	/// <summary>JSON → 规则表（纯函数，可离线断言；任何非法内容整份回退内置规则）。</summary>
-	internal static RuleTable Parse(string json, BackendRouter.RuleSpec[] builtIn, MechrevoBackendKind builtInFallback, string path)
+    internal static RuleTable Parse(string json, BackendRouter.RuleSpec[] builtIn, MechrevoBackendKind builtInFallback, string path, bool logFallback = true)
 	{
 		(long ticks, long length) = Stamp(path);
 		try
@@ -175,7 +175,11 @@ internal static class BackendRuleStore
 		string path, string error)
 	{
 		// 每次热重载检查都失败时不要刷屏：同一份内容只记一次。
-		Logger.WriteLineIfChanged("route-rules-fallback", "[route] 规则文件不可用 ⇒ 回退内置规则：" + path + " · " + error);
+        // 路径为空 = 路由自测的反向用例（没有真实文件），不要写进运行日志。
+        if (path.Length != 0)
+        {
+            Logger.WriteLineIfChanged("route-rules-fallback", "[route] 规则文件不可用 ⇒ 回退内置规则：" + path + " · " + error);
+        }
 		(long ticks, long length) = Stamp(path);
 		return new RuleTable(builtIn, fallback, "built-in", path, error, ticks, length);
 	}

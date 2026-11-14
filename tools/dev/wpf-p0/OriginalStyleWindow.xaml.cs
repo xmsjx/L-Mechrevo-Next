@@ -7565,13 +7565,13 @@ public partial class OriginalStyleWindow : Window
             bool umiGpuMode = hw?.IsUmiMachine == true;
             bool nucNoGpuSwitch = hw?.IsIntelNucMachine == true;
             bool gpuRowHidden = hw?.GpuRowHiddenByGcuReports == true;
-            bool directSupported = hw?.SupportsDgpuDirect ?? caps.DgpuDirect;
-            bool gpuSwitchSupported = hw?.CanOfferGpuModeSwitch ?? (caps.DgpuDirect || caps.IgpuOnly || caps.GpuHotSwap);
+        bool directSupported = hw?.SupportsDgpuDirect ?? L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuModeSwitch", false);
+        bool gpuSwitchSupported = hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuModeSwitch", false) || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("IgpuOnly", false) || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuHotSwap", false));
             GpuDirectButton.Visibility = directSupported ? Visibility.Visible : Visibility.Collapsed;
             bool dgpuPresent = hw != null && hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
             bool noSwitchButHasDgpu = !gpuSwitchSupported && dgpuPresent;
             GpuSection.Visibility = (!nucNoGpuSwitch && !gpuRowHidden
-                && (gpuSwitchSupported || directSupported || caps.GpuHotSwap || umiGpuMode || noSwitchButHasDgpu))
+                && (gpuSwitchSupported || directSupported || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuHotSwap", false) || umiGpuMode || noSwitchButHasDgpu))
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             GpuModeRow.Visibility = gpuSwitchSupported ? Visibility.Visible : Visibility.Collapsed;
