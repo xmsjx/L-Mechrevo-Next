@@ -766,10 +766,10 @@ public partial class CustomModeWindow : Window
                 limitsHw.IsBaolongda30Series,
                 L_Mechrevo.WpfP0.Services.WpfBackend.SmuReady(),
                 limitsHw.SmuCustomApu);
-            StapmTimeRow.Visibility = smuPower ? Visibility.Visible : Visibility.Collapsed;
-            SmuSlowLimitRow.Visibility = smuPower ? Visibility.Visible : Visibility.Collapsed;
+            StapmTimeRow.Visibility = (smuPower && PawnIO.CpuInfo.IsAMD) ? Visibility.Visible : Visibility.Collapsed;
+            SmuSlowLimitRow.Visibility = (smuPower && PawnIO.CpuInfo.IsAMD) ? Visibility.Visible : Visibility.Collapsed;
             SmuSlowTimeRow.Visibility = smuPower ? Visibility.Visible : Visibility.Collapsed;
-            SmuFastTimeRow.Visibility = smuPower ? Visibility.Visible : Visibility.Collapsed;
+            SmuFastTimeRow.Visibility = (smuPower && PawnIO.CpuInfo.IsAMD) ? Visibility.Visible : Visibility.Collapsed;
         }
         bool nucDirectRows = L_Mechrevo.WpfP0.Services.WpfBackend.NucGpuModeSupported(L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram);
         bool intelMsrRows = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram is { } intelHw
@@ -863,8 +863,8 @@ public partial class CustomModeWindow : Window
             ? Visibility.Collapsed : Visibility.Visible;
         FanBoostRow.Visibility = (noDgpu || intelXingyaoMsr) ? Visibility.Collapsed : Visibility.Visible;
         FanCard.Visibility = (noDgpu || intelXingyaoMsr) ? Visibility.Collapsed : Visibility.Visible;
-        StapmTimeRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
-        SmuSlowLimitRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
+        StapmTimeRow.Visibility = (smuPowerRows && !wujieApu && PawnIO.CpuInfo.IsAMD) ? Visibility.Visible : Visibility.Collapsed;
+        SmuSlowLimitRow.Visibility = (smuPowerRows && !wujieApu && PawnIO.CpuInfo.IsAMD) ? Visibility.Visible : Visibility.Collapsed;
         SmuSlowTimeRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuFastTimeRow.Visibility = Visibility.Collapsed;
         if (L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig() && !apuOrNoDgpu)

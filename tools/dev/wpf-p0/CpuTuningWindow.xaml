@@ -27,9 +27,9 @@
                 <CheckBox x:Name="AutoApplyCheck" Content="{x:Static loc:WpfStrings.AutoApplyCheck_Content}" Style="{DynamicResource HeaderSwitch}" VerticalAlignment="Center" Click="AutoApply_Click" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="{x:Static loc:WpfStrings.CpuTuningWindow_Content_4}" Style="{StaticResource FlatButton}" Click="SaveSnapshot_Click" Margin="0,0,8,0" />
-                <Button Content="{x:Static loc:WpfStrings.CpuTuningWindow_Content_3}" Style="{StaticResource FlatButton}" Click="LoadSnapshot_Click" Margin="0,0,8,0" />
-                <Button Content="{x:Static loc:WpfStrings.CpuTuningWindow_Content_2}" Style="{StaticResource FlatButton}" Click="Reset_Click" Margin="0,0,8,0" />
+                <Button x:Name="SaveSnapshotButton" Content="{x:Static loc:WpfStrings.CpuTuningWindow_Content_4}" Style="{StaticResource FlatButton}" Click="SaveSnapshot_Click" Margin="0,0,8,0" />
+                <Button x:Name="LoadSnapshotButton" Content="{x:Static loc:WpfStrings.CpuTuningWindow_Content_3}" Style="{StaticResource FlatButton}" Click="LoadSnapshot_Click" Margin="0,0,8,0" />
+                <Button x:Name="ResetButton" Content="{x:Static loc:WpfStrings.CpuTuningWindow_Content_2}" Style="{StaticResource FlatButton}" Click="Reset_Click" Margin="0,0,8,0" />
                 <Button Content="{x:Static loc:WpfStrings.CpuTuningWindow_Content}" Style="{StaticResource FlatButton}" Click="Close_Click" />
             </StackPanel>
         </Grid>

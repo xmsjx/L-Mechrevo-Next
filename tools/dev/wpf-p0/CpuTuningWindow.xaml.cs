@@ -24,6 +24,14 @@ public partial class CpuTuningWindow : Window
     {
         InitializeComponent();
         AutoApplyCheck.IsChecked = RuntimeCpuTuning.PerCoreAutoApplyEnabled;
+        // 非 AMD 机型没有 Curve Optimizer / FMax，这些入口不显示（Intel 只保留比例类选项）。
+        if (!PawnIO.CpuInfo.IsAMD)
+        {
+            AutoApplyCheck.Visibility = Visibility.Collapsed;
+            SaveSnapshotButton.Visibility = Visibility.Collapsed;
+            LoadSnapshotButton.Visibility = Visibility.Collapsed;
+            ResetButton.Visibility = Visibility.Collapsed;
+        }
         LoadProbe();
     }
 
