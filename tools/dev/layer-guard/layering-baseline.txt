@@ -3,7 +3,7 @@
 # 只会向下收紧：删掉引用后可再次 --update 降低上限；新增文件默认 0。
 App.xaml.cs	3
 BackendProbe.cs	91
-CustomModeWindow.xaml.cs	87
+CustomModeWindow.xaml.cs	22
 DisplayEffectEditorWindow.xaml.cs	5
 FanCurveWindow.xaml.cs	6
 HidKeyboardWindow.xaml.cs	2

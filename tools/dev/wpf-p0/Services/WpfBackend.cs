@@ -422,5 +422,106 @@ internal static class WpfBackend
 
     /// <summary>按百分比算 0x7A6 模式位（日志与复查用）。</summary>
     internal static int EcChargeModeBits(int percent) => EcChargeLimitOverride.ComputeModeBits(percent);
+
+    /// <summary>GPU 功耗可调范围（界面只读这三项）。</summary>
+    internal readonly record struct GpuTgpRange(int FloorWatts, int BaseMaxWatts, int DbMaxWatts);
+
+    internal static bool IsAmdCpu() => CpuVendor.IsAmd;
+
+    internal static bool IsIntelCpu() => CpuVendor.IsIntel;
+
+    internal static bool UsesAmdPowerFields() => Hw?.UsesAmdPowerFields == true;
+
+    internal static bool LocalPowerConfig() => GcuEcExperimental.LocalPowerConfig;
+
+    internal static bool SmuReady() => SmuAvailability.IsReady;
+
+    internal static bool TongfangFamily() => MachineIdentity.Collect().TongfangFamily;
+
+    internal static string BoardProduct() => BoardWhitelist.ReadBoardProduct();
+
+    /// <summary>SMU 自定义功耗的滑块边界（PL 最小值/最大值、温度墙最小/最大值）。</summary>
+    internal static (int PlMin, int PlMax, int TccMin, int TccMax) SmuLimits() =>
+        (WujieSmuGate.PlMinWatts, WujieSmuGate.PlMaxWatts, WujieSmuGate.TccMinCelsius, WujieSmuGate.TccMaxCelsius);
+
+    internal static bool EcPl4Supported() => EcPl4Unit.IsSupported;
+
+    internal static bool EcPl4TryRead(out bool doubleUnit) => EcPl4Unit.TryRead(out doubleUnit, out _);
+
+    internal static bool EcPl4TryRead(out bool doubleUnit, out byte raw) => EcPl4Unit.TryRead(out doubleUnit, out raw);
+
+    internal static bool EcPl4TryReadWatts(out int watts, out byte raw, out bool doubleUnit) =>
+        EcPl4Unit.TryReadPl4(out watts, out raw, out doubleUnit);
+
+    internal static bool EcPl4TrySetDouble(bool doubleUnit, out string detail) =>
+        EcPl4Unit.TrySetDouble(doubleUnit, out detail);
+
+    /// <summary>GPU TGP/动态加速的可调范围（读不到返回 false，界面保持原范围）。</summary>
+    internal static bool TryGetGpuTgpRange(out GpuTgpRange range) => TryGetGpuTgpRange(Hw, out range);
+
+    internal static bool TryGetGpuTgpRange(MechrevoHw? hw, out GpuTgpRange range)
+    {
+        range = default;
+        if (!EcGpuPower.TryGetCapabilities(hw, out EcGpuPower.Capabilities caps, out _))
+        {
+            return false;
+        }
+        range = new GpuTgpRange(caps.FloorWatts, caps.BaseMaxWatts, caps.DbMaxWatts);
+        return true;
+    }
+
+    internal static bool EcGpuPowerTryApply(int baseTgp, int dbWatts, bool dbOn, out string detail)
+    {
+        detail = "未提供硬件上下文";
+        MechrevoHw? hw = Hw;
+        return hw != null && EcGpuPower.TryApply(hw, baseTgp, dbWatts, dbOn, out detail);
+    }
+
+    internal static bool NucFanTableTrySetFanRamp(bool enabled, int speedMs, out string detail) =>
+        NucFanTable.TrySetFanRamp(enabled, speedMs, out detail);
+
+    internal static bool NucFanTableTryApply(byte[] cpuTemps, int[] cpuDuties, byte[] gpuTemps, int[] gpuDuties, out string detail) =>
+        NucFanTable.TryApply(cpuTemps, cpuDuties, gpuTemps, gpuDuties, out detail);
+
+    internal static bool NucFanTableTrySetFanIsolated(bool enabled, out string detail) =>
+        NucFanTable.TrySetFanIsolated(enabled, out detail);
+
+    internal static bool NucPerformanceModeTryApplyCustom(int? pl1, int? pl2, int? pl4, int? tcc, out string detail) =>
+        NucPerformanceMode.TryApplyCustom(pl1, pl2, pl4, tcc, out detail);
+
+    internal static bool GcuTryApplyMode(int visualMode, out string detail) =>
+        GcuEcExperimental.TryApplyMode(visualMode, out detail);
+
+    /// <summary>读工厂 Turbo 的 PL1/PL2（EC 0x7A7/0x7A8 语义，单位 W）。</summary>
+    internal static bool TryReadTurboPl1Pl2(out int pl1, out int pl2)
+    {
+        pl1 = 0;
+        pl2 = 0;
+        if (!AcpiDriverEc.TryReadByte(1959, out byte pl1Raw)
+            || !AcpiDriverEc.TryReadByte(1960, out byte pl2Raw))
+        {
+            return false;
+        }
+        pl1 = pl1Raw;
+        pl2 = pl2Raw;
+        return true;
+    }
+
+    /// <summary>读工厂 Turbo 的 PL4/fPPT 原始值（单位由 EcPl4Unit 决定）。</summary>
+    internal static bool TryReadTurboPl4(out byte raw) => AcpiDriverEc.TryReadByte(1961, out raw);
+
+    /// <summary>自定义功耗前先落模式字节（保留高 3 位与最低位，置 0x10）。</summary>
+    internal static bool TrySetCustomModeGate()
+    {
+        if (!AcpiDriverEc.TryReadByte(1963, out byte mode))
+        {
+            return false;
+        }
+        return AcpiDriverEc.TryWriteByte(1963, (byte)((mode & 0xE0) | 0x10 | (mode & 0x01)));
+    }
+
+    internal static List<(string Guid, string Name)> WinPowerPlanPlans() => WinPowerPlan.GetPlans();
+
+    internal static bool WinPowerPlanSetActive(string guid) => WinPowerPlan.SetActivePlan(guid);
 }
 

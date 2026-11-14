@@ -112,7 +112,7 @@ public partial class CustomModeWindow : Window
     private void ApplyCpuPowerLabels()
     {
         MechrevoHw? hw = CurrentHw;
-        bool amd = MechrevoLite.Hardware.CpuVendor.IsAmd || hw?.UsesAmdPowerFields == true;
+        bool amd = L_Mechrevo.WpfP0.Services.WpfBackend.IsAmdCpu() || hw?.UsesAmdPowerFields == true;
         if (amd)
         {
             Pl1Label.Text = "SPL";
@@ -139,7 +139,7 @@ public partial class CustomModeWindow : Window
         {
             LoadSettingsToUi(_settings);
         }
-        if (MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig())
         {
             DbSwitch.IsEnabled = true;
             GpuOcSwitch.IsEnabled = true;
@@ -451,7 +451,7 @@ public partial class CustomModeWindow : Window
         }
         try
         {
-            MechrevoLite.Hardware.MechrevoHw? hw = CurrentHw;
+            var hw = CurrentHw;
             if (hw?.IsNucUmiFamily == true)
             {
                 // 本地 ACPI/EC 自定义档：不走 GCU 固件槽，直接标记 ActiveModeId。
@@ -765,17 +765,16 @@ public partial class CustomModeWindow : Window
             bool smuPower = MechrevoLite.Mode.PerfModeCapabilities.UsesSmuForCustomPower(
                 limitsHw.UsesBaolongda,
                 limitsHw.IsBaolongda30Series,
-                MechrevoLite.Hardware.SmuAvailability.IsReady,
+                L_Mechrevo.WpfP0.Services.WpfBackend.SmuReady(),
                 limitsHw.SmuCustomApu);
             StapmTimeRow.Visibility = smuPower ? Visibility.Visible : Visibility.Collapsed;
             SmuSlowLimitRow.Visibility = smuPower ? Visibility.Visible : Visibility.Collapsed;
             SmuSlowTimeRow.Visibility = smuPower ? Visibility.Visible : Visibility.Collapsed;
             SmuFastTimeRow.Visibility = smuPower ? Visibility.Visible : Visibility.Collapsed;
         }
-        bool nucDirectRows = MechrevoLite.Hardware.Architecture.NucUmiCapabilityMap
-            .IsSupported(CurrentHw, MechrevoLite.Hardware.Architecture.NucUmiOperation.GpuMode);
+        bool nucDirectRows = L_Mechrevo.WpfP0.Services.WpfBackend.NucGpuModeSupported(CurrentHw);
         bool intelMsrRows = CurrentHw is MechrevoHw intelHw
-            && MechrevoLite.Hardware.CpuVendor.IsIntel
+            && L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
             && !intelHw.IsNucUmiFamily;
         bool locked = CurrentHw is MechrevoHw lockHw
             && lockHw.IsGcuConnected
@@ -783,8 +782,8 @@ public partial class CustomModeWindow : Window
             && _current?.IsCustom != true
             && !nucDirectRows
             && !intelMsrRows;
-        CpuPowerCard.IsEnabled = MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig || !locked;
-        TempGpuCard.IsEnabled = MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig || !locked;
+        CpuPowerCard.IsEnabled = L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig() || !locked;
+        TempGpuCard.IsEnabled = L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig() || !locked;
         FanCard.IsEnabled = !locked;
         CpuPowerCard.Opacity = locked ? 0.45 : 1.0;
         TempGpuCard.Opacity = locked ? 0.45 : 1.0;
@@ -795,20 +794,20 @@ public partial class CustomModeWindow : Window
         bool noDgpu = hwForRows?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
         // Intel 星耀只开放 PL1/PL2：fPPT、温度/GPU、风扇/超频都不显示。
         bool intelXingyaoMsr = hwForRows != null
-            && MechrevoLite.Hardware.CpuVendor.IsIntel
-            && MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
+            && L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
+            && L_Mechrevo.WpfP0.Services.WpfBackend.IsXingyaoPlatform
             && !hwForRows.IsNucUmiFamily;
         bool wujieApu = hwForRows?.WujieSmuApu == true;
         bool smuCustomApu = hwForRows?.SmuCustomApu == true;
         bool smuPowerRows = hwForRows != null && MechrevoLite.Mode.PerfModeCapabilities.UsesSmuForCustomPower(
             hwForRows.UsesBaolongda,
             hwForRows.IsBaolongda30Series,
-            MechrevoLite.Hardware.SmuAvailability.IsReady,
+            L_Mechrevo.WpfP0.Services.WpfBackend.SmuReady(),
             smuCustomApu);
         bool pl4Supported = hwForRows != null && hwForRows.Pl4Minimum >= 0 && hwForRows.Pl4Maximum > hwForRows.Pl4Minimum;
         bool gcuTongfangMachine = IsGcuTongfangMachine(hwForRows);
         bool gcuTongfangIntel = IsGcuTongfangIntel(hwForRows);
-        bool forceEcPl4 = MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig
+        bool forceEcPl4 = L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig()
             && hwForRows != null
             && !hwForRows.UsesBaolongda
             && !hwForRows.IsNucUmiFamily
@@ -823,9 +822,9 @@ public partial class CustomModeWindow : Window
         bool tongfangMoldIntel = hwForRows != null
             && !hwForRows.UsesBaolongda
             && !hwForRows.IsNucUmiFamily
-            && MechrevoLite.Hardware.CpuVendor.IsIntel
+            && L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
             && (hwForRows.IsTongfangFamily
-                || MechrevoLite.Hardware.MachineIdentity.Collect().TongfangFamily);
+                || L_Mechrevo.WpfP0.Services.WpfBackend.TongfangFamily());
         Pl4UnitRow.Visibility = tongfangMoldIntel ? Visibility.Visible : Visibility.Collapsed;
         _syncingPl4Unit = true;
         try
@@ -834,7 +833,7 @@ public partial class CustomModeWindow : Window
                 && MechrevoLite.AppConfig.Is("pl4_edit_open");
             Pl4EditSwitch.IsChecked = open;
             Pl4UnitControls.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
-            if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool pl4Double, out byte pl4Raw))
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool pl4Double, out byte pl4Raw))
             {
                 _pl4Unit = pl4Double ? 2 : 1;
                 Pl4UnitSwitch.IsChecked = pl4Double;
@@ -869,7 +868,7 @@ public partial class CustomModeWindow : Window
         SmuSlowLimitRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuSlowTimeRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuFastTimeRow.Visibility = Visibility.Collapsed;
-        if (MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig && !apuOrNoDgpu)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig() && !apuOrNoDgpu)
         {
             Pl4Row.Visibility = Visibility.Visible;
         }
@@ -919,7 +918,7 @@ public partial class CustomModeWindow : Window
         {
             PowerPlanCombo.Items.Clear();
             PowerPlanCombo.Items.Add(new ComboBoxItem { Content = WpfStrings.CustomModeWindow_Content_4, Tag = "" });
-            foreach ((string guid, string name) in MechrevoLite.Hardware.WinPowerPlan.GetPlans())
+            foreach ((string guid, string name) in L_Mechrevo.WpfP0.Services.WpfBackend.WinPowerPlanPlans())
             {
                 PowerPlanCombo.Items.Add(new ComboBoxItem { Content = name, Tag = guid });
             }
@@ -963,7 +962,7 @@ public partial class CustomModeWindow : Window
         }
         try
         {
-            bool ok = MechrevoLite.Hardware.WinPowerPlan.SetActivePlan(guid);
+            bool ok = L_Mechrevo.WpfP0.Services.WpfBackend.WinPowerPlanSetActive(guid);
             if (ok)
             {
                 _settings = _settings with { PowerPlanGuid = guid };
@@ -998,7 +997,7 @@ public partial class CustomModeWindow : Window
         bool smu = MechrevoLite.Mode.PerfModeCapabilities.UsesSmuForCustomPower(
             hw.UsesBaolongda,
             hw.IsBaolongda30Series,
-            MechrevoLite.Hardware.SmuAvailability.IsReady,
+            L_Mechrevo.WpfP0.Services.WpfBackend.SmuReady(),
             hw.SmuCustomApu);
         string pl1Base = smu ? MechrevoLite.Properties.Strings.SmuStapmLimitLabel : WpfStrings.CustomPowerPl1Label;
         string pl2Base = smu ? MechrevoLite.Properties.Strings.SmuFastLimitLabel : WpfStrings.CustomPowerPl2Label;
@@ -1059,32 +1058,29 @@ public partial class CustomModeWindow : Window
     private static bool IsGcuTongfangIntel(MechrevoHw? hw)
     {
         return IsGcuTongfangMachine(hw)
-            && MechrevoLite.Hardware.CpuVendor.IsIntel
-            && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
+            && L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.IsXingyaoPlatform;
     }
 
     private void ApplyHardwareControlLimits(MechrevoHw hw)
     {
         if (hw.SmuCustomApu)
         {
-            Pl1Slider.Minimum = MechrevoLite.Hardware.WujieSmuGate.PlMinWatts;
-            Pl1Slider.Maximum = MechrevoLite.Hardware.WujieSmuGate.PlMaxWatts;
-            Pl2Slider.Minimum = MechrevoLite.Hardware.WujieSmuGate.PlMinWatts;
-            Pl2Slider.Maximum = MechrevoLite.Hardware.WujieSmuGate.PlMaxWatts;
-            TccSlider.Minimum = MechrevoLite.Hardware.WujieSmuGate.TccMinCelsius;
-            TccSlider.Maximum = MechrevoLite.Hardware.WujieSmuGate.TccMaxCelsius;
+            Pl1Slider.Minimum = L_Mechrevo.WpfP0.Services.WpfBackend.SmuLimits().PlMin;
+            Pl1Slider.Maximum = L_Mechrevo.WpfP0.Services.WpfBackend.SmuLimits().PlMax;
+            Pl2Slider.Minimum = L_Mechrevo.WpfP0.Services.WpfBackend.SmuLimits().PlMin;
+            Pl2Slider.Maximum = L_Mechrevo.WpfP0.Services.WpfBackend.SmuLimits().PlMax;
+            TccSlider.Minimum = L_Mechrevo.WpfP0.Services.WpfBackend.SmuLimits().TccMin;
+            TccSlider.Maximum = L_Mechrevo.WpfP0.Services.WpfBackend.SmuLimits().TccMax;
         }
         else
         {
             SetSliderRange(Pl1Slider, hw.Pl1Minimum, hw.Pl1Maximum);
             SetSliderRange(Pl2Slider, hw.Pl2Minimum, hw.Pl2Maximum);
-            if (MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig
-                && MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1959, out byte turboPl1Raw)
-                && MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1960, out byte turboPl2Raw))
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig()
+            && L_Mechrevo.WpfP0.Services.WpfBackend.TryReadTurboPl1Pl2(out int turboPl1, out int turboPl2))
             {
                 // OpenRevo：默认上限 = 工厂 Turbo PL + 25W。
-                int turboPl1 = turboPl1Raw;
-                int turboPl2 = turboPl2Raw;
                 if (turboPl1 > 0)
                 {
                     SetSliderRange(Pl1Slider, 15, turboPl1 + 25);
@@ -1103,14 +1099,14 @@ public partial class CustomModeWindow : Window
         {
             SetSliderRange(Pl4Slider, 5, 300);
         }
-        if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool pl4DoubleUnit, out _))
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool pl4DoubleUnit))
         {
             _pl4Unit = pl4DoubleUnit ? 2 : 1;
             // 寄存器绝对上限 255×单位；界面默认上限按工厂 Turbo PL4 + 50W，和 OpenRevo 一致。
             int pl4Unit = pl4DoubleUnit ? 2 : 1;
             int pl4AbsMax = 255 * pl4Unit;
             int pl4DefaultMax = pl4AbsMax;
-            if (MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1961, out byte turboPl4Raw))
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.TryReadTurboPl4(out byte turboPl4Raw))
             {
                 int turboPl4 = turboPl4Raw * pl4Unit;
                 if (turboPl4 > 0)
@@ -1124,9 +1120,7 @@ public partial class CustomModeWindow : Window
         SetSliderRange(TccSlider, hw.TccMinimum, hw.TccMaximum);
         SetSliderRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
         SetSliderRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
-        if (MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig
-            && MechrevoLite.Hardware.EcGpuPower.TryGetCapabilities(hw,
-                out MechrevoLite.Hardware.EcGpuPower.Capabilities gpuCaps, out _))
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig() && L_Mechrevo.WpfP0.Services.WpfBackend.TryGetGpuTgpRange(hw, out var gpuCaps))
         {
             SetSliderRange(GpuTgpSlider, gpuCaps.FloorWatts, gpuCaps.BaseMaxWatts);
             GpuTgpSlider.Value = Math.Clamp(GpuTgpSlider.Value, gpuCaps.FloorWatts, gpuCaps.BaseMaxWatts);
@@ -1135,9 +1129,9 @@ public partial class CustomModeWindow : Window
         }
         SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, Math.Min(hw.FanSwitchSpeedMaximum, 12700));
         bool nucDirectUi = (hw.IsNucUmiFamily)
-            && !MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig;
-        bool intelXingyaoMsr = MechrevoLite.Hardware.CpuVendor.IsIntel
-            && MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig();
+        bool intelXingyaoMsr = L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
+            && L_Mechrevo.WpfP0.Services.WpfBackend.IsXingyaoPlatform
             && !hw.IsNucUmiFamily
             && !MechrevoHw.IsGcuServiceInstalled;
         if (intelXingyaoMsr)
@@ -1156,8 +1150,7 @@ public partial class CustomModeWindow : Window
             SetSliderRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
             SetSliderRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
             SetSliderRange(FanDelaySlider, hw.FanSwitchSpeedMinimum, Math.Min(hw.FanSwitchSpeedMaximum, 12700));
-            if (MechrevoLite.Hardware.EcGpuPower.TryGetCapabilities(hw,
-                out MechrevoLite.Hardware.EcGpuPower.Capabilities nucGpuCaps, out _))
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.TryGetGpuTgpRange(hw, out var nucGpuCaps))
             {
                 SetSliderRange(GpuTgpSlider, nucGpuCaps.FloorWatts, nucGpuCaps.BaseMaxWatts);
                 SetSliderRange(DbSlider, 0, nucGpuCaps.DbMaxWatts);
@@ -1172,7 +1165,7 @@ public partial class CustomModeWindow : Window
         }
         // 30 系固件配置编辑器是完整参数页；能力位滞后时不能把整页做成只读。
         bool vendorProfile = _firmwareMode;
-        bool ecPowerUi = MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig;
+        bool ecPowerUi = L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig();
         TccSwitch.IsEnabled = nucDirectUi || hw.TccAdjustable || vendorProfile || ecPowerUi;
         DbSwitch.IsEnabled = nucDirectUi || hw.GpuDynamicBoostAdjustable || vendorProfile || ecPowerUi;
         GpuTgpSlider.IsEnabled = nucDirectUi || hw.GpuTgpAdjustable || vendorProfile || ecPowerUi;
@@ -1300,8 +1293,8 @@ public partial class CustomModeWindow : Window
             {
                 return;
             }
-            if (!MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool doubleUnit, out byte gateRaw)
-                || !MechrevoLite.Hardware.EcPl4Unit.TryReadPl4(out int watts, out byte raw, out _))
+            if (!L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool doubleUnit, out byte gateRaw)
+                || !L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryReadWatts(out int watts, out byte raw, out _))
             {
                 if (!string.IsNullOrEmpty(prefix))
                 {
@@ -1332,7 +1325,7 @@ public partial class CustomModeWindow : Window
 
     private static string Pl4DefaultKey()
     {
-        string board = MechrevoLite.Hardware.BoardWhitelist.ReadBoardProduct();
+        string board = L_Mechrevo.WpfP0.Services.WpfBackend.BoardProduct();
         foreach (char ch in System.IO.Path.GetInvalidFileNameChars())
         {
             board = board.Replace(ch, '_');
@@ -1359,7 +1352,7 @@ public partial class CustomModeWindow : Window
         {
             return MechrevoLite.AppConfig.Get(key, 0) != 0;
         }
-        return MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool actual, out _) && actual;
+        return L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool actual) && actual;
     }
 
     private void Pl4EditSwitch_Changed(object sender, RoutedEventArgs e)
@@ -1397,12 +1390,12 @@ public partial class CustomModeWindow : Window
             return;
         }
         bool target = Pl4UnitSwitch.IsChecked == true;
-        if (!MechrevoLite.Hardware.EcPl4Unit.IsSupported)
+        if (!L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4Supported())
         {
             _syncingPl4Unit = true;
             try
             {
-                if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool actual, out byte raw))
+                if (L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool actual, out byte raw))
                 {
                     Pl4UnitSwitch.IsChecked = actual;
                     Pl4UnitStatus.Text = "0x0727=0x" + raw.ToString("X2") + " · 仅预览（本机不可写）";
@@ -1415,12 +1408,12 @@ public partial class CustomModeWindow : Window
             }
             return;
         }
-        if (!MechrevoLite.Hardware.EcPl4Unit.TrySetDouble(target, out string detail))
+        if (!L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TrySetDouble(target, out string detail))
         {
             _syncingPl4Unit = true;
             try
             {
-                if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool actual, out byte raw))
+                if (L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool actual, out byte raw))
                 {
                     Pl4UnitSwitch.IsChecked = actual;
                     Pl4UnitStatus.Text = "0x0727=0x" + raw.ToString("X2");
@@ -1438,7 +1431,7 @@ public partial class CustomModeWindow : Window
         if (newUnit != _pl4Unit)
         {
             int maxNew = 255 * newUnit;
-            if (MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1961, out byte turboRaw))
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.TryReadTurboPl4(out byte turboRaw))
             {
                 int turboPl4 = turboRaw * newUnit;
                 if (turboPl4 > 0)
@@ -1625,26 +1618,23 @@ public partial class CustomModeWindow : Window
                 MechrevoLite.Mode.PerfModeStore.SaveSettings(_current.Id, edited);
             }
             int pl4ForEc = pl4;
-            if (MechrevoLite.Hardware.EcPl4Unit.TryRead(out bool pl4Double, out _) && pl4Double)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool pl4Double) && pl4Double)
             {
                 pl4ForEc = Math.Max(0, pl4 / 2);
             }
             // 先落模式字节，再写自定义门控和 trigger，避免门控被后续模式写入清掉。
-            if (MechrevoLite.Hardware.AcpiDriverEc.TryReadByte(1963, out byte mode))
-            {
-                MechrevoLite.Hardware.AcpiDriverEc.TryWriteByte(1963, (byte)((mode & 0xE0) | 0x10 | (mode & 0x01)));
-            }
-            bool cpuOk = MechrevoLite.Hardware.NucPerformanceMode.TryApplyCustom(
+            L_Mechrevo.WpfP0.Services.WpfBackend.TrySetCustomModeGate();
+            bool cpuOk = L_Mechrevo.WpfP0.Services.WpfBackend.NucPerformanceModeTryApplyCustom(
                 pl1, pl2, pl4ForEc, tcc, out string detail);
-            MechrevoLite.Hardware.GcuEcExperimental.TryApplyMode(3, out string customModeDetail);
+            L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryApplyMode(3, out string customModeDetail);
             detail += " · " + customModeDetail;
             bool gpuPowerOk = true;
             string gpuPowerDetail = "未提供 TGP";
             if (CurrentHw is MechrevoHw powerHw && edited.GpuTgp is int tgp && tgp > 0)
             {
-                gpuPowerOk = MechrevoLite.Hardware.EcGpuPower.TryApply(
-                    powerHw, tgp, edited.GpuDynamicBoost ?? 25,
-                    edited.GpuDynamicBoostOn == true, out gpuPowerDetail);
+            gpuPowerOk = L_Mechrevo.WpfP0.Services.WpfBackend.EcGpuPowerTryApply(
+                tgp, edited.GpuDynamicBoost ?? 25,
+                edited.GpuDynamicBoostOn == true, out gpuPowerDetail);
             }
             bool gpuOk = true;
             if (CurrentHw is not MechrevoHw ocHw)
@@ -1672,7 +1662,7 @@ public partial class CustomModeWindow : Window
             bool fanOk = true;
             string fanDetail = "未启用曲线";
             // 灵敏度是独立项：即使风扇曲线关闭，也要把 FanRamp(1927) 写进去。
-            bool ramp = MechrevoLite.Hardware.NucFanTable.TrySetFanRamp(
+            bool ramp = L_Mechrevo.WpfP0.Services.WpfBackend.NucFanTableTrySetFanRamp(
                 edited.FanSwitchSpeedOn == true, edited.FanSwitchSpeedMs ?? 300, out string rampDetail);
             fanOk = fanOk && ramp;
             fanDetail += " · " + rampDetail;
@@ -1680,10 +1670,10 @@ public partial class CustomModeWindow : Window
                 && edited.CpuFanDuty is { Length: 16 } cpuFan
                 && edited.GpuFanDuty is { Length: 16 } gpuFan)
             {
-                bool curveOk = MechrevoLite.Hardware.NucFanTable.TryApply(
+                bool curveOk = L_Mechrevo.WpfP0.Services.WpfBackend.NucFanTableTryApply(
                     FanCurveDefaults.CpuTemperatures, cpuFan,
                     FanCurveDefaults.GpuTemperatures, gpuFan, out string curveDetail);
-                bool isolated = MechrevoLite.Hardware.NucFanTable.TrySetFanIsolated(true, out string isoDetail);
+                bool isolated = L_Mechrevo.WpfP0.Services.WpfBackend.NucFanTableTrySetFanIsolated(true, out string isoDetail);
                 fanOk = fanOk && curveOk && isolated;
                 fanDetail += " · 曲线=" + curveDetail + " · " + isoDetail;
             }
@@ -1713,7 +1703,7 @@ public partial class CustomModeWindow : Window
         {
             return;
         }
-        if (MechrevoLite.Hardware.GcuEcExperimental.LocalPowerConfig
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig()
             && CurrentHw?.IsGcuConnected != true)
         {
             await ApplyEcExperimentalCustomAsync();
@@ -1783,8 +1773,7 @@ public partial class CustomModeWindow : Window
                 StatusText.Text = WpfStrings.L("配置已保存：模式 ", "Configuration saved: mode ") + _firmwareVisualMode + WpfStrings.L(" · 配置 ", " · profile ") + (_firmwareProfileIndex + 1) + WpfStrings.L("（切到该模式后生效）", " (applies after switching to this mode)");
                 return;
             }
-            bool nucDirect = MechrevoLite.Hardware.Architecture.NucUmiCapabilityMap
-                .IsSupported(CurrentHw, MechrevoLite.Hardware.Architecture.NucUmiOperation.GpuMode);
+            bool nucDirect = L_Mechrevo.WpfP0.Services.WpfBackend.NucGpuModeSupported(CurrentHw);
             if (nucDirect)
             {
                 if (_current?.Id != null) MechrevoLite.Mode.PerfModeStore.SaveSettings(_current.Id, edited);
@@ -1804,9 +1793,9 @@ public partial class CustomModeWindow : Window
             // 星耀 Intel PTL 没有 GCU 固件槽；自定义按本机 MSR 直接下发，避免
             // PerfModeService 走 FirmwareSlot 时返回空结果（界面显示“没有返回下发结果”）。
             bool xingyaoIntelMsr = CurrentHw is MechrevoHw xyHw
-                && MechrevoLite.Hardware.CpuVendor.IsIntel
+                && L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
                 && !xyHw.IsNucUmiFamily
-                && MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
+                && L_Mechrevo.WpfP0.Services.WpfBackend.IsXingyaoPlatform;
             if (xingyaoIntelMsr && _current?.IsCustom == true && WpfBackend.Service != null)
             {
                 Dictionary<string, string> fields = new();
