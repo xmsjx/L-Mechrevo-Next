@@ -446,7 +446,7 @@ public partial class OriginalStyleWindow : Window
                 if (PresentationSource.FromVisual(this) is HwndSource inputSource)
                 {
                     BuiltInKeyboardInput.Initialize(inputSource);
-                    KeyboardRgb.BuiltInKeyDownProvider = BuiltInKeyboardInput.IsKeyDown;
+                    L_Mechrevo.WpfP0.Services.WpfBackend.SetPerKeyKeyDownProvider(BuiltInKeyboardInput.IsKeyDown);
                 }
                 _hotkeyService = new HotkeyService(this);
                 _hotkeyService.ModeRequested += RequestMode;
@@ -881,7 +881,7 @@ public partial class OriginalStyleWindow : Window
         {
             return ApplyEcWhiteKeyboard(on ? (level >= 2 ? 2 : 1) : 0);
         }
-        MechrevoService? service = _backendProbe?.Service ?? WpfBackend.Service;
+        var service = _backendProbe?.Service ?? WpfBackend.Service;
         if (service == null)
         {
             return false;
@@ -1015,7 +1015,7 @@ public partial class OriginalStyleWindow : Window
                 if (IsHidKeyboard(hw) && effect.StartsWith("hid:", StringComparison.Ordinal))
                 {
                     int hidMode = int.TryParse(effect.AsSpan(4), out int parsedMode) ? parsedMode : 1;
-                    KeyboardRgb? rgb = EnsureKeyboardRgb();
+                    var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgb();
                     if (rgb == null)
                     {
                         return false;
@@ -2375,7 +2375,7 @@ public partial class OriginalStyleWindow : Window
             }
             if (IsHidKeyboard(_backendProbe.Hw))
             {
-                KeyboardRgb? rgb = EnsureKeyboardRgb();
+                var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgb();
                 if (rgb == null)
                 {
                     Logger.WriteLine("[lid] HID 键盘实例不可用 ⇒ 合盖关灯安全跳过（不伪造）");
@@ -3747,7 +3747,7 @@ public partial class OriginalStyleWindow : Window
                     else
                     {
                         // 非狂暴档只关闭当前硬件超频，保留 gpu_oc 记忆供下次狂暴恢复。
-                        MechrevoService.GpuOverclockEnabled = false;
+                        L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled = false;
                         bool off = await _backendProbe!.ApplyGpuOverclockAsync(false);
                         Logger.WriteError("[gpu-oc] 非狂暴档关闭显卡超频 ⇒ " + off);
                     }
@@ -4002,7 +4002,7 @@ public partial class OriginalStyleWindow : Window
                 Logger.WriteError("[kbd-osd] ACPI 亮度走 EC " + clamped + (white ? "/2" : "/4") + " ⇒ " + ecOk);
                 return;
             }
-            KeyboardRgb? rgb = EnsureKeyboardRgb();
+            var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgb();
             if (rgb != null)
             {
                 rgb.Brightness = clamped * 25;
@@ -4017,7 +4017,7 @@ public partial class OriginalStyleWindow : Window
                 Logger.WriteError("[kbd-osd] ACPI 亮度实际下发 " + clamped + "/4");
                 return;
             }
-            MechrevoService? service = _backendProbe?.Service;
+            var service = _backendProbe?.Service;
             if (service != null)
             {
                 _ = service.SetKeyboardBrightnessPreservingEffect(clamped);
@@ -4126,7 +4126,7 @@ public partial class OriginalStyleWindow : Window
 
     private int NucHidKeyboardBrightnessLevel()
     {
-        KeyboardRgb? rgb = WpfBackend.rgb;
+        var rgb = WpfBackend.rgb;
         if (rgb == null || !rgb.IsConnected)
         {
             return Math.Clamp(_lastKbdHotkeyLevel, 0, 4);
@@ -4137,7 +4137,7 @@ public partial class OriginalStyleWindow : Window
 
     private void ApplyNucHidKeyboardBrightness(int level)
     {
-        KeyboardRgb? rgb = WpfBackend.rgb;
+        var rgb = WpfBackend.rgb;
         if (rgb == null || !rgb.IsConnected)
         {
             return;
@@ -5060,8 +5060,13 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    private async Task<bool> TryForceIgpuSavingAsync(MechrevoService service, string mode, bool occupancyAlreadyConfirmed)
+    private async Task<bool> TryForceIgpuSavingAsync(string mode, bool occupancyAlreadyConfirmed)
     {
+        var service = L_Mechrevo.WpfP0.Services.WpfBackend.Service;
+        if (service == null)
+        {
+            return false;
+        }
         if (!NvidiaGpuControl.TryGetActiveDgpuApplications(out IReadOnlyList<DgpuApplication> applications))
         {
             MessageBox.Show(WpfStrings.IgpuListReadFailed, WpfStrings.OriginalStyleWindow_Text_14,
@@ -5229,7 +5234,7 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        MechrevoService? service = _backendProbe?.Service;
+        var service = _backendProbe?.Service;
         var hardware = _backendProbe?.Hw;
         int currentGpuModeForSaving = _backendProbe?.CurrentGpuMode ?? hardware?.GpuMode ?? -1;
         if (currentGpuModeForSaving != 1)
@@ -5293,7 +5298,7 @@ public partial class OriginalStyleWindow : Window
                 StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_33 + IgpuSavingPreviewStatus.Text;
                 return;
             }
-            bool forced = await TryForceIgpuSavingAsync(service, mode, occupancyConfirmed);
+            bool forced = await TryForceIgpuSavingAsync(mode, occupancyConfirmed);
             if (forced)
             {
                 await service.RecheckIgpuOnlySaveModeAsync();
@@ -6739,7 +6744,7 @@ public partial class OriginalStyleWindow : Window
         GpuOverclockSwitch.Visibility = (mode == 1 && (probe.GpuOcSupported || ecExperimentRoute)
     && (probe.Hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu || ecExperimentRoute))
     ? Visibility.Visible : Visibility.Collapsed;
-        GpuOverclockSwitch.IsChecked = MechrevoService.GpuOverclockEnabled || AppConfig.Is("gpu_oc");
+        GpuOverclockSwitch.IsChecked = L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled || AppConfig.Is("gpu_oc");
         int currentGpu = probe.CurrentGpuMode;
         int pendingGpu = probe.PendingGpuTarget;
         bool pending = probe.HasPendingGpuRestart && pendingGpu >= 0;
@@ -7262,7 +7267,7 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            MechrevoService? service = _backendProbe?.Service;
+            var service = _backendProbe?.Service;
             if (service != null)
             {
                 await L_Mechrevo.WpfP0.Services.WpfBackend.ApplyGpuOcGuardAsync().ConfigureAwait(true);
@@ -8464,7 +8469,7 @@ public partial class OriginalStyleWindow : Window
     {
         var hw = _backendProbe?.Hw;
         // 只看「GCU 本身是 30 系」：显卡是 30 系但 GCU 不是 30 系时不显示模式×配置。
-        bool gcu30 = hw?.IsGcuConnected == true && MechrevoService.IsGcu30;
+        bool gcu30 = hw?.IsGcuConnected == true && L_Mechrevo.WpfP0.Services.WpfBackend.IsGcu30Variant;
         bool profileConfig = gcu30
                 && !(hw?.IsNucUmiFamily == true);
         bool show = profileConfig && currentMode >= 0 && currentMode <= 2;
@@ -8670,7 +8675,7 @@ public partial class OriginalStyleWindow : Window
         {
             return false;
         }
-        MechrevoService.GpuOverclockEnabled = on;
+        L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled = on;
         int modeBefore = _backendProbe.CurrentMode;
         bool ok = await _backendProbe.ApplyGpuOverclockAsync(on);
         // 部分 50 GCU 在只写 OC 字段后会把 operating mode 落回平衡；超频开关本身不应切模式，
@@ -8718,7 +8723,7 @@ public partial class OriginalStyleWindow : Window
         {
             try
             {
-                return MechrevoService.GpuOverclockEnabled || AppConfig.Is("gpu_oc");
+                return L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled || AppConfig.Is("gpu_oc");
             }
             catch
             {
@@ -9469,7 +9474,7 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    /// <summary>EC 实验模式：键盘灯开关按 EC 实际状态回填（HID 由 KeyboardRgb 自己维护）。</summary>
+    /// <summary>EC 实验模式：键盘灯开关按 EC 实际状态回填（HID 由单键帧流自己维护）。</summary>
     // ── EC 键盘通道：状态与下发都问服务层（⛔ 界面层不引用 EC 键盘驱动类型） ──
 
     private static bool EcKeyboardActive => EcKeyboardFacts.Active;
@@ -9533,24 +9538,6 @@ public partial class OriginalStyleWindow : Window
         LightSyncEditButton.Visibility = visibility;
     }
 
-    private static KeyboardRgb? EnsureKeyboardRgbConfig()
-    {
-        if (L_Mechrevo.WpfP0.Services.WpfBackend.rgb != null)
-        {
-            return L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
-        }
-        try
-        {
-            KeyboardRgb rgb = new();
-            rgb.LoadConfig();
-            L_Mechrevo.WpfP0.Services.WpfBackend.rgb = rgb;
-            return rgb;
-        }
-        catch
-        {
-            return null;
-        }
-    }
 
     private void FillKeyboardEffects()
     {
@@ -9561,7 +9548,7 @@ public partial class OriginalStyleWindow : Window
             var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
             if (IsHidKeyboard(hw))
             {
-                EnsureKeyboardRgbConfig();
+                L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgbConfig();
                 (int Mode, string Name)[] hidEffects = LightingCatalog.VisibleHidEffects(
                     hw?.Capabilities.KeyboardType ?? 0);
                 int selectedMode = L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.KbHidMode ?? (hidEffects.Length > 0 ? hidEffects[0].Mode : 1);
@@ -9819,7 +9806,7 @@ public partial class OriginalStyleWindow : Window
             OpenLightEditor("Keyboard/Ctrl", WpfStrings.HidKeyboardWindow_Text_9, EffectsForCurrentBackend(KeyboardEffectsForCurrent()));
             return;
         }
-        KeyboardRgb? rgb = EnsureKeyboardRgb();
+        var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgb();
         if (rgb == null)
         {
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_66;
@@ -10134,7 +10121,7 @@ public partial class OriginalStyleWindow : Window
                 }
                 else if (IsHidKeyboard(_backendProbe.Hw))
                 {
-                    KeyboardRgb? rgb = EnsureKeyboardRgb();
+                    var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgb();
                     if (rgb != null && rgb.IsConnected)
                     {
                         rgb.StopCurrentEffect();
@@ -10173,7 +10160,7 @@ public partial class OriginalStyleWindow : Window
         var hw = _backendProbe?.Hw;
         if (hw == null || !hw.UsesBaolongda || hw.IsKeyboardRainbowRunning) return;
         if (_services?.Lighting.ChannelEffectIs("Keyboard/Ctrl", "Rainbow") != true) return;
-        KeyboardRgb? rgb = EnsureKeyboardRgb();
+        var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgb();
         if (rgb != null && rgb.KbPowerExplicitOff) return;
         if (!hw.TryReadKeyboardLightingViaBackend(out bool hardwareOn, out int _, out int brightness, out string _) || !hardwareOn) return;
         if (brightness <= 0 && hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen30)
@@ -10610,36 +10597,6 @@ public partial class OriginalStyleWindow : Window
         OpenLightEditor("HidLightbar/Ctrl", WpfStrings.LightTitleLightbar, EffectsForCurrentBackend(CurrentLightbarEffectsForBackend()));
     }
 
-    private KeyboardRgb? EnsureKeyboardRgb()
-    {
-        if (L_Mechrevo.WpfP0.Services.WpfBackend.rgb != null)
-        {
-            if (!L_Mechrevo.WpfP0.Services.WpfBackend.rgb.IsConnected)
-            {
-                try
-                {
-                    L_Mechrevo.WpfP0.Services.WpfBackend.rgb.Connect();
-                }
-                catch
-                {
-                }
-            }
-            return L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
-        }
-        try
-        {
-            KeyboardRgb rgb = new();
-            rgb.LoadConfig();
-            rgb.Connect();
-            L_Mechrevo.WpfP0.Services.WpfBackend.rgb = rgb;
-            return rgb;
-        }
-        catch (Exception ex)
-        {
-            StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_71 + ex.Message;
-            return null;
-        }
-    }
 
     private async void LightHingeSwitch_Click(object sender, RoutedEventArgs e)
     {
@@ -10797,7 +10754,7 @@ public partial class OriginalStyleWindow : Window
         // 与 0.293.5.1 同口径：不管最终走 HID 还是 GCU 固件键盘，先落下用户意图位。
         // 固件键盘的电源状态包可能滞后/无回读，同步时 KeyboardLightingDecision 需要这份意图，
         // 否则“命令已下发但回读仍为 false”会把开关压回去。
-        KeyboardRgb? intentRgb = L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
+        var intentRgb = L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
         if (intentRgb != null)
         {
             try { intentRgb.KbPowerOn = requested; } catch { }
@@ -10819,7 +10776,7 @@ public partial class OriginalStyleWindow : Window
         {
             _pendingKeyboardPower = null;
             // 与 0.293.5.1 一致：下发失败时用户意图也回滚，否则下一拍同步又会被旧意图点亮。
-            KeyboardRgb? rollbackRgb = L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
+            var rollbackRgb = L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
             if (rollbackRgb != null)
             {
                 try { rollbackRgb.KbPowerOn = !requested; } catch { }
@@ -10907,7 +10864,7 @@ public partial class OriginalStyleWindow : Window
         {
             try
             {
-                KeyboardRgb? rgb = L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
+                var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
                 if (rgb == null || rgb.IsConnected
                     || rgb.ControllerAvailability == L_Mechrevo.WpfP0.Services.WpfBackend.FeatureUnsupported)
                 {
@@ -10944,7 +10901,7 @@ public partial class OriginalStyleWindow : Window
 
     private async Task<bool> ApplyHidKeyboardCoreAsync(int mode, bool on, bool showStatus = true)
     {
-        KeyboardRgb? rgb = EnsureKeyboardRgb();
+        var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgb();
         if (rgb == null)
         {
             if (showStatus) StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_79;
@@ -11106,7 +11063,7 @@ public partial class OriginalStyleWindow : Window
         {
             // 按 0.293.5.1：开关只补电源/亮度，不重发 SetEffectALL。
             // 重发效果帧会被部分 GCU 固件当成新灯效并复位 KeyboardPower。
-            MechrevoService? keyboardService = _backendProbe.Service;
+            var keyboardService = _backendProbe.Service;
             if (keyboardService != null)
             {
                 int brightness = Math.Clamp(_backendProbe.Hw?.KeyboardBrightness ?? 100, 1, 100);

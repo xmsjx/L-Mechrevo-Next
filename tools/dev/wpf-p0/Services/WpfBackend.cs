@@ -624,5 +624,68 @@ internal static class WpfBackend
     internal static MechrevoHw CreateOfflineHw() => new();
 
     internal static void AttachOfflineHw(MechrevoHw hw) => MechrevoLite.HardwareControl.AttachMechrevoHw(hw);
+
+    /// <summary>单键 RGB 帧流对象：已存在就直接复用，否则按配置新建（不连接）。</summary>
+    internal static KeyboardRgb? EnsurePerKeyRgbConfig()
+    {
+        if (_rgb != null)
+        {
+            return _rgb;
+        }
+        try
+        {
+            KeyboardRgb created = new();
+            created.LoadConfig();
+            _rgb = created;
+            return created;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>单键 RGB 帧流对象：已存在但未连接时补一次连接。</summary>
+    internal static KeyboardRgb? EnsurePerKeyRgb()
+    {
+        if (_rgb != null)
+        {
+            if (!_rgb.IsConnected)
+            {
+                try
+                {
+                    _rgb.Connect();
+                }
+                catch
+                {
+                }
+            }
+            return _rgb;
+        }
+        try
+        {
+            KeyboardRgb created = new();
+            created.LoadConfig();
+            created.Connect();
+            _rgb = created;
+            return created;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>无原厂回读的机型靠全局按键状态判断"是否有键入"。</summary>
+    internal static void SetPerKeyKeyDownProvider(Func<int, bool>? provider) => KeyboardRgb.BuiltInKeyDownProvider = provider;
+
+    /// <summary>GPU 超频开关（GCU 侧持久状态）。</summary>
+    internal static bool GpuOverclockEnabled
+    {
+        get => MechrevoService.GpuOverclockEnabled;
+        set => MechrevoService.GpuOverclockEnabled = value;
+    }
+
+    internal static bool IsGcu30Variant => MechrevoService.IsGcu30;
 }
 
