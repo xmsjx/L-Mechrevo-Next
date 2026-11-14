@@ -837,7 +837,7 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            MechrevoHw? hw = WpfBackend.Hw;
+            var hw = WpfBackend.Hw;
             if (hw != null && IsHidKeyboard(hw))
             {
                 return LightingCatalog.VisibleHidEffects(hw.Capabilities.KeyboardType)
@@ -931,8 +931,9 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    private static bool IsGradeLightTopicForOsd(string topic, MechrevoHw? hw)
+    private static bool IsGradeLightTopicForOsd(string topic)
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
         return (string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
                 || string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
             && hw != null
@@ -974,7 +975,7 @@ public partial class OriginalStyleWindow : Window
             return Math.Clamp(light, 1, 2) + "/2";
         }
         if (string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal)
-            || IsGradeLightTopicForOsd(topic, WpfBackend.Hw))
+            || IsGradeLightTopicForOsd(topic))
         {
             return Math.Clamp(light, 0, 4) + "/4";
         }
@@ -982,7 +983,7 @@ public partial class OriginalStyleWindow : Window
     }
 
     internal async Task<bool> WideApplyLightAsync(string topic, string effect, int light, int speed, int colorArgb, bool on, bool channelPowerOsd = false)    {
-        MechrevoHw? hw = _backendProbe?.Hw;
+        var hw = _backendProbe?.Hw;
         BackendProbe? probe = _backendProbe;
         if (probe == null)
         {
@@ -1581,7 +1582,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             int mode = _services?.Battery.CurrentMode ?? _backendProbe?.BatteryMode ?? -1;
-            MechrevoHw? hw = _backendProbe?.Hw;
+            var hw = _backendProbe?.Hw;
             bool thresholdBackend = ChargeLimitUsesWmiMailbox;
             // 宝龙达三档是“写阈值”语义：高亮由上下限文本框反推；GCU 保持原固件三档逻辑。
             if (thresholdBackend && ChargeLimitInputRow.Visibility == Visibility.Visible
@@ -1848,7 +1849,7 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            MechrevoHw? hw = _backendProbe?.Hw;
+            var hw = _backendProbe?.Hw;
             return hw != null && !ChargeLimitUsesWmiMailbox
                 && (hw.IsNucUmiFamily
                     || L_Mechrevo.WpfP0.Services.WpfBackend.RuntimeModelSupported
@@ -2845,7 +2846,7 @@ public partial class OriginalStyleWindow : Window
         bool supported = false;
         try
         {
-            MechrevoHw? hw = _backendProbe?.Hw;
+            var hw = _backendProbe?.Hw;
             supported = hw != null
                 && (BatteryLimitPanel.IsSupportedBoard(hw)
                     || hw.IsNucUmiFamily
@@ -2978,7 +2979,7 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            MechrevoHw? limitHw = _backendProbe?.Hw;
+            var limitHw = _backendProbe?.Hw;
             if (limitHw == null || !BatteryLimitPanel.IsSupportedBoard(limitHw))
             {
                 return;
@@ -3836,13 +3837,13 @@ public partial class OriginalStyleWindow : Window
         try
         {
             BackendProbe? probe = _backendProbe;
-            MechrevoHw? hw = probe?.Hw;
+            var hw = probe?.Hw;
             if (hw != null)
             {
-                PollKeyboardBrightnessOsd(hw);
-                PollTouchpadOsd(hw);
-                PollFnLockOsd(hw);
-                PollMicOsd(hw);
+                PollKeyboardBrightnessOsd();
+                PollTouchpadOsd();
+                PollFnLockOsd();
+                PollMicOsd();
             }
             bool nucPerf = _services?.Gpu.SupportsNucGpuMode == true;
             bool gcuPerf = hw != null
@@ -3890,7 +3891,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             long now = Environment.TickCount64;
-            MechrevoHw? nucHw = _backendProbe?.Hw;
+            var nucHw = _backendProbe?.Hw;
             bool nucKeyboard = nucHw?.IsNucUmiFamily == true;
             if (nucKeyboard && (code == 177 || code == 178 || code == 185 || code == 193
                 || (code >= 59 && code <= 63)))
@@ -3950,7 +3951,7 @@ public partial class OriginalStyleWindow : Window
                 return;
             }
             _lastBrightnessHotkeyTick = now;
-            MechrevoHw? hw = _backendProbe?.Hw;
+            var hw = _backendProbe?.Hw;
             bool nucCycle = _services?.Gpu.SupportsNucGpuMode == true;
             int current = hw?.KeyboardBrightness ?? -1;
             int hwLevel = current <= 4 ? current : (current < 0 ? 1 : Math.Clamp((int)Math.Round(current / 25.0), 0, 4));
@@ -4153,8 +4154,9 @@ public partial class OriginalStyleWindow : Window
     }
 
     // OSD 交互参考：OpenRevo (https://github.com/faintonce/open-revo, GPL-3.0)。
-    private void PollTouchpadOsd(MechrevoHw hw)
+    private void PollTouchpadOsd()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         try
         {
             object? raw = Microsoft.Win32.Registry.GetValue(
@@ -4190,8 +4192,9 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    private void PollFnLockOsd(MechrevoHw hw)
+    private void PollFnLockOsd()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         try
         {
             bool fnKnown;
@@ -4228,8 +4231,9 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    private void PollMicOsd(MechrevoHw hw)
+    private void PollMicOsd()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         try
         {
             if (!MechrevoLite.Helpers.AudioEndpointMic.Available)
@@ -4262,8 +4266,9 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    private void PollKeyboardBrightnessOsd(MechrevoHw hw)
+    private void PollKeyboardBrightnessOsd()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         int brightness = hw.KeyboardBrightness;
         bool powerOn = hw.KeyboardPower;
 
@@ -4350,7 +4355,7 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            MechrevoHw? hw = probe.Hw;
+            var hw = probe.Hw;
             if (!IsNucLike(hw) || _modeSwitchInFlight || _pendingMode >= 0)
             {
                 return;
@@ -4418,7 +4423,7 @@ public partial class OriginalStyleWindow : Window
         string displayedId = MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId
             ?? MechrevoLite.Mode.PerfModeStore.ActiveModeId;
         bool customDisplayed = displayedId?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) == true;
-        MechrevoHw? hw = probe.Hw;
+        var hw = probe.Hw;
         // 极致狂暴没有独立 EC 字节（Benchmark 与性能风扇同为 1），只能靠本进程标志；
         // 自定义编辑态优先显示自定义，避免打开自定义时误亮极致狂暴。
         if (!customDisplayed
@@ -4496,7 +4501,7 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            MechrevoHw? hw = _backendProbe?.Hw;
+            var hw = _backendProbe?.Hw;
             if (hw == null || !hw.IsIntelNucMachine || hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen30)
             {
                 return;
@@ -4530,7 +4535,7 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        MechrevoHw keyHw = _backendProbe.Hw;
+        var keyHw = _backendProbe.Hw;
         bool hasPerformanceKey = IsNucLike(keyHw)
             || (keyHw.IsGcuConnected && !keyHw.UsesBaolongda && !keyHw.IsNucUmiFamily)
             || IsEcLocalRoute;
@@ -4558,7 +4563,7 @@ public partial class OriginalStyleWindow : Window
             {
                 return;
             }
-            MechrevoHw? hw = probe.Hw;
+            var hw = probe.Hw;
             bool nuc = IsNucLike(hw);
 
             if (await TryHandlePerformanceKeyOverrideAsync())
@@ -4644,7 +4649,7 @@ public partial class OriginalStyleWindow : Window
     }
 
     /// <summary>启动时恢复狂暴档的显卡超频；只在内置狂暴档且上次确实开启时执行。</summary>
-    /// <summary>实验：GCU 停止时用无 GCU 的 MechrevoHw 撑起 EC-only 首页，模式/显卡按钮仍可用。</summary>
+    /// <summary>实验：GCU 停止时用离线后端对象撑起 EC-only 首页，模式/显卡按钮仍可用。</summary>
     private bool TryStartExperimentalOfflineBackend(string reason)
     {
         try
@@ -4661,7 +4666,7 @@ public partial class OriginalStyleWindow : Window
                 Logger.WriteLine("[gcu-ec] 路由声明读取失败（已忽略）：" + ex.Message);
             }
             _ = System.Threading.Tasks.Task.Run(() => _services?.Lighting.RefreshLocalLightEvidence());
-            MechrevoHw offlineHw = new();
+            var offlineHw = L_Mechrevo.WpfP0.Services.WpfBackend.CreateOfflineHw();
             BackendProbe probe = new(offlineHw, null);
             _backendProbe = probe;
             _backendRoute = BackendRoute.Ec;
@@ -4669,7 +4674,7 @@ public partial class OriginalStyleWindow : Window
             MechrevoLite.Program.hw = offlineHw;
             try
             {
-                MechrevoLite.HardwareControl.AttachMechrevoHw(offlineHw);
+                L_Mechrevo.WpfP0.Services.WpfBackend.AttachOfflineHw(offlineHw);
             }
             catch
             {
@@ -4710,7 +4715,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             BackendProbe? probe = _backendProbe;
-            MechrevoHw? hw = probe?.Hw;
+            var hw = probe?.Hw;
             if (probe == null || hw == null
                 // 没有 GCU 且 EC 模式未开启时没有可恢复的后端。
                 || (!hw.IsGcuConnected && !IsEcModeActive)
@@ -5019,7 +5024,7 @@ public partial class OriginalStyleWindow : Window
 
     private void VisualiseIgpuSaving()
     {
-        MechrevoHw? hardware = _backendProbe?.Hw;
+        var hardware = _backendProbe?.Hw;
         if (hardware == null)
         {
             return;
@@ -5225,7 +5230,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         MechrevoService? service = _backendProbe?.Service;
-        MechrevoHw? hardware = _backendProbe?.Hw;
+        var hardware = _backendProbe?.Hw;
         int currentGpuModeForSaving = _backendProbe?.CurrentGpuMode ?? hardware?.GpuMode ?? -1;
         if (currentGpuModeForSaving != 1)
         {
@@ -5533,7 +5538,7 @@ public partial class OriginalStyleWindow : Window
 
         // 宝龙达三档：直接写充电上下限，并把文本框同步到实际阈值。
         // GCU 保持原来的固件三档逻辑（不在这里改阈值）。
-        MechrevoHw? modeHw = _backendProbe.Hw;
+        var modeHw = _backendProbe.Hw;
         bool modeBaolongda = modeHw?.UsesBaolongda == true;
         bool modeGcu = !modeBaolongda
             && modeHw?.IsGcuConnected == true
@@ -6422,7 +6427,7 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            MechrevoHw? hw = _backendProbe?.Hw;
+            var hw = _backendProbe?.Hw;
             if (hw == null || !hw.IsGcuConnected || hw.UsesBaolongda)
             {
                 return;
@@ -6588,7 +6593,7 @@ public partial class OriginalStyleWindow : Window
         }
         try
         {
-            MechrevoHw hw = probe.Hw;
+            var hw = probe.Hw;
             L_Mechrevo.WpfP0.Services.PowerStatusSnapshot power = L_Mechrevo.WpfP0.Services.PowerStatusService.Read();
             L_Mechrevo.WpfP0.Services.SensorSnapshot sensor = _services?.Sensors.Read() ?? L_Mechrevo.WpfP0.Services.SensorSnapshot.Empty;
             int battery = power.Percent;
@@ -6625,7 +6630,7 @@ public partial class OriginalStyleWindow : Window
         try { RefreshBrightness(); } catch { }
         BackendLine.Text = probe.Snapshot();
         UpdateTraySensorTooltip(probe);
-        HookHardwareState(probe.Hw);
+        HookHardwareState();
         if (probe.Hw.IsNucUmiFamily)
         {
             L_Mechrevo.WpfP0.Services.WpfBackend.NucSyncQuickSwitches(probe.Hw);
@@ -6637,7 +6642,7 @@ public partial class OriginalStyleWindow : Window
         EnsurePerformanceKeyService();
         try
         {
-            MechrevoHw? liveHw = probe.Hw;
+            var liveHw = probe.Hw;
             long connectionGeneration = liveHw?.ConnectionGeneration ?? 0;
             bool live = probe.Connected && liveHw != null && liveHw.IsConnected;
             if (live && (connectionGeneration != _lastLightingConnectionGeneration || _lastLightingConnectionGeneration == 0))
@@ -6658,15 +6663,15 @@ public partial class OriginalStyleWindow : Window
         catch
         {
         }
-        if (probe.Hw is not MechrevoHw hw)
+        if (probe.Hw is not { } hw)
         {
             return;
         }
-        RefreshXingyaoFanIfNeeded(hw);
+        RefreshXingyaoFanIfNeeded();
         bool noDgpu = hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
         GpuStat.Visibility = noDgpu ? Visibility.Collapsed : Visibility.Visible;
-        CpuStat.Text = SensorLine(hw, cpu: true);
-        GpuStat.Text = SensorLine(hw, cpu: false);
+        CpuStat.Text = SensorLine(cpu: true);
+        GpuStat.Text = SensorLine(cpu: false);
         VisualiseIgpuSaving();
         if (L_Mechrevo.WpfP0.Services.WpfBackend.rgb != null)
         {
@@ -6872,8 +6877,9 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    private static void RefreshXingyaoFanIfNeeded(MechrevoHw hw)
+    private static void RefreshXingyaoFanIfNeeded()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         try
         {
             if (hw.CpuFanRpm > 0 && hw.GpuFanRpm > 0)
@@ -6895,8 +6901,9 @@ public partial class OriginalStyleWindow : Window
     }
 
     /// <summary>CPU / GPU 那行读数：温度 + 风扇转速 + 风扇百分比。</summary>
-    private string SensorLine(MechrevoHw hw, bool cpu)
+    private string SensorLine(bool cpu)
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         L_Mechrevo.WpfP0.Services.SensorSnapshot? snapshot = _services?.Sensors.Read();
         int temp = cpu ? (snapshot?.CpuTempC ?? 0) : (snapshot?.GpuTempC ?? 0);
         if (temp <= 0)
@@ -6919,16 +6926,17 @@ public partial class OriginalStyleWindow : Window
             rpm = cpu ? ecCpu : ecGpu;
         }
         string line = (cpu ? "CPU " : "GPU ") + temp + "℃   " + rpm + "rpm";
-        string duty = FanDutyText(hw, cpu);
+        string duty = FanDutyText(cpu);
         return duty.Length == 0 ? line : line + " " + duty;
     }
 
     /// <summary>
     /// 风扇百分比（占空比）。读不到风扇信息、或该后端给不出百分比（只报转速）时不显示。
     /// </summary>
-    private static string FanDutyText(MechrevoHw hw, bool cpu)
+    private static string FanDutyText(bool cpu)
     {
-        if (!hw.IsFanInfoFresh(MechrevoHw.FanInfoMaximumAge))
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
+        if (!hw.IsFanInfoFresh(L_Mechrevo.WpfP0.Services.WpfBackend.FanInfoMaxAgeMs))
         {
             return "";
         }
@@ -7171,7 +7179,7 @@ public partial class OriginalStyleWindow : Window
         {
             if (AppConfig.Get("onboarding_version", 0) < 1)
             {
-                MechrevoHw? hw = _backendProbe?.Hw;
+                var hw = _backendProbe?.Hw;
                 if (!(hw?.UsesBaolongda ?? false))
                 {
                     AppConfig.Set("igpu_only_asked", 1);
@@ -7190,7 +7198,7 @@ public partial class OriginalStyleWindow : Window
             }
             if (AppConfig.Get("igpu_only_asked", 0) != 1)
             {
-                MechrevoHw? hw = _backendProbe?.Hw;
+                var hw = _backendProbe?.Hw;
                 bool baolongda = hw?.UsesBaolongda ?? false;
                 bool needAsk = !baolongda && (hw == null || (hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen30 && !hw.HasReliableIgpuOnlyCapability));
                 if (needAsk)
@@ -7288,7 +7296,7 @@ public partial class OriginalStyleWindow : Window
         }
         // UI 探针预览：合成 Hw 已挂在 WpfBackend，不要再连真实后端覆盖能力位。
         if (MechrevoLite.Program.UiAuditMode
-            && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is MechrevoHw previewHw)
+            && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } previewHw)
         {
             try
             {
@@ -7615,7 +7623,7 @@ public partial class OriginalStyleWindow : Window
         }
         try
         {
-            MechrevoHw? hw = _backendProbe?.Hw;
+            var hw = _backendProbe?.Hw;
             bool umiGpuMode = hw?.IsUmiMachine == true;
             bool nucNoGpuSwitch = hw?.IsIntelNucMachine == true;
             bool gpuRowHidden = hw?.GpuRowHiddenByGcuReports == true;
@@ -7765,7 +7773,7 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        MechrevoHw? hw = _backendProbe.Hw;
+        var hw = _backendProbe.Hw;
         MechrevoDeviceCapabilities? caps = _backendProbe.Capabilities;
         string igpuMode = AppConfig.GetString("igpu_only_ui") ?? "auto";
         bool igpuSupported = hw?.CanOfferIgpuOnly ?? ((caps?.IgpuOnly ?? false) || (hw?.SupportsIgpuOnly ?? false));
@@ -8454,7 +8462,7 @@ public partial class OriginalStyleWindow : Window
 
     private void RefreshPerfConfigVisibility(int currentMode)
     {
-        MechrevoHw? hw = _backendProbe?.Hw;
+        var hw = _backendProbe?.Hw;
         // 只看「GCU 本身是 30 系」：显卡是 30 系但 GCU 不是 30 系时不显示模式×配置。
         bool gcu30 = hw?.IsGcuConnected == true && MechrevoService.IsGcu30;
         bool profileConfig = gcu30
@@ -8689,7 +8697,7 @@ public partial class OriginalStyleWindow : Window
         {
             try
             {
-                MechrevoHw? hw = _backendProbe?.Hw;
+                var hw = _backendProbe?.Hw;
                 // 与迷你窗 GpuOverclockSwitch 同一条件：只在狂暴档且后端支持超频时显示；
                 // 不额外按 DgpuGeneration 硬屏蔽（50 系 GCU 支持时即可用）。
                 return hw != null
@@ -9330,7 +9338,7 @@ public partial class OriginalStyleWindow : Window
 
     private static (string Effect, string Name)[] CurrentLogoEffectsForBackend()
     {
-        MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
         if (hw != null && !hw.UsesBaolongda
             && (hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen30
                 || hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40))
@@ -9355,7 +9363,7 @@ public partial class OriginalStyleWindow : Window
 
     private static (string Effect, string Name)[] KeyboardEffectsForCurrent()
     {
-        MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
         if (EcKeyboardActive)
         {
             return EcKeyboardEffects();
@@ -9431,7 +9439,7 @@ public partial class OriginalStyleWindow : Window
 
     private static (string Effect, string Name)[] CurrentLightbarEffectsForBackend()
     {
-        MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
         if (hw?.IsIntelNucMachine == true)
         {
             // NUC 灯带只有单色/彩虹两档，其余名称下发无效。
@@ -9550,7 +9558,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             KeyboardEffectCombo.Items.Clear();
-            MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+            var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
             if (IsHidKeyboard(hw))
             {
                 EnsureKeyboardRgbConfig();
@@ -9601,7 +9609,7 @@ public partial class OriginalStyleWindow : Window
 
     private void SyncLightSwitchesFromHardware()
     {
-        MechrevoHw? hw = _backendProbe?.Hw;
+        var hw = _backendProbe?.Hw;
         if (hw == null || !hw.IsConnected)
         {
             return;
@@ -9781,7 +9789,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         L_Mechrevo.WpfP0.Services.WpfBackend.Attach(_backendProbe.Hw, _backendProbe.Service);
-        MechrevoHw? hw = _backendProbe.Hw;
+        var hw = _backendProbe.Hw;
         if (EcKeyboardActive && !EcKeyboardHid)
         {
             if (!EcKeyboardControllable)
@@ -9929,8 +9937,9 @@ public partial class OriginalStyleWindow : Window
         _ = ApplyKeyboardLightAsync(showStatus: false);
     }
 
-    private void HookHardwareState(MechrevoHw? hw)
+    private void HookHardwareState()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         if (ReferenceEquals(_stateHookedHw, hw))
         {
             return;
@@ -9981,7 +9990,7 @@ public partial class OriginalStyleWindow : Window
             {
                 await Task.Delay(120);
                 BackendProbe? probe = _backendProbe;
-                MechrevoHw? hw = probe?.Hw;
+                var hw = probe?.Hw;
                 if (probe == null || hw == null
                     || !hw.IsGcuConnected
                     || hw.UsesBaolongda
@@ -10138,7 +10147,7 @@ public partial class OriginalStyleWindow : Window
                 }
             }
             await RestoreSavedChannelAsync("HidLightbar/Ctrl", LightStripSwitch);
-            if (!IsSamePhysicalLightbar(_backendProbe.Hw))
+            if (!IsSamePhysicalLightbar())
             {
                 await RestoreSavedChannelAsync("HidLightbar_Logo/Ctrl", LogoLightSwitch);
             }
@@ -10161,7 +10170,7 @@ public partial class OriginalStyleWindow : Window
     /// <summary>0.293.5.1：宝龙达软件彩虹只在硬件亮着且保存效果=彩虹时恢复刷色，不重新点亮。</summary>
     private void TryResumeBaolongdaRainbow(string reason)
     {
-        MechrevoHw? hw = _backendProbe?.Hw;
+        var hw = _backendProbe?.Hw;
         if (hw == null || !hw.UsesBaolongda || hw.IsKeyboardRainbowRunning) return;
         if (_services?.Lighting.ChannelEffectIs("Keyboard/Ctrl", "Rainbow") != true) return;
         KeyboardRgb? rgb = EnsureKeyboardRgb();
@@ -10172,7 +10181,7 @@ public partial class OriginalStyleWindow : Window
             L_Mechrevo.WpfP0.Services.WpfBackend.ReadEcKeyboardBrightness(out brightness);
         }
         if (brightness <= 0) return;
-        int max = Math.Max(1, MechrevoHw.EffectiveKeyboardBrightnessMax());
+        int max = Math.Max(1, L_Mechrevo.WpfP0.Services.WpfBackend.KeyboardBrightnessMax());
         hw.StartKeyboardRainbow((byte)Math.Clamp(brightness, 1, max), CancellationToken.None);
         Logger.WriteError("[light] 宝龙达启动：" + reason + " 软件彩虹恢复（硬件亮着 · 亮度=" + brightness + "）");
     }
@@ -10183,7 +10192,7 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        if (topic == "HidLightbar_Logo/Ctrl" && IsSamePhysicalLightbar(_backendProbe.Hw))
+        if (topic == "HidLightbar_Logo/Ctrl" && IsSamePhysicalLightbar())
         {
             return;
         }
@@ -10226,8 +10235,9 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    private static bool IsSamePhysicalLightbar(MechrevoHw? hw)
+    private static bool IsSamePhysicalLightbar()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         try
         {
             if (hw == null || !L_Mechrevo.WpfP0.Services.WpfBackend.LightbarDedupEnabled)
@@ -10265,7 +10275,7 @@ public partial class OriginalStyleWindow : Window
             _lightingIdleSwitchSnapshot = null;
         }
         await ApplyKeyboardLightAsync(showStatus: false);
-        if (!IsSamePhysicalLightbar(_backendProbe?.Hw))
+        if (!IsSamePhysicalLightbar())
         {
             await ApplyLogoLightAsync(restoreEffect: true);
         }
@@ -10961,7 +10971,7 @@ public partial class OriginalStyleWindow : Window
                 }
                 rgb.StopCurrentEffect();
                 // 0.293.5.1：HID 关灯后同时走固件键盘电源关（NUC/UMI 自带通道，不走 GCU）。
-                MechrevoHw? offHw = _backendProbe?.Hw;
+                var offHw = _backendProbe?.Hw;
                 if (_backendProbe?.Service != null && offHw is { IsConnected: true }
                     && offHw.IsNucUmiFamily != true)
                 {
@@ -10989,7 +10999,7 @@ public partial class OriginalStyleWindow : Window
             }
             // 0.293.5.1：HID 帧流前，如果固件键盘电源还是关的，先补一次电源；
             // 否则部分机型 HID 帧在线但背光仍不亮（NUC/UMI 不走这条 GCU 分流）。
-            MechrevoHw? onHw = _backendProbe?.Hw;
+            var onHw = _backendProbe?.Hw;
             if (_backendProbe?.Service != null && onHw is { IsConnected: true, KeyboardPower: false }
                 && onHw.IsNucUmiFamily != true)
             {
@@ -11501,7 +11511,7 @@ public partial class OriginalStyleWindow : Window
         // ⭐ P0-3：温度/占用/频率/风扇/功耗统一由共享 ISensorService 快照提供；
         //   VRAM/RAM（SensorSnapshot 暂无字段）仍从后端对象取，未连接回退 -1 ✅
         SensorSnapshot snapshot = _services?.Sensors.Read() ?? SensorSnapshot.Empty;
-        MechrevoHw? hw = _backendProbe?.Hw;
+        var hw = _backendProbe?.Hw;
         int battery = hw?.BatteryPercent ?? -1;
         try
         {

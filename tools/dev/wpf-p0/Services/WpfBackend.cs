@@ -616,5 +616,13 @@ internal static class WpfBackend
 
     internal static void NucKbdApply(string effect, bool on, int brightness, int speed, int colorArgb, int[] cycleColors) =>
         NucKeyboardLighting.Apply(effect, on, brightness, speed, colorArgb, cycleColors);
+
+    /// <summary>风扇读数新鲜度阈值。</summary>
+    internal static TimeSpan FanInfoMaxAgeMs => MechrevoHw.FanInfoMaximumAge;
+
+    /// <summary>离线后端对象（GCU 停掉时撑起 EC-only 首页）。</summary>
+    internal static MechrevoHw CreateOfflineHw() => new();
+
+    internal static void AttachOfflineHw(MechrevoHw hw) => MechrevoLite.HardwareControl.AttachMechrevoHw(hw);
 }
 
