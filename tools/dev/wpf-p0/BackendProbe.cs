@@ -279,7 +279,8 @@ internal sealed class BackendProbe : IDisposable
         {
             try
             {
-                bool legacy = _hw?.SupportsColorCalibration ?? false;
+                // 本地通道（Windows 颜色管理 + 已落地 ICC 文件）也算可用：OEM 校色位只是其中一条腿。
+                bool legacy = (_hw?.SupportsColorCalibration ?? false) || HasLocalIccProfile();
                 bool value = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
                     MechrevoLite.Hardware.Architecture.FeatureId.ColorCalibration, _hw, legacy);
                 MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogFeature(
@@ -292,6 +293,33 @@ internal sealed class BackendProbe : IDisposable
             }
         }
     }
+    /// <summary>本地是否有可用的 ICC 配置文件（官方目录或自定义目录里有 .icm/.icc）。</summary>
+    private static bool HasLocalIccProfile()
+    {
+        try
+        {
+            foreach (string dir in new[]
+            {
+                MechrevoLite.Display.IccHelper.OfficialIccDir,
+                MechrevoLite.Display.IccHelper.CustomIccDir
+            })
+            {
+                if (!System.IO.Directory.Exists(dir))
+                {
+                    continue;
+                }
+                if (System.IO.Directory.EnumerateFiles(dir, "*.ic[cm]").Any())
+                {
+                    return true;
+                }
+            }
+        }
+        catch
+        {
+        }
+        return false;
+    }
+
 
     internal int ColorCalibrationLevel
     {
