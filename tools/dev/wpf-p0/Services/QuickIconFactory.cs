@@ -79,8 +79,8 @@ internal static class QuickIconFactory
 			};
 			Rectangle rect = new()
 			{
-				Width = 18,
-				Height = 17,
+				Width = 15,
+				Height = 14,
 				OpacityMask = mask
 			};
 			rect.SetResourceReference(Shape.FillProperty, "TextBrush");

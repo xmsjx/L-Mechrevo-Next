@@ -48,6 +48,7 @@
             <Setter Property="HorizontalContentAlignment" Value="Center" />
         </Style>
         <Style x:Key="Tile" TargetType="ToggleButton">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Foreground" Value="{DynamicResource MutedBrush}" />
             <Setter Property="Background" Value="{DynamicResource ControlBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />

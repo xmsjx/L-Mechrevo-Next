@@ -1,4 +1,4 @@
-﻿// ==============================================================================================
+// ==============================================================================================
 // L-Mechrevo — AMD SMU / PawnIO service layer.
 //
 // 本文件属于 L-Mechrevo（GPL-3.0-only，见仓库根 LICENSE）。
@@ -195,8 +195,8 @@ public sealed class RyzenSmuService : IDisposable
 		{
 			throw new ArgumentOutOfRangeException("coreIndex");
 		}
-		// 与 EncodeCurve 同一区间：LM 的写入路径只接受 -40..0，不能越过自己的约束。
-		if (margin < -40 || margin > 0)
+		// 与 EncodeCurve 同一区间：LM 的写入路径只接受 -50..0（SMU 曲线优化的下限）。
+		if (!MechrevoLite.Hardware.CpuCoRange.IsValid(margin))
 		{
 			throw new ArgumentOutOfRangeException("margin");
 		}
@@ -1269,7 +1269,7 @@ public sealed class RyzenSmuService : IDisposable
 
 	internal static uint EncodeCurve(int steps)
 	{
-		if ((steps < -40 || steps > 0) ? true : false)
+		if (!MechrevoLite.Hardware.CpuCoRange.IsValid(steps))
 		{
 			throw new ArgumentOutOfRangeException("steps");
 		}

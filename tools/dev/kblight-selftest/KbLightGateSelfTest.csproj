@@ -21,5 +21,6 @@
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\ChargeModePolicy.cs" Link="ChargeModePolicy.cs" />
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\CrashLogPolicy.cs" Link="CrashLogPolicy.cs" />
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\FanRingFraction.cs" Link="FanRingFraction.cs" />
+    <Compile Include="..\..\..\source\MechrevoLite.Hardware\CpuCoRange.cs" Link="CpuCoRange.cs" />
   </ItemGroup>
 </Project>

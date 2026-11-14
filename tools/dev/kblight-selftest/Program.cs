@@ -398,6 +398,17 @@ internal static class Program
 			FanRingFraction.FromDuty(0) == null, true);
 		Check("占空比负数 ⇒ 未知",
 			FanRingFraction.FromDuty(-1) == null, true);
+		Console.WriteLine();
+		Console.WriteLine("== 2026-11-14 分核负压区间（SMU 下限 -50）==");
+		Console.WriteLine("起因：界面只到 -30、写入层只到 -40，SMU 实际可用 -50");
+
+		Check("下限 = -50", CpuCoRange.Minimum == -50, true);
+		Check("上限 = 0", CpuCoRange.Maximum == 0, true);
+		Check("-50 合法", CpuCoRange.IsValid(-50), true);
+		Check("-30 合法", CpuCoRange.IsValid(-30), true);
+		Check("0 合法", CpuCoRange.IsValid(0), true);
+		Check("-51 非法", CpuCoRange.IsValid(-51), false);
+		Check("+1 非法", CpuCoRange.IsValid(1), false);
 
 		Console.WriteLine();
 		Console.WriteLine(_fail == 0 ? $"== 全绿：键盘灯自检 {_total}/{_total} ==" : $"== 失败 {_fail}/{_total} 项 ==");

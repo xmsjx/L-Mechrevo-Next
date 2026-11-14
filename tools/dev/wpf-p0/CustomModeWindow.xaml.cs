@@ -1638,6 +1638,10 @@ public partial class CustomModeWindow : Window
             L_Mechrevo.WpfP0.Services.WpfBackend.TrySetCustomModeGate();
             bool cpuOk = L_Mechrevo.WpfP0.Services.WpfBackend.NucPerformanceModeTryApplyCustom(
                 pl1, pl2, pl4ForEc, tcc, out string detail);
+        if (cpuOk)
+        {
+            L_Mechrevo.WpfP0.Services.PowerWallRestore.Save(pl1, pl2, pl4);
+        }
             L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryApplyMode(3, out string customModeDetail);
             detail += " · " + customModeDetail;
             bool gpuPowerOk = true;

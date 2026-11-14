@@ -303,7 +303,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 						// （CurveCommand 无值）的代号也能在 UI 上给出 CO 输入口，否则"删掉全核框"之后
 						// 那些代号会连一个输入口都没有。SKU 层级仍然是否决项（与改前同一把锁）。
 						bool coWritable = skuRejection == null && (curveCommandPresent || perCoreCommand.HasValue);
-						optionList.Add(new CpuTuningOption("amd-co", "CpuTuneCurve", -30m, 0m, "CO", current, CanWrite: coWritable, coreMargins, readbackNoteKey, PerCoreWrite: perCoreWrite));
+						optionList.Add(new CpuTuningOption("amd-co", "CpuTuneCurve", CpuCoRange.Minimum, 0m, "CO", current, CanWrite: coWritable, coreMargins, readbackNoteKey, PerCoreWrite: perCoreWrite));
 					}
 					bool clockAvailable = RyzenSmuService.SupportsClock(_smu.CpuCodeName);
 					if (clockAvailable)
@@ -920,7 +920,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 
 	private const int MaximumSavedCores = 64;
 
-	private const int MinimumPerCoreMargin = -40;
+	private const int MinimumPerCoreMargin = CpuCoRange.Minimum;
 
 	private const int MaximumPerCoreMargin = 0;
 
@@ -1072,8 +1072,8 @@ internal sealed class RuntimeCpuTuning : IDisposable
 	// ⚠️ 两个例外，都**照实说**，绝不假装已校验：
 	//   * 该代号没有每核读命令（Matisse）-> 基线读不到、写后也读不回：写**照发**
 	//     （用户"只要支持就开"），但 `Verified: false` + 明写"无法回读校验"；
-	//   * 基线读到了但在允许范围外（例如基线 -50 而 UI 只允许 -40..0）-> 回读一致仍然给
-	//     `Verified: true`（**值确实写进去了**），但在 Detail 里明写"基线超出可写范围（-40..0）、
+	//   * 基线读到了但在允许范围外（例如基线 -45 而 UI 只允许 -30..0）-> 回读一致仍然给
+	//     `Verified: true`（**值确实写进去了**），但在 Detail 里明写"基线超出可写范围（-50..0）、
 	//     回写路径不会用这个值"，避免用户误以为点一下就能恢复到一个写不回去的状态。
 	// ==========================================================================================
 	internal CpuTuningResult ApplyPerCore(IReadOnlyList<int> margins)

@@ -18,6 +18,7 @@
 
     <Window.Resources>
         <Style x:Key="PickerButton" TargetType="Button">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Background" Value="{DynamicResource ControlBrush}" />
             <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
@@ -39,6 +40,7 @@
         </Style>
 
         <Style x:Key="PickerCheck" TargetType="CheckBox">
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
             <Setter Property="Margin" Value="0,2" />
             <Setter Property="Cursor" Value="Hand" />
@@ -92,7 +94,7 @@
                                   IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                   Click="Choice_Click">
                             <StackPanel Orientation="Horizontal">
-              <ContentPresenter Content="{Binding Icon}" Width="20" Height="18" VerticalAlignment="Center" />
+              <ContentPresenter Content="{Binding Icon}" Width="24" Height="18" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Label}" FontSize="12" VerticalAlignment="Center" />
                             </StackPanel>
                         </CheckBox>

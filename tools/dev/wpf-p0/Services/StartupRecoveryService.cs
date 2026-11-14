@@ -52,12 +52,30 @@ internal static class StartupRecoveryService
         {
             // 旧 Program.ScheduleCpuCoAutoApply 的启动入口；内部有 clean-exit/开关/能力门控。
             RuntimeCpuTuning.ApplySavedOnStartup();
+            // 结论可见化：开关开着但被跳过（关机守卫/能力不支持）时提示一次，避免"以为已经自动应用"。
+            if (RuntimeCpuTuning.SkippedByGuard)
+            {
+                try
+                {
+                    ToastService.Show("分核负压：上次非正常关机，本次未自动应用（自动应用开关已关闭）", failure: true);
+                }
+                catch
+                {
+                }
+            }
         });
 
         Try("WujieFanCurveAutoApply.Schedule", () =>
         {
             // 无界 APU 自定义档开机自动曲线（内部等 4s 并判 WujieSmuApu/自定义档）。
             WujieFanCurveAutoApply.Schedule();
+
+        });
+
+        Try("PowerWallRestore.RunOnce", () =>
+        {
+            // 自定义档的 PL1/PL2/fPPT 随档位保存，但开机回档不重写功耗墙；这里补一次重放。
+            PowerWallRestore.RunOnce();
         });
 
         Logger.WriteLine("[startup-recovery] 启动恢复调度结束");
