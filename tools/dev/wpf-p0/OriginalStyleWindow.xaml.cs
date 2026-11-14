@@ -2244,27 +2244,26 @@ public partial class OriginalStyleWindow : Window
 
     private IntPtr PowerBroadcastHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        const int WM_POWERBROADCAST = 0x0218;
-        const int PBT_APMRESUMESUSPEND = 0x0007;
-        const int PBT_APMRESUMEAUTOMATIC = 0x0012;
-        int reason = wParam.ToInt32();
-        if (msg == WM_POWERBROADCAST && (reason == PBT_APMRESUMEAUTOMATIC || reason == PBT_APMRESUMESUSPEND))
+        // ⛔ 消息号与 wParam 的判定都在 Core 的策略里：先判消息再取 wParam，避免溢出。
+        if (!PowerBroadcastPolicy.IsResume(msg, msg == PowerBroadcastPolicy.WmPowerBroadcast ? wParam.ToInt64() : 0))
         {
-            // 与 SystemEvents.PowerModeChanged 双通道触发：5 秒内只处理一次。
-            long now = Environment.TickCount64;
-            if (now - _lastWakeRestoreTick >= 5000)
-            {
-                _lastWakeRestoreTick = now;
-                Dispatcher.BeginInvoke(new Action(async () =>
-                {
-                    await Task.Delay(1500);
-                    _welcomeSentForWake = false;
-                    await RestoreLightingOnStartupAsync();
-                    await RestoreKeyboardLightAfterWakeAsync();
-                    await MaybeAutoWelcomeAsync(wake: true);
-                }));
-            }
+            return IntPtr.Zero;
         }
+        // 与 SystemEvents.PowerModeChanged 双通道触发：5 秒内只处理一次。
+        long now = Environment.TickCount64;
+        if (!PowerBroadcastPolicy.ShouldHandle(now, _lastWakeRestoreTick, 5000))
+        {
+            return IntPtr.Zero;
+        }
+        _lastWakeRestoreTick = now;
+        Dispatcher.BeginInvoke(new Action(async () =>
+        {
+            await Task.Delay(1500);
+            _welcomeSentForWake = false;
+            await RestoreLightingOnStartupAsync();
+            await RestoreKeyboardLightAfterWakeAsync();
+            await MaybeAutoWelcomeAsync(wake: true);
+        }));
         return IntPtr.Zero;
     }
 

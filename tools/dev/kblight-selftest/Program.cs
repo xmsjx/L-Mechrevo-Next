@@ -336,6 +336,22 @@ internal static class Program
 			LightingIdleTimerPolicy.Snap(600) == 600, true);
 		Check("小于最小档 ⇒ 归零",
 			LightingIdleTimerPolicy.Snap(7) == 0, true);
+		Console.WriteLine();
+		Console.WriteLine("== 2026-11-14 电源广播判定（先判消息号再取 wParam，防止 OverflowException）==");
+		Console.WriteLine("起因：唤醒分支重写后，别的消息的 wParam 被 ToInt32() ⇒ 每条消息都抛 OverflowException");
+
+		Check("非电源广播消息一律不算唤醒（wParam 再大也不读）",
+			PowerBroadcastPolicy.IsResume(0x000F, long.MaxValue), false);
+		Check("0x0218 + 0x12 ⇒ 自动唤醒",
+			PowerBroadcastPolicy.IsResume(PowerBroadcastPolicy.WmPowerBroadcast, 0x0012), true);
+		Check("0x0218 + 0x07 ⇒ 挂起唤醒",
+			PowerBroadcastPolicy.IsResume(PowerBroadcastPolicy.WmPowerBroadcast, 0x0007), true);
+		Check("0x0218 + 其它原因 ⇒ 不算",
+			PowerBroadcastPolicy.IsResume(PowerBroadcastPolicy.WmPowerBroadcast, 0x0004), false);
+		Check("5 秒内重复触发被去重",
+			PowerBroadcastPolicy.ShouldHandle(10000, 8000, 5000), false);
+		Check("超过 5 秒允许再次处理",
+			PowerBroadcastPolicy.ShouldHandle(14000, 8000, 5000), true);
 
 		Console.WriteLine();
 		Console.WriteLine(_fail == 0 ? $"== 全绿：键盘灯自检 {_total}/{_total} ==" : $"== 失败 {_fail}/{_total} 项 ==");
