@@ -366,6 +366,24 @@ internal static class Program
 			ChargeModePolicy.ComputeModeBits(60) == ChargeModePolicy.ModeBitsWorkstation, true);
 		Check("40% ⇒ 0x20（下限仍是工作站）",
 			ChargeModePolicy.ComputeModeBits(40) == ChargeModePolicy.ModeBitsWorkstation, true);
+		Console.WriteLine();
+		Console.WriteLine("== 2026-11-14 崩溃记录去重（同一异常不许把 crash.txt 刷到几 MB）==");
+		Console.WriteLine("起因：一个未观察的 SocketException 记录 385 条、crash.txt 涨到 2MB");
+
+		DateTime t0 = new(2026, 11, 14, 12, 0, 0, DateTimeKind.Utc);
+		Check("从未记录过 ⇒ 写完整堆栈",
+			CrashLogPolicy.ShouldWriteFull(t0, null), true);
+		Check("窗口期内重复 ⇒ 只累计",
+			CrashLogPolicy.ShouldWriteFull(t0.AddSeconds(30), t0), false);
+		Check("超过窗口期 ⇒ 再写一次完整堆栈",
+			CrashLogPolicy.ShouldWriteFull(t0.AddSeconds(61), t0), true);
+		Check("签名含来源/类型/首帧 ⇒ 不同异常不会互相抑制",
+			CrashLogPolicy.Signature("Task", "System.Net.Sockets.SocketException", "at A()")
+				== CrashLogPolicy.Signature("Task", "System.Net.Sockets.SocketException", "at A()"), true);
+		Check("首帧提取：取第一处 at 行",
+			CrashLogPolicy.FirstFrame("   at Foo.Bar()" + Environment.NewLine + "   at Baz.Qux()").StartsWith("at Foo.Bar", StringComparison.Ordinal), true);
+		Check("超过 2MB 触发轮转",
+			CrashLogPolicy.ShouldRotate(CrashLogPolicy.MaxBytes + 1), true);
 
 		Console.WriteLine();
 		Console.WriteLine(_fail == 0 ? $"== 全绿：键盘灯自检 {_total}/{_total} ==" : $"== 失败 {_fail}/{_total} 项 ==");

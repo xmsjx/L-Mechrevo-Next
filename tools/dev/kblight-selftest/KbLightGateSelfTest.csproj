@@ -19,5 +19,6 @@
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\LightingIdleTimerPolicy.cs" Link="LightingIdleTimerPolicy.cs" />
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\PowerBroadcastPolicy.cs" Link="PowerBroadcastPolicy.cs" />
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\ChargeModePolicy.cs" Link="ChargeModePolicy.cs" />
+    <Compile Include="..\..\..\source\MechrevoLite.Hardware\CrashLogPolicy.cs" Link="CrashLogPolicy.cs" />
   </ItemGroup>
 </Project>

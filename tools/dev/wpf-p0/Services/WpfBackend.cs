@@ -620,6 +620,17 @@ internal static class WpfBackend
     /// <para>⚠️ 只在**确实探到**时返回 true；探不到一律 null（未知），交给旧判据，避免误否。</para>
     /// <summary>
     private static bool KeyboardLightLocalEvidence() => IteLightingLocal.HasLightbar || EcKeyboardActiveNow;
+    /// <summary>崩溃记录去重：签名、窗口判定、轮转判定（界面层不直接引用硬件层类型）。</summary>
+    internal static string CrashSignature(string source, string exceptionType, string firstFrame) =>
+        CrashLogPolicy.Signature(source, exceptionType, firstFrame);
+
+    internal static string CrashFirstFrame(string? stack) => CrashLogPolicy.FirstFrame(stack);
+
+    internal static bool CrashShouldWriteFull(DateTime nowUtc, DateTime? lastUtc) =>
+        CrashLogPolicy.ShouldWriteFull(nowUtc, lastUtc);
+
+    internal static bool CrashShouldRotate(long bytes) => CrashLogPolicy.ShouldRotate(bytes);
+
     internal static void AttachLocalChannelEvidence()
     {
         FeatureGate.LocalChannelEvidenceProvider = feature =>

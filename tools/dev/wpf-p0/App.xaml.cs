@@ -239,6 +239,11 @@ public partial class App : Application
         };
     }
 
+    /// <summary>同一崩溃签名的最近一次完整记录时间（去重窗口用）。</summary>
+    private static readonly System.Collections.Generic.Dictionary<string, (DateTime Last, int Suppressed)> CrashSignatures = new();
+
+    private static readonly object CrashLock = new();
+
     private static void WriteCrash(string source, Exception? ex)
     {
         try
@@ -246,9 +251,30 @@ public partial class App : Application
             string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MechrevoLite");
             Directory.CreateDirectory(dir);
             string path = Path.Combine(dir, "crash.txt");
-            string text = "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "] "
-                + source + " · " + (ex == null ? "(no exception object)" : ex.ToString())
-                + Environment.NewLine + new string('-', 72) + Environment.NewLine;
+            string firstFrame = L_Mechrevo.WpfP0.Services.WpfBackend.CrashFirstFrame(ex?.StackTrace);
+            string signature = L_Mechrevo.WpfP0.Services.WpfBackend.CrashSignature(source, ex?.GetType().FullName ?? "", firstFrame);
+            DateTime nowUtc = DateTime.UtcNow;
+            string text;
+            lock (CrashLock)
+            {
+                CrashSignatures.TryGetValue(signature, out (DateTime Last, int Suppressed) state);
+                if (!L_Mechrevo.WpfP0.Services.WpfBackend.CrashShouldWriteFull(nowUtc, state.Last))
+                {
+                    // 窗口期内重复：只累计次数，不写堆栈（避免同一异常刷满 crash.txt）。
+                    CrashSignatures[signature] = (state.Last, state.Suppressed + 1);
+                    return;
+                }
+                string suppressed = state.Suppressed > 0 ? "（上次之后同类已抑制 " + state.Suppressed + " 次）" : "";
+                CrashSignatures[signature] = (nowUtc, 0);
+                text = "[" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") + "] "
+                    + source + " · " + (ex == null ? "(no exception object)" : ex.ToString())
+                    + suppressed + Environment.NewLine + new string('-', 72) + Environment.NewLine;
+            }
+            FileInfo info = new(path);
+            if (info.Exists && L_Mechrevo.WpfP0.Services.WpfBackend.CrashShouldRotate(info.Length))
+            {
+                File.Move(path, path + ".1", overwrite: true);
+            }
             File.AppendAllText(path, text, System.Text.Encoding.UTF8);
         }
         catch
