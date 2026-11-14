@@ -3878,7 +3878,12 @@ public partial class MainWindow : Window
                 rgb.LoadConfig();
                 WpfBackend.rgb = rgb;
             }
-            MountInlineLightEditor(new HidKeyboardWindow(L_Mechrevo.WpfP0.Services.PerKeyRgbView.Attach()!));
+            var perKeyView = L_Mechrevo.WpfP0.Services.PerKeyRgbView.Attach();
+            if (perKeyView == null)
+            {
+                return;
+            }
+            MountInlineLightEditor(new HidKeyboardWindow(perKeyView));
             Logger.WriteLineIfChanged("wide-light-hid-editor", $"[wide-light] HID 键盘编辑器已内联：{title}");
         }
         catch (Exception ex)

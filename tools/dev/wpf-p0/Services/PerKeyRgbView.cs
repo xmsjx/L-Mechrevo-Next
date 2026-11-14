@@ -17,8 +17,16 @@ public sealed class PerKeyRgbView
     /// <summary>取当前帧流对象（没有就按配置新建并连接），失败返回 null。</summary>
     public static PerKeyRgbView? Attach()
     {
-        KeyboardRgb? rgb = WpfBackend.EnsurePerKeyRgb();
-        return rgb == null ? null : new PerKeyRgbView(rgb);
+        try
+        {
+            KeyboardRgb? rgb = WpfBackend.EnsurePerKeyRgb();
+            return rgb == null ? null : new PerKeyRgbView(rgb);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteError("[hid-fx] 打开单键灯效窗口失败：" + ex.Message);
+            return null;
+        }
     }
 
     public bool IsConnected => _rgb.IsConnected;

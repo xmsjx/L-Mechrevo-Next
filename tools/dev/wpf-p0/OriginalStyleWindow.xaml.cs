@@ -9800,7 +9800,11 @@ public partial class OriginalStyleWindow : Window
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_66;
             return;
         }
-        new HidKeyboardWindow(L_Mechrevo.WpfP0.Services.PerKeyRgbView.Attach()!) { Owner = this }.ShowDialog();
+        var perKeyView = L_Mechrevo.WpfP0.Services.PerKeyRgbView.Attach();
+            if (perKeyView != null)
+            {
+                new HidKeyboardWindow(perKeyView) { Owner = this }.ShowDialog();
+            }
         FillKeyboardEffects();
     }
 
