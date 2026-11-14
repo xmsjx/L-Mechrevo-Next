@@ -61,7 +61,9 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
         [FeatureId.TurboMode] = new FeatureDeclaration(FeatureAvailability.Unknown,
             BackendChannel.None, "涡轮档：本后端未声明，交由门控回退旧判据", new string[0]),
         [FeatureId.SilentTurbo] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "静音↔狂暴：本后端未声明，交由门控回退旧判据", new string[0])
+            BackendChannel.None, "静音↔狂暴：本后端未声明，交由门控回退旧判据", new string[0]),
+        [FeatureId.PerfTuning] = new FeatureDeclaration(FeatureAvailability.Unknown,
+            BackendChannel.None, "CPU 调优/风扇设置：本后端未声明，交由门控回退旧判据", new string[0])
 			});
 	}
 }

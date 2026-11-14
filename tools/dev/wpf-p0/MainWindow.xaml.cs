@@ -2349,7 +2349,7 @@ public partial class MainWindow : Window
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         return (hw?.Pl1Adjustable ?? false) || (hw?.Pl2Adjustable ?? false) || (hw?.Pl4Adjustable ?? false)
             || (hw?.TccAdjustable ?? false) || (hw?.GpuTgpAdjustable ?? false) || (hw?.GpuDynamicBoostAdjustable ?? false)
-            || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerformanceProfile", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("FanCurve", "FanSettings");
+            || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "FanSettings");
     }
 
     private void ApplyHomeCapabilities()
@@ -2365,7 +2365,7 @@ public partial class MainWindow : Window
         // Intel 星耀暂时屏蔽自定义；AMD 星耀/无界走本机 SMU 自定义。
         bool smuCustom = _probe?.Hw?.SmuCustomApu == true;
         bool customAllowed = nucUmi || smuCustom
-            || ((L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerformanceProfile", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("FanCurve", "FanSettings") || HasAnyCustomRange(caps))
+            || ((L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "FanSettings") || HasAnyCustomRange(caps))
                 && !(_probe?.Hw?.SupportsModeProfileConfig ?? false))
             || _probe?.Hw?.UsesBaolongda == true
             || (ecLocal && _probe?.Hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu);

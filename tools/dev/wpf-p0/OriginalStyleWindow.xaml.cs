@@ -7620,7 +7620,7 @@ public partial class OriginalStyleWindow : Window
                 && System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
                     != System.Windows.Forms.PowerLineStatus.Online;
             bool customAllowed = nucUmiModeUi || smuCustom || ecLocalCustom || allowPerfOnBattery
-            || ((L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerformanceProfile", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("FanCurve", "FanSettings"))
+            || ((L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "FanSettings"))
                     && !(_backendProbe?.Hw?.SupportsModeProfileConfig ?? false));
             CustomModeButton.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
             ExtremeModeButton.Visibility = hw?.IsIntelNucMachine == true ? Visibility.Visible : Visibility.Collapsed;

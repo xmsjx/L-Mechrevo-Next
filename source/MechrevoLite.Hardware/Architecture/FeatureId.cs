@@ -34,5 +34,8 @@ internal enum FeatureId
     TurboMode,
 
     /// <summary>静音↔狂暴 三态支持结论。</summary>
-    SilentTurbo
+    SilentTurbo,
+
+    /// <summary>CPU 性能调优与风扇设置的统一入口（PL/温度墙/风扇设置）。</summary>
+    PerfTuning
 }

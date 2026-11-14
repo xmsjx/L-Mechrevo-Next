@@ -654,15 +654,13 @@ internal static class WpfBackend
     internal static double? FanRingFractionFromDuty(int dutyPercent) => FanRingFraction.FromDuty(dutyPercent);
 
 
-    /// <summary>是否有摄像头设备（有缓存读缓存，否则探测一次并缓存）。</summary>
-    /// <summary>按特征名读门控结论；后端未就绪或名字未知时退回调用方给的 legacy 判定。</summary>
     /// <summary>按特征名读门控；legacy 用"能力位名字"给出，由桥内部取值（界面不直接读能力位）。</summary>
     internal static bool SupportsFeatureWithCapability(string feature, string capability)
     {
         bool legacy = false;
         try
         {
-            MechrevoDeviceCapabilities? caps = Hw?.Capabilities;
+            MechrevoDeviceCapabilities? caps = HwOrProgram?.Capabilities;
             if (caps != null)
             {
                 legacy = capability switch
@@ -692,7 +690,7 @@ internal static class WpfBackend
         {
             try
             {
-                MechrevoDeviceCapabilities? caps = Hw?.Capabilities;
+                MechrevoDeviceCapabilities? caps = HwOrProgram?.Capabilities;
                 if (caps == null)
                 {
                     return 2;
@@ -731,11 +729,12 @@ internal static class WpfBackend
         }
     }
 
+    /// <summary>按特征名读门控结论；后端未就绪或名字未知时退回调用方给的 legacy 判定。</summary>
     internal static bool SupportsFeature(string feature, bool legacy)
     {
         try
         {
-            MechrevoHw? hw = Hw;
+            MechrevoHw? hw = HwOrProgram;
             if (hw == null)
             {
                 return legacy;
@@ -762,6 +761,7 @@ internal static class WpfBackend
                 "PerformanceProfile" => MechrevoLite.Hardware.Architecture.FeatureId.PerformanceProfile,
                 "TurboMode" => MechrevoLite.Hardware.Architecture.FeatureId.TurboMode,
                 "SilentTurbo" => MechrevoLite.Hardware.Architecture.FeatureId.SilentTurbo,
+                "PerfTuning" => MechrevoLite.Hardware.Architecture.FeatureId.PerfTuning,
                 _ => (MechrevoLite.Hardware.Architecture.FeatureId?)null
             };
             if (id == null)
@@ -778,6 +778,7 @@ internal static class WpfBackend
         }
     }
 
+    /// <summary>是否有摄像头设备（有缓存读缓存，否则探测一次并缓存）。</summary>
     internal static bool HasCamera
     {
         get

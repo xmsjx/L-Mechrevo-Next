@@ -79,7 +79,7 @@ internal static class BackendRuleStore
 	}
 
 	/// <summary>JSON → 规则表（纯函数，可离线断言；任何非法内容整份回退内置规则）。</summary>
-    internal static RuleTable Parse(string json, BackendRouter.RuleSpec[] builtIn, MechrevoBackendKind builtInFallback, string path, bool logFallback = true)
+    internal static RuleTable Parse(string json, BackendRouter.RuleSpec[] builtIn, MechrevoBackendKind builtInFallback, string path)
 	{
 		(long ticks, long length) = Stamp(path);
 		try
