@@ -1058,7 +1058,7 @@ public partial class MainWindow : Window
         }
         if (HomePerf极致 != null && ReferenceEquals(button, HomePerf极致))
         {
-            _owner?.WideSetMode(MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode);
+            _owner?.WideSetMode(L_Mechrevo.WpfP0.Services.WpfBackend.NucExtremeVisualMode);
             StatusText.Text = WpfStrings.MainWindow_xaml_Text_6 + button.Content;
             return;
         }
@@ -2044,7 +2044,7 @@ public partial class MainWindow : Window
         {
             profile = found;
         }
-        profile ??= MechrevoLite.Hardware.SoftwareColorEnhancement.DefaultProfile(_currentEffectMode);
+        profile ??= L_Mechrevo.WpfP0.Services.WpfBackend.DefaultColorEffectProfile(_currentEffectMode);
         AddEffectRow("brightness", WpfStrings.L("亮度", "Brightness"), 0, 100, profile.Brightness, v => v + "%");
         AddEffectRow("colortemp", WpfStrings.L("色温", "Color temp"), 30, 100, profile.ColorTemp / 100, v => (v * 100) + "K");
         AddEffectRow("saturation", WpfStrings.L("饱和度", "Saturation"), 5, 25, (int)Math.Round(profile.VibrantValue * 10), v => (v * 0.1).ToString("0.0"));
@@ -2120,7 +2120,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            MechrevoLite.Hardware.SoftwareColorEnhancement.ApplyProfile(profile.Name, profile.Brightness,
+            L_Mechrevo.WpfP0.Services.WpfBackend.ApplyLocalColorProfile(profile.Name, profile.Brightness,
                 profile.ColorTemp, profile.ColorR, profile.ColorG, profile.ColorB,
                 profile.VibrantValue, profile.Constrast, profile.Gamma);
         }
@@ -2145,7 +2145,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            MechrevoLite.Hardware.SoftwareColorEnhancement.Apply(_currentEffectMode);
+            L_Mechrevo.WpfP0.Services.WpfBackend.ApplyLocalColorEffect(_currentEffectMode);
         }
         BuildEffectEditor();
     }
@@ -2292,7 +2292,7 @@ public partial class MainWindow : Window
             HomePerf平衡.IsChecked = currentMode == 0;
             if (HomePerf静音狂暴 != null) HomePerf静音狂暴.IsChecked = currentMode == 1 && silentTurboActive;
             HomePerf狂暴.IsChecked = currentMode == 1 && !silentTurboActive;
-            if (HomePerf极致 != null) HomePerf极致.IsChecked = currentMode == MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode;
+            if (HomePerf极致 != null) HomePerf极致.IsChecked = currentMode == L_Mechrevo.WpfP0.Services.WpfBackend.NucExtremeVisualMode;
             HomePerf自定义.IsChecked = currentMode is 3 or 4;
         }
         // 按实际 GPU 模式枚举高亮，不再依赖本地化文案匹配（语言/文案变化不会失配）。
@@ -2394,11 +2394,9 @@ public partial class MainWindow : Window
         {
             return;
         }
-        bool nucUmi = MechrevoLite.Hardware.Architecture.NucUmiCapabilityMap
-            .IsSupported(_probe?.Hw, MechrevoLite.Hardware.Architecture.NucUmiOperation.GpuMode);
+        bool nucUmi = L_Mechrevo.WpfP0.Services.WpfBackend.NucGpuModeSupported(_probe?.Hw);
         bool nucNoGpu = _probe?.Hw?.IsIntelNucMachine == true;
-        bool ecLocal = MechrevoLite.Hardware.GcuEcExperimental.Enabled
-            && MechrevoLite.Hardware.GcuEcMode.IsEcMode;
+        bool ecLocal = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive;
         // Intel 星耀暂时屏蔽自定义；AMD 星耀/无界走本机 SMU 自定义。
         bool smuCustom = _probe?.Hw?.SmuCustomApu == true;
         bool customAllowed = nucUmi || smuCustom
@@ -2438,10 +2436,10 @@ public partial class MainWindow : Window
         bool hasLighting = caps.Keyboard || caps.Lightbar || caps.LogoLight
             || _probe?.Hw?.SupportsKeyboard == true || _probe?.Hw?.SupportsLightbar == true
             || _probe?.Hw?.SupportsLogoLight == true
-            || (ecLocal && (MechrevoLite.Hardware.GcuEcKeyboard.Active
-                || MechrevoLite.Hardware.IteLightingLocal.HasLightbar
-                || MechrevoLite.Hardware.IteLightingLocal.HasUsbLogo
-                || MechrevoLite.Hardware.IteLightingLocal.HasHinge));
+            || (ecLocal && (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardActiveNow
+                || L_Mechrevo.WpfP0.Services.WpfBackend.IteHasLightbar
+                || L_Mechrevo.WpfP0.Services.WpfBackend.IteHasUsbLogo
+                || L_Mechrevo.WpfP0.Services.WpfBackend.IteHasHinge));
         NavLighting.Visibility = hasLighting ? Visibility.Visible : Visibility.Collapsed;
         NavCustom.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
         NavScreen.Visibility = displaySupported ? Visibility.Visible : Visibility.Collapsed;
@@ -3047,39 +3045,29 @@ public partial class MainWindow : Window
             // NUC/UMI：HID 单键 RGB 优先；没有 HID 时看 EC 单区支持位（0x766 bit2）。
             hasKeyboard = (hw?.SupportsKeyboard ?? false)
                 || WpfBackend.rgb?.IsConnected == true
-                || (hw?.IsNucOnly == true && MechrevoLite.Hardware.NucKeyboardLighting.IsSingleZone());
+                || (hw?.IsNucOnly == true && L_Mechrevo.WpfP0.Services.WpfBackend.IsNucSingleZoneKeyboard());
         }
-        if (GcuEcKeyboard.Active)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardActiveNow)
         {
-            hasKeyboard = GcuEcKeyboard.HasControllableKeyboard;
+            hasKeyboard = L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardControllableNow;
         }
         bool legacyKeyboard = hasKeyboard;
-        hasKeyboard = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-            MechrevoLite.Hardware.Architecture.FeatureId.KeyboardLight, hw, hasKeyboard);
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogKeyboardLight(hw, legacyKeyboard, "mini");
+        hasKeyboard = _owner?.ResolveLightChannelForMini("Keyboard/Ctrl", legacyKeyboard) ?? legacyKeyboard;
         bool hasLightbar = (hw?.SupportsLightbar ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.LocalLightbar);
+            || L_Mechrevo.WpfP0.Services.WpfBackend.LocalLightbarSupported;
         bool legacyLightbar = hasLightbar;
-        hasLightbar = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-            MechrevoLite.Hardware.Architecture.FeatureId.Lightbar, hw, hasLightbar);
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLightbar(hw, legacyLightbar, "mini");
+        hasLightbar = _owner?.ResolveLightChannelForMini("HidLightbar/Ctrl", legacyLightbar) ?? legacyLightbar;
         bool hasLogo = (hw?.SupportsLogoLight ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.LocalLogoLight);
-        bool logoSupport = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-            MechrevoLite.Hardware.Architecture.FeatureId.LogoLight, hw, hasLogo);
+            || L_Mechrevo.WpfP0.Services.WpfBackend.LocalLogoSupported;
+        bool logoSupport = _owner?.ResolveLightChannelForMini("HidLightbar_Logo/Ctrl", hasLogo) ?? hasLogo;
         bool logoVisible = ResolveWideLightVisible("light_logo_ui", logoSupport);
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogLogoLight(hw, hasLogo, "mini");
         bool hasHinge = (hw?.SupportsHingeLight ?? false)
-            || (MechrevoLite.Hardware.GcuEcExperimental.LocalHingeLight);
+            || L_Mechrevo.WpfP0.Services.WpfBackend.LocalHingeSupported;
         bool hasSync = hw?.SupportsSyncLight ?? false;
         bool legacyHinge = hasHinge;
         bool legacySync = hasSync;
-        hasHinge = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-            MechrevoLite.Hardware.Architecture.FeatureId.HingeLight, hw, hasHinge);
-        hasSync = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
-            MechrevoLite.Hardware.Architecture.FeatureId.SyncLight, hw, hasSync);
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogHingeLight(hw, legacyHinge, "mini");
-        MechrevoLite.Hardware.Architecture.FeatureGateShadow.LogSyncLight(hw, legacySync, "mini");
+        hasHinge = _owner?.ResolveLightChannelForMini("HidLightbar_Hinge/Ctrl", legacyHinge) ?? legacyHinge;
+        hasSync = _owner?.ResolveLightChannelForMini("HidLightbar_Sync/Ctrl", legacySync) ?? legacySync;
         foreach ((string topic, string title, (string Effect, string Name)[] effects) in channels)
         {
             bool supported = topic switch
@@ -3239,21 +3227,21 @@ public partial class MainWindow : Window
         int breathingIndex = Math.Clamp(settings.BreathingIndex, 1, 4);
         bool singleZoneKeyboard = topic == "Keyboard/Ctrl"
             && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } keyboardHw
-            && MechrevoLite.Hardware.KeyboardFirmwareEffects.IsSingleZoneRgb(keyboardHw.Capabilities.KeyboardType);
+            && L_Mechrevo.WpfP0.Services.LightingFacts.IsSingleZoneRgb(keyboardHw.Capabilities.KeyboardType);
         Slider? sliderRef = null;
         Slider? speedRef = null;
         bool powerOn = settings.PowerOn;
         string selectedEffect = Array.Exists(effects, item => item.Effect == settings.Effect) ? settings.Effect : effects[0].Effect;
         if (hidKeyboard && WpfBackend.rgb is { } hidState)
         {
-            // ⭐ task-17：HID 键盘卡初始状态以 KeyboardRgb 配置为准（与迷你窗 FillKeyboardEffects 同口径）✅
+            // HID 键盘卡初始状态以 HID 键盘配置为准（与迷你窗 FillKeyboardEffects 同口径）
             string hidEffect = "hid:" + hidState.KbHidMode;
             if (Array.Exists(effects, item => item.Effect == hidEffect))
             {
                 selectedEffect = hidEffect;
             }
             powerOn = hidState.KbPowerOn;
-            light = Math.Clamp(MechrevoLite.Hardware.KeyboardRgb.MapSoftwareBrightnessToHardwareLevel(hidState.Brightness), 0, maxLight);
+            light = Math.Clamp(L_Mechrevo.WpfP0.Services.WpfBackend.MapHidBrightnessToLevel(hidState.Brightness), 0, maxLight);
         }
         ToggleButton? powerRef = null;
         Action<string>? updateEffectUi = null;
@@ -3474,7 +3462,7 @@ public partial class MainWindow : Window
         for (int i = 0; i < 4; i++)
         {
             int index = i + 1;
-            System.Drawing.Color c = System.Drawing.Color.FromArgb(MechrevoLite.Hardware.LightChannelSettings.BreathingPalette[i]);
+            System.Drawing.Color c = System.Drawing.Color.FromArgb(L_Mechrevo.WpfP0.Services.WpfBackend.BreathingPaletteColor(i));
             Button breathSwatch = new()
             {
                 Width = 24,
@@ -3644,14 +3632,14 @@ public partial class MainWindow : Window
                 {
                     singleColor = !manual && !breathPalette
                         && !string.Equals(effect, "Rainbow", StringComparison.Ordinal)
-                        && MechrevoLite.Hardware.KeyboardFirmwareEffects.IsSingleColorEffect(effect);
+                        && L_Mechrevo.WpfP0.Services.LightingFacts.IsSingleColorEffect(effect);
                     mixColor = false;
                 }
                 else
                 {
                     // 老 LightForm：非 Gen40 灯条/Logo/铰链/同步没有七色混色；
                     // 单色系灯效（含呼吸/波浪/冲击等）走一个单色选择器。
-                    singleColor = !breathPalette && MechrevoLite.Hardware.KeyboardFirmwareEffects.IsSingleColorEffect(effect);
+                    singleColor = !breathPalette && L_Mechrevo.WpfP0.Services.LightingFacts.IsSingleColorEffect(effect);
                     mixColor = false;
                 }
                 bool speedApplicable = EffectSupportsSpeed(topic, effect, hidEffect);
@@ -3727,10 +3715,10 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (GcuEcKeyboard.Active)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardActiveNow)
             {
                 // EC 实验模式：以实际探测为准（与迷你窗 IsHidKeyboard 同口径）。
-                return GcuEcKeyboard.IsHid;
+                return L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardIsHidNow;
             }
             if (hw == null
                 || hw.UsesBaolongda
@@ -3744,7 +3732,7 @@ public partial class MainWindow : Window
                 // NUC/UMI：只有 HID 控制器在线才走 HID；否则是 EC 单区/无键盘。
                 return WpfBackend.rgb?.IsConnected == true;
             }
-            KeyboardRgb? rgb = WpfBackend.rgb;
+            var rgb = WpfBackend.rgb;
             if (rgb != null
                 && KeyboardLightPathPolicy.ShouldUseGcuKeyboardFallback(
                     rgb.ControllerAvailability,
@@ -3772,9 +3760,9 @@ public partial class MainWindow : Window
     {
         try
         {
-            if (GcuEcKeyboard.Active)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardActiveNow)
             {
-                return GcuEcKeyboard.IsEcWhite;
+                return L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardIsWhiteNow;
             }
             if (hw == null || !hw.SupportsKeyboard || WideIsHidKeyboard(hw) || hw.UsesBaolongda)
             {
@@ -3833,7 +3821,7 @@ public partial class MainWindow : Window
                             ? "WujieSmuApu=true（白色背光：仅电源+亮度）"
                             : gcuZonePath
                                 ? "IsGcuZoneKeyboardPath=true（固件/HID 回退路径）"
-                                : hidKeyboard ? "HID 可达（KeyboardRgb 已连接且未回退）" : "非 HID 固件键盘";
+                                : hidKeyboard ? "HID 可达（HID 键盘已连接且未回退）" : "非 HID 固件键盘";
             Logger.WriteLineIfChanged("wide-light-keyboard-cap",
                 $"[wide-light] 键盘能力判定：hid={hidKeyboard} white={whiteKeyboard} hw={(hw == null ? "null" : "ok")}"
                 + $" connected={IsWideBackendConnected} KeyboardType={keyboardType} solution={solution}"
@@ -3871,7 +3859,7 @@ public partial class MainWindow : Window
     /// <summary>打开与迷你窗共用的 HID 键盘编辑器。</summary>
     private void OpenWideHidKeyboardEditor(string title)
     {
-        if ((!IsWideBackendConnected && !GcuEcKeyboard.IsHid) || (_probe?.Hw ?? WpfBackend.Hw) is null)
+        if ((!IsWideBackendConnected && !L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardIsHidNow) || (_probe?.Hw ?? WpfBackend.Hw) is null)
         {
             StatusText.Text = WpfStrings.StatusHidEditorNeedsBackend;
             return;
@@ -3879,10 +3867,10 @@ public partial class MainWindow : Window
         try
         {
             WpfBackend.Attach(_probe?.Hw, _probe?.Service);
-            KeyboardRgb? rgb = WpfBackend.rgb;
+            var rgb = WpfBackend.rgb;
             if (rgb == null)
             {
-                rgb = new KeyboardRgb();
+                rgb = L_Mechrevo.WpfP0.Services.WpfBackend.CreateKeyboardRgb();
                 rgb.LoadConfig();
                 WpfBackend.rgb = rgb;
             }

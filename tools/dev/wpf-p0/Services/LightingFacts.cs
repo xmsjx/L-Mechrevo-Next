@@ -19,4 +19,10 @@ internal static class LightingFacts
     /// <summary>单区固件键盘灯效常量（1 常亮 / 2 硬件彩虹 / 3 硬件呼吸 / 4 软件六色轮播）。</summary>
     internal static IReadOnlyList<(string Id, string Label)> SingleZoneFirmwareKeyboardEffects =>
         KeyboardFirmwareEffects.SingleZone;
+
+    /// <summary>该键盘类型是否单区 RGB。</summary>
+    internal static bool IsSingleZoneRgb(int keyboardType) => KeyboardFirmwareEffects.IsSingleZoneRgb(keyboardType);
+
+    /// <summary>该灯效是否为单色（需要下发颜色）。</summary>
+    internal static bool IsSingleColorEffect(string effect) => KeyboardFirmwareEffects.IsSingleColorEffect(effect);
 }

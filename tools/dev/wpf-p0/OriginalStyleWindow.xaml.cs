@@ -7736,6 +7736,11 @@ public partial class OriginalStyleWindow : Window
 
     /// <summary>NUC 极致狂暴的虚拟档位常量。</summary>
     private const int NucExtremeVisualMode = L_Mechrevo.WpfP0.Services.WpfBackend.NucExtremeVisualMode;
+
+    /// <summary>小窗用的灯光通道能力查询（同一套门控与影子日志，调用点标 "mini"）。</summary>
+    internal bool ResolveLightChannelForMini(string topic, bool legacySupport) =>
+        _services?.Lighting.ResolveChannelSupport(topic, legacySupport, "mini") ?? legacySupport;
+
     private bool ResolveLightChannel(string topic, bool legacySupport) =>
         _services?.Lighting.ResolveChannelSupport(topic, legacySupport, "wide") ?? legacySupport;
 

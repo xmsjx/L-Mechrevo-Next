@@ -2,6 +2,8 @@ using System;
 using System.Threading.Tasks;
 using MechrevoLite;
 using MechrevoLite.Hardware;
+using MechrevoLite.Display;
+using MechrevoLite.Hardware.Architecture;
 using MechrevoLite.Gpu;
 using L_Mechrevo.WpfP0.Resources;
 
@@ -342,5 +344,63 @@ internal static class WpfBackend
         }
         return null;
     }
+
+    // ── EC 本地灯光 / ITE 设备事实（小窗也要用） ──
+
+    /// <summary>EC 本地灯带可用。</summary>
+    internal static bool LocalLightbarSupported => GcuEcExperimental.LocalLightbar;
+
+    /// <summary>EC 本地 Logo 灯可用。</summary>
+    internal static bool LocalLogoSupported => GcuEcExperimental.LocalLogoLight;
+
+    /// <summary>EC 本地铰链灯可用。</summary>
+    internal static bool LocalHingeSupported => GcuEcExperimental.LocalHingeLight;
+
+    /// <summary>ITE 设备有灯带通道。</summary>
+    internal static bool IteHasLightbar => IteLightingLocal.HasLightbar;
+
+    /// <summary>ITE 设备有 USB Logo 通道。</summary>
+    internal static bool IteHasUsbLogo => IteLightingLocal.HasUsbLogo;
+
+    /// <summary>ITE 设备有铰链灯通道。</summary>
+    internal static bool IteHasHinge => IteLightingLocal.HasHinge;
+
+    /// <summary>NUC/UMI 是否支持走能力位的显卡模式切换（按传入事实判定）。</summary>
+    internal static bool NucGpuModeSupported(MechrevoHw? hw) => NucUmiCapabilityMap.IsSupported(hw, NucUmiOperation.GpuMode);
+
+    // ── EC 键盘事实 / 本地软件调色 / HID 亮度换算（小窗用） ──
+
+    /// <summary>EC 键盘灯通道是否启用。</summary>
+    internal static bool EcKeyboardActiveNow => EcKeyboardFacts.Active;
+
+    /// <summary>EC 键盘灯是否可控。</summary>
+    internal static bool EcKeyboardControllableNow => EcKeyboardFacts.Controllable;
+
+    /// <summary>EC 键盘是否为 HID 单键键盘。</summary>
+    internal static bool EcKeyboardIsHidNow => EcKeyboardFacts.Hid;
+
+    /// <summary>EC 键盘是否为白光键盘。</summary>
+    internal static bool EcKeyboardIsWhiteNow => EcKeyboardFacts.White;
+
+    /// <summary>色彩增强默认档位（无后端档位表时用本地预设）。</summary>
+    internal static DisplayEffectProfile? DefaultColorEffectProfile(string mode) =>
+        SoftwareColorEnhancement.DefaultProfile(mode);
+
+    /// <summary>按参数应用本地软件色彩增强。</summary>
+    internal static void ApplyLocalColorProfile(string mode, int brightness, int colorTemp,
+        float red, float green, float blue, float vibrant, float contrast, float gamma) =>
+        SoftwareColorEnhancement.ApplyProfile(mode, brightness, colorTemp, red, green, blue, vibrant, contrast, gamma);
+
+    /// <summary>按档位名应用本地软件色彩增强。</summary>
+    internal static void ApplyLocalColorEffect(string mode) => SoftwareColorEnhancement.Apply(mode);
+
+    /// <summary>HID 软件亮度（%）换算成硬件档位。</summary>
+    internal static int MapHidBrightnessToLevel(int percent) => KeyboardRgb.MapSoftwareBrightnessToHardwareLevel(percent);
+
+    /// <summary>呼吸灯配色（1..4 编号）。</summary>
+    internal static int BreathingPaletteColor(int index) => LightChannelSettings.BreathingPalette[index];
+
+    /// <summary>新建一个 HID 键盘实例（未连接）。</summary>
+    internal static KeyboardRgb CreateKeyboardRgb() => new KeyboardRgb();
 }
 
