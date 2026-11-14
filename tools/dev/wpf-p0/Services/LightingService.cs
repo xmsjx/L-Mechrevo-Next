@@ -323,6 +323,37 @@ internal sealed class LightingService : ILightingService
     private static bool _idleSecondsMigrated;
 
     /// <summary>旧键 light_autooff_seconds 迁移到统一键一次（旧键只读不写，避免两个键并行）。</summary>
+    /// <summary>该秒数是否是界面档位表里的合法取值（0 = 关闭也算合法）。</summary>
+    /// <summary>把非法值归一到不超过它的最大合法档（没有就归零）。</summary>
+    private static int SnapToKnownIdleOption(int seconds)
+    {
+        int best = 0;
+        foreach ((string _, int _, int idleSeconds) in LightingCatalog.LightingCloseTimerOptions)
+        {
+            if (idleSeconds > 0 && idleSeconds <= seconds && idleSeconds > best)
+            {
+                best = idleSeconds;
+            }
+        }
+        return best;
+    }
+
+    private static bool IsKnownIdleOption(int seconds)
+    {
+        if (seconds <= 0)
+        {
+            return true;
+        }
+        foreach ((string _, int _, int idleSeconds) in LightingCatalog.LightingCloseTimerOptions)
+        {
+            if (idleSeconds == seconds)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static void MigrateIdleSecondsKeyOnce()
     {
         if (_idleSecondsMigrated)
@@ -365,6 +396,15 @@ internal sealed class LightingService : ILightingService
                 return;
             }
             int seconds = AppConfig.Get(IdleSecondsKey, 0);
+            if (seconds > 0 && !IsKnownIdleOption(seconds))
+            {
+                // 本地值不在档位表内（历史版本写坏过）⇒ 归一到不超过它的最大合法档，避免一直"10 小时"。
+                int snapped = SnapToKnownIdleOption(seconds);
+                AppConfig.Set(IdleSecondsKey, snapped);
+                AppConfig.Flush();
+                Logger.WriteError("[light-idle] 本地值非法：" + seconds + " 秒 ⇒ 归一到 " + snapped + " 秒");
+                seconds = snapped;
+            }
             int backendMinutes = _backend.Hw?.CloseTimerMinutes ?? -1;
             IdleTimerAction action = LightingIdleTimerPolicy.Decide(seconds, backendMinutes, userChanged);
             string backendText = backendMinutes < 0 ? "(未知)" : backendMinutes + " 分钟";
@@ -376,6 +416,12 @@ internal sealed class LightingService : ILightingService
             if (action == IdleTimerAction.AdoptGcu)
             {
                 int adopted = backendMinutes * 60;
+                if (!IsKnownIdleOption(adopted))
+                {
+                    // 后端值不在档位表内（可能是别处写进去的异常值）⇒ 不采用，避免把"10 分钟"变成几小时。
+                    Logger.WriteError("[light-idle] 跳过采用：后端=" + backendText + " 不在档位表内 · 本地保持 " + seconds + " 秒");
+                    return;
+                }
                 AppConfig.Set(IdleSecondsKey, adopted);
                 AppConfig.Flush();
                 Logger.WriteError("[light-idle] 采用后端值：本地=" + seconds + " 秒 → " + adopted

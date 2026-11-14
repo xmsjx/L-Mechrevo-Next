@@ -5673,13 +5673,16 @@ public partial class OriginalStyleWindow : Window
             {
                 MechrevoLite.Battery.BatteryControl.SetSelectedModePercent(percentForMode);
                 ApplyBatteryModeHighlight(mode);
-                // GCU/固件会把自己的档位再写回，覆盖用户选择：3 秒后复查一次，被覆盖就重写一次。
+                // 后端会按自己的档位再写回 EC：先让后端认这个档，再盯一段时间，被写回就重写。
                 int reassertMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcChargeModeBits(percentForMode);
-                _ = Task.Run(() =>
+                _ = Task.Run(async () =>
                 {
+                    await L_Mechrevo.WpfP0.Services.WpfBackend.AlignBackendBatteryProtectionAsync(mode);
+                    await Task.Delay(1500).ConfigureAwait(false);
                     bool kept = L_Mechrevo.WpfP0.Services.WpfBackend.EcReassertChargeMode(reassertMode, out string reassertDetail);
-                    Logger.WriteError("[battery-gcu] 档位复查 mode=" + mode + " 目标=0x" + reassertMode.ToString("X2")
-                        + " ⇒ " + (kept ? "保持" : "被覆盖/重写失败") + "：" + reassertDetail);
+                    Logger.WriteError("[battery-gcu] 对齐后复查 mode=" + mode + " 目标=0x" + reassertMode.ToString("X2")
+                        + " ⇒ " + (kept ? "保持" : "被写回/重写失败") + "：" + reassertDetail);
+                    L_Mechrevo.WpfP0.Services.WpfBackend.StartChargeModeWatch(reassertMode);
                 });
                 StatusText.Text = mode switch
                 {

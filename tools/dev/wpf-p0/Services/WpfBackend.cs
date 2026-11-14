@@ -420,6 +420,51 @@ internal static class WpfBackend
     internal static bool EcReassertChargeMode(int mode, out string detail) =>
         EcChargeLimitOverride.TryReassertMode(mode, 3000, out detail);
 
+    /// <summary>把用户选的三档同步给后端（GCU 会按自己的值再写回 EC，必须先让它认这个档）。</summary>
+    internal static async Task<bool> AlignBackendBatteryProtectionAsync(int mode)
+    {
+        MechrevoHw? hw = Hw;
+        if (hw == null)
+        {
+            return false;
+        }
+        try
+        {
+            bool ok = await hw.SetBatteryProtection(mode);
+            Logger.WriteError("[battery-gcu] 后端档位同步 mode=" + mode + " ⇒ " + ok
+                + " · 后端上报=" + hw.BatteryProtection);
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteError("[battery-gcu] 后端档位同步失败：" + ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 用户选完档位后盯一段时间：EC 档位位被后端写回就再写一次。
+    /// <para>⭐ 只盯 attempts×intervalMs，不无限刷写；每次结果都写日志便于定位。</para>
+    /// </summary>
+    internal static void StartChargeModeWatch(int mode, int attempts = 10, int intervalMs = 3000)
+    {
+        _ = Task.Run(async () =>
+        {
+            int rewrites = 0;
+            for (int i = 0; i < attempts; i++)
+            {
+                await Task.Delay(intervalMs).ConfigureAwait(false);
+                bool kept = EcChargeLimitOverride.TryReassertMode(mode, 0, out string detail);
+                if (!kept)
+                {
+                    rewrites++;
+                    Logger.WriteError("[battery-gcu] 第 " + (i + 1) + " 次复查被写回 ⇒ 已重写：" + detail);
+                }
+            }
+            Logger.WriteError("[battery-gcu] 档位监视结束 mode=" + mode + " · 重写次数=" + rewrites);
+        });
+    }
+
     /// <summary>按百分比算 0x7A6 模式位（日志与复查用）。</summary>
     internal static int EcChargeModeBits(int percent) => EcChargeLimitOverride.ComputeModeBits(percent);
 
