@@ -3214,7 +3214,7 @@ public partial class MainWindow : Window
         {
             return BuildInlineEditorCard(topic, title, effects, whiteKeyboard);
         }
-        LightChannelSettings settings = LightingSettingsStore.Load(topic, effects[0].Effect);
+        LightChannelSettings settings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, effects[0].Effect);
         bool keyboardChannel = string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
         bool gradeLightChannel = IsGradeLightChannel(topic, _probe?.Hw ?? WpfBackend.Hw);
         int maxLight = whiteKeyboard ? 2 : (keyboardChannel || gradeLightChannel ? 4 : 100);
@@ -3257,7 +3257,7 @@ public partial class MainWindow : Window
         WrapPanel manualPanel = new();
         List<Button> manualButtons = new();
         int[] manualIndexes = (settings.ManualIndexes ?? LightChannelSettings.DefaultManualIndexes).ToArray();
-        int[] mixColors = (LightingSettingsStore.Load(topic, "ColorMarquee").MixColors ?? LightChannelSettings.DefaultMixColors).ToArray();
+        int[] mixColors = (L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, "ColorMarquee").MixColors ?? LightChannelSettings.DefaultMixColors).ToArray();
         void RefreshMixButtons()
         {
             for (int i = 0; i < mixColors.Length && i < mixButtons.Count; i++)
@@ -3271,10 +3271,10 @@ public partial class MainWindow : Window
         {
             try
             {
-                LightChannelSettings current = LightingSettingsStore.Load(topic, selectedEffect) with { MixColors = (int[])mixColors.Clone() };
-                LightingSettingsStore.Save(topic, current);
-                LightChannelSettings marquee = LightingSettingsStore.Load(topic, "ColorMarquee") with { MixColors = (int[])mixColors.Clone() };
-                LightingSettingsStore.Save(topic, marquee);
+                LightChannelSettings current = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, selectedEffect) with { MixColors = (int[])mixColors.Clone() };
+                L_Mechrevo.WpfP0.Services.WpfBackend.SaveLightChannelSettings(topic, current);
+                LightChannelSettings marquee = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, "ColorMarquee") with { MixColors = (int[])mixColors.Clone() };
+                L_Mechrevo.WpfP0.Services.WpfBackend.SaveLightChannelSettings(topic, marquee);
             }
             catch
             {
@@ -3650,7 +3650,7 @@ public partial class MainWindow : Window
                 manualSection.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
                 speedRow.Visibility = speedApplicable ? Visibility.Visible : Visibility.Collapsed;
                 speedLabel.Text = speedLabelText;
-                LightChannelSettings effectSettings = LightingSettingsStore.Load(topic, effect);
+                LightChannelSettings effectSettings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, effect);
                 if (breathPalette)
                 {
                     breathingIndex = Math.Clamp(effectSettings.BreathingIndex, 1, 4);
@@ -3870,7 +3870,7 @@ public partial class MainWindow : Window
             var rgb = WpfBackend.rgb;
             if (rgb == null)
             {
-                rgb = L_Mechrevo.WpfP0.Services.WpfBackend.CreateKeyboardRgb();
+                rgb = L_Mechrevo.WpfP0.Services.WpfBackend.CreatePerKeyRgb();
                 rgb.LoadConfig();
                 WpfBackend.rgb = rgb;
             }
@@ -4004,7 +4004,7 @@ public partial class MainWindow : Window
                 }
                 return;
             }
-            LightChannelSettings settings = LightingSettingsStore.Load(topic, effect) with
+            LightChannelSettings settings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, effect) with
             {
                 Effect = effect,
                 Light = light,
@@ -4016,7 +4016,7 @@ public partial class MainWindow : Window
                 UsePresetColor = false,
                 PowerOn = powerOn
             };
-            LightingSettingsStore.Save(topic, settings);
+            L_Mechrevo.WpfP0.Services.WpfBackend.SaveLightChannelSettings(topic, settings);
             if (_owner == null)
             {
                 StatusText.Text = WpfStrings.StatusLightSavedOffline;

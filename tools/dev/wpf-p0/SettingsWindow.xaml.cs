@@ -436,7 +436,7 @@ public partial class SettingsWindow : Window
         _syncing = true;
         try
         {
-            MechrevoHw? hw = _owner?.CurrentBackend?.Hw ?? L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+            var hw = _owner?.CurrentBackend?.Hw ?? L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
             bool family = hw?.IsTongfangFamily == true;
             if (!family)
             {

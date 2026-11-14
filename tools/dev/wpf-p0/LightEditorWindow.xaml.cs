@@ -57,20 +57,20 @@ public partial class LightEditorWindow : Window
         _applyIntent = applyIntent;
         _whiteBacklightOnly = whiteBacklightOnly && string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
         _keyboard = string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
-        MechrevoHw? keyboardHw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
-        _ecExperimentKeyboard = _keyboard && GcuEcKeyboard.Active;
+        var keyboardHw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        _ecExperimentKeyboard = _keyboard && L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdActive;
         _nucSingleZone = _keyboard
             && (((keyboardHw?.IsNucOnly == true)
                     && L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.IsConnected != true
-                    && NucKeyboardLighting.IsSingleZone())
+                    && L_Mechrevo.WpfP0.Services.WpfBackend.NucKbdIsSingleZone())
                 // EC 实验模式的同方单区键盘与 NUC 单区同一套 EC 写法。
-                || GcuEcKeyboard.IsEcSingleZone);
+                || L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdIsSingleZone);
         _hideSpeedForNucLightbar = string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
             && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } lightbarHw
             && (lightbarHw.IsNucUmiFamily);
         Title = title;
         TitleText.Text = title;
-        MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
         bool gen40 = hw != null
             && !hw.UsesBaolongda
             && (hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen30
@@ -113,14 +113,14 @@ public partial class LightEditorWindow : Window
             }
             else
             {
-                _lightMax = _wujieWhite ? 2 : (bd ? Math.Max(1, MechrevoHw.EffectiveKeyboardBrightnessMax()) : 4);
+                _lightMax = _wujieWhite ? 2 : (bd ? Math.Max(1, L_Mechrevo.WpfP0.Services.WpfBackend.KeyboardBrightnessMax()) : 4);
                 LightSlider.Minimum = 0;
                 LightSlider.Maximum = _lightMax;
             }
         }
-        _settings = LightingSettingsStore.Load(topic, effects.Length > 0 ? effects[0].Effect : "Single");
+        _settings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, effects.Length > 0 ? effects[0].Effect : "Single");
         _light = Math.Clamp(_settings.Light, (int)LightSlider.Minimum, (int)LightSlider.Maximum);
-        if (_nucSingleZone && NucKeyboardLighting.TryReadBrightness(out int nucBrightness))
+        if (_nucSingleZone && L_Mechrevo.WpfP0.Services.WpfBackend.NucKbdTryReadBrightness(out int nucBrightness))
         {
             _light = nucBrightness;
         }
@@ -151,17 +151,17 @@ public partial class LightEditorWindow : Window
         }
         _manualInterval = Math.Clamp(_settings.Speed, 2, 10);
         _breathingIndex = Math.Clamp(_settings.BreathingIndex, 1, 4);
-        LightChannelSettings mixSettings = LightingSettingsStore.Load(topic, "ColorMarquee");
+        LightChannelSettings mixSettings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, "ColorMarquee");
         if (mixSettings.MixColors is { Length: 7 } mix)
         {
             _mixColors = (int[])mix.Clone();
         }
         PowerCheck.IsChecked = _settings.PowerOn;
-        if (_ecExperimentKeyboard && GcuEcKeyboard.TryReadPower(out bool ecPowerOn))
+        if (_ecExperimentKeyboard && L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdTryReadPower(out bool ecPowerOn))
         {
             // EC 实验模式没有 GCU 状态包，电源/白光亮度以 EC 回读为准。
             PowerCheck.IsChecked = ecPowerOn;
-            if (_whiteBacklightOnly && EcKeyboardLight.TryGet(out _, out int whiteLevel) && whiteLevel >= 1 && whiteLevel <= 2)
+            if (_whiteBacklightOnly && L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardTryGet(out _, out int whiteLevel) && whiteLevel >= 1 && whiteLevel <= 2)
             {
                 _light = whiteLevel;
             }
@@ -294,9 +294,9 @@ public partial class LightEditorWindow : Window
         _manualIndexes = (int[])LightChannelSettings.DefaultManualIndexes.Clone();
         try
         {
-            LightChannelSettings settings = LightingSettingsStore.Load(_topic, SelectedEffect)
+            LightChannelSettings settings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(_topic, SelectedEffect)
                 with { ManualIndexes = (int[])_manualIndexes.Clone() };
-            LightingSettingsStore.Save(_topic, settings);
+            L_Mechrevo.WpfP0.Services.WpfBackend.SaveLightChannelSettings(_topic, settings);
         }
         catch
         {
@@ -310,8 +310,8 @@ public partial class LightEditorWindow : Window
         _mixColors = (int[])LightChannelSettings.DefaultMixColors.Clone();
         try
         {
-            LightChannelSettings mixSettings = LightingSettingsStore.Load(_topic, "ColorMarquee");
-            LightingSettingsStore.Save(_topic, mixSettings with { MixColors = (int[])_mixColors.Clone() });
+            LightChannelSettings mixSettings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(_topic, "ColorMarquee");
+            L_Mechrevo.WpfP0.Services.WpfBackend.SaveLightChannelSettings(_topic, mixSettings with { MixColors = (int[])_mixColors.Clone() });
         }
         catch
         {
@@ -683,8 +683,8 @@ public partial class LightEditorWindow : Window
         button.ToolTip = $"#{c.R:X2}{c.G:X2}{c.B:X2}";
         try
         {
-            LightChannelSettings mixSettings = LightingSettingsStore.Load(_topic, "ColorMarquee");
-            LightingSettingsStore.Save(_topic, mixSettings with { MixColors = (int[])_mixColors.Clone() });
+            LightChannelSettings mixSettings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(_topic, "ColorMarquee");
+            L_Mechrevo.WpfP0.Services.WpfBackend.SaveLightChannelSettings(_topic, mixSettings with { MixColors = (int[])_mixColors.Clone() });
         }
         catch
         {
@@ -706,8 +706,7 @@ public partial class LightEditorWindow : Window
             StatusText.Text = "迎宾灯效已触发";
             return;
         }
-        if (L_Mechrevo.WpfP0.Services.WpfBackend.Service is not MechrevoService service
-            || await service.TriggerWelcomeAsync("迷你窗") == false)
+        if (!await L_Mechrevo.WpfP0.Services.WpfBackend.TriggerWelcomeAsync("迷你窗"))
         {
             StatusText.Text = "迎宾灯效仅支持 GCU 键盘";
             return;
@@ -774,10 +773,10 @@ public partial class LightEditorWindow : Window
                 PowerOn = power
             };
             bool powerChanged = _settings.PowerOn != power;
-            LightingSettingsStore.Save(_topic, next);
+            L_Mechrevo.WpfP0.Services.WpfBackend.SaveLightChannelSettings(_topic, next);
             if (powerChanged)
             {
-                LightingSettingsStore.SavePower(_topic, power, "用户编辑灯光电源");
+                L_Mechrevo.WpfP0.Services.WpfBackend.SaveLightChannelPower(_topic, power, "用户编辑灯光电源");
             }
             _settings = next;
             bool ok = true;
@@ -800,12 +799,12 @@ public partial class LightEditorWindow : Window
             }
             if (string.Equals(_topic, "Keyboard/Ctrl", StringComparison.Ordinal))
             {
-                if (_ecExperimentKeyboard && GcuEcKeyboard.IsEcWhite)
+                if (_ecExperimentKeyboard && L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdIsWhite)
                 {
                     // EC 实验模式白光：只有电源 + 2 档亮度。
-                    return GcuEcKeyboard.ApplyWhite(power, _light >= 2 ? 2 : 1);
+                    return L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdApplyWhite(power, _light >= 2 ? 2 : 1);
                 }
-                if (_ecExperimentKeyboard && (GcuEcKeyboard.IsHid || !GcuEcKeyboard.HasControllableKeyboard))
+                if (_ecExperimentKeyboard && (L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdIsHid || !L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdControllable))
                 {
                     // HID 单键/四分区由 HidKeyboardWindow 处理；这里不要再落 EC 白光。
                     return false;
@@ -833,7 +832,7 @@ public partial class LightEditorWindow : Window
                             _ => _colorArgb
                         }
                         : _colorArgb;
-                    NucKeyboardLighting.Apply(effect, power, _light, nucSpeed, nucColor, cycleColors);
+                    L_Mechrevo.WpfP0.Services.WpfBackend.NucKbdApply(effect, power, _light, nucSpeed, nucColor, cycleColors);
                     return true;
                 }
                 if (_applyIntent != null && !_wujieWhite && !_whiteBacklightOnly)
@@ -890,13 +889,13 @@ public partial class LightEditorWindow : Window
                 {
                     // NUC/UMI 灯带走本地 ACPI 通道；XAML 编辑器原来走 GCU service，
                     // 彩虹/混色的亮度和颜色根本没下发。
-                    L_Mechrevo.WpfP0.Services.WpfBackend.UmiLightbarSetPower(true);
+                    L_Mechrevo.WpfP0.Services.WpfBackend.NucLightbarSetPower(true);
                     if (!powerWasOn)
                     {
                         await Task.Delay(600);
                     }
                     System.Drawing.Color nucColor = System.Drawing.Color.FromArgb(_colorArgb);
-                    ok = L_Mechrevo.WpfP0.Services.WpfBackend.UmiLightbarSetEffect(effect, nucColor, _light);
+                    ok = L_Mechrevo.WpfP0.Services.WpfBackend.NucLightbarSetEffect(effect, nucColor, _light);
                 }
                 else
                 {
@@ -917,7 +916,7 @@ public partial class LightEditorWindow : Window
                     && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } lbHwOff
                     && (lbHwOff.IsNucUmiFamily);
                 ok = nucLightbarOff
-                    ? L_Mechrevo.WpfP0.Services.WpfBackend.UmiLightbarSetPower(false)
+                    ? L_Mechrevo.WpfP0.Services.WpfBackend.NucLightbarSetPower(false)
                     : await L_Mechrevo.WpfP0.Services.WpfBackend.Service.SetLightPower(_topic, false);
             }
             if (ok)

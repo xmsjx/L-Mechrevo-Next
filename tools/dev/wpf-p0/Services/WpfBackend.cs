@@ -401,7 +401,7 @@ internal static class WpfBackend
     internal static int BreathingPaletteColor(int index) => LightChannelSettings.BreathingPalette[index];
 
     /// <summary>新建一个 HID 键盘实例（未连接）。</summary>
-    internal static KeyboardRgb CreateKeyboardRgb() => new KeyboardRgb();
+    internal static KeyboardRgb CreatePerKeyRgb() => new KeyboardRgb();
 
     /// <summary>系统唤醒后重连 HID 键盘并按原模式重放灯效（休眠后句柄失效）。</summary>
     internal static bool ReconnectHidKeyboardForResume()
@@ -535,9 +535,9 @@ internal static class WpfBackend
     }
 
     /// <summary>UMI/NUC 灯带走本地 ACPI 通道（与 GCU 服务通道不同）。</summary>
-    internal static bool UmiLightbarSetPower(bool on) => UmiLightbar.SetPower(on);
+    internal static bool NucLightbarSetPower(bool on) => UmiLightbar.SetPower(on);
 
-    internal static bool UmiLightbarSetEffect(string effect, System.Drawing.Color color, int level) =>
+    internal static bool NucLightbarSetEffect(string effect, System.Drawing.Color color, int level) =>
         UmiLightbar.SetEffect(effect, color, level);
 
     /// <summary>本地软件色彩增强：按 9 个参数下发（无 GCU 档位表时的回退通道）。</summary>
@@ -569,5 +569,52 @@ internal static class WpfBackend
         PowerInputKind kind = PowerInputDecoder.Reconcile(sample, acOnline);
         return ((int)kind, sample != null, sample?.AdapterWatts ?? -1, sample?.BiosInfo3Raw ?? -1);
     }
+
+    /// <summary>当前后端硬件对象（后端桥 + 老程序集兜底），界面只当不透明句柄用。</summary>
+    internal static MechrevoHw? HwOrProgram => Hw ?? MechrevoLite.Program.hw;
+
+    internal static bool IsGcuServiceInstalled => MechrevoHw.IsGcuServiceInstalled;
+
+    /// <summary>键盘档位上限（宝龙达有效上限与常规 4 档的取舍由 Core 决定）。</summary>
+    internal static int KeyboardBrightnessMax() => MechrevoHw.EffectiveKeyboardBrightnessMax();
+
+    /// <summary>EC 键盘实验通道的判据与下发（与 GCU 通道相互独立）。</summary>
+    internal static bool EcKbdActive => GcuEcKeyboard.Active;
+
+    internal static bool EcKbdIsSingleZone => GcuEcKeyboard.IsEcSingleZone;
+
+    internal static bool EcKbdTryReadPower(out bool on) => GcuEcKeyboard.TryReadPower(out on);
+
+    internal static bool EcKbdIsWhite => GcuEcKeyboard.IsEcWhite;
+
+    internal static bool EcKbdIsHid => GcuEcKeyboard.IsHid;
+
+    internal static bool EcKbdControllable => GcuEcKeyboard.HasControllableKeyboard;
+
+    internal static bool EcKbdApplyWhite(bool on, int level) => GcuEcKeyboard.ApplyWhite(on, level);
+
+    internal static bool NucKbdTryReadBrightness(out int level) => NucKeyboardLighting.TryReadBrightness(out level);
+
+    /// <summary>触发官方迎宾灯效（仅 GCU 键盘支持，无服务时返回 false）。</summary>
+    internal static Task<bool> TriggerWelcomeAsync(string trigger)
+    {
+        MechrevoService? service = Service;
+        return service == null ? Task.FromResult(false) : service.TriggerWelcomeAsync(trigger);
+    }
+
+    /// <summary>灯光通道设置的读写（界面不再直接触碰存档层）。</summary>
+    internal static LightChannelSettings LoadLightChannelSettings(string topic, string defaultEffect) =>
+        LightingSettingsStore.Load(topic, defaultEffect);
+
+    internal static void SaveLightChannelSettings(string topic, LightChannelSettings settings) =>
+        LightingSettingsStore.Save(topic, settings);
+
+    internal static void SaveLightChannelPower(string topic, bool powerOn, string trigger) =>
+        LightingSettingsStore.SavePower(topic, powerOn, trigger);
+
+    internal static bool NucKbdIsSingleZone() => NucKeyboardLighting.IsSingleZone();
+
+    internal static void NucKbdApply(string effect, bool on, int brightness, int speed, int colorArgb, int[] cycleColors) =>
+        NucKeyboardLighting.Apply(effect, on, brightness, speed, colorArgb, cycleColors);
 }
 
