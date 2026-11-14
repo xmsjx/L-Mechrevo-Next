@@ -22,5 +22,6 @@
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\CrashLogPolicy.cs" Link="CrashLogPolicy.cs" />
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\FanRingFraction.cs" Link="FanRingFraction.cs" />
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\CpuCoRange.cs" Link="CpuCoRange.cs" />
+    <Compile Include="..\..\..\source\PawnIO\CpuCodeName.cs" Link="CpuCodeName.cs" />
   </ItemGroup>
 </Project>

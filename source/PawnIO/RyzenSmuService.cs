@@ -141,7 +141,7 @@ public sealed class RyzenSmuService : IDisposable
 
 	public SmuStatus SetCoAll(int value)
 	{
-		uint arg = EncodeCurve(value);
+        uint arg = EncodeCurve(value, _cpu);
 		(bool, uint)? tuple = CurveCommand(_cpu);
 		if (tuple.HasValue)
 		{
@@ -195,8 +195,9 @@ public sealed class RyzenSmuService : IDisposable
 		{
 			throw new ArgumentOutOfRangeException("coreIndex");
 		}
-		// 与 EncodeCurve 同一区间：LM 的写入路径只接受 -50..0（SMU 曲线优化的下限）。
-		if (!MechrevoLite.Hardware.CpuCoRange.IsValid(margin))
+		// 与 EncodeCurve 同一区间：区间按本机代号解析（Zen3 及更早只有 -30..0）。
+        (int coMin, int coMax) = MechrevoLite.Hardware.CpuCoRange.ForCode(_cpu);
+        if (!MechrevoLite.Hardware.CpuCoRange.IsValid(margin, coMin, coMax))
 		{
 			throw new ArgumentOutOfRangeException("margin");
 		}
@@ -667,7 +668,7 @@ public sealed class RyzenSmuService : IDisposable
 		{
 			return RefuseLegacyFamilyCommand(nameof(SetCoGfx));
 		}
-		uint arg = EncodeCurve(value);
+        uint arg = EncodeCurve(value, _cpu);
 		switch (Family)
 		{
 		case CpuFamily.Renoir:
@@ -1267,9 +1268,10 @@ public sealed class RyzenSmuService : IDisposable
 		return SmuStatus.Failed;
 	}
 
-	internal static uint EncodeCurve(int steps)
+    internal static uint EncodeCurve(int steps, CpuCodeName code = CpuCodeName.Undefined)
 	{
-		if (!MechrevoLite.Hardware.CpuCoRange.IsValid(steps))
+        (int coMin, int coMax) = MechrevoLite.Hardware.CpuCoRange.ForCode(code);
+        if (!MechrevoLite.Hardware.CpuCoRange.IsValid(steps, coMin, coMax))
 		{
 			throw new ArgumentOutOfRangeException("steps");
 		}

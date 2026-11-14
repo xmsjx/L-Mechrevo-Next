@@ -173,6 +173,7 @@ public partial class CpuTuningWindow : Window
             return;
         }
         bool editable = option.CanWrite && option.PerCoreWrite;
+        (int coMin, int coMax) = RuntimeCpuTuning.CoRange();
         OptionsPanel.Children.Add(new TextBlock
         {
             Text = WpfStrings.CpuTuningWindow_xaml_Text_3,
@@ -181,8 +182,8 @@ public partial class CpuTuningWindow : Window
         });
         OptionsPanel.Children.Add(new TextBlock
         {
-            Text = WpfStrings.L("范围 −50 ~ +30：负值降压（超频），正值加压；改动后请自行确认稳定性",
-                "Range −50 ~ +30: negative undervolts, positive overvolts; verify stability yourself"),
+            Text = WpfStrings.L($"范围 {coMin} ~ {coMax}（本机）：负值降压（超频），正值加压；改动后请自行确认稳定性",
+                $"Range {coMin} ~ {coMax} (this CPU): negative undervolts, positive overvolts; verify stability yourself"),
             FontSize = 11,
             Opacity = 0.7,
             TextWrapping = TextWrapping.Wrap,

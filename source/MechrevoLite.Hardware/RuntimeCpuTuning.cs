@@ -303,7 +303,8 @@ internal sealed class RuntimeCpuTuning : IDisposable
 						// （CurveCommand 无值）的代号也能在 UI 上给出 CO 输入口，否则"删掉全核框"之后
 						// 那些代号会连一个输入口都没有。SKU 层级仍然是否决项（与改前同一把锁）。
 						bool coWritable = skuRejection == null && (curveCommandPresent || perCoreCommand.HasValue);
-						optionList.Add(new CpuTuningOption("amd-co", "CpuTuneCurve", CpuCoRange.Minimum, CpuCoRange.Maximum, "CO", current, CanWrite: coWritable, coreMargins, readbackNoteKey, PerCoreWrite: perCoreWrite));
+        (int coMin, int coMax) = CoRange();
+        optionList.Add(new CpuTuningOption("amd-co", "CpuTuneCurve", coMin, coMax, "CO", current, CanWrite: coWritable));
 					}
 					bool clockAvailable = RyzenSmuService.SupportsClock(_smu.CpuCodeName);
 					if (clockAvailable)
@@ -919,10 +920,33 @@ internal sealed class RuntimeCpuTuning : IDisposable
 	internal const string PerCoreAllCoreKey = "cpu_co_all";
 
 	private const int MaximumSavedCores = 64;
+    /// <summary>本机代号对应的可写区间（Zen3 及更早只有 −30..0）。</summary>
+    internal static (int Minimum, int Maximum) CoRange()
+    {
+        (int minimum, int maximum) = CpuCoRange.ForCode(PawnIO.CpuInfo.DetectedAmdCodeName);
+        try
+        {
+            // 若曾观测到 SMU 把更低的请求夹住，就按学到的真实下限收窄（只收窄，不放宽）。
+            if (AppConfig.Exists(LearnedMinimumKey))
+            {
+                int learned = AppConfig.Get(LearnedMinimumKey, minimum);
+                if (learned > minimum && learned <= maximum)
+                {
+                    minimum = learned;
+                }
+            }
+        }
+        catch
+        {
+        }
+        return (minimum, maximum);
+    }
 
-	private const int MinimumPerCoreMargin = CpuCoRange.Minimum;
 
-	private const int MaximumPerCoreMargin = CpuCoRange.Maximum;
+    private const string LearnedMinimumKey = "cpu_co_min_learned";
+    private static readonly int MinimumPerCoreMargin = CoRange().Minimum;
+
+    private static readonly int MaximumPerCoreMargin = CoRange().Maximum;
 
 	private static int _autoApplyRan;
 
@@ -1137,6 +1161,19 @@ internal sealed class RuntimeCpuTuning : IDisposable
 			}
 			// ③ 写后回读校验（只读，每核一条）。⚠️ 读不回来（不能读/读失败）时 verified 必须为 false。
 			List<int?> readback = ReadPerCore(coreCount);
+        // 学到本机真实下限：请求更低但回读停在某个值、且没有核失败 ⇒ SMU 自己夹住了，记住它。
+        if (readbackAvailable && baselineComplete && failed.Count == 0 && readback.All(v => v.HasValue))
+        {
+            int? clamped = CpuCoRange.DetectClampedMinimum(
+                margins, readback.Select(v => v!.Value).ToList(), MinimumPerCoreMargin);
+            if (clamped.HasValue)
+            {
+                AppConfig.Set(LearnedMinimumKey, clamped.Value);
+                AppConfig.Flush();
+                Logger.WriteLine("[cpu-co] learned effective floor: " + clamped.Value
+                    + " (requested lower than accepted; SMU clamped it)");
+            }
+        }
 			bool verified = false;
 			string note;
 			if (readbackAvailable && baselineComplete)

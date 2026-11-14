@@ -402,15 +402,40 @@ internal static class Program
 		Console.WriteLine("== 2026-11-14 分核负压区间（SMU 下限 -50）==");
 		Console.WriteLine("起因：界面只到 -30、写入层只到 -40，SMU 实际可用 -50");
 
-		Check("下限 = -50", CpuCoRange.Minimum == -50, true);
-		Check("上限 = +30（正值可写）", CpuCoRange.Maximum == 30, true);
-		Check("-50 合法", CpuCoRange.IsValid(-50), true);
+		Check("Zen4 下限 -50", CpuCoRange.ForCode(PawnIO.CpuCodeName.Raphael).Minimum == -50, true);
+		Check("Zen4 上限 +30", CpuCoRange.ForCode(PawnIO.CpuCodeName.Raphael).Maximum == 30, true);
+		Check("-50 在 Zen4 区间合法", CpuCoRange.IsValid(-50, -50, 30), true);
 		Check("-30 合法", CpuCoRange.IsValid(-30), true);
 		Check("0 合法", CpuCoRange.IsValid(0), true);
 		Check("-51 非法", CpuCoRange.IsValid(-51), false);
-		Check("+1 合法（旧版判非法）", CpuCoRange.IsValid(1), true);
-		Check("+30 合法", CpuCoRange.IsValid(30), true);
+		Check("+1 在 Zen4 区间合法", CpuCoRange.IsValid(1, -50, 30), true);
+		Check("+30 在 Zen4 区间合法", CpuCoRange.IsValid(30, -50, 30), true);
 		Check("+31 非法", CpuCoRange.IsValid(31), false);
+
+		Console.WriteLine();
+		Console.WriteLine("== 区间按 CPU 代号解析（Zen3 不到 -50，Zen4/5 到 -50）==");
+
+		(int z3min, int z3max) = CpuCoRange.ForCode(PawnIO.CpuCodeName.Vermeer);
+		Check("Vermeer(5000系) 下限 -30", z3min == -30, true);
+		Check("Vermeer(5000系) 上限 0", z3max == 0, true);
+		Check("Vermeer -31 非法", CpuCoRange.IsValid(-31, z3min, z3max), false);
+		Check("Vermeer +1 非法", CpuCoRange.IsValid(1, z3min, z3max), false);
+		(int z4min, int z4max) = CpuCoRange.ForCode(PawnIO.CpuCodeName.Raphael);
+		Check("Raphael(7000系) 下限 -50", z4min == -50, true);
+		Check("Raphael(7000系) 上限 +30", z4max == 30, true);
+		Check("Raphael -51 非法", CpuCoRange.IsValid(-51, z4min, z4max), false);
+		(int umin, int umax) = CpuCoRange.ForCode(PawnIO.CpuCodeName.Undefined);
+		Check("未知代号回落 -30..0", umin == -30 && umax == 0, true);
+
+		Console.WriteLine();
+		Console.WriteLine("== 回读学习：SMU 自己夹住时按真实下限收窄 ==");
+
+		Check("请求 -50 回读 -30 ⇒ 学到 -30",
+			CpuCoRange.DetectClampedMinimum(new[] { -50, -50 }, new[] { -30, -30 }, -50) == -30, true);
+		Check("回读与请求一致 ⇒ 没有可学",
+			CpuCoRange.DetectClampedMinimum(new[] { -30, -30 }, new[] { -30, -30 }, -50) == null, true);
+		Check("混杂时取最大值（保守）",
+			CpuCoRange.DetectClampedMinimum(new[] { -50, -50 }, new[] { -30, -40 }, -50) == -30, true);
 
 		Console.WriteLine();
 		Console.WriteLine(_fail == 0 ? $"== 全绿：键盘灯自检 {_total}/{_total} ==" : $"== 失败 {_fail}/{_total} 项 ==");
