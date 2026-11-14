@@ -97,4 +97,51 @@ internal static class WpfBackend
         Hw = hw;
         Service = service;
     }
+
+    // ── 星耀 / NUC 专用通道（界面层只经这里调用，⛔ 不直连硬件类型）──
+
+    /// <summary>星耀平台（AMD SMU 系）判定。</summary>
+    internal static bool IsXingyaoPlatform => XingyaoPmc2.IsXingyaoPlatform();
+
+    /// <summary>星耀性能档是否适用（按机型事实判定）。</summary>
+    internal static bool XingyaoPerformanceModeApplicable(MechrevoHw? hw) => XingyaoPerformanceMode.IsApplicable(hw);
+
+    /// <summary>星耀快捷键（灯光休眠等）是否适用。</summary>
+    internal static bool XingyaoQuickSwitchApplicable(MechrevoHw? hw) => XingyaoQuickSwitch.IsApplicable(hw);
+
+    /// <summary>读星耀限充（档位上下限）。</summary>
+    internal static bool XingyaoReadChargeLimit(out bool enabled, out int low, out int high, out string detail)
+        => XingyaoPmc2.TryReadChargeLimit(out enabled, out low, out high, out detail);
+
+    /// <summary>写星耀限充。</summary>
+    internal static bool XingyaoApplyChargeLimit(bool enabled, int low, int high, out string detail)
+        => XingyaoPmc2.TryApplyChargeLimit(enabled, low, high, out detail);
+
+    /// <summary>恢复星耀限充原状。</summary>
+    internal static bool XingyaoRestoreChargeLimit(out string detail) => XingyaoPmc2.TryRestoreChargeLimit(out detail);
+
+    /// <summary>星耀性能档下发。</summary>
+    internal static bool XingyaoApplyVisualMode(int mode, out string detail) => XingyaoPerformanceMode.TryApplyVisualMode(mode, out detail);
+
+    /// <summary>星耀性能档回读。</summary>
+    internal static bool XingyaoReadVisualMode(out int mode, out string detail) => XingyaoPerformanceMode.TryReadVisualMode(out mode, out detail);
+
+    /// <summary>星耀键盘休眠超时设置。</summary>
+    internal static bool XingyaoSetKeyboardSleepTimeout(bool alwaysOn, out string detail)
+        => XingyaoQuickSwitch.TrySetKeyboardSleepTimeout(alwaysOn, out detail);
+
+    /// <summary>NUC 极致狂暴的虚拟档位常量。</summary>
+    internal const int NucExtremeVisualMode = NucPerformanceMode.ExtremeVisualMode;
+
+    /// <summary>NUC 性能档下发。</summary>
+    internal static bool NucApplyMode(int mode, out string detail) => NucPerformanceMode.TryApply(mode, out detail);
+
+    /// <summary>NUC 性能档回读。</summary>
+    internal static bool NucReadMode(out int mode) => NucPerformanceMode.TryReadVisualMode(out mode);
+
+    /// <summary>NUC 极致狂暴是否处于已下发状态。</summary>
+    internal static bool NucExtremeActive => NucPerformanceMode.IsExtremeActive;
+
+    /// <summary>清掉 NUC 极致狂暴的本地标记（回读不一致时用）。</summary>
+    internal static void NucClearExtremeMarker() => NucPerformanceMode.ClearExtremeMarker();
 }

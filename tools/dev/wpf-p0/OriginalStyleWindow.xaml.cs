@@ -615,7 +615,7 @@ public partial class OriginalStyleWindow : Window
             return true;
         }
         // 星耀 PTL 的三档由 WMAA 提供；GCU WJXY 的 TurboModeSupport=0 不能拿来做 UI 判据。
-        if (MechrevoLite.Hardware.XingyaoPerformanceMode.IsApplicable(hw)) return true;
+        if (XingyaoPerfApplicable(hw)) return true;
         if (caps == null) return true;
         if (!caps.ProfileAvailable) return true;
         if (caps.TurboMode) return true;
@@ -1590,7 +1590,7 @@ public partial class OriginalStyleWindow : Window
                 mode = ChargeLimitSwitch.IsChecked == true ? ModeForPercent(high) : 0;
             }
             // 星耀三档同样按自身 PMC2 文本框反推。
-            if (MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
+            if (IsXingyaoPlatform
                 && XingyaoChargeHighBox.Visibility == Visibility.Visible
                 && int.TryParse(XingyaoChargeHighBox.Text.Trim(), out int xyHigh))
             {
@@ -1609,7 +1609,7 @@ public partial class OriginalStyleWindow : Window
                     && hw.IsGcuConnected
                     && !hw.UsesBaolongda
                     && !hw.IsNucUmiFamily
-                    && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
+                    && !IsXingyaoPlatform;
                 if (gcuMode)
                 {
                     mode = ModeForPercent(MechrevoLite.Battery.BatteryControl.SelectedModePercent());
@@ -2875,7 +2875,7 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            if (!MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform())
+            if (!IsXingyaoPlatform)
             {
                 XingyaoChargeRow.Visibility = Visibility.Collapsed;
                 XingyaoChargeButtonRow.Visibility = Visibility.Collapsed;
@@ -2886,7 +2886,7 @@ public partial class OriginalStyleWindow : Window
             XingyaoChargeRow.Visibility = Visibility.Visible;
             XingyaoChargeButtonRow.Visibility = Visibility.Visible;
             XingyaoChargeStatus.Visibility = Visibility.Visible;
-            if (MechrevoLite.Hardware.XingyaoPmc2.TryReadChargeLimit(out bool xyEnabled, out int xyT1, out int xyT2, out string xyDetail))
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoReadChargeLimit(out bool xyEnabled, out int xyT1, out int xyT2, out string xyDetail))
             {
                 if (!_xingyaoChargeLoaded)
                 {
@@ -2904,7 +2904,7 @@ public partial class OriginalStyleWindow : Window
         }
         catch (Exception ex)
         {
-            if (MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform())
+            if (IsXingyaoPlatform)
             {
                 XingyaoChargeRow.Visibility = Visibility.Visible;
                 XingyaoChargeStatus.Visibility = Visibility.Visible;
@@ -2927,7 +2927,7 @@ public partial class OriginalStyleWindow : Window
             bool enabled = XingyaoChargeEnable.IsChecked == true;
             (bool ok, string detail) = await Task.Run(() =>
             {
-                bool applied = MechrevoLite.Hardware.XingyaoPmc2.TryApplyChargeLimit(enabled, t1, t2, out string d);
+                bool applied = L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoApplyChargeLimit(enabled, t1, t2, out string d);
                 return (applied, d);
             });
             XingyaoChargeStatus.Text = detail;
@@ -2946,7 +2946,7 @@ public partial class OriginalStyleWindow : Window
         {
             (bool ok, string detail) = await Task.Run(() =>
             {
-                bool applied = MechrevoLite.Hardware.XingyaoPmc2.TryRestoreChargeLimit(out string d);
+                bool applied = L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoRestoreChargeLimit(out string d);
                 return (applied, d);
             });
             XingyaoChargeStatus.Text = detail;
@@ -3412,7 +3412,7 @@ public partial class OriginalStyleWindow : Window
                 : sender == BalancedModeButton ? 0
                 : sender == SilentTurboModeButton ? 1
                 : sender == TurboModeButton ? 1
-                : sender == ExtremeModeButton ? MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode
+                : sender == ExtremeModeButton ? NucExtremeVisualMode
                 : sender == CustomModeButton ? 3
                 : -1;
             if (pendingMode >= 0 && _backendProbe != null)
@@ -3448,7 +3448,7 @@ public partial class OriginalStyleWindow : Window
                 : selected == BalancedModeButton ? 0
                 : SilentTurboModeButton != null && selected == SilentTurboModeButton ? 1
                 : selected == TurboModeButton ? 1
-                : selected == ExtremeModeButton ? MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode
+                : selected == ExtremeModeButton ? NucExtremeVisualMode
                 : selected == CustomModeButton ? 3
                 : -1;
             // 高能狂暴按钮永远显式要求 silent=false；不能读“上次记忆”，
@@ -3581,7 +3581,7 @@ public partial class OriginalStyleWindow : Window
                 ? WpfStrings.SilentTurbo
                 : silentTurbo == false && turboSubModeSupported ? WpfStrings.TurboHighEnergy : WpfStrings.ModeTurbo,
             0 => WpfStrings.ModeBalanced,
-            MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode => WpfStrings.NucExtremeTurbo,
+            NucExtremeVisualMode => WpfStrings.NucExtremeTurbo,
             _ => WpfStrings.ModeCustom
         };
         // 无界自动曲线控制器会在启动后常驻；切到非自定义档必须停掉它，
@@ -3615,11 +3615,11 @@ public partial class OriginalStyleWindow : Window
         {
             bool nucDirect = IsNucLike(_backendProbe?.Hw);
             bool xingyaoDirect = mode != 3
-                && MechrevoLite.Hardware.XingyaoPerformanceMode.IsApplicable(_backendProbe?.Hw);
+                && XingyaoPerfApplicable(_backendProbe?.Hw);
             MechrevoService.ModeSwitchResult result;
             if (xingyaoDirect)
             {
-                bool applied = MechrevoLite.Hardware.XingyaoPerformanceMode.TryApplyVisualMode(mode, out string xyDetail);
+                bool applied = L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoApplyVisualMode(mode, out string xyDetail);
                 Logger.WriteError("[xingyao-mode] " + (applied ? "OK" : "FAIL") + "：" + xyDetail);
                 if (!applied)
                 {
@@ -3630,9 +3630,9 @@ public partial class OriginalStyleWindow : Window
             else if (nucDirect)
             {
                 int previousMode = ResolveDisplayMode(_backendProbe);
-                bool applied = MechrevoLite.Hardware.NucPerformanceMode.TryApply(mode, out string detail);
-                if (mode != MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode
-                    && applied && MechrevoLite.Hardware.NucPerformanceMode.TryReadVisualMode(out int reportedMode))
+                bool applied = L_Mechrevo.WpfP0.Services.WpfBackend.NucApplyMode(mode, out string detail);
+                if (mode != NucExtremeVisualMode
+                    && applied && L_Mechrevo.WpfP0.Services.WpfBackend.NucReadMode(out int reportedMode))
                 {
                     if (reportedMode != mode)
                     {
@@ -4351,7 +4351,7 @@ public partial class OriginalStyleWindow : Window
             0 => WpfStrings.ModeBalanced,
             1 => WpfStrings.ModeTurbo,
             2 => WpfStrings.ModeSilent,
-            MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode => WpfStrings.NucExtremeTurbo,
+            NucExtremeVisualMode => WpfStrings.NucExtremeTurbo,
             _ => "—"
         };
     }
@@ -4366,7 +4366,7 @@ public partial class OriginalStyleWindow : Window
             {
                 return;
             }
-            if (!MechrevoLite.Hardware.NucPerformanceMode.TryReadVisualMode(out int ecMode))
+            if (!L_Mechrevo.WpfP0.Services.WpfBackend.NucReadMode(out int ecMode))
             {
                 return;
             }
@@ -4434,11 +4434,11 @@ public partial class OriginalStyleWindow : Window
         // 自定义编辑态优先显示自定义，避免打开自定义时误亮极致狂暴。
         if (!customDisplayed
             && IsNucLike(hw)
-            && MechrevoLite.Hardware.NucPerformanceMode.IsExtremeActive
-            && MechrevoLite.Hardware.NucPerformanceMode.TryReadVisualMode(out int extremeEc)
+            && L_Mechrevo.WpfP0.Services.WpfBackend.NucExtremeActive
+            && L_Mechrevo.WpfP0.Services.WpfBackend.NucReadMode(out int extremeEc)
             && extremeEc == 1)
         {
-            return MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode;
+            return NucExtremeVisualMode;
         }
         if (customDisplayed)
         {
@@ -4460,24 +4460,24 @@ public partial class OriginalStyleWindow : Window
                 return 3;
             }
         }
-        if (MechrevoLite.Hardware.XingyaoPerformanceMode.IsApplicable(hw)
-            && MechrevoLite.Hardware.XingyaoPerformanceMode.TryReadVisualMode(out int xingyaoMode, out _))
+        if (XingyaoPerfApplicable(hw)
+            && L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoReadVisualMode(out int xingyaoMode, out _))
         {
             return xingyaoMode;
         }
         if (IsNucLike(hw))
         {
             // 等同于 CurrentProfile 事件：直接读 EC 1963 的模式字节。
-            if (MechrevoLite.Hardware.NucPerformanceMode.TryReadVisualMode(out int ecMode))
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.NucReadMode(out int ecMode))
             {
                 if (ecMode != 1)
                 {
                     // 外部/Fn 键切到其它档：极致狂暴标志失效。
-                    MechrevoLite.Hardware.NucPerformanceMode.ClearExtremeMarker();
+                    L_Mechrevo.WpfP0.Services.WpfBackend.NucClearExtremeMarker();
                 }
-                if (ecMode == 1 && MechrevoLite.Hardware.NucPerformanceMode.IsExtremeActive)
+                if (ecMode == 1 && L_Mechrevo.WpfP0.Services.WpfBackend.NucExtremeActive)
                 {
-                    return MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode;
+                    return NucExtremeVisualMode;
                 }
                 return ecMode;
             }
@@ -4599,7 +4599,7 @@ public partial class OriginalStyleWindow : Window
             if (nuc)
             {
                 int ecBefore = -1;
-                bool ecBeforeOk = MechrevoLite.Hardware.NucPerformanceMode.TryReadVisualMode(out ecBefore);
+                bool ecBeforeOk = L_Mechrevo.WpfP0.Services.WpfBackend.NucReadMode(out ecBefore);
                 int before = ResolveDisplayMode(probe);
                 if (before < 0 && ecBeforeOk)
                 {
@@ -4619,7 +4619,7 @@ public partial class OriginalStyleWindow : Window
                     return;
                 }
                 int after = ResolveDisplayMode(probe);
-                bool ecChanged = MechrevoLite.Hardware.NucPerformanceMode.TryReadVisualMode(out int ecAfter)
+                bool ecChanged = L_Mechrevo.WpfP0.Services.WpfBackend.NucReadMode(out int ecAfter)
                     && ecBeforeOk && ecAfter != ecBefore;
                 // 固件只要真的切了档（不一定是预测的 next，也可能是自定义档），
                 // 就跟随实际档位出 OSD，不再主动覆盖固件结果。
@@ -5550,11 +5550,11 @@ public partial class OriginalStyleWindow : Window
         bool modeBaolongda = modeHw?.UsesBaolongda == true;
         bool modeGcu = !modeBaolongda
             && modeHw?.IsGcuConnected == true
-            && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
+            && !IsXingyaoPlatform;
         bool modeLocalEc = !modeBaolongda
             && modeHw?.IsGcuConnected != true
             && modeHw?.IsNucUmiFamily != true
-            && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
+            && !IsXingyaoPlatform;
         if (modeBaolongda && _services != null)
         {
             bool enable = mode != 0;
@@ -5591,7 +5591,7 @@ public partial class OriginalStyleWindow : Window
         }
 
         // 星耀三档：直接写 PMC2 的 T1/T2，并同步星耀自己的文本框。
-        if (MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform())
+        if (IsXingyaoPlatform)
         {
             bool enable = mode != 0;
             int low = mode switch { 1 => 75, 2 => 55, _ => 0 };
@@ -5599,8 +5599,8 @@ public partial class OriginalStyleWindow : Window
             (bool xyOk, string xyDetail) = await Task.Run(() =>
             {
                 bool applied = enable
-                    ? MechrevoLite.Hardware.XingyaoPmc2.TryApplyChargeLimit(true, low, high, out string d)
-                    : MechrevoLite.Hardware.XingyaoPmc2.TryRestoreChargeLimit(out d);
+                    ? L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoApplyChargeLimit(true, low, high, out string d)
+                    : L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoRestoreChargeLimit(out d);
                 return (applied, d);
             });
             if (xyOk)
@@ -5679,7 +5679,7 @@ public partial class OriginalStyleWindow : Window
         bool modeEcThree = (modeGcu || modeLocalEc || IsEcLocalRoute)
             && !modeBaolongda
             && modeHw?.IsNucUmiFamily != true
-            && !MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform()
+            && !IsXingyaoPlatform
             && !MechrevoLite.Hardware.EcChargeLimit.IsLegacyGenerationBlocked();
         if (modeEcThree)
         {
@@ -6782,7 +6782,7 @@ public partial class OriginalStyleWindow : Window
                 ? WpfStrings.SilentTurbo
                 : silentTurboSupported ? WpfStrings.TurboHighEnergy : WpfStrings.ModeTurbo,
             0 => WpfStrings.ModeBalanced,
-            MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode => WpfStrings.NucExtremeTurbo,
+            NucExtremeVisualMode => WpfStrings.NucExtremeTurbo,
             3 or 4 => WpfStrings.ModeCustom,
             _ => "—"
         });
@@ -6803,7 +6803,7 @@ public partial class OriginalStyleWindow : Window
             BalancedModeButton.IsChecked = mode == 0;
             if (SilentTurboModeButton != null) SilentTurboModeButton.IsChecked = silentTurboActive;
             TurboModeButton.IsChecked = mode == 1 && !silentTurboActive;
-            ExtremeModeButton.IsChecked = mode == MechrevoLite.Hardware.NucPerformanceMode.ExtremeVisualMode;
+            ExtremeModeButton.IsChecked = mode == NucExtremeVisualMode;
             CustomModeButton.IsChecked = mode is 3 or 4;
             RefreshModeHighlights();
         }
@@ -6902,7 +6902,7 @@ public partial class OriginalStyleWindow : Window
             {
                 return;
             }
-            if (!MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform())
+            if (!IsXingyaoPlatform)
             {
                 return;
             }
@@ -7416,7 +7416,7 @@ public partial class OriginalStyleWindow : Window
         }
         if (!probe.IsGcuConnected
             && probe.Connected
-            && MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform())
+            && IsXingyaoPlatform)
         {
             SetBackendStatus(WpfStrings.BackendNonGcuReady, "#4ADE80",
                 WpfStrings.L("星耀 WMAA 本地模式已就绪（无需 GCU）", "Xingyao WMAA local mode ready (GCU not required)"));
@@ -7672,7 +7672,7 @@ public partial class OriginalStyleWindow : Window
                 || _services?.Lighting.LocalLogoSupported == true;
             bool hasHinge = _backendProbe?.SupportsHingeLight == true;
             bool hasSync = _backendProbe?.SupportsSyncLight == true;
-            bool xingyaoLightIdle = MechrevoLite.Hardware.XingyaoQuickSwitch.IsApplicable(hw);
+            bool xingyaoLightIdle = XingyaoQuickApplicable(hw);
             LightingSection.Visibility = (hasKeyboard || hasLightbar || hasLogo || hasHinge || hasSync || xingyaoLightIdle) ? Visibility.Visible : Visibility.Collapsed;
             KeyboardLightRow.Visibility = hasKeyboard ? Visibility.Visible : Visibility.Collapsed;
             LogoLightRow.Visibility = ResolveLightChannel(LightingTopics.Logo, hasLogo) ? Visibility.Visible : Visibility.Collapsed;
@@ -7757,6 +7757,22 @@ public partial class OriginalStyleWindow : Window
     }
 
     /// <summary>灯光通道能力：门控求值 + 影子日志都由服务层负责（界面只问结果）。</summary>
+
+    // ── 星耀 / NUC 专用通道：由服务层的后端桥转发，界面不直连硬件类型 ──
+
+    /// <summary>星耀平台（AMD SMU 系）判定。</summary>
+    private static bool IsXingyaoPlatform => L_Mechrevo.WpfP0.Services.WpfBackend.IsXingyaoPlatform;
+
+    /// <summary>星耀性能档是否适用。</summary>
+    private static bool XingyaoPerfApplicable(MechrevoHw? hw) =>
+        L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoPerformanceModeApplicable(hw);
+
+    /// <summary>星耀快捷键是否适用。</summary>
+    private static bool XingyaoQuickApplicable(MechrevoHw? hw) =>
+        L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoQuickSwitchApplicable(hw);
+
+    /// <summary>NUC 极致狂暴的虚拟档位常量。</summary>
+    private const int NucExtremeVisualMode = L_Mechrevo.WpfP0.Services.WpfBackend.NucExtremeVisualMode;
     private bool ResolveLightChannel(string topic, bool legacySupport) =>
         _services?.Lighting.ResolveChannelSupport(topic, legacySupport, "wide") ?? legacySupport;
 
@@ -7830,7 +7846,7 @@ public partial class OriginalStyleWindow : Window
         LiquidSection.Visibility = (AppConfig.Is("force_liquid_cooling_menu") || liquidSupported) ? Visibility.Visible : Visibility.Collapsed;
         RefreshLiquidCoolingUi();
         _wideWindow?.RefreshLiquidCooling();
-        bool xingyaoLightIdle = MechrevoLite.Hardware.XingyaoQuickSwitch.IsApplicable(hw);
+        bool xingyaoLightIdle = XingyaoQuickApplicable(hw);
         LightingSection.Visibility = (KeyboardLightRow.Visibility == Visibility.Visible
             || LightStripRow.Visibility == Visibility.Visible
             || LogoLightRow.Visibility == Visibility.Visible
@@ -9707,7 +9723,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             LightIdleCombo.Items.Clear();
-            bool xingyao = MechrevoLite.Hardware.XingyaoQuickSwitch.IsApplicable(L_Mechrevo.WpfP0.Services.WpfBackend.Hw);
+            bool xingyao = XingyaoQuickApplicable(L_Mechrevo.WpfP0.Services.WpfBackend.Hw);
             int current = _services?.Lighting.LightIdleSeconds ?? AppConfig.Get("lighting_idle_seconds", 0);
             foreach ((string Label, int Seconds) option in LightingCatalog.KeyboardAutoOffOptions)
             {
@@ -9744,10 +9760,10 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        if (MechrevoLite.Hardware.XingyaoQuickSwitch.IsApplicable(L_Mechrevo.WpfP0.Services.WpfBackend.Hw))
+        if (XingyaoQuickApplicable(L_Mechrevo.WpfP0.Services.WpfBackend.Hw))
         {
             bool alwaysOn = seconds <= 0;
-            if (!MechrevoLite.Hardware.XingyaoQuickSwitch.TrySetKeyboardSleepTimeout(alwaysOn, out string xyDetail))
+            if (!L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoSetKeyboardSleepTimeout(alwaysOn, out string xyDetail))
             {
                 StatusText.Text = "星耀键盘睡眠设置失败：" + xyDetail;
                 return;
