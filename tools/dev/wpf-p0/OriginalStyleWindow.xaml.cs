@@ -5949,83 +5949,9 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    /// <summary>把单色图形当作遮罩，填充色跟随主题前景色（线条图标不写死颜色）。</summary>
-    private static FrameworkElement CreateMaskedIcon(string resourcePath, double width, double height)
+    private static FrameworkElement CreateQuickTileIcon(string key, string glyph)
     {
-        System.Windows.Media.ImageBrush brush = new(new System.Windows.Media.Imaging.BitmapImage(
-            new Uri("pack://application:,,,/L-Mechrevo;component/" + resourcePath)));
-        brush.Stretch = Stretch.Uniform;
-        System.Windows.Shapes.Rectangle rect = new()
-        {
-            Width = width,
-            Height = height,
-            OpacityMask = brush,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        rect.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "TextBrush");
-        return rect;
-    }
-
-    private FrameworkElement CreateQuickTileIcon(string key, string glyph)
-    {
-    if (string.Equals(key, "copilot", StringComparison.OrdinalIgnoreCase))
-    if (string.Equals(key, "copilot", StringComparison.OrdinalIgnoreCase))
-    {
-        // Copilot 键锁：官方标志形状的实心填充版（颜色跟随主题前景色）。
-        return CreateMaskedIcon("Assets/Icons/copilot-line.png", 18, 17);
-    }
-        if (string.Equals(key, "fanboost", StringComparison.OrdinalIgnoreCase))
-        {
-            System.Windows.Shapes.Path path = new System.Windows.Shapes.Path
-            {
-                Data = Geometry.Parse("M8,8 C6,5 6,2 8,1 C10,2 10,5 8,8 Z M8,8 C11,6 14,7 15,9 C13,11 10,10 8,8 Z M8,8 C10,11 10,14 8,15 C6,14 6,11 8,8 Z M8,8 C5,10 2,9 1,7 C3,5 6,6 8,8 Z M8,7 A1,1 0 1 1 8,9 A1,1 0 1 1 8,7 Z")
-            };
-            path.SetBinding(System.Windows.Shapes.Shape.FillProperty, new System.Windows.Data.Binding("Foreground")
-            {
-                RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(ToggleButton), 1)
-            });
-            Canvas canvas = new Canvas { Width = 16, Height = 16 };
-            canvas.Children.Add(path);
-            return new Viewbox { Width = 16, Height = 16, Child = canvas, HorizontalAlignment = HorizontalAlignment.Center };
-        }
-        if (string.Equals(key, "touchpad", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(key, "touchpadtoggle", StringComparison.OrdinalIgnoreCase))
-        {
-            // 触摸板磁贴用矢量线条，跟随主题 Foreground，浅色模式也能保持深色。
-            System.Windows.Shapes.Path outline = new()
-            {
-                Data = Geometry.Parse("M2,3 L14,3 L14,13 L2,13 Z"),
-                StrokeThickness = 1.3,
-                Fill = System.Windows.Media.Brushes.Transparent
-            };
-            System.Windows.Shapes.Path line = new()
-            {
-                Data = Geometry.Parse("M5,10 L11,10"),
-                StrokeThickness = 1.3
-            };
-            foreach (System.Windows.Shapes.Path path in new[] { outline, line })
-            {
-                path.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, new System.Windows.Data.Binding("Foreground")
-                {
-                    RelativeSource = new System.Windows.Data.RelativeSource(
-                        System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(ToggleButton), 1)
-                });
-            }
-            Canvas canvas = new() { Width = 16, Height = 16 };
-            canvas.Children.Add(outline);
-            canvas.Children.Add(line);
-            return new Viewbox { Width = 16, Height = 16, Child = canvas, HorizontalAlignment = HorizontalAlignment.Center };
-        }
-        TextBlock text = new TextBlock
-        {
-            Text = glyph,
-                FontFamily = L_Mechrevo.WpfP0.Services.QuickGlyphs.Font(glyph),
-                FontSize = L_Mechrevo.WpfP0.Services.QuickGlyphs.Size(glyph),
-                FontWeight = L_Mechrevo.WpfP0.Services.QuickGlyphs.Weight(glyph),
-        };
-        text.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
-        return text;
+        return QuickIconFactory.Create(key, glyph);
     }
 
     private const string MoreOpenConfigKey = "group_quick_open";

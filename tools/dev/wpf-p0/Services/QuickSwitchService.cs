@@ -127,11 +127,22 @@ internal sealed class QuickSwitchService : IQuickSwitchService
             {
                 if (string.Equals(item.Key, key, StringComparison.OrdinalIgnoreCase))
                 {
-                    return item.Label;
+                return NormalizeLabel(item.Key, item.Label);
                 }
             }
         }
         return Label(key, key);
+    }
+
+    /// <summary>文案与语义对齐：麦克风开关已改为"开=可用"，旧译名不再显示。</summary>
+    private static string NormalizeLabel(string key, string label)
+    {
+        if (string.Equals(key, "micmute", StringComparison.OrdinalIgnoreCase)
+            && label.Contains("静音", StringComparison.Ordinal))
+        {
+            return "麦克风";
+        }
+        return label;
     }
 
     internal static string Label(string key, string? fallback = null)

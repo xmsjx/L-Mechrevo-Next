@@ -20,6 +20,7 @@ public sealed class QuickChoice
         Key = key;
         Label = label;
         Glyph = glyph;
+        Icon = L_Mechrevo.WpfP0.Services.QuickIconFactory.Create(key, glyph);
         IsSelected = isSelected;
     }
 
@@ -28,6 +29,9 @@ public sealed class QuickChoice
     public string Label { get; }
 
     public string Glyph { get; }
+
+    /// <summary>磁贴同款图标元素（磁贴/迷你窗/选择框共用工厂，避免三处不一致）。</summary>
+    public System.Windows.FrameworkElement Icon { get; }
 
     public System.Windows.Media.FontFamily GlyphFont => L_Mechrevo.WpfP0.Services.QuickGlyphs.Font(Glyph);
 

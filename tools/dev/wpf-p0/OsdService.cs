@@ -72,8 +72,10 @@ internal static class OsdService
             TextBlock glyphText = new()
             {
                 Text = glyph,
-                FontFamily = new FontFamily("Segoe MDL2 Assets"),
-                FontSize = 30,
+            // 单字符走图标字体；Num / Fn / Aa 这类文字图标必须用正文字体（否则是方框）。
+            FontFamily = L_Mechrevo.WpfP0.Services.QuickGlyphs.Font(glyph),
+            FontSize = L_Mechrevo.WpfP0.Services.QuickGlyphs.IsText(glyph) ? 20 : 30,
+            FontWeight = L_Mechrevo.WpfP0.Services.QuickGlyphs.Weight(glyph),
                 Foreground = Brushes.White,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 16, 0)

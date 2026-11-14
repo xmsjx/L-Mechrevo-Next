@@ -1179,49 +1179,7 @@ public partial class MainWindow : Window
 
     private FrameworkElement CreateWideQuickIcon(string key, string glyph)
     {
-        // 强冷图标与迷你窗完全一致：复用其四叶风扇 Path，而不是另一枚字体图标。
-        if (string.Equals(key, "fanboost", StringComparison.OrdinalIgnoreCase))
-        {
-            Path path = new()
-            {
-                Data = Geometry.Parse("M8,8 C6,5 6,2 8,1 C10,2 10,5 8,8 Z M8,8 C11,6 14,7 15,9 C13,11 10,10 8,8 Z M8,8 C10,11 10,14 8,15 C6,14 6,11 8,8 Z M8,8 C5,10 2,9 1,7 C3,5 6,6 8,8 Z M8,7 A1,1 0 1 1 8,9 A1,1 0 1 1 8,7 Z"),
-                Fill = (Brush)FindResource("TextBrush"),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            Canvas canvas = new() { Width = 16, Height = 16 };
-            canvas.Children.Add(path);
-            return new Viewbox { Width = 16, Height = 16, Child = canvas, HorizontalAlignment = HorizontalAlignment.Center };
-        }
-        // 触摸板与迷你窗共用同一套矢量线条，不再用 MDL2 字形。
-        if (string.Equals(key, "touchpad", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(key, "touchpadtoggle", StringComparison.OrdinalIgnoreCase))
-        {
-            Path outline = new()
-            {
-                Data = Geometry.Parse("M2,3 L14,3 L14,13 L2,13 Z"),
-                StrokeThickness = 1.3,
-                Fill = Brushes.Transparent,
-                Stroke = (Brush)FindResource("TextBrush")
-            };
-            Path line = new()
-            {
-                Data = Geometry.Parse("M5,10 L11,10"),
-                StrokeThickness = 1.3,
-                Stroke = (Brush)FindResource("TextBrush")
-            };
-            Canvas canvas = new() { Width = 16, Height = 16 };
-            canvas.Children.Add(outline);
-            canvas.Children.Add(line);
-            return new Viewbox { Width = 16, Height = 16, Child = canvas, HorizontalAlignment = HorizontalAlignment.Center };
-        }
-        return new TextBlock
-        {
-            Text = glyph,
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = 13,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
+        return L_Mechrevo.WpfP0.Services.QuickIconFactory.Create(key, glyph);
     }
 
     private void BuildQuickTiles()
