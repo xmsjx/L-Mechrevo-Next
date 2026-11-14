@@ -5972,7 +5972,7 @@ public partial class OriginalStyleWindow : Window
     if (string.Equals(key, "copilot", StringComparison.OrdinalIgnoreCase))
     if (string.Equals(key, "copilot", StringComparison.OrdinalIgnoreCase))
     {
-        // Copilot 键锁：官方标志形状的"仅线条"版（描边跟随主题前景色，不填色）。
+        // Copilot 键锁：官方标志形状的实心填充版（颜色跟随主题前景色）。
         return CreateMaskedIcon("Assets/Icons/copilot-line.png", 18, 17);
     }
         if (string.Equals(key, "fanboost", StringComparison.OrdinalIgnoreCase))
