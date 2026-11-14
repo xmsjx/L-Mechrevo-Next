@@ -54,10 +54,10 @@ internal sealed class BaolongdaStateSnapshot
 	/// <summary>⭐ 功能号 12（⭐ 触摸板锁 ⚠️ 未真机验证 ✅）。</summary>
 	internal int? TouchpadLock { get; private set; }
 
-	/// <summary>⭐ 功能号 13（⭐ 第一个风扇通道转速 RPM ⚠️ 归属待确认 ✅）。</summary>
+	/// <summary>功能号 13 的第一个风扇通道转速（RPM；通道 0 = 大扇 / GPU）。</summary>
 	internal int? FanFirstRpm { get; private set; }
 
-	/// <summary>⭐ 功能号 13（⭐ 第二个风扇通道转速 RPM ⚠️ 归属待确认 ✅）。</summary>
+	/// <summary>功能号 13 的第二个风扇通道转速（RPM；通道 1 = 小扇 / CPU）。</summary>
 	internal int? FanSecondRpm { get; private set; }
 
 	/// <summary>⭐ 功能号 15（⭐ LOGO 灯 ✅：⭐ 1 = 亮 · ⭐ 0 = 灭 ✅）。</summary>

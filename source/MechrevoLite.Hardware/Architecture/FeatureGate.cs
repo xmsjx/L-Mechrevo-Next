@@ -172,9 +172,12 @@ internal static class FeatureGate
 		Check(lines, "gcu-color-calibration-supported", Facts(BackendKind.TongfangGcu),
 			new FeatureProbe(true, false, false, null, false, ColorCalibrationCapability: true),
 			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.ColorCalibration);
-		Check(lines, "baolongda-no-lightbar", Facts(BackendKind.BaolongdaWmi),
+		Check(lines, "baolongda-tail-lightbar-same-as-logo", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, true, false, null, false),
-			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.Lightbar);
+		Check(lines, "baolongda-no-localdimming", Facts(BackendKind.BaolongdaWmi),
+			new FeatureProbe(false, true, false, null, false),
+			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.LocalDimming);
 		Check(lines, "baolongda-local-icc-calibration", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.ColorCalibration);

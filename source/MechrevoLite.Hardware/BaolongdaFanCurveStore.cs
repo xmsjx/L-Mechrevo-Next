@@ -1,4 +1,4 @@
-// ⇒   **不下发任何转速**（ 真机未验证功能号 20/21 的写入  ⇒  见方案 §6.2 ）
+// 宝龙达风扇曲线存档：只保存曲线与开关状态，实际下发由闭环步骤负责。
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -82,7 +82,7 @@ internal sealed class BaolongdaFanCurveSettings
 	/// <summary>⭐ 默认转速上界（RPM ✅）＝ <see cref="DefaultFullRpm" /> ✅（⭐ 默认曲线 100 ℃ 正好到满转）。</summary>
 	internal const int DefaultMaxRpm = DefaultFullRpm;
 
-	/// <summary>⭐ 软件闭环是否启用 ⚠️（⭐ 默认 **false** —— ⭐ 通道归属未确认前不许启用 ✅）。</summary>
+	/// <summary>软件闭环是否启用（默认 false：曲线只记录，不参与下发）。</summary>
 	internal bool Enabled { get; init; }
 
 	/// <summary>
@@ -549,7 +549,7 @@ internal static class BaolongdaFanCurveStore
 			StringBuilder sb = new StringBuilder();
 			sb.AppendLine("# 宝龙达软件风扇曲线（⭐ 由 L-Mechrevo 自动生成，⭐ 手改请谨慎 ✅）");
 			sb.AppendLine("# ⚠️ 数值是**我们软件记的**（⭐ 机器读不回来）—— 见 docs\\notes 里第 4 步说明 ✅");
-			sb.AppendLine("# ⭐ 单位是 RPM（⛔ 不是占空比）✅；⭐ 通道 0/1 对应协议 FanType 0/1（⭐ 哪个是 CPU/GPU 待确认 ⚠️）✅");
+			sb.AppendLine("# 单位是 RPM；通道 0 跟 GPU 温度（FanType 0）、通道 1 跟 CPU 温度（FanType 1）");
 			sb.AppendLine("# syncenabled=1 ⇒ 双风扇 0.85 联动（共用热管）；旧版本存档没有该键 ⇒ 按 1 处理 ✅");
 			sb.Append("format=").Append(BaolongdaFanCurveSettings.CurrentFormatVersion).AppendLine();
 			sb.Append("enabled=").Append(settings.Enabled ? "1" : "0").AppendLine();

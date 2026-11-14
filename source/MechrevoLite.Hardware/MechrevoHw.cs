@@ -6158,46 +6158,22 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 	}
 
-	// ══════════════════════════════════════════════════════════════════════════
-	// ⭐⭐ 2026-10-16（"全部接入"第 4 步 · 风扇**软件闭环曲线** · ⭐ 骨架）
-	//
-	//  ⭐⭐ 为什么是"软件闭环"（⭐ 用户 2026-10-16：「四 宝龙达是风扇曲线是吗 能不能接我们的曲线里面」）：
-	//     ⭐ 我们的曲线（`FanCurveForm`）⭐ 是"⭐ **上传表给 GCU 固件**"的 ✅ ⇒ ⭐ 固件自己按温度调 ✅
-	//     ⚠️ 宝龙达协议（⭐ 功能号 20/21）⭐ **只有**「⭐ 手动开关 ＋ ⭐ 固定转速」，⭐ **没有曲线表** ⚠️
-	//     ⇒ ⭐ ⭐ 所以只能 ⭐ **我们的程序读温度 → ⭐ 查曲线 → ⭐ 写功能号 21** ✅
-	//
-	//  ⚠️⚠️ **本骨架【故意不可用】**（⭐ 硬闸）⚠️ —— ⭐ 原因只有一个：
-	//     ⚠️ **风扇两通道的归属还没确认** ⚠️
-	//        ⭐ 参考实现（蛟龙16Pro）说 ⭐ `FanType=0` = 大扇/**GPU** · ⭐ `1` = 小扇/**CPU** ⚠️
-	//        ⭐ 但真机两组读数太接近（⭐ 3054 / 3098 ✅）⭐ **分不出来** ⚠️
-	//        ⇒ ⭐ ⚠️ 搞反的后果：⭐ **CPU 风扇会按 GPU 温度转** ⚠️ ⇒ ⭐ 散热逻辑完全错 ❌
-	//     ⇒ ⭐ 所以 ⭐ `FanChannelMappingConfirmed` ⭐ **恒为 false** ⇒ ⭐ `ApplyBaolongdaFanCurveStep()`
-	//        ⭐ **只记一行日志、⭐ 什么都不写** ✅
-	//     ⇒ ⭐ ⭐ **待办**：⭐ 用 `--fan-watch` 确认归属后 ⇒ ⭐ 把下面那个常量改成 `true` ⇒ ⭐ 闭环即生效 ✅
-	//        （⭐ 这是**唯一**的开关点，⭐ 故意做成一个常量，⭐ 便于审查时一眼看到 ✅）
-	// ══════════════════════════════════════════════════════════════════════════
+	// 宝龙达没有曲线表：协议只提供"手动开关 + 固定目标转速"，
+	// 所以曲线由程序读温度 → 查表 → 写目标转速，形成软件闭环。
+	// 通道归属：FanType 0（大扇）跟 GPU 温度、FanType 1（小扇）跟 CPU 温度；
+	// 若出现 CPU 满载时 GPU 扇狂转，先把 FanChannelMappingConfirmed 改回 false 再复查归属。
 
 	/// <summary>
-	/// ⭐⭐ **风扇两通道归属** —— ⚠️ 2026-10-17 已由 owner 确认为正确 ✅
-	/// <para>⭐ 确认口径（沿用参考实现 · 与现有代码配对一致）：⭐ <c>FanType = 0</c>（大扇）＝ **GPU** ·
-	/// ⭐ <c>FanType = 1</c>（小扇）＝ **CPU** ✅
-	/// ⇒ ⭐ 曲线通道 <c>ch0</c> 跟 <b>GPU 温度</b>、<c>ch1</c> 跟 <b>CPU 温度</b> ✅
-	/// （⭐ 见 <see cref="ApplyBaolongdaFanCurveStep" /> 里 <c>channel0Rpm</c> ← <c>gpuTemp</c> /
-	/// <c>channel1Rpm</c> ← <c>cpuTemp</c> 的配对 ✅）</para>
-	/// <para>⚠️ <b>历史</b>：此前恒 <c>false</c> 是因为真机静止读数太接近（3054 / 3098）分不出通道，
-	/// 而搞反会让 <b>CPU 风扇按 GPU 温度转</b> ⚠️ ⇒ 宁可锁死。现已确认 ⇒ 放开 ✅</para>
-	/// <para>⚠️ 若日后发现风扇行为异常（例如 CPU 满载时 GPU 扇狂转），<b>第一件事</b>就是把本常量改回
-	/// <c>false</c> 并复查通道归属 —— 这是唯一开关点，便于快速回滚 ✅</para>
+	/// 风扇两通道归属：<c>FanType = 0</c>（大扇）＝ GPU，<c>FanType = 1</c>（小扇）＝ CPU；
+	/// 曲线通道 <c>ch0</c> 跟 GPU 温度、<c>ch1</c> 跟 CPU 温度（见 <see cref="ApplyBaolongdaFanCurveStep" />）。
+	/// <para>唯一开关点：改回 <c>false</c> 即停止闭环下发（只记日志）。</para>
 	/// </summary>
 	internal const bool FanChannelMappingConfirmed = true;
 
-	/// <summary>
-	/// ⭐ 参考实现的通道口径（⚠️ **未确认**，⭐ 等 `--fan-watch` 的结论 ✅）：
-	/// ⭐ 宝龙达 ⭐ <c>FanType = 0</c> ⇒ ⭐ **大扇 / GPU** · ⭐ <c>FanType = 1</c> ⇒ ⭐ **小扇 / CPU** ⚠️
-	/// </summary>
+	/// <summary>风扇通道 0（大扇）对应协议的 FanType 值。</summary>
 	internal const int BaolongdaFanTypeLarge = BaolongdaProfile.FanTypeLarge;
 
-	/// <summary>⭐ 见 <see cref="BaolongdaFanTypeLarge" /> ⚠️（⭐ 未确认 ✅）。</summary>
+	/// <summary>风扇通道 1（小扇）对应协议的 FanType 值。</summary>
 	internal const int BaolongdaFanTypeSmall = BaolongdaProfile.FanTypeSmall;
 
 	// ⚠️ 占空比 → `x100RPM` 需要"该通道最大转速" ⚠️

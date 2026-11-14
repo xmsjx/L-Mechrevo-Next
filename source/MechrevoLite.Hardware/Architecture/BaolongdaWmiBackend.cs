@@ -14,10 +14,12 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
 		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.WmiMailbox, "宝龙达功能号 15 提供 Logo 开关",
 			new[] { "wmi:Baolongda.Function15" });
-		FeatureDeclaration lightbar = new FeatureDeclaration(FeatureAvailability.Unknown,
-			BackendChannel.None, "宝龙达未声明灯带通道，回退旧判据", new string[0]);
-		FeatureDeclaration noOemDisplay = new FeatureDeclaration(FeatureAvailability.Unsupported,
-			BackendChannel.None, "宝龙达没有 OEM 显示能力通道", new string[0]);
+		FeatureDeclaration lightbar = new FeatureDeclaration(FeatureAvailability.Unsupported,
+			BackendChannel.None, "尾部灯带与 LOGO 灯同一路（功能号 15），没有独立灯带通道", new string[0]);
+		FeatureDeclaration localDimming = new FeatureDeclaration(FeatureAvailability.Unsupported,
+			BackendChannel.None, "协议没有分区背光功能号", new string[0]);
+		FeatureDeclaration lcdOverdrive = new FeatureDeclaration(FeatureAvailability.Unsupported,
+			BackendChannel.None, "协议没有 LCD Overdrive 功能号", new string[0]);
 		// 色彩增强走 Windows 本地 gamma/矩阵（与后端无关），校色走 Windows 颜色管理的本地 ICC。
 		FeatureDeclaration displayEffect = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.Local, "本地软件色彩增强（Win32 gamma/矩阵）", new[] { "win32:gamma" });
@@ -38,8 +40,8 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
 			{
 				[FeatureId.LogoLight] = logo,
 				[FeatureId.Lightbar] = lightbar,
-				[FeatureId.LocalDimming] = noOemDisplay,
-				[FeatureId.LcdOverdrive] = noOemDisplay,
+				[FeatureId.LocalDimming] = localDimming,
+				[FeatureId.LcdOverdrive] = lcdOverdrive,
 				[FeatureId.DisplayEffect] = displayEffect,
 				[FeatureId.ColorCalibration] = colorCalibration,
 				[FeatureId.FanCurve] = fanCurve,
