@@ -1726,7 +1726,7 @@
     <value>Webcam</value>
   </data>
   <data name="QuickMicMute" xml:space="preserve">
-    <value>Mic mute</value>
+    <value>Mic</value>
   </data>
   <data name="QuickNumpad" xml:space="preserve">
     <value>Numpad lock</value>

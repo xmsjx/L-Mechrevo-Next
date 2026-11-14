@@ -205,9 +205,9 @@ public partial class OriginalStyleWindow : Window
     {
         ("touchpad", QuickSwitchService.Label("touchpad", "触摸板"), "\uE7C9"), ("touchpadtoggle", QuickSwitchService.Label("touchpadtoggle", "触摸板切换键"), "\uE7C9"),
         ("wifi", "WiFi", "\uE701"), ("bt", QuickSwitchService.Label("bt", "蓝牙"), "\uE702"),
-        ("webcam", QuickSwitchService.Label("webcam", "摄像头"), "\uE722"), ("micmute", QuickSwitchService.Label("micmute", "麦克风静音"), "\uE720"),
-        ("numpad", QuickSwitchService.Label("numpad", "小键盘锁"), "\uE765"), ("winkey", QuickSwitchService.Label("winkey", "禁用Win键"), "\uE765"),
-        ("fnkey", QuickSwitchService.Label("fnkey", "Fn键锁"), "\uE765"), ("capslock", QuickSwitchService.Label("capslock", "大小写锁定"), "\uE8AB"),
+        ("webcam", QuickSwitchService.Label("webcam", "摄像头"), "\uE722"), ("micmute", QuickSwitchService.Label("micmute", "麦克风"), "\uE720"),
+        ("numpad", QuickSwitchService.Label("numpad", "小键盘锁"), "Num"), ("winkey", QuickSwitchService.Label("winkey", "禁用Win键"), "\uE765"),
+        ("fnkey", QuickSwitchService.Label("fnkey", "Fn键锁"), "Fn"), ("capslock", QuickSwitchService.Label("capslock", "大小写锁定"), "Aa"),
         ("osd", QuickSwitchService.Label("osd", "OSD提示"), "\uE7F4"), ("gcuosd", "GCU-OSD", "\uE7F4"), ("copilot", QuickSwitchService.Label("copilot", "Copilot键锁"), "\uE8B7"),
         ("usb", QuickSwitchService.Label("usb", "关机USB供电"), "\uE88E"), ("acrecovery", QuickSwitchService.Label("acrecovery", "来电自启"), "\uE7E8"),
         ("highperf", QuickSwitchService.Label("highperf", "高性能电源"), "\uE945"), ("apuboost", QuickSwitchService.Label("apuboost", WpfStrings.QuickApuBoost), "\uE9D9"),
@@ -1423,7 +1423,7 @@ public partial class OriginalStyleWindow : Window
             (WpfStrings.QuickGroupInput, new (string, string)[]
             {
                 ("touchpad", QuickSwitchService.Label("touchpad", "触摸板")), ("wifi", "WiFi"), ("bt", QuickSwitchService.Label("bt", "蓝牙")), ("webcam", QuickSwitchService.Label("webcam", "摄像头")),
-                ("micmute", QuickSwitchService.Label("micmute", "麦克风静音")), ("numpad", QuickSwitchService.Label("numpad", "小键盘锁")), ("touchpadtoggle", QuickSwitchService.Label("touchpadtoggle", "触摸板切换键"))
+                ("micmute", QuickSwitchService.Label("micmute", "麦克风")), ("numpad", QuickSwitchService.Label("numpad", "小键盘锁")), ("touchpadtoggle", QuickSwitchService.Label("touchpadtoggle", "触摸板切换键"))
             }),
             (WpfStrings.QuickGroupKeyboard, new (string, string)[]
             {
@@ -4031,7 +4031,7 @@ public partial class OriginalStyleWindow : Window
                 }
                 _lastMicOsd = target ? 1 : 0;
                 OsdService.Show(QuickGlyph("micmute"), QuickSwitchService.DisplayLabel("micmute"),
-                    target ? WpfStrings.StateOn : WpfStrings.StateOff);
+            target ? WpfStrings.StateOff : WpfStrings.StateOn);
                 UpdateQuickTileStates();
                 _wideWindow?.RefreshFromOwner();
                 Logger.WriteError("[acpikey] 183 麦克风静音=" + target + " " + note);
@@ -4239,7 +4239,7 @@ public partial class OriginalStyleWindow : Window
                 hw.QuickSwitches["micmute"] = muted;
             }
             OsdService.Show(QuickGlyph("micmute"), QuickSwitchService.DisplayLabel("micmute"),
-                muted ? WpfStrings.StateOn : WpfStrings.StateOff);
+            muted ? WpfStrings.StateOff : WpfStrings.StateOn);
             UpdateQuickTileStates();
             _wideWindow?.RefreshFromOwner();
             Logger.WriteError("[mic-osd] mic mute=" + muted + " => OSD");
@@ -5996,9 +5996,9 @@ public partial class OriginalStyleWindow : Window
         TextBlock text = new TextBlock
         {
             Text = glyph,
-            FontFamily = new System.Windows.Media.FontFamily("Segoe MDL2 Assets"),
-            FontSize = 16,
-            HorizontalAlignment = HorizontalAlignment.Center
+                FontFamily = L_Mechrevo.WpfP0.Services.QuickGlyphs.Font(glyph),
+                FontSize = L_Mechrevo.WpfP0.Services.QuickGlyphs.Size(glyph),
+                FontWeight = L_Mechrevo.WpfP0.Services.QuickGlyphs.Weight(glyph),
         };
         text.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
         return text;
@@ -6190,7 +6190,7 @@ public partial class OriginalStyleWindow : Window
             (WpfStrings.QuickGroupInput, new (string, string)[]
             {
                 ("touchpad", QuickSwitchService.Label("touchpad", "触摸板")), ("wifi", "WiFi"), ("bt", QuickSwitchService.Label("bt", "蓝牙")), ("webcam", QuickSwitchService.Label("webcam", "摄像头")),
-                ("micmute", QuickSwitchService.Label("micmute", "麦克风静音")), ("numpad", QuickSwitchService.Label("numpad", "小键盘锁")), ("touchpadtoggle", QuickSwitchService.Label("touchpadtoggle", "触摸板切换键"))
+                ("micmute", QuickSwitchService.Label("micmute", "麦克风")), ("numpad", QuickSwitchService.Label("numpad", "小键盘锁")), ("touchpadtoggle", QuickSwitchService.Label("touchpadtoggle", "触摸板切换键"))
             }),
             (WpfStrings.QuickGroupKeyboard, new (string, string)[]
             {

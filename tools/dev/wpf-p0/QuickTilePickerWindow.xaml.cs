@@ -29,6 +29,12 @@ public sealed class QuickChoice
 
     public string Glyph { get; }
 
+    public System.Windows.Media.FontFamily GlyphFont => L_Mechrevo.WpfP0.Services.QuickGlyphs.Font(Glyph);
+
+    public double GlyphSize => L_Mechrevo.WpfP0.Services.QuickGlyphs.Size(Glyph);
+
+    public System.Windows.FontWeight GlyphWeight => L_Mechrevo.WpfP0.Services.QuickGlyphs.Weight(Glyph);
+
     public bool IsSelected { get; set; }
 
     public bool IsFanBoost => string.Equals(Key, "fanboost", StringComparison.OrdinalIgnoreCase);

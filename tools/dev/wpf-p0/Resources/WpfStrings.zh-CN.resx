@@ -1726,7 +1726,7 @@
     <value>摄像头</value>
   </data>
   <data name="QuickMicMute" xml:space="preserve">
-    <value>麦克风静音</value>
+    <value>麦克风</value>
   </data>
   <data name="QuickNumpad" xml:space="preserve">
     <value>小键盘锁</value>

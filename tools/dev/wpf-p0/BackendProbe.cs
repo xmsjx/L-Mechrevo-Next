@@ -141,6 +141,9 @@ internal sealed class BackendProbe : IDisposable
                     return true;
                 case "numpad":
                     return true;
+            case "webcam":
+                // 摄像头走本机 PnP 禁用/启用，不依赖后端；入口始终保留（否则列表里会整项消失）。
+                return true;
                 case "acrecovery":
                     return _hw.Capabilities.AcRecovery || GcuEcExperimental.LocalQuickSwitch;
                 case "usb":
