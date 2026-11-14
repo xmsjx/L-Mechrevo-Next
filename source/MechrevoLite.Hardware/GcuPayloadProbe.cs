@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.Win32;
 
 namespace MechrevoLite.Hardware;
@@ -61,16 +63,30 @@ internal static class GcuPayloadProbe
     /// <summary>本地控制端口的连通性（只做一次 TCP 连接，200 ms 超时，不发任何数据）。</summary>
     internal static bool IsPortReachable(string host, int port, int timeoutMs = 200)
     {
-        // ⛔ 用 APM（Begin/EndConnect）：ConnectAsync 超时后任务会带异常，未观察会在终结器线程重抛成崩溃记录。
+        // ⚠️ 连接过程必须全程被观察：超时放弃时若留下带异常的任务，终结器线程会把它重抛成崩溃记录。
         try
         {
-            using System.Net.Sockets.TcpClient client = new System.Net.Sockets.TcpClient();
-            IAsyncResult ar = client.BeginConnect(host, port, null, null);
-            if (!ar.AsyncWaitHandle.WaitOne(timeoutMs))
+            Task<bool> probe = ProbePortAsync(host, port, timeoutMs);
+            if (!probe.Wait(timeoutMs + 100))
             {
                 return false;
             }
-            client.EndConnect(ar);
+            return probe.Result;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>只做一次连接尝试；任何异常都在内部转成 false，保证任务不携带未观察异常。</summary>
+    private static async Task<bool> ProbePortAsync(string host, int port, int timeoutMs)
+    {
+        try
+        {
+            using System.Net.Sockets.TcpClient client = new System.Net.Sockets.TcpClient();
+            using CancellationTokenSource cts = new CancellationTokenSource(timeoutMs);
+            await client.ConnectAsync(host, port, cts.Token).ConfigureAwait(false);
             return client.Connected;
         }
         catch
