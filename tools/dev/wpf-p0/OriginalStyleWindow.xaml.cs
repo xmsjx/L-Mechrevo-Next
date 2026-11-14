@@ -10245,6 +10245,7 @@ public partial class OriginalStyleWindow : Window
 
     private async Task RestoreAllLightsAsync()
     {
+        Logger.WriteError("[light] 恢复全部灯效（来源见上一条日志；HID 软件效果需重启帧流）");
         if (_lightingIdleSwitchSnapshot is { Length: 5 } snapshot)
         {
             _syncingLighting = true;

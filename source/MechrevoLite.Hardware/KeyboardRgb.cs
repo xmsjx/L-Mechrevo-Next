@@ -1087,6 +1087,7 @@ public class KeyboardRgb : IDisposable
 			if (ShouldRestartEffect(mode, _activeMode, _stop, _effectThread?.IsAlive ?? false))
 			{
 				LogBootHid($"start(mode={mode} · activeMode={_activeMode} · stopping={_stop} · threadAlive={_effectThread?.IsAlive ?? false})");
+				Logger.WriteError("[hid-fx] start(mode=" + mode + " · previous=" + _activeMode + ")");
 				StopCurrentEffect();
 				int gen = Interlocked.Increment(ref _generation);
 				_activeMode = mode;
@@ -1148,6 +1149,7 @@ public class KeyboardRgb : IDisposable
 	public void StopCurrentEffect()
 	{
 		LogBootHid($"stop(stream={(this._stream != null ? "connected" : "null")} · activeMode={_activeMode} · threadAlive={_effectThread?.IsAlive ?? false})");
+		Logger.WriteError("[hid-fx] stop(activeMode=" + _activeMode + " · threadAlive=" + (_effectThread?.IsAlive ?? false) + ")");
 		_stop = true;
 		_effectThread?.Join(500);
 		_effectThread = null;
@@ -1236,14 +1238,18 @@ public class KeyboardRgb : IDisposable
 	{
 		double num = 0.0;
 		byte[] array = new byte[512];
+		int frames = 0;
 		while (!_stop && generation == _generation)
 		{
 			Array.Clear(array);
 			fill(array);
 			SendFrame(array);
+			frames++;
 			num += tick();
 			PaceFrame(TargetFps);
 		}
+		// 帧流退出 = 灯效停在最后一帧/变黑：记清是谁让它停的（区别于 generation 换代）
+		Logger.WriteError("[hid-fx] frame-loop-exit(mode=" + _activeMode + " · gen=" + generation + " · stopping=" + _stop + " · frames=" + frames + ")");
 	}
 
 	private void EffectBreath(int gen)
