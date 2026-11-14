@@ -1,7 +1,9 @@
 using System;
+using System.Threading.Tasks;
 using MechrevoLite;
 using MechrevoLite.Hardware;
 using MechrevoLite.Gpu;
+using L_Mechrevo.WpfP0.Resources;
 
 namespace L_Mechrevo.WpfP0.Services;
 
@@ -189,4 +191,156 @@ internal static class WpfBackend
     /// <summary>开机恢复被强制静音的显卡状态。</summary>
     internal static bool IgpuRecoverForcedSilenceOnStartup(out string detail)
         => AcpiGpuHotSwitch.TryRecoverForcedSilenceOnStartup(out detail);
+
+    // ── 机型/能力枚举与零散硬件事实（界面层只经这里读） ──
+
+    internal const FeatureAvailability FeatureSupported = FeatureAvailability.Supported;
+    internal const FeatureAvailability FeatureUnsupported = FeatureAvailability.Unsupported;
+    internal const FeatureAvailability FeatureUnknown = FeatureAvailability.Unknown;
+
+    /// <summary>是否属同方家族（只读事实）。</summary>
+    internal static bool IsTongfangFamily => MachineIdentity.Collect().TongfangFamily;
+
+    /// <summary>限充状态回读是否可读（通道探测用）。</summary>
+    internal static bool ChargeLimitChannelReadable() => BatteryLimitWriter.TryReadState(out _, out _, out _, out _);
+
+    /// <summary>运行时机型是否允许可写通道。</summary>
+    internal static bool RuntimeModelSupported => RuntimeModelSupport.Current().IsSupported;
+
+    /// <summary>分区背光本机探测。</summary>
+    internal static bool QueryLocalDimmingSupport() => AcpiDisplaySwitch.QueryLocalDimmingSupport();
+
+    /// <summary>LCD Overdrive 本机探测。</summary>
+    internal static bool QueryLcdOverdriveSupport() => AcpiDisplaySwitch.QueryLcdOverdriveSupport();
+
+    /// <summary>静音狂暴（Turbo 子模式）当前是否激活。</summary>
+    internal static bool SilentTurboActive => MechrevoService.IsSilentTurboActive;
+
+    /// <summary>限充判定结论后缀（" · 提示"）。</summary>
+    internal static string ChargeLimitVerdictSuffix => EcChargeLimit.Verdict switch
+    {
+        ChargeLimitVerdict.Verified => " · " + EcChargeLimit.VerifiedNotice,
+        ChargeLimitVerdict.Ineffective => " · " + EcChargeLimit.IneffectiveNotice,
+        _ => " · " + EcChargeLimit.PendingNotice
+    };
+
+    /// <summary>EC-only 路由声明（只读，供诊断包解释当前机型）。</summary>
+    internal static string EcRouteDeclaration()
+    {
+        try
+        {
+            BackendRouteDecision route = BackendRouter.DecideAndLog();
+            return "backend=" + route.Backend + " · rule=#" + route.RuleIndex + " " + route.Rule
+                + " · machine=" + route.Identity.Summary;
+        }
+        catch (Exception ex)
+        {
+            return "路由声明读取失败：" + ex.Message;
+        }
+    }
+
+    /// <summary>显卡数据库控制是否可用。</summary>
+    internal static bool GpuDbAvailable => GpuDbControl.Supported();
+
+    /// <summary>按视觉档同步显卡数据库。</summary>
+    internal static void GpuDbSyncForVisualMode(int visualMode, string reason) => GpuDbControl.SyncForVisualMode(visualMode, reason);
+
+    /// <summary>GCU 变体标识。</summary>
+    internal static string GcuVariant => GcuIdentity.Variant;
+
+    /// <summary>NUC 风扇表恢复默认。</summary>
+    internal static bool NucFanRestoreDefault(out string detail) => NucFanTable.TryRestoreDefault(out detail);
+
+    /// <summary>读 NUC Fn 锁状态。</summary>
+    internal static bool NucReadFnLock(out bool on) => NucQuickSwitches.TryReadFnLock(out on);
+
+    /// <summary>同步 NUC 快捷开关。</summary>
+    internal static void NucSyncQuickSwitches(MechrevoHw? hw) => NucQuickSwitches.Sync(hw);
+
+    /// <summary>静音狂暴的 WMI 子模式是否支持。</summary>
+    internal static bool TurboSubModeSupported() => TurboSubModeWmi.IsSupported();
+
+    /// <summary>UEFI 显卡复用变量是否存在。</summary>
+    internal static bool UefiMuxVariablePresent => UefiGpuMux.HasMuxVariable;
+
+    /// <summary>写 UEFI 冷切换档位。</summary>
+    internal static bool UefiWriteColdMode(int visualMode, out string detail) => UefiGpuMux.TryWriteColdMode(visualMode, out detail);
+
+    /// <summary>NUC 电池模式按百分比设置。</summary>
+    internal static bool NucSetBatteryPercent(int percent, out string detail) => NucBatteryMode.TrySetPercent(percent, out detail);
+
+    /// <summary>EC 限充覆盖（无智能提示）设置。</summary>
+    internal static bool EcSetChargeLimitOverride(int percent, out string detail) => EcChargeLimitOverride.TrySetNoSmartHint(percent, out detail);
+
+    /// <summary>星耀风扇转速读取。</summary>
+    internal static bool XingyaoReadFanRpm(out int main, out int secondary) => XingyaoFanReader.TryReadFanRpm(out main, out secondary);
+
+    /// <summary>灯光开关显示状态（通道电源 + 临时挂起）。</summary>
+    internal static bool LightSwitchOn(bool channelPowerOn, bool temporarilySuspended) => LightingState.IsLightSwitchOn(channelPowerOn, temporarilySuspended);
+
+    /// <summary>读 EC 键盘亮度档。</summary>
+    internal static bool ReadEcKeyboardBrightness(out int level) => KeyboardEcBrightness.TryReadCurrentLevel(out level);
+
+    /// <summary>灯带去重修复开关。</summary>
+    internal static bool LightbarDedupEnabled => LightCompatibilitySwitches.LightbarDedupEnabled;
+
+    /// <summary>NUC 单区键盘判定。</summary>
+    internal static bool IsNucSingleZoneKeyboard() => NucKeyboardLighting.IsSingleZone();
+
+    /// <summary>停止无界 EC 风扇自定义档。</summary>
+    internal static void StopWujieFanActive(string reason) => WujieFanEcController.StopActive(reason);
+
+    /// <summary>开机显卡 OC 保护（无服务时直接返回）。</summary>
+    internal static Task<bool> ApplyGpuOcGuardAsync() =>
+        Service is { } svc ? GpuOcShutdownGuard.ApplyIfUncleanShutdownAsync(svc) : Task.FromResult(false);
+
+    /// <summary>宝龙达退出自定义档：停用曲线并交回固件（失败只记日志，不抛）。</summary>
+    internal static void RestoreBaolongdaFanOnExit()
+    {
+        try
+        {
+            if (Hw is not { UsesBaolongda: true } bld)
+            {
+                return;
+            }
+            BaolongdaFanCurveSettings? curve = bld.LoadBaolongdaFanCurve();
+            if (curve != null)
+            {
+                bld.SaveBaolongdaFanCurve(MechrevoHw.CurrentFanCurveModeId, curve.WithEnabled(false));
+            }
+            bld.RestoreBaolongdaFanFirmwareControl();
+            Logger.WriteError("[fan] 宝龙达退出自定义档 ⇒ 曲线已停用并交回固件");
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteError("[fan] 宝龙达退出自定义档失败（已吞掉）：" + ex.Message);
+        }
+    }
+
+    /// <summary>电源来源标题（功率表命中 / EC 原始码 / 充放功率兜底）；无结论返回 null。</summary>
+    internal static string? ResolvePowerSourceHeadline(bool acOnline)
+    {
+        PowerInputSample? sample = PowerStatusService.Read().Input;
+        PowerInputKind kind = PowerInputDecoder.Reconcile(sample, acOnline);
+        if (sample != null)
+        {
+            string text = SettingsText.PowerSourceHeadline(kind, sample.AdapterWatts);
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+        }
+        int raw = sample?.BiosInfo3Raw ?? -1;
+        if (raw >= 0)
+        {
+            return string.Format(WpfStrings.DisplayPowerEcHexFormat, raw.ToString("X2"));
+        }
+        decimal? rate = PowerStatusService.Read().BatteryRateWatts;
+        if (rate.HasValue)
+        {
+            return string.Format(WpfStrings.DisplayPowerEcWattFormat, rate.Value.ToString("0.0"));
+        }
+        return null;
+    }
 }
+
