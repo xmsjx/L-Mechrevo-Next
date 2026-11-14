@@ -113,6 +113,7 @@ public partial class OriginalStyleWindow : Window
     private bool _welcomeEffectBusy;
     private bool _welcomeSentForBoot;
     private bool _welcomeSentForWake;
+    private long _lastWakeRestoreTick;
     private readonly System.Threading.SemaphoreSlim _keyboardLightApplyLock = new(1, 1);
     private readonly System.Threading.SemaphoreSlim _hidApplyLock = new(1, 1);
     private int _lightingReassertGeneration;
@@ -2244,16 +2245,25 @@ public partial class OriginalStyleWindow : Window
     private IntPtr PowerBroadcastHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         const int WM_POWERBROADCAST = 0x0218;
+        const int PBT_APMRESUMESUSPEND = 0x0007;
         const int PBT_APMRESUMEAUTOMATIC = 0x0012;
-        if (msg == WM_POWERBROADCAST && wParam.ToInt32() == PBT_APMRESUMEAUTOMATIC)
+        int reason = wParam.ToInt32();
+        if (msg == WM_POWERBROADCAST && (reason == PBT_APMRESUMEAUTOMATIC || reason == PBT_APMRESUMESUSPEND))
         {
-            Dispatcher.BeginInvoke(new Action(async () =>
+            // 与 SystemEvents.PowerModeChanged 双通道触发：5 秒内只处理一次。
+            long now = Environment.TickCount64;
+            if (now - _lastWakeRestoreTick >= 5000)
             {
-                await Task.Delay(1500);
-                _welcomeSentForWake = false;
-                await RestoreLightingOnStartupAsync();
-                await MaybeAutoWelcomeAsync(wake: true);
-            }));
+                _lastWakeRestoreTick = now;
+                Dispatcher.BeginInvoke(new Action(async () =>
+                {
+                    await Task.Delay(1500);
+                    _welcomeSentForWake = false;
+                    await RestoreLightingOnStartupAsync();
+                    await RestoreKeyboardLightAfterWakeAsync();
+                    await MaybeAutoWelcomeAsync(wake: true);
+                }));
+            }
         }
         return IntPtr.Zero;
     }
@@ -2443,6 +2453,7 @@ public partial class OriginalStyleWindow : Window
         }
         if (e.Mode == Microsoft.Win32.PowerModes.Resume)
         {
+            _lastWakeRestoreTick = Environment.TickCount64;
             MarkResumeShowSuppression("PowerModes.Resume");
             _welcomeSentForWake = false;
             _ = Task.Run(async () =>
