@@ -18,5 +18,6 @@
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\LightingChannelRouting.cs" Link="LightingChannelRouting.cs" />
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\LightingIdleTimerPolicy.cs" Link="LightingIdleTimerPolicy.cs" />
     <Compile Include="..\..\..\source\MechrevoLite.Hardware\PowerBroadcastPolicy.cs" Link="PowerBroadcastPolicy.cs" />
+    <Compile Include="..\..\..\source\MechrevoLite.Hardware\ChargeModePolicy.cs" Link="ChargeModePolicy.cs" />
   </ItemGroup>
 </Project>

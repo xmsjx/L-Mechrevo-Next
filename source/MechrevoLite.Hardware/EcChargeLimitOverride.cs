@@ -41,7 +41,7 @@ internal static class EcChargeLimitOverride
     /// <summary>档位对应的 0x7A6 模式位（100% = 不限充 = 0x00；≤65% = 工作站 0x20；其余 0x10）。</summary>
     internal static int ComputeModeBits(int percent)
     {
-        return percent >= 95 ? 0x00 : percent <= 65 ? 0x20 : 0x10;
+        return ChargeModePolicy.ComputeModeBits(percent);
     }
 
     internal static bool TrySetNoSmartHint(int percent, out string detail)

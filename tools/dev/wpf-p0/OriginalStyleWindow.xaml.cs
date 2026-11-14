@@ -5674,21 +5674,16 @@ public partial class OriginalStyleWindow : Window
                 ApplyBatteryModeHighlight(mode);
                 // 后端会按自己的档位再写回 EC：先让后端认这个档，再盯一段时间，被写回就重写。
                 int reassertMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcChargeModeBits(percentForMode);
-                _ = Task.Run(async () =>
-                {
-                    await L_Mechrevo.WpfP0.Services.WpfBackend.AlignBackendBatteryProtectionAsync(mode);
-                    await Task.Delay(1500).ConfigureAwait(false);
-                    bool kept = L_Mechrevo.WpfP0.Services.WpfBackend.EcReassertChargeMode(reassertMode, out string reassertDetail);
-                    Logger.WriteError("[battery-gcu] 对齐后复查 mode=" + mode + " 目标=0x" + reassertMode.ToString("X2")
-                        + " ⇒ " + (kept ? "保持" : "被写回/重写失败") + "：" + reassertDetail);
-                    L_Mechrevo.WpfP0.Services.WpfBackend.StartChargeModeWatch(reassertMode);
-                });
-                StatusText.Text = mode switch
+                bool backendAligned = await L_Mechrevo.WpfP0.Services.WpfBackend.AlignBackendBatteryProtectionAsync(mode);
+                L_Mechrevo.WpfP0.Services.WpfBackend.StartChargeModeWatch(reassertMode);
+                string baseText = mode switch
                 {
                     1 => "平衡模式：充电 75~80%",
                     2 => "工作站模式：充电 55~60%",
                     _ => "长效模式：不限制充电"
                 };
+                // 后端没认这个档时如实提示：EC 已写入，但后端可能仍按旧档回写。
+                StatusText.Text = backendAligned ? baseText : baseText + "（后端未确认该档）";
             }
             else
             {

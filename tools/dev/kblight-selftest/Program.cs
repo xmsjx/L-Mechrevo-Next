@@ -352,6 +352,20 @@ internal static class Program
 			PowerBroadcastPolicy.ShouldHandle(10000, 8000, 5000), false);
 		Check("超过 5 秒允许再次处理",
 			PowerBroadcastPolicy.ShouldHandle(14000, 8000, 5000), true);
+		Console.WriteLine();
+		Console.WriteLine("== 2026-11-14 充电档位 → EC 模式位换算（写入与复查共用同一算法）==");
+		Console.WriteLine("起因：旷世「长效」档在界面上被弹回工作站，需要确认映射本身没错");
+
+		Check("100% ⇒ 0x00（不限充）",
+			ChargeModePolicy.ComputeModeBits(100) == ChargeModePolicy.ModeBitsOff, true);
+		Check("95% ⇒ 0x00（≥95 视为不限充）",
+			ChargeModePolicy.ComputeModeBits(95) == ChargeModePolicy.ModeBitsOff, true);
+		Check("80% ⇒ 0x10（平衡）",
+			ChargeModePolicy.ComputeModeBits(80) == ChargeModePolicy.ModeBitsBalanced, true);
+		Check("60% ⇒ 0x20（工作站）",
+			ChargeModePolicy.ComputeModeBits(60) == ChargeModePolicy.ModeBitsWorkstation, true);
+		Check("40% ⇒ 0x20（下限仍是工作站）",
+			ChargeModePolicy.ComputeModeBits(40) == ChargeModePolicy.ModeBitsWorkstation, true);
 
 		Console.WriteLine();
 		Console.WriteLine(_fail == 0 ? $"== 全绿：键盘灯自检 {_total}/{_total} ==" : $"== 失败 {_fail}/{_total} 项 ==");
