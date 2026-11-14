@@ -129,6 +129,18 @@ internal static class Program
             }
 
             Console.WriteLine();
+        Console.WriteLine();
+        Console.WriteLine("--- 特征 × 后端 声明矩阵（FeatureGate.RunDeclarationMatrix，只读）---");
+        try
+        {
+            Type gateType = RequireType(core, "MechrevoLite.Hardware.Architecture.FeatureGate");
+            Console.WriteLine((string)InvokeStatic(gateType, "RunDeclarationMatrix")!);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("（声明矩阵导出失败：" + ex.Message + "）");
+        }
+
             Console.WriteLine("--- 规则矩阵自测（BackendRouter.RunSelfTest，纯函数）---");
             string selfTest = (string)InvokeStatic(routerType, "RunSelfTest")!;
             foreach (string line in SplitLines(selfTest))

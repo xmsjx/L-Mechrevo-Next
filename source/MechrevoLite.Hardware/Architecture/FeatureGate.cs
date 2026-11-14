@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace MechrevoLite.Hardware.Architecture;
 
@@ -480,13 +481,82 @@ internal static class FeatureGate
 		FeatureId.ChargeLimit
 	};
 
-	private static MachineFacts Facts(BackendKind backend, string model = "")
-	{
-		MachineIdentity identity = MachineIdentity.ForTest(board: "TEST", generation: "Gen40",
-			gcuInstalled: backend == BackendKind.TongfangGcu, whitelisted: backend == BackendKind.BaolongdaWmi,
-			model: model);
-		return new MachineFacts(identity, backend, backend);
-	}
+    /// <summary>只读导出：特征 × 各后端的声明矩阵（核对用，不参与运行判定）。</summary>
+    internal static string RunDeclarationMatrix()
+    {
+        (string Label, FeatureProbe Probe)[] probes =
+        {
+            ("最大能力", ProbeMax()),
+            ("仅能力位（未连接）", ProbeCapability()),
+            ("EC 本地证据", ProbeEcEvidence()),
+            ("GCU 连接 + 仅能力位", ProbeGcuCapability()),
+            ("无证据", ProbeEmpty())
+        };
+        StringBuilder sb = new StringBuilder();
+        for (int p = 0; p < probes.Length; p++)
+        {
+            string label = probes[p].Label;
+            FeatureProbe probe = probes[p].Probe;
+            List<string> names = new List<string>();
+            List<BackendFeatureDeclaration> declarations = new List<BackendFeatureDeclaration>();
+            foreach (IBackendModule module in BackendModuleRegistry.All)
+            {
+                names.Add(module.DisplayName);
+                try
+                {
+                    declarations.Add(module.Declare(Facts(module.Kind), probe));
+                }
+                catch
+                {
+                    declarations.Add(new BackendFeatureDeclaration(module.Kind, new Dictionary<FeatureId, FeatureDeclaration>()));
+                }
+            }
+            sb.AppendLine("## " + label);
+            sb.Append("| 特征 |");
+            for (int n = 0; n < names.Count; n++)
+            {
+                sb.Append(" " + names[n] + " |");
+            }
+            sb.AppendLine();
+            sb.Append("|---|");
+            for (int n = 0; n < names.Count; n++)
+            {
+                sb.Append("---|");
+            }
+            sb.AppendLine();
+            foreach (FeatureId feature in Enum.GetValues<FeatureId>())
+            {
+                sb.Append("| " + feature + " |");
+                for (int n = 0; n < declarations.Count; n++)
+                {
+                    string cell = "?";
+                    if (declarations[n].Features.TryGetValue(feature, out FeatureDeclaration? d))
+                    {
+                        if (d.State == FeatureAvailability.Supported)
+                        {
+                            cell = "✓" + d.Channel;
+                        }
+                        else if (d.State == FeatureAvailability.Unsupported)
+                        {
+                            cell = "✗";
+                        }
+                    }
+                    sb.Append(" " + cell + " |");
+                }
+                sb.AppendLine();
+            }
+            sb.AppendLine();
+        }
+        return sb.ToString();
+    }
+
+    private static MachineFacts Facts(BackendKind backend, string model = "")
+    {
+        MachineIdentity identity = MachineIdentity.ForTest(board: "TEST", generation: "Gen40",
+            gcuInstalled: backend == BackendKind.TongfangGcu, whitelisted: backend == BackendKind.BaolongdaWmi,
+            model: model);
+        return new MachineFacts(identity, backend, backend);
+    }
 
 	private static void CheckBackend(List<string> lines, string scenario, BackendKind actual, BackendKind expected)
 	{
