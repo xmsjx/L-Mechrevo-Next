@@ -113,20 +113,13 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            if (_hw == null)
-            {
-                return false;
-            }
-            if (_hw.SupportsQuickSwitch(key))
-            {
-                return true;
-            }
-            // 与 LM StaticQuick 对齐：这些项要么是纯 Windows 策略，要么有本机回退通道。
+            // 纯本机通道的开关：不依赖后端是否就绪（后端句柄还没建好时也要保留入口）。
             switch (key)
             {
                 case "apuboost":
                 case "capslock":
                 case "micmute":
+                case "numpad":
                 case "highperf":
                 case "monitoroff":
                 case "transparency":
@@ -139,11 +132,20 @@ internal sealed class BackendProbe : IDisposable
                 case "sleephibernate":
                 case "winupdate":
                     return true;
-                case "numpad":
-                    return true;
-            case "webcam":
-                // 摄像头走本机 PnP 禁用/启用，不依赖后端；入口始终保留（否则列表里会整项消失）。
+                case "webcam":
+                    // 摄像头按真实设备判定：有设备才给入口，避免点了没反应。
+                    return L_Mechrevo.WpfP0.Services.WpfBackend.HasCamera;
+            }
+            if (_hw == null)
+            {
+                return false;
+            }
+            if (_hw.SupportsQuickSwitch(key))
+            {
                 return true;
+            }
+            switch (key)
+            {
                 case "acrecovery":
                     return _hw.Capabilities.AcRecovery || GcuEcExperimental.LocalQuickSwitch;
                 case "usb":

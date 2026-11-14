@@ -24,6 +24,19 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         InstallCrashHandlers();
+        // 空闲时预热一次摄像头设备探测（只读枚举），避免首次打开开关列表才现探测。
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            try
+            {
+                bool hasCamera = L_Mechrevo.WpfP0.Services.WpfBackend.WarmupCameraProbe();
+                Logger.WriteLine("[camera] 设备探测预热：" + (hasCamera ? "有摄像头" : "未发现摄像头"));
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("[camera] 探测预热失败（已吞掉）：" + ex.GetType().Name + " " + ex.Message);
+            }
+        }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         // 独立更新器必须先于单实例/UI/硬件初始化处理，避免更新器加载安装目录里的旧 DLL。
         if (L_Mechrevo.WpfP0.Services.DllUpdateHelper.TryHandle(e.Args, out int updateExitCode))
         {

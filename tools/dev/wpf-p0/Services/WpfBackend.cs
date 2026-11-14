@@ -634,6 +634,36 @@ internal static class WpfBackend
     /// <summary>风扇环形填充比例：以占空比为准，未知返回 null（交给调用方退回转速比例）。</summary>
     internal static double? FanRingFractionFromDuty(int dutyPercent) => FanRingFraction.FromDuty(dutyPercent);
 
+
+    /// <summary>是否有摄像头设备（有缓存读缓存，否则探测一次并缓存）。</summary>
+    internal static bool HasCamera
+    {
+        get
+        {
+            try
+            {
+                return MechrevoLite.Hardware.CameraPnpControl.HasCameraCached
+                    || MechrevoLite.Hardware.CameraPnpControl.HasCamera;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>后台预热摄像头设备探测，避免首次打开快捷开关列表时现枚举。</summary>
+    internal static bool WarmupCameraProbe()
+    {
+        try
+        {
+            return MechrevoLite.Hardware.CameraPnpControl.ProbeHasCamera();
+        }
+        catch
+        {
+            return false;
+        }
+    }
     internal static void AttachLocalChannelEvidence()
     {
         FeatureGate.LocalChannelEvidenceProvider = feature =>
