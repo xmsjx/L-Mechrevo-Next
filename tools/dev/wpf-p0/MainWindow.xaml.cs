@@ -2380,8 +2380,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private static bool HasAnyCustomRange(MechrevoHw? hw, MechrevoDeviceCapabilities caps)
+    private static bool HasAnyCustomRange(MechrevoDeviceCapabilities caps)
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         return (hw?.Pl1Adjustable ?? false) || (hw?.Pl2Adjustable ?? false) || (hw?.Pl4Adjustable ?? false)
             || (hw?.TccAdjustable ?? false) || (hw?.GpuTgpAdjustable ?? false) || (hw?.GpuDynamicBoostAdjustable ?? false)
             || caps.CpuPerformanceTuning || caps.FanSettings;
@@ -2400,7 +2401,7 @@ public partial class MainWindow : Window
         // Intel 星耀暂时屏蔽自定义；AMD 星耀/无界走本机 SMU 自定义。
         bool smuCustom = _probe?.Hw?.SmuCustomApu == true;
         bool customAllowed = nucUmi || smuCustom
-            || ((caps.CpuPerformanceTuning || caps.FanSettings || HasAnyCustomRange(_probe?.Hw, caps))
+            || ((caps.CpuPerformanceTuning || caps.FanSettings || HasAnyCustomRange(caps))
                 && !(_probe?.Hw?.SupportsModeProfileConfig ?? false))
             || _probe?.Hw?.UsesBaolongda == true
             || (ecLocal && _probe?.Hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu);
@@ -2991,21 +2992,21 @@ public partial class MainWindow : Window
         _inlineLightEditors.Clear();
         LightingCardsGrid.Children.Clear();
         BuildLightingGlobalControls();
-        MechrevoHw? hw = _probe?.Hw ?? WpfBackend.Hw;
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         // ⭐⭐ task-17/task-26（宽屏 HID / 白色背光入口）：能力判定与迷你窗同判据；
         //    判定异常/无设备一律按「不支持」处理 ⇒ 不建对应入口、⛔ 不伪造能力 ✅
         bool hidKeyboard = false;
         bool whiteKeyboard = false;
         try
         {
-            hidKeyboard = WideIsHidKeyboard(hw);
-            whiteKeyboard = WideIsWhiteBacklightKeyboard(hw);
+            hidKeyboard = WideIsHidKeyboard();
+            whiteKeyboard = WideIsWhiteBacklightKeyboard();
         }
         catch (Exception ex)
         {
             Logger.WriteError("[wide-light] 键盘能力判定异常（按不支持处理，⛔ 不伪造能力）：" + ex);
         }
-        LogKeyboardCapabilityDecision(hw, hidKeyboard, whiteKeyboard);
+        LogKeyboardCapabilityDecision(hidKeyboard, whiteKeyboard);
         (string Effect, string Name)[] keyboardEffects;
         try
         {
@@ -3216,7 +3217,7 @@ public partial class MainWindow : Window
         }
         LightChannelSettings settings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, effects[0].Effect);
         bool keyboardChannel = string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
-        bool gradeLightChannel = IsGradeLightChannel(topic, _probe?.Hw ?? WpfBackend.Hw);
+        bool gradeLightChannel = IsGradeLightChannel(topic);
         int maxLight = whiteKeyboard ? 2 : (keyboardChannel || gradeLightChannel ? 4 : 100);
         int light = whiteKeyboard
             ? (settings.Light >= 3 ? 2 : Math.Clamp(settings.Light, 1, 2))
@@ -3711,8 +3712,9 @@ public partial class MainWindow : Window
     /// ⭐⭐ task-17（宽屏 HID / 完整灯光编辑器入口）：与迷你窗 <c>KeyboardLightEdit_Click</c> 同判据 —
     /// HID 可达（<see cref="KeyboardLightPathPolicy" />）⇒ HID 编辑器；非 HID 固件键盘 ⇒ 完整 <see cref="LightEditorWindow" />。
     /// </summary>
-    private static bool WideIsHidKeyboard(MechrevoHw? hw)
+    private static bool WideIsHidKeyboard()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         try
         {
             if (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardActiveNow)
@@ -3756,15 +3758,16 @@ public partial class MainWindow : Window
     /// 非 HID、非宝龙达；无界 APU 白键盘，或固件效果表为空（<see cref="KeyboardFirmwareEffects.Visible" />）。
     /// 这类键盘只有「电源 + 4 档亮度」，⛔ 没有 RGB 效果/颜色 ✅。
     /// </summary>
-    private static bool WideIsWhiteBacklightKeyboard(MechrevoHw? hw)
+    private static bool WideIsWhiteBacklightKeyboard()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         try
         {
             if (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardActiveNow)
             {
                 return L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardIsWhiteNow;
             }
-            if (hw == null || !hw.SupportsKeyboard || WideIsHidKeyboard(hw) || hw.UsesBaolongda)
+            if (hw == null || !hw.SupportsKeyboard || WideIsHidKeyboard() || hw.UsesBaolongda)
             {
                 return false;
             }
@@ -3790,8 +3793,9 @@ public partial class MainWindow : Window
     /// ⭐⭐ task-26：补齐键盘能力位判定日志，供验收/真机从日志确认「HID/白色背光入口为什么出现或不出现」。
     /// ⚠️ 只写日志（WriteLineIfChanged 去重），⛔ 不改任何可见性/能力值 ✅。
     /// </summary>
-    private void LogKeyboardCapabilityDecision(MechrevoHw? hw, bool hidKeyboard, bool whiteKeyboard)
+    private void LogKeyboardCapabilityDecision(bool hidKeyboard, bool whiteKeyboard)
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         try
         {
             int keyboardType = -1;
@@ -3932,8 +3936,9 @@ public partial class MainWindow : Window
         BuildLightingCards();
     }
 
-    private static bool IsGradeLightChannel(string topic, MechrevoHw? hw)
+    private static bool IsGradeLightChannel(string topic)
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         return (string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
                 || string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
             && hw != null
@@ -3988,14 +3993,14 @@ public partial class MainWindow : Window
         try
         {
             bool keyboardChannel = string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
-            bool gradeLightChannel = IsGradeLightChannel(topic, _probe?.Hw ?? WpfBackend.Hw);
+            bool gradeLightChannel = IsGradeLightChannel(topic);
             int sliderLight = (int)Math.Round(slider.Value);
             int light = keyboardChannel || gradeLightChannel
                 ? sliderLight
                 : Math.Clamp(sliderLight * 4 / 100, 0, 4);
             bool speedApplicable = EffectSupportsSpeed(topic, effect, effect.StartsWith("hid:", StringComparison.Ordinal));
             int speedValue = speedApplicable ? (int)Math.Round(speed.Value) : 0;
-            if (topic == "Keyboard/Ctrl" && WideIsWhiteBacklightKeyboard(_probe?.Hw))
+            if (topic == "Keyboard/Ctrl" && WideIsWhiteBacklightKeyboard())
             {
                 if (_owner != null)
                 {

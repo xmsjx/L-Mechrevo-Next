@@ -4,5 +4,3 @@
 BackendProbe.cs	91
 FanCurveWindow.xaml.cs	2
 HidKeyboardWindow.xaml.cs	2
-MainWindow.xaml.cs	6
-OriginalStyleWindow.xaml.cs	17

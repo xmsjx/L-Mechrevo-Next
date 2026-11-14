@@ -118,7 +118,7 @@ public partial class OriginalStyleWindow : Window
     private int _lightingReassertGeneration;
     private int _capabilityWarmupGeneration;
     private int _hidApplyGeneration;
-    private MechrevoHw? _stateHookedHw;
+    private object? _stateHookedHw;
     private bool? _pendingKeyboardPower;
     private long _pendingKeyboardPowerTick;
     private long _keyboardLightUiLockUntil;
@@ -282,7 +282,7 @@ public partial class OriginalStyleWindow : Window
             MarkCleanExitForShutdown("窗口 Closed");
             if (_stateHookedHw != null)
             {
-                _stateHookedHw.StateChanged -= OnHardwareLightingStateChanged;
+                L_Mechrevo.WpfP0.Services.WpfBackend.UnhookHwStateChanged(_stateHookedHw, OnHardwareLightingStateChanged, OnHardwareModeChanged);
                 _stateHookedHw = null;
             }
         };
@@ -591,17 +591,18 @@ public partial class OriginalStyleWindow : Window
         _ = SwitchModeAsync(mode);
     }
 
-    internal bool WideSilentTurboVisible => ShouldShowSilentTurbo(_backendProbe?.Capabilities, _backendProbe?.Hw);
+    internal bool WideSilentTurboVisible => ShouldShowSilentTurbo(_backendProbe?.Capabilities);
 
-    internal bool WideTurboVisible => ShouldShowTurboMode(_backendProbe?.Capabilities, _backendProbe?.Hw);
+    internal bool WideTurboVisible => ShouldShowTurboMode(_backendProbe?.Capabilities);
 
     /// <summary>
     /// 50 系默认显示静音狂暴/高能狂暴；其他机型默认显示狂暴。
     /// 只有 GCU 明确上报不支持（ProfileAvailable=true 且对应位=0）才隐藏，
     /// 避免首次装 GCU 服务未完全启动时把能力位误判为“不支持”。
     /// </summary>
-    private static bool ShouldShowTurboMode(MechrevoDeviceCapabilities? caps, MechrevoHw? hw)
+    private static bool ShouldShowTurboMode(MechrevoDeviceCapabilities? caps)
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         if (UiQaShowAll.Enabled) return true;
         if (GcuEcExperimental.Enabled
             && hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
@@ -615,7 +616,7 @@ public partial class OriginalStyleWindow : Window
             return true;
         }
         // 星耀 PTL 的三档由 WMAA 提供；GCU WJXY 的 TurboModeSupport=0 不能拿来做 UI 判据。
-        if (XingyaoPerfApplicable(hw)) return true;
+        if (XingyaoPerfApplicable()) return true;
         if (caps == null) return true;
         if (!caps.ProfileAvailable) return true;
         if (caps.TurboMode) return true;
@@ -623,8 +624,9 @@ public partial class OriginalStyleWindow : Window
         return hw?.UsesBaolongda == true;
     }
 
-    private static bool ShouldShowSilentTurbo(MechrevoDeviceCapabilities? caps, MechrevoHw? hw)
+    private static bool ShouldShowSilentTurbo(MechrevoDeviceCapabilities? caps)
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         if (UiQaShowAll.Enabled) return true;
         if (GcuEcExperimental.Enabled
             && hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
@@ -838,7 +840,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             var hw = WpfBackend.Hw;
-            if (hw != null && IsHidKeyboard(hw))
+            if (hw != null && IsHidKeyboard())
             {
                 return LightingCatalog.VisibleHidEffects(hw.Capabilities.KeyboardType)
                     .Select(item => ("hid:" + item.Mode, item.Name))
@@ -907,15 +909,16 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    private static bool IsWhiteBacklightForOsd(MechrevoHw? hw)
+    private static bool IsWhiteBacklightForOsd()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         try
         {
             if (EcKeyboardActive)
             {
                 return EcKeyboardWhite;
             }
-            if (hw == null || !hw.SupportsKeyboard || hw.UsesBaolongda || IsHidKeyboard(hw))
+            if (hw == null || !hw.SupportsKeyboard || hw.UsesBaolongda || IsHidKeyboard())
             {
                 return false;
             }
@@ -1006,13 +1009,13 @@ public partial class OriginalStyleWindow : Window
             }
             else
             {
-                bool osdWhite = string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal) && IsWhiteBacklightForOsd(hw);
+                bool osdWhite = string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal) && IsWhiteBacklightForOsd();
                 OsdService.Show(LightChannelGlyph(topic), WpfStrings.OsdLighting,
                     on ? LightLevelText(topic, light, osdWhite) : WpfStrings.StateOff);
             }
             if (string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal))
             {
-                if (IsHidKeyboard(hw) && effect.StartsWith("hid:", StringComparison.Ordinal))
+                if (IsHidKeyboard() && effect.StartsWith("hid:", StringComparison.Ordinal))
                 {
                     int hidMode = int.TryParse(effect.AsSpan(4), out int parsedMode) ? parsedMode : 1;
                     var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgb();
@@ -1244,37 +1247,6 @@ public partial class OriginalStyleWindow : Window
     /// 充电阈值 UI 分流：宝龙达白名单直接可用；其它机型只有 EC 通道**真实可读**时才显示，
     /// 避免出现“能点但读取失败：需要 PawnIO/本机型不支持”的控件。
     /// </summary>
-    private bool IsChargeLimitChannelAvailable(MechrevoHw? hw)
-    {
-        if (hw == null)
-        {
-            return false;
-        }
-        try
-        {
-            if (MechrevoLite.BatteryLimitPanel.IsSupportedBoard(hw))
-            {
-                return true;
-            }
-            if (!L_Mechrevo.WpfP0.Services.WpfBackend.EcChargeAvailable)
-            {
-                return false;
-            }
-            long now = Environment.TickCount64;
-            if (_chargeLimitChannelProbe is bool cached && now - _chargeLimitChannelProbeTick < 10000)
-            {
-                return cached;
-            }
-            bool readable = L_Mechrevo.WpfP0.Services.WpfBackend.ChargeLimitChannelReadable();
-            _chargeLimitChannelProbe = readable;
-            _chargeLimitChannelProbeTick = now;
-            return readable;
-        }
-        catch
-        {
-            return false;
-        }
-    }
 
     internal bool WideChargeLimitVisible
     {
@@ -2373,7 +2345,7 @@ public partial class OriginalStyleWindow : Window
                 await ApplyKeyboardLightAsync(showStatus: false);
                 return;
             }
-            if (IsHidKeyboard(_backendProbe.Hw))
+            if (IsHidKeyboard())
             {
                 var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgb();
                 if (rgb == null)
@@ -3603,10 +3575,10 @@ public partial class OriginalStyleWindow : Window
         _backendProbe?.MarkUserModeSwitch();
         try
         {
-            bool nucDirect = IsNucLike(_backendProbe?.Hw);
+            bool nucDirect = IsNucLike();
             bool xingyaoDirect = mode != 3
-                && XingyaoPerfApplicable(_backendProbe?.Hw);
-            MechrevoService.ModeSwitchResult result;
+                && XingyaoPerfApplicable();
+            int result;
             if (xingyaoDirect)
             {
                 bool applied = L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoApplyVisualMode(mode, out string xyDetail);
@@ -3615,7 +3587,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     StatusText.Text = "[星耀] " + xyDetail;
                 }
-                result = applied ? MechrevoService.ModeSwitchResult.Ok : MechrevoService.ModeSwitchResult.Failed;
+                result = applied ? L_Mechrevo.WpfP0.Services.WpfBackend.ModeResultOk : L_Mechrevo.WpfP0.Services.WpfBackend.ModeResultFailed;
             }
             else if (nucDirect)
             {
@@ -3637,7 +3609,7 @@ public partial class OriginalStyleWindow : Window
                     detail += " 退出自定义风扇恢复=" + fanRestored + " " + fanDetail;
                 }
                 Logger.WriteLine("[nuc-mode] 直写 EC " + (applied ? "OK" : "FAIL") + "：" + detail);
-                result = applied ? MechrevoService.ModeSwitchResult.Ok : MechrevoService.ModeSwitchResult.Failed;
+                result = applied ? L_Mechrevo.WpfP0.Services.WpfBackend.ModeResultOk : L_Mechrevo.WpfP0.Services.WpfBackend.ModeResultFailed;
             }
             else
             {
@@ -3650,23 +3622,23 @@ public partial class OriginalStyleWindow : Window
                     // GCU 内置档由固件表接管：不要套用 NUC/UMI 的 NucPerformanceMode 默认表，
                     // 那套会写 1963 低 4 位风扇模式，把 GCU 的模式字节写坏。
                     Logger.WriteError("[gcu-ec] 实验通道接管模式 " + mode + "：" + ecDetail);
-                    result = MechrevoService.ModeSwitchResult.Ok;
+                    result = L_Mechrevo.WpfP0.Services.WpfBackend.ModeResultOk;
                 }
                 else
                 {
-                    result = await DashboardCommands.SetPerformanceModeResultAsync(mode);
+                    result = (int)await DashboardCommands.SetPerformanceModeResultAsync(mode);
                 }
             }
             if (request != _modeRequestId)
             {
                 return;
             }
-            if (result == MechrevoService.ModeSwitchResult.Superseded)
+            if (result == L_Mechrevo.WpfP0.Services.WpfBackend.ModeResultSuperseded)
             {
                 _pendingMode = -1;
                 return;
             }
-            bool ok = result == MechrevoService.ModeSwitchResult.Ok;
+            bool ok = result == L_Mechrevo.WpfP0.Services.WpfBackend.ModeResultOk;
             if (!nucDirect && !xingyaoDirect && ok && mode == 1 && silentTurbo == true && !turboSubModeSupported)
             {
                 ok = false;
@@ -3795,8 +3767,9 @@ public partial class OriginalStyleWindow : Window
         };
     }
 
-    private static bool IsNucLike(MechrevoHw? hw)
+    private static bool IsNucLike()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         return hw != null && (hw.IsNucUmiFamily);
     }
 
@@ -3963,7 +3936,7 @@ public partial class OriginalStyleWindow : Window
             {
                 // NUC/UMI 的 Fn+F8 是单键循环，固件可能固定发 177；
                 // 若再按“177=减一”处理，亮度到 0 后会永远卡在 0。
-                int max = IsWhiteBacklightForOsd(hw) ? 2 : 4;
+                int max = IsWhiteBacklightForOsd() ? 2 : 4;
                 level = (level + 1) % (max + 1);
                 Logger.WriteError("[kbd-osd] ACPI code=" + code + " NUC 循环 " + level + "/" + max);
             }
@@ -3989,7 +3962,7 @@ public partial class OriginalStyleWindow : Window
 
     private void ApplyKeyboardBrightnessHotkey(int level)
     {
-        bool white = IsWhiteBacklightForOsd(_backendProbe?.Hw);
+        bool white = IsWhiteBacklightForOsd();
         int clamped = Math.Clamp(level, 0, white ? 2 : 4);
         _lastKbdHotkeyLevel = clamped;
         ShowKeyboardBrightnessOsd(clamped);
@@ -4106,7 +4079,7 @@ public partial class OriginalStyleWindow : Window
     {
         int clamped = Math.Clamp(level, 0, 4);
         _lastKeyboardBrightnessOsd = clamped;
-        bool white = IsWhiteBacklightForOsd(_backendProbe?.Hw);
+        bool white = IsWhiteBacklightForOsd();
         OsdService.Show(LightChannelGlyph("Keyboard/Ctrl"), WpfStrings.OsdLighting,
             white ? Math.Clamp(clamped, 0, 2) + "/2" : clamped + "/4");
         Logger.WriteError("[kbd-osd] ACPI 亮度 → " + clamped + "/4");
@@ -4314,7 +4287,7 @@ public partial class OriginalStyleWindow : Window
         int level = brightness <= 4
             ? brightness
             : Math.Clamp((int)Math.Round(brightness / 25.0), 0, 4);
-        bool white = IsWhiteBacklightForOsd(hw);
+        bool white = IsWhiteBacklightForOsd();
         OsdService.Show(LightChannelGlyph("Keyboard/Ctrl"), WpfStrings.OsdLighting,
             LightLevelText("Keyboard/Ctrl", level, white));
         Logger.WriteError("[kbd-osd] Fn 亮度变化 " + previous + " -> " + brightness + " ⇒ OSD");
@@ -4356,7 +4329,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             var hw = probe.Hw;
-            if (!IsNucLike(hw) || _modeSwitchInFlight || _pendingMode >= 0)
+            if (!IsNucLike() || _modeSwitchInFlight || _pendingMode >= 0)
             {
                 return;
             }
@@ -4427,7 +4400,7 @@ public partial class OriginalStyleWindow : Window
         // 极致狂暴没有独立 EC 字节（Benchmark 与性能风扇同为 1），只能靠本进程标志；
         // 自定义编辑态优先显示自定义，避免打开自定义时误亮极致狂暴。
         if (!customDisplayed
-            && IsNucLike(hw)
+            && IsNucLike()
             && L_Mechrevo.WpfP0.Services.WpfBackend.NucExtremeActive
             && L_Mechrevo.WpfP0.Services.WpfBackend.NucReadMode(out int extremeEc)
             && extremeEc == 1)
@@ -4454,12 +4427,12 @@ public partial class OriginalStyleWindow : Window
                 return 3;
             }
         }
-        if (XingyaoPerfApplicable(hw)
+        if (XingyaoPerfApplicable()
             && L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoReadVisualMode(out int xingyaoMode, out _))
         {
             return xingyaoMode;
         }
-        if (IsNucLike(hw))
+        if (IsNucLike())
         {
             // 等同于 CurrentProfile 事件：直接读 EC 1963 的模式字节。
             if (L_Mechrevo.WpfP0.Services.WpfBackend.NucReadMode(out int ecMode))
@@ -4536,7 +4509,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         var keyHw = _backendProbe.Hw;
-        bool hasPerformanceKey = IsNucLike(keyHw)
+        bool hasPerformanceKey = IsNucLike()
             || (keyHw.IsGcuConnected && !keyHw.UsesBaolongda && !keyHw.IsNucUmiFamily)
             || IsEcLocalRoute;
         if (!hasPerformanceKey)
@@ -4564,7 +4537,7 @@ public partial class OriginalStyleWindow : Window
                 return;
             }
             var hw = probe.Hw;
-            bool nuc = IsNucLike(hw);
+            bool nuc = IsNucLike();
 
             if (await TryHandlePerformanceKeyOverrideAsync())
             {
@@ -6681,7 +6654,7 @@ public partial class OriginalStyleWindow : Window
         if (L_Mechrevo.WpfP0.Services.WpfBackend.rgb != null)
         {
             string? selectedHidTag = (KeyboardEffectCombo.SelectedItem as ComboBoxItem)?.Tag as string;
-            if (IsHidKeyboard(hw))
+            if (IsHidKeyboard())
             {
                 string expectedHidTag = "hid:" + L_Mechrevo.WpfP0.Services.WpfBackend.rgb.KbHidMode;
                 if (!string.Equals(selectedHidTag, expectedHidTag, StringComparison.Ordinal))
@@ -7663,7 +7636,7 @@ public partial class OriginalStyleWindow : Window
                 || _services?.Lighting.LocalLogoSupported == true;
             bool hasHinge = _backendProbe?.SupportsHingeLight == true;
             bool hasSync = _backendProbe?.SupportsSyncLight == true;
-            bool xingyaoLightIdle = XingyaoQuickApplicable(hw);
+            bool xingyaoLightIdle = XingyaoQuickApplicable();
             LightingSection.Visibility = (hasKeyboard || hasLightbar || hasLogo || hasHinge || hasSync || xingyaoLightIdle) ? Visibility.Visible : Visibility.Collapsed;
             KeyboardLightRow.Visibility = hasKeyboard ? Visibility.Visible : Visibility.Collapsed;
             LogoLightRow.Visibility = ResolveLightChannel(LightingTopics.Logo, hasLogo) ? Visibility.Visible : Visibility.Collapsed;
@@ -7697,11 +7670,11 @@ public partial class OriginalStyleWindow : Window
         bool vendorNucModes = hw?.IsIntelNucMachine == true
             && hw.WujieSmuApu != true
             && hw.SmuCustomApu != true;
-        TurboModeButton.Visibility = (ShouldShowTurboMode(caps, hw) || vendorNucModes)
+        TurboModeButton.Visibility = (ShouldShowTurboMode(caps) || vendorNucModes)
             ? Visibility.Visible
             : Visibility.Collapsed;
             // 50 系默认两个狂暴；其它机型默认只显示狂暴。GCU 明确不支持才隐藏。
-            bool silentTurboAllowed = ShouldShowSilentTurbo(caps, hw);
+            bool silentTurboAllowed = ShouldShowSilentTurbo(caps);
             EnsureSilentTurboButton(silentTurboAllowed);
             // 预览用：强制显示五模式，不改变实际档位能力。
             bool forceFiveModes = string.Equals(
@@ -7755,12 +7728,12 @@ public partial class OriginalStyleWindow : Window
     private static bool IsXingyaoPlatform => L_Mechrevo.WpfP0.Services.WpfBackend.IsXingyaoPlatform;
 
     /// <summary>星耀性能档是否适用。</summary>
-    private static bool XingyaoPerfApplicable(MechrevoHw? hw) =>
-        L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoPerformanceModeApplicable(hw);
+    private static bool XingyaoPerfApplicable() =>
+        L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoPerformanceModeApplicable(L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram);
 
     /// <summary>星耀快捷键是否适用。</summary>
-    private static bool XingyaoQuickApplicable(MechrevoHw? hw) =>
-        L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoQuickSwitchApplicable(hw);
+    private static bool XingyaoQuickApplicable() =>
+        L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoQuickSwitchApplicable(L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram);
 
     /// <summary>NUC 极致狂暴的虚拟档位常量。</summary>
     private const int NucExtremeVisualMode = L_Mechrevo.WpfP0.Services.WpfBackend.NucExtremeVisualMode;
@@ -7842,7 +7815,7 @@ public partial class OriginalStyleWindow : Window
         LiquidSection.Visibility = (AppConfig.Is("force_liquid_cooling_menu") || liquidSupported) ? Visibility.Visible : Visibility.Collapsed;
         RefreshLiquidCoolingUi();
         _wideWindow?.RefreshLiquidCooling();
-        bool xingyaoLightIdle = XingyaoQuickApplicable(hw);
+        bool xingyaoLightIdle = XingyaoQuickApplicable();
         LightingSection.Visibility = (KeyboardLightRow.Visibility == Visibility.Visible
             || LightStripRow.Visibility == Visibility.Visible
             || LogoLightRow.Visibility == Visibility.Visible
@@ -9517,10 +9490,11 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    private static bool IsHidKeyboard(MechrevoHw? hw)
+    private static bool IsHidKeyboard()
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         // 判据在服务层（Services/KeyboardChannelPolicy）：窗口只转发，⛔ 不判断硬件类型。
-        return KeyboardChannelPolicy.IsHidKeyboard(hw);
+        return KeyboardChannelPolicy.IsHidKeyboard(L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram);
     }
 
 
@@ -9546,7 +9520,7 @@ public partial class OriginalStyleWindow : Window
         {
             KeyboardEffectCombo.Items.Clear();
             var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
-            if (IsHidKeyboard(hw))
+            if (IsHidKeyboard())
             {
                 L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgbConfig();
                 (int Mode, string Name)[] hidEffects = LightingCatalog.VisibleHidEffects(
@@ -9608,7 +9582,7 @@ public partial class OriginalStyleWindow : Window
             // 这里必须区分“硬件回读值”和“用户刚点的 pending 值”：
             // 旧逻辑先把 pending 覆盖进 effective，再拿 effective 和 pending 比较 ⇒ 永远相等、
             // pending 在第一条状态包就被清掉，下一拍又按仍然为 false 的硬件回读把开关压回去。
-            bool hardwareKeyboardPower = IsHidKeyboard(hw)
+            bool hardwareKeyboardPower = IsHidKeyboard()
                 ? (L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.KbPowerOn ?? hw.KeyboardPower)
                 : hw.KeyboardPower;
             if (_pendingKeyboardPower is bool pendingPower)
@@ -9629,7 +9603,7 @@ public partial class OriginalStyleWindow : Window
             else
             {
                 // EC 模式的 HID 单键键盘没有回读通道：不能拿 GCU 电源位（在 EC 下恒为 false）压成"关"。
-                if (_services?.Lighting.ResolveKeyboardSwitchState() is bool ecOn && IsHidKeyboard(hw))
+                if (_services?.Lighting.ResolveKeyboardSwitchState() is bool ecOn && IsHidKeyboard())
                 {
                     KeyboardLightSwitch.IsChecked = ecOn && !suspended;
                 }
@@ -9641,10 +9615,10 @@ public partial class OriginalStyleWindow : Window
                     KeyboardLightSwitch.IsChecked = L_Mechrevo.WpfP0.Services.WpfBackend.LightSwitchOn(keyboardOn, suspended);
                 }
             }
-            SetSwitchFromQuick(hw, "lightbar", LightStripSwitch, suspended, 0);
-            SetSwitchFromQuick(hw, "logolight", LogoLightSwitch, suspended, 1);
-            SetSwitchFromQuick(hw, "hingelight", LightHingeSwitch, suspended, 2);
-            SetSwitchFromQuick(hw, "synclight", LightSyncSwitch, suspended, 3);
+            SetSwitchFromQuick("lightbar", LightStripSwitch, suspended, 0);
+            SetSwitchFromQuick("logolight", LogoLightSwitch, suspended, 1);
+            SetSwitchFromQuick("hingelight", LightHingeSwitch, suspended, 2);
+            SetSwitchFromQuick("synclight", LightSyncSwitch, suspended, 3);
         }
         finally
         {
@@ -9652,8 +9626,9 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    private void SetSwitchFromQuick(MechrevoHw hw, string key, CheckBox target, bool suspended, int index)
+    private void SetSwitchFromQuick(string key, CheckBox target, bool suspended, int index)
     {
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         if (hw.QuickSwitches == null || !hw.QuickSwitches.TryGetValue(key, out bool power))
         {
             return;
@@ -9701,7 +9676,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             LightIdleCombo.Items.Clear();
-            bool xingyao = XingyaoQuickApplicable(L_Mechrevo.WpfP0.Services.WpfBackend.Hw);
+            bool xingyao = XingyaoQuickApplicable();
             int current = _services?.Lighting.LightIdleSeconds ?? AppConfig.Get("lighting_idle_seconds", 0);
             foreach ((string Label, int Seconds) option in LightingCatalog.KeyboardAutoOffOptions)
             {
@@ -9738,7 +9713,7 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        if (XingyaoQuickApplicable(L_Mechrevo.WpfP0.Services.WpfBackend.Hw))
+        if (XingyaoQuickApplicable())
         {
             bool alwaysOn = seconds <= 0;
             if (!L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoSetKeyboardSleepTimeout(alwaysOn, out string xyDetail))
@@ -9800,7 +9775,7 @@ public partial class OriginalStyleWindow : Window
             SyncEcKeyboardSwitch();
             return;
         }
-        bool firmwareKeyboard = hw != null && !IsHidKeyboard(hw);
+        bool firmwareKeyboard = hw != null && !IsHidKeyboard();
         if (firmwareKeyboard)
         {
             OpenLightEditor("Keyboard/Ctrl", WpfStrings.HidKeyboardWindow_Text_9, EffectsForCurrentBackend(KeyboardEffectsForCurrent()));
@@ -9931,22 +9906,11 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        if (_stateHookedHw != null)
-        {
-            try
-            {
-                _stateHookedHw.StateChanged -= OnHardwareLightingStateChanged;
-                _stateHookedHw.ModeChanged -= OnHardwareModeChanged;
-            }
-            catch
-            {
-            }
-        }
+        L_Mechrevo.WpfP0.Services.WpfBackend.UnhookHwStateChanged(hw, OnHardwareLightingStateChanged, OnHardwareModeChanged);
         _stateHookedHw = hw;
         if (hw != null)
         {
-            hw.StateChanged += OnHardwareLightingStateChanged;
-            hw.ModeChanged += OnHardwareModeChanged;
+            L_Mechrevo.WpfP0.Services.WpfBackend.HookHwStateChanged(OnHardwareLightingStateChanged, OnHardwareModeChanged);
         }
     }
 
@@ -9960,7 +9924,7 @@ public partial class OriginalStyleWindow : Window
         }
         // ⛔ 不能在每次 GCU 灯光状态回包时重放保存的灯效：
         //    应用灯效 → GCU 回包 → 5s 后再次重放 ⇒ 无限循环（NUC 上表现为每 6s 一次的
-        //    UmiLightbar 电源写入 + HID 状态栏反复出现，并会覆盖用户刚调的彩虹亮度/颜色）。
+        //    灯带电源写入 + HID 状态栏反复出现，并会覆盖用户刚调的彩虹亮度/颜色）。
         //    这里只把开关状态同步到界面；真正的恢复只在连接/启动/定时重试时做。
         Dispatcher.BeginInvoke(new Action(SyncLightSwitchesFromHardware));
     }
@@ -10082,7 +10046,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         // r78：同方单键 RGB 开机闪 —— HID 帧流不要抢在固件/GCU 稳定前接管。
-        if (IsHidKeyboard(_backendProbe.Hw))
+        if (IsHidKeyboard())
         {
             const long hidStartupDelayMs = 8000;
             long elapsed = Environment.TickCount64 - _bootTick;
@@ -10110,7 +10074,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             (bool savedKeyboardOn, bool savedKeyboardExplicit) = _services?.Lighting.LoadChannelPower("Keyboard/Ctrl") ?? (false, false);
-            if (savedKeyboardExplicit && !IsNucLike(_backendProbe.Hw))
+            if (savedKeyboardExplicit && !IsNucLike())
             {
                 _syncingLighting = true;
                 KeyboardLightSwitch.IsChecked = savedKeyboardOn;
@@ -10119,7 +10083,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     await ApplyKeyboardLightAsync(showStatus: false);
                 }
-                else if (IsHidKeyboard(_backendProbe.Hw))
+                else if (IsHidKeyboard())
                 {
                     var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgb();
                     if (rgb != null && rgb.IsConnected)
@@ -10350,7 +10314,7 @@ public partial class OriginalStyleWindow : Window
                     ApplyEcKeyboard("Rainbow", true, 4);
                 }
             }
-            else if (IsHidKeyboard(_backendProbe.Hw))
+            else if (IsHidKeyboard())
             {
                 await SetKeyboardEffectServiceAsync("Rainbow");
             }
@@ -10440,7 +10404,7 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        if (IsHidKeyboard(_backendProbe.Hw) && L_Mechrevo.WpfP0.Services.WpfBackend.rgb != null)
+        if (IsHidKeyboard() && L_Mechrevo.WpfP0.Services.WpfBackend.rgb != null)
         {
             L_Mechrevo.WpfP0.Services.WpfBackend.rgb.StopCurrentEffect();
             L_Mechrevo.WpfP0.Services.WpfBackend.rgb.KbPowerSyncFromHardware(false);
@@ -10996,7 +10960,7 @@ public partial class OriginalStyleWindow : Window
 
     private void EnsureKeyboardBrightnessOnPowerOn()
     {
-        if (_backendProbe?.Hw == null || IsHidKeyboard(_backendProbe.Hw))
+        if (_backendProbe?.Hw == null || IsHidKeyboard())
         {
             return;
         }

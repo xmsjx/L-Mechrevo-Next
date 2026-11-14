@@ -687,5 +687,40 @@ internal static class WpfBackend
     }
 
     internal static bool IsGcu30Variant => MechrevoService.IsGcu30;
+
+    /// <summary>模式切换结果的三种取值（界面用整数比较，不再引用后端的枚举类型）。</summary>
+    internal static int ModeResultOk => (int)MechrevoService.ModeSwitchResult.Ok;
+
+    internal static int ModeResultFailed => (int)MechrevoService.ModeSwitchResult.Failed;
+
+    internal static int ModeResultSuperseded => (int)MechrevoService.ModeSwitchResult.Superseded;
+
+    /// <summary>挂硬件状态事件（灯效状态、性能模式），窗口只收回调。</summary>
+    internal static void HookHwStateChanged(Action<string> onLightingState, Action<int> onMode)
+    {
+        MechrevoHw? hw = HwOrProgram;
+        if (hw == null)
+        {
+            return;
+        }
+        hw.StateChanged += onLightingState;
+        hw.ModeChanged += onMode;
+    }
+
+    internal static void UnhookHwStateChanged(object? hw, Action<string> onLightingState, Action<int> onMode)
+    {
+        if (hw is not MechrevoHw typed)
+        {
+            return;
+        }
+        try
+        {
+            typed.StateChanged -= onLightingState;
+            typed.ModeChanged -= onMode;
+        }
+        catch
+        {
+        }
+    }
 }
 
