@@ -9801,7 +9801,7 @@ public partial class OriginalStyleWindow : Window
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_66;
             return;
         }
-        new HidKeyboardWindow(rgb) { Owner = this }.ShowDialog();
+        new HidKeyboardWindow(L_Mechrevo.WpfP0.Services.PerKeyRgbView.Attach()!) { Owner = this }.ShowDialog();
         FillKeyboardEffects();
     }
 

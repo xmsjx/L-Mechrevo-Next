@@ -11,12 +11,12 @@ namespace L_Mechrevo.WpfP0;
 
 public partial class HidKeyboardWindow : Window
 {
-    private readonly KeyboardRgb _rgb;
+    private readonly L_Mechrevo.WpfP0.Services.PerKeyRgbView _rgb;
 
     private readonly (int Mode, string Name)[] _effects;
     private System.Drawing.Color _color = System.Drawing.Color.FromArgb(0, 120, 255);
 
-    public HidKeyboardWindow(KeyboardRgb rgb)
+    public HidKeyboardWindow(L_Mechrevo.WpfP0.Services.PerKeyRgbView rgb)
     {
         InitializeComponent();
         _rgb = rgb;
