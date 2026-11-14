@@ -766,6 +766,8 @@ internal static class WpfBackend
             };
             if (id == null)
             {
+                // 名字写错会静默回退 legacy，这里留一行便于发现（同一名字只记一次）。
+                Logger.WriteErrorIfChanged("gate-unknown-" + feature, "[gate] 未映射的特征名：" + feature);
                 return legacy;
             }
             bool supported = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(id.Value, hw, legacy);
