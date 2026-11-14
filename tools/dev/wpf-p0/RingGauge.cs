@@ -9,12 +9,14 @@ internal sealed class RingGauge : FrameworkElement
     private double _value;
     private double _maximum = 100;
     private string _caption = "";
+    private double? _fraction;
 
-    internal void SetValue(double value, double maximum, string caption)
+    internal void SetValue(double value, double maximum, string caption, double? fraction = null)
     {
         _value = value;
         _maximum = Math.Max(1, maximum);
         _caption = caption;
+        _fraction = fraction;
         InvalidateVisual();
     }
 
@@ -30,7 +32,7 @@ internal sealed class RingGauge : FrameworkElement
         Pen accentPen = new(accent, 8) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
         drawingContext.DrawEllipse(null, trackPen, center, radius, radius);
 
-        double ratio = Math.Clamp(_value / _maximum, 0, 1);
+        double ratio = Math.Clamp(_fraction ?? (_value / _maximum), 0, 1);
         if (ratio >= 0.999)
         {
             // 100% 时起点和终点重合，单个 ArcTo 不画线；直接画整圆。

@@ -254,8 +254,12 @@ public partial class MainWindow : Window
         //   未连接/异常 ⇒ Empty ⇒ 0，占位显示与原来的 ParseNumber("--") 一致 ✅
         SensorSnapshot snapshot = _owner.Services?.Sensors.Read() ?? SensorSnapshot.Empty;
 
-        double fanMax = Math.Max(1, snapshot.FanRpmMaxForPercent);
-        if (fanMax <= 1) fanMax = 5000;
+        double rpmMax = snapshot.FanRpmMaxForPercent;
+        bool hasRpmDenominator = rpmMax > 1;
+        double fanMax = hasRpmDenominator ? rpmMax : 5000;
+        // 后端不给"转速→百分比"的分母时（如 EC-only 机型）：环形按占空比填充，中心仍显示真实转速。
+        double? cpuFanFraction = hasRpmDenominator ? null : snapshot.CpuFanDutyPercent / 100.0;
+        double? gpuFanFraction = hasRpmDenominator ? null : snapshot.GpuFanDutyPercent / 100.0;
         SetMetric(_cpuMetrics, 0, snapshot.CpuTempC, "℃");
         SetMetric(_cpuMetrics, 1, snapshot.CpuUsagePercent, "%");
         SetMetric(_cpuMetrics, 2, snapshot.CpuPowerWatts ?? double.NaN, "W");
@@ -265,8 +269,8 @@ public partial class MainWindow : Window
         SetMetric(_gpuMetrics, 2, snapshot.GpuPowerWatts ?? double.NaN, "W");
         SetMetric(_gpuMetrics, 3, snapshot.GpuCoreFrequencyMhz, "MHz");
         SetMetric(_gpuMetrics, 4, snapshot.GpuMemoryClockMhz ?? 0, "MHz");
-        _cpuFanRing?.SetValue(snapshot.CpuFanRpm, fanMax, "rpm");
-        _gpuFanRing?.SetValue(snapshot.GpuFanRpm, fanMax, "rpm");
+        _cpuFanRing?.SetValue(snapshot.CpuFanRpm, fanMax, "rpm", cpuFanFraction);
+        _gpuFanRing?.SetValue(snapshot.GpuFanRpm, fanMax, "rpm", gpuFanFraction);
         if (_cpuDutyText != null) _cpuDutyText.Text = WpfStrings.MainWindow_xaml_Text_2 + snapshot.CpuFanDutyPercent + "%";
         if (_gpuDutyText != null) _gpuDutyText.Text = WpfStrings.MainWindow_xaml_Text_2 + snapshot.GpuFanDutyPercent + "%";
         // ⭐ task-26：连接状态可能后变（GCU 服务重连/掉线）⇒ 每次传感器 tick 顺带校正一次屏幕页门控（有缓存，只在变化时改 UI）

@@ -205,7 +205,7 @@ public partial class OriginalStyleWindow : Window
     {
         ("touchpad", QuickSwitchService.Label("touchpad", "触摸板"), "\uE7C9"), ("touchpadtoggle", QuickSwitchService.Label("touchpadtoggle", "触摸板切换键"), "\uE7C9"),
         ("wifi", "WiFi", "\uE701"), ("bt", QuickSwitchService.Label("bt", "蓝牙"), "\uE702"),
-        ("webcam", QuickSwitchService.Label("webcam", "摄像头"), "\uE722"), ("micmute", QuickSwitchService.Label("micmute", "麦克风"), "\uE720"),
+        ("webcam", QuickSwitchService.Label("webcam", "摄像头"), "\uE722"), ("micmute", QuickSwitchService.Label("micmute", "麦克风静音"), "\uE720"),
         ("numpad", QuickSwitchService.Label("numpad", "小键盘锁"), "\uE765"), ("winkey", QuickSwitchService.Label("winkey", "禁用Win键"), "\uE765"),
         ("fnkey", QuickSwitchService.Label("fnkey", "Fn键锁"), "\uE765"), ("capslock", QuickSwitchService.Label("capslock", "大小写锁定"), "\uE8AB"),
         ("osd", QuickSwitchService.Label("osd", "OSD提示"), "\uE7F4"), ("gcuosd", "GCU-OSD", "\uE7F4"), ("copilot", QuickSwitchService.Label("copilot", "Copilot键锁"), "\uE8B7"),

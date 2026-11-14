@@ -61,14 +61,16 @@ internal static class GcuPayloadProbe
     /// <summary>本地控制端口的连通性（只做一次 TCP 连接，200 ms 超时，不发任何数据）。</summary>
     internal static bool IsPortReachable(string host, int port, int timeoutMs = 200)
     {
+        // ⛔ 用 APM（Begin/EndConnect）：ConnectAsync 超时后任务会带异常，未观察会在终结器线程重抛成崩溃记录。
         try
         {
-            using var client = new System.Net.Sockets.TcpClient();
-            System.Threading.Tasks.Task task = client.ConnectAsync(host, port);
-            if (!task.Wait(timeoutMs))
+            using System.Net.Sockets.TcpClient client = new System.Net.Sockets.TcpClient();
+            IAsyncResult ar = client.BeginConnect(host, port, null, null);
+            if (!ar.AsyncWaitHandle.WaitOne(timeoutMs))
             {
                 return false;
             }
+            client.EndConnect(ar);
             return client.Connected;
         }
         catch
