@@ -296,6 +296,11 @@ private static readonly string[] CapabilityNames =
                 {
                     continue;
                 }
+                if (line.Contains("Supported(", StringComparison.Ordinal))
+                {
+                    // 能力位只作为"门控未声明时的回退证据"传入门控 ⇒ 判定已由门控做，不计直读。
+                    continue;
+                }
                 foreach (string name in CapabilityNames)
                 {
                     if (Regex.IsMatch(line, "caps\\." + name + "\\b"))
