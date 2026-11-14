@@ -260,10 +260,8 @@ public partial class MainWindow : Window
         // 后端不给"转速→百分比"的分母时（如 EC-only 机型）：环形按占空比填充，中心仍显示真实转速。
         // 环形跟随"占空比"（EC/后端给的百分比才是界面文字显示的那个值）；
         // ⚠️ 只有占空比未知时才退回"转速 / 转速上限"，否则会出现"文字 100% 但环形不满"。
-        double? cpuFanFraction = snapshot.CpuFanDutyPercent > 0
-            ? Math.Min(1.0, snapshot.CpuFanDutyPercent / 100.0) : null;
-        double? gpuFanFraction = snapshot.GpuFanDutyPercent > 0
-            ? Math.Min(1.0, snapshot.GpuFanDutyPercent / 100.0) : null;
+        double? cpuFanFraction = L_Mechrevo.WpfP0.Services.WpfBackend.FanRingFractionFromDuty(snapshot.CpuFanDutyPercent);
+        double? gpuFanFraction = L_Mechrevo.WpfP0.Services.WpfBackend.FanRingFractionFromDuty(snapshot.GpuFanDutyPercent);
         SetMetric(_cpuMetrics, 0, snapshot.CpuTempC, "℃");
         SetMetric(_cpuMetrics, 1, snapshot.CpuUsagePercent, "%");
         SetMetric(_cpuMetrics, 2, snapshot.CpuPowerWatts ?? double.NaN, "W");

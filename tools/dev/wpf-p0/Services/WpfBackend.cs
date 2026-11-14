@@ -631,6 +631,9 @@ internal static class WpfBackend
 
     internal static bool CrashShouldRotate(long bytes) => CrashLogPolicy.ShouldRotate(bytes);
 
+    /// <summary>风扇环形填充比例：以占空比为准，未知返回 null（交给调用方退回转速比例）。</summary>
+    internal static double? FanRingFractionFromDuty(int dutyPercent) => FanRingFraction.FromDuty(dutyPercent);
+
     internal static void AttachLocalChannelEvidence()
     {
         FeatureGate.LocalChannelEvidenceProvider = feature =>

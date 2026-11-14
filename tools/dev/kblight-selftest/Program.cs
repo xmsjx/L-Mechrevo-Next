@@ -384,6 +384,20 @@ internal static class Program
 			CrashLogPolicy.FirstFrame("   at Foo.Bar()" + Environment.NewLine + "   at Baz.Qux()").StartsWith("at Foo.Bar", StringComparison.Ordinal), true);
 		Check("超过 2MB 触发轮转",
 			CrashLogPolicy.ShouldRotate(CrashLogPolicy.MaxBytes + 1), true);
+		Console.WriteLine();
+		Console.WriteLine("== 2026-11-14 风扇环形填充跟随占空比（文字 100% 时环形必须满）==");
+		Console.WriteLine("起因：占空比显示 100% 但环形只有约九成（环形用了转速/上限，文字用了占空比）");
+
+		Check("占空比 100 ⇒ 满环",
+			FanRingFraction.FromDuty(100) == 1.0, true);
+		Check("占空比 55 ⇒ 0.55",
+			FanRingFraction.FromDuty(55) == 0.55, true);
+		Check("占空比超过 100 ⇒ 夹到满环",
+			FanRingFraction.FromDuty(255) == 1.0, true);
+		Check("占空比 0 ⇒ 未知（退回转速比例）",
+			FanRingFraction.FromDuty(0) == null, true);
+		Check("占空比负数 ⇒ 未知",
+			FanRingFraction.FromDuty(-1) == null, true);
 
 		Console.WriteLine();
 		Console.WriteLine(_fail == 0 ? $"== 全绿：键盘灯自检 {_total}/{_total} ==" : $"== 失败 {_fail}/{_total} 项 ==");
