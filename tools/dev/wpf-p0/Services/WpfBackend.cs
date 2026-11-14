@@ -636,6 +636,46 @@ internal static class WpfBackend
 
 
     /// <summary>是否有摄像头设备（有缓存读缓存，否则探测一次并缓存）。</summary>
+    /// <summary>按特征名读门控结论；后端未就绪或名字未知时退回调用方给的 legacy 判定。</summary>
+    internal static bool SupportsFeature(string feature, bool legacy)
+    {
+        try
+        {
+            MechrevoHw? hw = Hw;
+            if (hw == null)
+            {
+                return legacy;
+            }
+            MechrevoLite.Hardware.Architecture.FeatureId? id = feature switch
+            {
+                "LogoLight" => MechrevoLite.Hardware.Architecture.FeatureId.LogoLight,
+                "Lightbar" => MechrevoLite.Hardware.Architecture.FeatureId.Lightbar,
+                "KeyboardLight" => MechrevoLite.Hardware.Architecture.FeatureId.KeyboardLight,
+                "HingeLight" => MechrevoLite.Hardware.Architecture.FeatureId.HingeLight,
+                "SyncLight" => MechrevoLite.Hardware.Architecture.FeatureId.SyncLight,
+                "LocalDimming" => MechrevoLite.Hardware.Architecture.FeatureId.LocalDimming,
+                "LcdOverdrive" => MechrevoLite.Hardware.Architecture.FeatureId.LcdOverdrive,
+                "DisplayEffect" => MechrevoLite.Hardware.Architecture.FeatureId.DisplayEffect,
+                "ColorCalibration" => MechrevoLite.Hardware.Architecture.FeatureId.ColorCalibration,
+                "FanCurve" => MechrevoLite.Hardware.Architecture.FeatureId.FanCurve,
+                "FanBoost" => MechrevoLite.Hardware.Architecture.FeatureId.FanBoost,
+                "ChargeLimit" => MechrevoLite.Hardware.Architecture.FeatureId.ChargeLimit,
+                "PerformanceMode" => MechrevoLite.Hardware.Architecture.FeatureId.PerformanceMode,
+                "RefreshRate" => MechrevoLite.Hardware.Architecture.FeatureId.RefreshRate,
+                _ => (MechrevoLite.Hardware.Architecture.FeatureId?)null
+            };
+            if (id == null)
+            {
+                return legacy;
+            }
+            return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(id.Value, hw, legacy);
+        }
+        catch
+        {
+            return legacy;
+        }
+    }
+
     internal static bool HasCamera
     {
         get

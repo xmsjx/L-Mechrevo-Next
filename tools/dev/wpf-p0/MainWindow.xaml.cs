@@ -2391,14 +2391,17 @@ public partial class MainWindow : Window
         var platformFacts = L_Mechrevo.WpfP0.Services.DisplayPlatformFacts.Read();
         bool hasWindowsRefresh = platformFacts.WindowsRefreshAvailable;
         bool hasWmiBrightness = platformFacts.WmiBrightnessAvailable;
-        bool displaySupported = hasWindowsRefresh || hasWmiBrightness || caps.DisplayRefresh || _probe?.Hw?.SupportsDisplayRefresh == true
+        bool displaySupported = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("RefreshRate",
+            hasWindowsRefresh || hasWmiBrightness || _probe?.Hw?.SupportsDisplayRefresh == true)
             || calibrationVisible || _owner?.SupportsLcdOverdrive == true || _owner?.SupportsMiniled == true;
         HomeDisplayCard.Visibility = displaySupported ? Visibility.Visible : Visibility.Collapsed;
         HomeDisplayColumn.Width = displaySupported ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
         HomeDisplayGap.Width = displaySupported ? new GridLength(10) : new GridLength(0);
         Grid.SetColumn(BatteryCardHost, displaySupported ? 2 : 0);
         Grid.SetColumnSpan(BatteryCardHost, displaySupported ? 1 : 3);
-        bool hasLighting = caps.Keyboard || caps.Lightbar || caps.LogoLight
+        bool hasLighting = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("KeyboardLight", false)
+            || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("Lightbar", false)
+            || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("LogoLight", false)
             || _probe?.Hw?.SupportsKeyboard == true || _probe?.Hw?.SupportsLightbar == true
             || _probe?.Hw?.SupportsLogoLight == true
             || (ecLocal && (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardActiveNow

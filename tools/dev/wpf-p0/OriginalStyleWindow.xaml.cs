@@ -7581,17 +7581,17 @@ public partial class OriginalStyleWindow : Window
             bool localIccAvailable = IccHelper.HasFactoryIccFile() || IccHelper.ListCustomIccFiles().Count > 0;
             L_Mechrevo.WpfP0.Services.DisplayPlatformFacts platform = L_Mechrevo.WpfP0.Services.DisplayPlatformFacts.Read();
             bool hasWindowsRefresh = platform.WindowsRefreshAvailable;
-            ScreenSection.Visibility = (hasWindowsRefresh || platform.WmiBrightnessAvailable || caps.DisplayRefresh || _backendProbe?.Hw?.SupportsDisplayRefresh == true || SupportsOemCalibration || SupportsLcdOverdrive || SupportsMiniled || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
+            ScreenSection.Visibility = (L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("RefreshRate", hasWindowsRefresh || platform.WmiBrightnessAvailable || _backendProbe?.Hw?.SupportsDisplayRefresh == true) || SupportsOemCalibration || SupportsLcdOverdrive || SupportsMiniled || localIccAvailable) ? Visibility.Visible : Visibility.Collapsed;
             AutoRefreshSwitch.Visibility = platform.AutoRefreshVisible ? Visibility.Visible : Visibility.Collapsed;
             bool hasKeyboard = EcKeyboardActive
                 ? EcKeyboardControllable
-                : caps.Keyboard || (hw?.SupportsKeyboard ?? false)
-                    || hw?.IsNucUmiFamily == true;
-            bool hasLightbar = caps.Lightbar || (hw?.SupportsLightbar ?? false)
+                : L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("KeyboardLight", (hw?.SupportsKeyboard ?? false)
+                || hw?.IsNucUmiFamily == true);
+        bool hasLightbar = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("Lightbar", (hw?.SupportsLightbar ?? false)
                 || _services?.Lighting.LocalLightbarSupported == true
-                || hw?.IsNucUmiFamily == true;
-            bool hasLogo = caps.LogoLight || (hw?.SupportsLogoLight ?? false)
-                || _services?.Lighting.LocalLogoSupported == true;
+            || hw?.IsNucUmiFamily == true);
+        bool hasLogo = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("LogoLight", (hw?.SupportsLogoLight ?? false)
+            || _services?.Lighting.LocalLogoSupported == true);
             bool hasHinge = _backendProbe?.SupportsHingeLight == true;
             bool hasSync = _backendProbe?.SupportsSyncLight == true;
             bool xingyaoLightIdle = XingyaoQuickApplicable();
