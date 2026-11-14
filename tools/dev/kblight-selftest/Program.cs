@@ -320,6 +320,22 @@ internal static class Program
 			LightingIdleTimerPolicy.Decide(0, 10, explicitChange: false) == IdleTimerAction.Nothing, true);
 		Check("后端未上报 ⇒ 推本地",
 			LightingIdleTimerPolicy.Decide(120, -1, explicitChange: false) == IdleTimerAction.PushLocal, true);
+		Console.WriteLine();
+		Console.WriteLine("== 2026-11-14 空闲关灯档位表护栏（不许把 10 小时当合法档，也不许把非法值原样推送）==");
+		Console.WriteLine("起因：旷世 X 的本地值被写成 36000 秒（10 小时），后端值 600 分钟也不在档位表内");
+
+		Check("600 秒是合法档",
+			LightingIdleTimerPolicy.IsKnown(600), true);
+		Check("36000 秒不是合法档",
+			LightingIdleTimerPolicy.IsKnown(36000), false);
+		Check("0（关闭）永远合法",
+			LightingIdleTimerPolicy.IsKnown(0), true);
+		Check("非法值归一到不超过它的最大合法档：36000 → 10800",
+			LightingIdleTimerPolicy.Snap(36000) == 10800, true);
+		Check("合法值归一后不变：600 → 600",
+			LightingIdleTimerPolicy.Snap(600) == 600, true);
+		Check("小于最小档 ⇒ 归零",
+			LightingIdleTimerPolicy.Snap(7) == 0, true);
 
 		Console.WriteLine();
 		Console.WriteLine(_fail == 0 ? $"== 全绿：键盘灯自检 {_total}/{_total} ==" : $"== 失败 {_fail}/{_total} 项 ==");

@@ -48,4 +48,41 @@ internal static class LightingIdleTimerPolicy
 		}
 		return localSeconds > backendSeconds ? IdleTimerAction.PushLocal : IdleTimerAction.AdoptGcu;
 	}
+
+	/// <summary>界面档位表对应的秒数（0 = 关闭）。</summary>
+	internal static readonly int[] KnownIdleSeconds =
+	{
+		0, 10, 15, 20, 30, 45, 60, 120, 180, 300, 600, 900, 1200, 1800, 2700, 3600, 7200, 10800
+	};
+
+	/// <summary>该秒数是否是档位表里的合法取值。</summary>
+	internal static bool IsKnown(int seconds)
+	{
+		if (seconds <= 0)
+		{
+			return true;
+		}
+		foreach (int option in KnownIdleSeconds)
+		{
+			if (option == seconds)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/// <summary>把非法值归一到不超过它的最大合法档（没有就归零）。</summary>
+	internal static int Snap(int seconds)
+	{
+		int best = 0;
+		foreach (int option in KnownIdleSeconds)
+		{
+			if (option > 0 && option <= seconds && option > best)
+			{
+				best = option;
+			}
+		}
+		return best;
+	}
 }
