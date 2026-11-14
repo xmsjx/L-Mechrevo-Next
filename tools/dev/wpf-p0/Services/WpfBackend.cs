@@ -672,6 +672,9 @@ internal static class WpfBackend
                     "ProfileAvailable" => caps.ProfileAvailable,
                     "TurboMode" => caps.TurboMode,
                     "SilentTurboAvailability" => caps.SilentTurboAvailability == FeatureSupported,
+                    "DgpuDirect" => caps.DgpuDirect,
+                    "GpuHotSwap" => caps.GpuHotSwap,
+                    "IgpuOnly" => caps.IgpuOnly,
                     _ => false
                 };
             }
@@ -704,6 +707,30 @@ internal static class WpfBackend
         }
     }
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> GateLogged = new();
+
+    /// <summary>每个特征只记一次判定，便于解释"为什么这个区块显示/隐藏"。</summary>
+    private static void LogGateOnce(string feature, MechrevoHw hw, MechrevoLite.Hardware.Architecture.FeatureId id,
+        bool effective, bool legacy)
+    {
+        if (!GateLogged.TryAdd(feature, 0))
+        {
+            return;
+        }
+        try
+        {
+            MechrevoLite.Hardware.Architecture.FeatureDecision decision =
+                MechrevoLite.Hardware.Architecture.FeatureGate.Get(id, hw);
+            Logger.WriteLine("[gate] f=" + feature + " backend=" + decision.Backend
+                + " availability=" + decision.State + " channel=" + decision.Channel
+                + " → " + (effective ? "supported" : "hidden") + " · legacy=" + legacy
+                + " · " + decision.Reason);
+        }
+        catch
+        {
+        }
+    }
+
     internal static bool SupportsFeature(string feature, bool legacy)
     {
         try
@@ -729,13 +756,21 @@ internal static class WpfBackend
                 "ChargeLimit" => MechrevoLite.Hardware.Architecture.FeatureId.ChargeLimit,
                 "PerformanceMode" => MechrevoLite.Hardware.Architecture.FeatureId.PerformanceMode,
                 "RefreshRate" => MechrevoLite.Hardware.Architecture.FeatureId.RefreshRate,
+                "GpuModeSwitch" => MechrevoLite.Hardware.Architecture.FeatureId.GpuModeSwitch,
+                "GpuHotSwap" => MechrevoLite.Hardware.Architecture.FeatureId.GpuHotSwap,
+                "IgpuOnly" => MechrevoLite.Hardware.Architecture.FeatureId.IgpuOnly,
+                "PerformanceProfile" => MechrevoLite.Hardware.Architecture.FeatureId.PerformanceProfile,
+                "TurboMode" => MechrevoLite.Hardware.Architecture.FeatureId.TurboMode,
+                "SilentTurbo" => MechrevoLite.Hardware.Architecture.FeatureId.SilentTurbo,
                 _ => (MechrevoLite.Hardware.Architecture.FeatureId?)null
             };
             if (id == null)
             {
                 return legacy;
             }
-            return MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(id.Value, hw, legacy);
+            bool supported = MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(id.Value, hw, legacy);
+            LogGateOnce(feature, hw, id.Value, supported, legacy);
+            return supported;
         }
         catch
         {

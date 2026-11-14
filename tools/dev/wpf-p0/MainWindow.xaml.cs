@@ -2371,13 +2371,13 @@ public partial class MainWindow : Window
             || (ecLocal && _probe?.Hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu);
         HomePerf自定义.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
         bool gpuRowHidden = _probe?.Hw?.GpuRowHiddenByGcuReports == true;
-        bool directSupported = _probe?.Hw?.SupportsDgpuDirect ?? L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuModeSwitch", false);
-        bool gpuSwitchSupported = _probe?.Hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuModeSwitch", false) || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("IgpuOnly", false) || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuHotSwap", false));
+        bool directSupported = _probe?.Hw?.SupportsDgpuDirect ?? L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuModeSwitch", "DgpuDirect");
+        bool gpuSwitchSupported = _probe?.Hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuModeSwitch", "DgpuDirect") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("IgpuOnly", "IgpuOnly") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuHotSwap", "GpuHotSwap"));
         bool gpuSupported = !nucNoGpu && !gpuRowHidden
-            && (gpuSwitchSupported || directSupported || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuHotSwap", false));
+            && (gpuSwitchSupported || directSupported || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuHotSwap", "GpuHotSwap"));
         HomeGpuCard.Visibility = gpuSupported ? Visibility.Visible : Visibility.Collapsed;
         HomeGpu独显.Visibility = directSupported ? Visibility.Visible : Visibility.Collapsed;
-        HomeGpu集显.Visibility = (_probe?.Hw?.CanOfferIgpuOnly ?? L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("IgpuOnly", false))
+        HomeGpu集显.Visibility = (_probe?.Hw?.CanOfferIgpuOnly ?? L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("IgpuOnly", "IgpuOnly"))
             ? Visibility.Visible : Visibility.Collapsed;
         HomeGpuOcToggle.Visibility = _owner?.WideGpuOverclockVisible == true
             ? Visibility.Visible : Visibility.Collapsed;

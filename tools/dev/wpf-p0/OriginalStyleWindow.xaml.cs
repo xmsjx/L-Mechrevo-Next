@@ -7566,13 +7566,13 @@ public partial class OriginalStyleWindow : Window
             bool umiGpuMode = hw?.IsUmiMachine == true;
             bool nucNoGpuSwitch = hw?.IsIntelNucMachine == true;
             bool gpuRowHidden = hw?.GpuRowHiddenByGcuReports == true;
-        bool directSupported = hw?.SupportsDgpuDirect ?? L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuModeSwitch", false);
-        bool gpuSwitchSupported = hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuModeSwitch", false) || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("IgpuOnly", false) || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuHotSwap", false));
+        bool directSupported = hw?.SupportsDgpuDirect ?? L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuModeSwitch", "DgpuDirect");
+        bool gpuSwitchSupported = hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuModeSwitch", "DgpuDirect") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("IgpuOnly", "IgpuOnly") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuHotSwap", "GpuHotSwap"));
             GpuDirectButton.Visibility = directSupported ? Visibility.Visible : Visibility.Collapsed;
             bool dgpuPresent = hw != null && hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
             bool noSwitchButHasDgpu = !gpuSwitchSupported && dgpuPresent;
             GpuSection.Visibility = (!nucNoGpuSwitch && !gpuRowHidden
-                && (gpuSwitchSupported || directSupported || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("GpuHotSwap", false) || umiGpuMode || noSwitchButHasDgpu))
+                && (gpuSwitchSupported || directSupported || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuHotSwap", "GpuHotSwap") || umiGpuMode || noSwitchButHasDgpu))
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             GpuModeRow.Visibility = gpuSwitchSupported ? Visibility.Visible : Visibility.Collapsed;
