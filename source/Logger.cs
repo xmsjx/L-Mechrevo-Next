@@ -224,6 +224,15 @@ public static class Logger
 		}
 	}
 
+    /// <summary>错误级日志的内容去重：同一行重复出现（值没变）时只记一次。</summary>
+    public static void WriteErrorIfChanged(string key, string logMessage)
+    {
+        if (TryMarkChanged(key, logMessage))
+        {
+            WriteError(logMessage);
+        }
+    }
+
 	internal static bool TryMarkChanged(string key, string logMessage)
 	{
 		if (LastMessages.TryGetValue(key, out string value) && value == logMessage)

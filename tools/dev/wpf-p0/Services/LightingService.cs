@@ -381,7 +381,7 @@ internal sealed class LightingService : ILightingService
             string backendText = backendMinutes < 0 ? "(未知)" : backendMinutes + " 分钟";
             if (action == IdleTimerAction.Nothing)
             {
-                Logger.WriteError("[light-idle] 跳过推送：本地=" + seconds + " 秒 · 后端=" + backendText);
+                Logger.WriteErrorIfChanged("light-idle-skip", "[light-idle] 跳过推送：本地=" + seconds + " 秒 · 后端=" + backendText);
                 return;
             }
             if (action == IdleTimerAction.AdoptGcu)
@@ -399,7 +399,7 @@ internal sealed class LightingService : ILightingService
                     + " 秒（后端=" + backendText + "；不缩小后端的关灯时间）");
                 return;
             }
-            Logger.WriteError("[light-idle] 推送：本地=" + seconds + " 秒 · 后端=" + backendText
+            Logger.WriteErrorIfChanged("light-idle-push", "[light-idle] 推送：本地=" + seconds + " 秒 · 后端=" + backendText
                 + (userChanged ? "（用户修改）" : "（本地更长）"));
             _ = service.PublishKeyboardCloseTimerSeconds(seconds);
         }
