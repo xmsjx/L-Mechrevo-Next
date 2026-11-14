@@ -2407,6 +2407,9 @@ public partial class OriginalStyleWindow : Window
             _syncingLighting = true;
             KeyboardLightSwitch.IsChecked = true;
             _syncingLighting = false;
+            // 休眠会让 HID 句柄失效（写入不报错但设备不响应）⇒ 先重连再重放，不能只重放。
+            bool hidReconnected = L_Mechrevo.WpfP0.Services.WpfBackend.ReconnectHidKeyboardForResume();
+            Logger.WriteError("[light] 唤醒重放：HID 重连=" + hidReconnected);
             await ApplyKeyboardLightAsync(showStatus: false);
         }
         catch

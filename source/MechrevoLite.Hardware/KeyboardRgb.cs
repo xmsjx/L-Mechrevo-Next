@@ -1133,6 +1133,23 @@ public class KeyboardRgb : IDisposable
 		}
 	}
 
+    /// <summary>
+    /// 系统唤醒后重放灯效：休眠会让 HID 句柄失效（写入不报错但设备不响应），
+    /// 所以必须先释放并重新打开设备，再按原模式重放。
+    /// </summary>
+    public bool ReconnectForResumeReplay()
+    {
+        int mode = _activeMode;
+        StopCurrentEffect();
+        bool connected = Connect();
+        if (connected && mode >= 0)
+        {
+            StartModeForced(mode);
+        }
+        Logger.WriteError("[hid-fx] 唤醒重连：connect=" + connected + " · replayMode=" + mode);
+        return connected;
+    }
+
 	public bool ReInitCustomMode()
 	{
 		lock (_lock)

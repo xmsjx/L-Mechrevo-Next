@@ -403,6 +403,19 @@ internal static class WpfBackend
     /// <summary>新建一个 HID 键盘实例（未连接）。</summary>
     internal static KeyboardRgb CreateKeyboardRgb() => new KeyboardRgb();
 
+    /// <summary>系统唤醒后重连 HID 键盘并按原模式重放灯效（休眠后句柄失效）。</summary>
+    internal static bool ReconnectHidKeyboardForResume()
+    {
+        try
+        {
+            KeyboardRgb? kb = rgb;
+            return kb != null && kb.ReconnectForResumeReplay();
+        }
+        catch
+        {
+            return false;
+        }
+    }
     /// <summary>复查并重写一次 EC 限充档位（GCU 会把自己的档位写回，覆盖用户选择）。</summary>
     internal static bool EcReassertChargeMode(int mode, out string detail) =>
         EcChargeLimitOverride.TryReassertMode(mode, 3000, out detail);
