@@ -14,8 +14,9 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
 		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.WmiMailbox, "宝龙达功能号 15 提供 Logo 开关",
 			new[] { "wmi:Baolongda.Function15" });
-		FeatureDeclaration lightbar = new FeatureDeclaration(FeatureAvailability.Unsupported,
-			BackendChannel.None, "尾部灯带与 LOGO 灯同一路（功能号 15），没有独立灯带通道", new string[0]);
+		FeatureDeclaration lightbar = new FeatureDeclaration(FeatureAvailability.Unknown,
+			BackendChannel.None, "尾部灯带与 LOGO 灯同一路（功能号 15），本后端无独立灯带通道；本地通道由灯效服务判定",
+			new string[0]);
 		FeatureDeclaration localDimming = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "协议没有分区背光功能号", new string[0]);
 		FeatureDeclaration lcdOverdrive = new FeatureDeclaration(FeatureAvailability.Unsupported,

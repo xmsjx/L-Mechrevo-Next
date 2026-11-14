@@ -175,7 +175,7 @@ internal static class FeatureGate
 			FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.ColorCalibration);
 		Check(lines, "baolongda-tail-lightbar-same-as-logo", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, true, false, null, false),
-			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.Lightbar);
+			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
 		Check(lines, "baolongda-no-localdimming", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.LocalDimming);
