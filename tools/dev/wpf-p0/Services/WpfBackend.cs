@@ -523,5 +523,51 @@ internal static class WpfBackend
     internal static List<(string Guid, string Name)> WinPowerPlanPlans() => WinPowerPlan.GetPlans();
 
     internal static bool WinPowerPlanSetActive(string guid) => WinPowerPlan.SetActivePlan(guid);
+
+    /// <summary>EC 键盘背光当前状态（是否点亮 + 档位）。</summary>
+    internal static bool EcKeyboardTryGet(out bool on, out int level) => EcKeyboardLight.TryGet(out on, out level);
+
+    /// <summary>键盘是否为单区 RGB（只有轮播有速度概念）。</summary>
+    internal static bool IsSingleZoneRgbKeyboard()
+    {
+        MechrevoHw? hw = Hw;
+        return hw != null && KeyboardFirmwareEffects.IsSingleZoneRgb(hw.Capabilities.KeyboardType);
+    }
+
+    /// <summary>UMI/NUC 灯带走本地 ACPI 通道（与 GCU 服务通道不同）。</summary>
+    internal static bool UmiLightbarSetPower(bool on) => UmiLightbar.SetPower(on);
+
+    internal static bool UmiLightbarSetEffect(string effect, System.Drawing.Color color, int level) =>
+        UmiLightbar.SetEffect(effect, color, level);
+
+    /// <summary>本地软件色彩增强：按 9 个参数下发（无 GCU 档位表时的回退通道）。</summary>
+    internal static void ApplyColorProfile(string name, int brightness, int colorTemp,
+        float red, float green, float blue, float vibrant, float contrast, float gamma) =>
+        SoftwareColorEnhancement.ApplyProfile(name, brightness, colorTemp, red, green, blue, vibrant, contrast, gamma);
+
+    internal static bool LocalFanCurve() => GcuEcExperimental.LocalFanCurve;
+
+    /// <summary>风扇曲线能力：门控优先，未声明回退旧判据。</summary>
+    internal static bool ResolveFanCurveSupport(bool legacySupported) =>
+        FeatureGate.ResolveSupportOrLegacy(FeatureId.FanCurve, Hw, legacySupported);
+
+    internal static Task<(bool Ok, string Detail)> SetEcModeAsync(bool ecMode) => GcuEcMode.SetModeAsync(ecMode);
+
+    internal static int PowerInputKindBarrel => (int)PowerInputKind.Barrel;
+
+    internal static int PowerInputKindTypeC => (int)PowerInputKind.TypeC;
+
+    internal static int PowerInputKindBarrelAndTypeC => (int)PowerInputKind.BarrelAndTypeC;
+
+    internal static int PowerInputKindExternalUnknown => (int)PowerInputKind.ExternalUnknown;
+
+    /// <summary>供电输入类别 + 适配器瓦数 + BIOS 原始字节（-1 = 读不到）。</summary>
+    internal static (int Kind, bool HasSample, int Watts, int BiosRaw) DescribePowerInput(bool acOnline)
+    {
+        PowerStatusSnapshot power = PowerStatusService.Read();
+        PowerInputSample? sample = power.Input;
+        PowerInputKind kind = PowerInputDecoder.Reconcile(sample, acOnline);
+        return ((int)kind, sample != null, sample?.AdapterWatts ?? -1, sample?.BiosInfo3Raw ?? -1);
+    }
 }
 

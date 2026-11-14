@@ -136,7 +136,7 @@ public partial class LightEditorWindow : Window
         if (_keyboard && _wujieWhite)
         {
             _light = Math.Clamp(MechrevoLite.AppConfig.Get("wujie_kbd_level", 2), 1, 2);
-            if (MechrevoLite.Hardware.EcKeyboardLight.TryGet(out bool ecOn, out int ecLevel) && ecOn && ecLevel >= 1 && ecLevel <= 2)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardTryGet(out bool ecOn, out int ecLevel) && ecOn && ecLevel >= 1 && ecLevel <= 2)
             {
                 _light = ecLevel;
             }
@@ -172,7 +172,7 @@ public partial class LightEditorWindow : Window
             // 如果 EC 已经是亮的，编辑器不能停在“电源关、滑块不可拖”。
             try
             {
-                if (MechrevoLite.Hardware.EcKeyboardLight.TryGet(out bool ecOn, out int ecLevel)
+                if (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardTryGet(out bool ecOn, out int ecLevel)
                     && (ecOn || ecLevel > 0))
                 {
                     PowerCheck.IsChecked = true;
@@ -485,9 +485,7 @@ public partial class LightEditorWindow : Window
         bool manual = string.Equals(effect, "Manual", StringComparison.Ordinal);
         bool breathing = string.Equals(effect, "Breathing", StringComparison.Ordinal)
             && (_nucSingleZone
-                || (L_Mechrevo.WpfP0.Services.WpfBackend.Hw != null
-                    && MechrevoLite.Hardware.KeyboardFirmwareEffects.IsSingleZoneRgb(
-                        L_Mechrevo.WpfP0.Services.WpfBackend.Hw.Capabilities.KeyboardType)));
+                || L_Mechrevo.WpfP0.Services.WpfBackend.IsSingleZoneRgbKeyboard());
         // 单区只有轮播（Manual）有速度概念，单色/彩虹固定速度。
         SpeedRow.Visibility = _nucSingleZone && manual ? Visibility.Visible : Visibility.Collapsed;
         PerKeyPanel.Visibility = manual && !_nucSingleZone ? Visibility.Visible : Visibility.Collapsed;
@@ -892,13 +890,13 @@ public partial class LightEditorWindow : Window
                 {
                     // NUC/UMI 灯带走本地 ACPI 通道；XAML 编辑器原来走 GCU service，
                     // 彩虹/混色的亮度和颜色根本没下发。
-                    MechrevoLite.Hardware.UmiLightbar.SetPower(true);
+                    L_Mechrevo.WpfP0.Services.WpfBackend.UmiLightbarSetPower(true);
                     if (!powerWasOn)
                     {
                         await Task.Delay(600);
                     }
                     System.Drawing.Color nucColor = System.Drawing.Color.FromArgb(_colorArgb);
-                    ok = MechrevoLite.Hardware.UmiLightbar.SetEffect(effect, nucColor, _light);
+                    ok = L_Mechrevo.WpfP0.Services.WpfBackend.UmiLightbarSetEffect(effect, nucColor, _light);
                 }
                 else
                 {
@@ -919,7 +917,7 @@ public partial class LightEditorWindow : Window
                     && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } lbHwOff
                     && (lbHwOff.IsNucUmiFamily);
                 ok = nucLightbarOff
-                    ? MechrevoLite.Hardware.UmiLightbar.SetPower(false)
+                    ? L_Mechrevo.WpfP0.Services.WpfBackend.UmiLightbarSetPower(false)
                     : await L_Mechrevo.WpfP0.Services.WpfBackend.Service.SetLightPower(_topic, false);
             }
             if (ok)

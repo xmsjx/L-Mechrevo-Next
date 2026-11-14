@@ -109,7 +109,7 @@ public partial class DisplayEffectEditorWindow : Window
         {
             profile = found;
         }
-        profile ??= MechrevoLite.Hardware.SoftwareColorEnhancement.DefaultProfile(_mode);
+        profile ??= L_Mechrevo.WpfP0.Services.WpfBackend.DefaultColorEffectProfile(_mode);
         _syncing = true;
         try
         {
@@ -154,7 +154,7 @@ public partial class DisplayEffectEditorWindow : Window
             Constrast = Get("contrast") * 0.1f,
             Gamma = Get("gamma") * 0.01f
         };
-        MechrevoLite.Hardware.MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
         bool hasGcuProfile = hw != null && hw.DisplayEffectProfiles.ContainsKey(_mode);
         if (hasGcuProfile)
         {
@@ -162,7 +162,7 @@ public partial class DisplayEffectEditorWindow : Window
         }
         else
         {
-            MechrevoLite.Hardware.SoftwareColorEnhancement.ApplyProfile(profile.Name, profile.Brightness,
+            L_Mechrevo.WpfP0.Services.WpfBackend.ApplyColorProfile(profile.Name, profile.Brightness,
                 profile.ColorTemp, profile.ColorR, profile.ColorG, profile.ColorB,
                 profile.VibrantValue, profile.Constrast, profile.Gamma);
         }
@@ -176,7 +176,7 @@ public partial class DisplayEffectEditorWindow : Window
     private async void ResetButton_Click(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_mode)) return;
-        MechrevoLite.Hardware.MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
         bool hasGcuProfile = hw != null && hw.DisplayEffectProfiles.ContainsKey(_mode);
         if (hasGcuProfile && L_Mechrevo.WpfP0.Services.WpfBackend.Service != null)
         {
@@ -189,7 +189,7 @@ public partial class DisplayEffectEditorWindow : Window
         else
         {
             // 没有 GCU 档位表 / NUC 本机软件路径：恢复当前档位的软件默认，而不是回多彩。
-            MechrevoLite.Hardware.SoftwareColorEnhancement.Apply(_mode);
+            L_Mechrevo.WpfP0.Services.WpfBackend.ApplyLocalColorEffect(_mode);
         }
         LoadProfile();
     }

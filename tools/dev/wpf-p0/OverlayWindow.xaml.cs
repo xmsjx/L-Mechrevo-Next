@@ -119,7 +119,7 @@ public partial class OverlayWindow : Window
         {
             OverlaySnapshot s = _provider();
             _acOnline = s.AcOnline;
-            MechrevoLite.Hardware.MechrevoHw? hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
+            var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
             // 无界 APU 没有独显（NoDgpu），但仍有 AMD 核显温度/频率/功耗，GPU 行必须显示。
             bool showGpu = hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu
                 || hw?.WujieSmuApu == true;
@@ -202,31 +202,40 @@ public partial class OverlayWindow : Window
             {
                 return WpfStrings.OverlayAcPower;
             }
-            L_Mechrevo.WpfP0.Services.PowerStatusSnapshot power = L_Mechrevo.WpfP0.Services.PowerStatusService.Read();
-            MechrevoLite.Hardware.PowerInputSample? sample = power.Input;
-            MechrevoLite.Hardware.PowerInputKind kind = MechrevoLite.Hardware.PowerInputDecoder.Reconcile(sample, acOnline);
-            // task-38: map the enum on the WPF side so the power-source headline is localized
-            // (Core only returns a pre-localized string; we no longer depend on its language).
-            if (sample?.AdapterWatts is int watts)
+            PowerStatusSnapshot power = L_Mechrevo.WpfP0.Services.PowerStatusService.Read();
+            (int kind, bool hasSample, int watts, int biosRaw) =
+                L_Mechrevo.WpfP0.Services.WpfBackend.DescribePowerInput(acOnline);
+            // task-38: 文案在 WPF 侧拼装，Core 只给类别与瓦数，不依赖它的语言。
+            if (hasSample)
             {
-                string text = kind switch
+                string text;
+                if (kind == L_Mechrevo.WpfP0.Services.WpfBackend.PowerInputKindBarrel)
                 {
-                    MechrevoLite.Hardware.PowerInputKind.Barrel => string.Format(WpfStrings.OverlayBarrelWattsFormat, watts),
-                    MechrevoLite.Hardware.PowerInputKind.TypeC => WpfStrings.OverlayUsbCPower,
-                    MechrevoLite.Hardware.PowerInputKind.BarrelAndTypeC => WpfStrings.OverlayUsbCPower,
-                    MechrevoLite.Hardware.PowerInputKind.ExternalUnknown => WpfStrings.OverlayExternalPower,
-                    _ => WpfStrings.OverlayAcPower
-                };
+                    text = string.Format(WpfStrings.OverlayBarrelWattsFormat, watts);
+                }
+                else if (kind == L_Mechrevo.WpfP0.Services.WpfBackend.PowerInputKindTypeC
+                    || kind == L_Mechrevo.WpfP0.Services.WpfBackend.PowerInputKindBarrelAndTypeC)
+                {
+                    text = WpfStrings.OverlayUsbCPower;
+                }
+                else if (kind == L_Mechrevo.WpfP0.Services.WpfBackend.PowerInputKindExternalUnknown)
+                {
+                    text = WpfStrings.OverlayExternalPower;
+                }
+                else
+                {
+                    text = WpfStrings.OverlayAcPower;
+                }
                 if (!string.IsNullOrWhiteSpace(text))
                 {
                     return text;
                 }
             }
-            else if (kind == MechrevoLite.Hardware.PowerInputKind.Barrel)
+            else if (kind == L_Mechrevo.WpfP0.Services.WpfBackend.PowerInputKindBarrel)
             {
                 return WpfStrings.OverlayBarrelPower;
             }
-            int raw = sample?.BiosInfo3Raw ?? -1;
+            int raw = biosRaw;
             if (raw >= 0)
             {
                 return WpfStrings.OverlayAcPowerEcHex + raw.ToString("X2") + CloseParen();

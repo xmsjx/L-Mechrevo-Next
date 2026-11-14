@@ -377,7 +377,7 @@ public partial class SettingsWindow : Window
         }
         if (ControlModeCombo != null)
         {
-            bool ecMode = MechrevoLite.Hardware.GcuEcMode.IsEcMode;
+            bool ecMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive;
             ControlModeCombo.SelectedIndex = ecMode ? 1 : 0;
             if (ControlModeStatus != null)
             {
@@ -440,7 +440,7 @@ public partial class SettingsWindow : Window
             bool family = hw?.IsTongfangFamily == true;
             if (!family)
             {
-                try { family = MechrevoLite.Hardware.MachineIdentity.Collect().TongfangFamily; } catch { }
+                try { family = L_Mechrevo.WpfP0.Services.WpfBackend.TongfangFamily(); } catch { }
             }
             bool eligible = family && hw?.WujieSmuApu != true;
             CustomButtonCard.Visibility = eligible ? Visibility.Visible : Visibility.Collapsed;
@@ -574,7 +574,7 @@ public partial class SettingsWindow : Window
             _syncing = false;
             return;
         }
-        (bool Ok, string Detail) result = await MechrevoLite.Hardware.GcuEcMode.SetModeAsync(ecMode);
+        (bool Ok, string Detail) result = await L_Mechrevo.WpfP0.Services.WpfBackend.SetEcModeAsync(ecMode);
         Status(result.Detail);
         if (ControlModeStatus != null)
         {
