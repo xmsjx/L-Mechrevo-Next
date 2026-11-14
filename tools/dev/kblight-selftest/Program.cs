@@ -403,12 +403,14 @@ internal static class Program
 		Console.WriteLine("起因：界面只到 -30、写入层只到 -40，SMU 实际可用 -50");
 
 		Check("下限 = -50", CpuCoRange.Minimum == -50, true);
-		Check("上限 = 0", CpuCoRange.Maximum == 0, true);
+		Check("上限 = +30（正值可写）", CpuCoRange.Maximum == 30, true);
 		Check("-50 合法", CpuCoRange.IsValid(-50), true);
 		Check("-30 合法", CpuCoRange.IsValid(-30), true);
 		Check("0 合法", CpuCoRange.IsValid(0), true);
 		Check("-51 非法", CpuCoRange.IsValid(-51), false);
-		Check("+1 非法", CpuCoRange.IsValid(1), false);
+		Check("+1 合法（旧版判非法）", CpuCoRange.IsValid(1), true);
+		Check("+30 合法", CpuCoRange.IsValid(30), true);
+		Check("+31 非法", CpuCoRange.IsValid(31), false);
 
 		Console.WriteLine();
 		Console.WriteLine(_fail == 0 ? $"== 全绿：键盘灯自检 {_total}/{_total} ==" : $"== 失败 {_fail}/{_total} 项 ==");

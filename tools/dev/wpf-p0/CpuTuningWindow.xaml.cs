@@ -179,6 +179,15 @@ public partial class CpuTuningWindow : Window
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 12, 0, 6)
         });
+        OptionsPanel.Children.Add(new TextBlock
+        {
+            Text = WpfStrings.L("范围 −50 ~ +30：负值降压（超频），正值加压；改动后请自行确认稳定性",
+                "Range −50 ~ +30: negative undervolts, positive overvolts; verify stability yourself"),
+            FontSize = 11,
+            Opacity = 0.7,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 6)
+        });
         IReadOnlyList<int?> saved = RuntimeCpuTuning.LoadSavedPerCore(coreCount);
         List<TextBox> boxes = _perCoreInputs;
         Grid grid = new();

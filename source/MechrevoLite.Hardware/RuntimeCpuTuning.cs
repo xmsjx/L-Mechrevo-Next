@@ -303,7 +303,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 						// （CurveCommand 无值）的代号也能在 UI 上给出 CO 输入口，否则"删掉全核框"之后
 						// 那些代号会连一个输入口都没有。SKU 层级仍然是否决项（与改前同一把锁）。
 						bool coWritable = skuRejection == null && (curveCommandPresent || perCoreCommand.HasValue);
-						optionList.Add(new CpuTuningOption("amd-co", "CpuTuneCurve", CpuCoRange.Minimum, 0m, "CO", current, CanWrite: coWritable, coreMargins, readbackNoteKey, PerCoreWrite: perCoreWrite));
+						optionList.Add(new CpuTuningOption("amd-co", "CpuTuneCurve", CpuCoRange.Minimum, CpuCoRange.Maximum, "CO", current, CanWrite: coWritable, coreMargins, readbackNoteKey, PerCoreWrite: perCoreWrite));
 					}
 					bool clockAvailable = RyzenSmuService.SupportsClock(_smu.CpuCodeName);
 					if (clockAvailable)
@@ -922,7 +922,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 
 	private const int MinimumPerCoreMargin = CpuCoRange.Minimum;
 
-	private const int MaximumPerCoreMargin = 0;
+	private const int MaximumPerCoreMargin = CpuCoRange.Maximum;
 
 	private static int _autoApplyRan;
 
