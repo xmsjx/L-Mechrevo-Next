@@ -5674,7 +5674,8 @@ public partial class OriginalStyleWindow : Window
                 ApplyBatteryModeHighlight(mode);
                 // 后端会按自己的档位再写回 EC：先让后端认这个档，再盯一段时间，被写回就重写。
                 int reassertMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcChargeModeBits(percentForMode);
-                bool backendAligned = await L_Mechrevo.WpfP0.Services.WpfBackend.AlignBackendBatteryProtectionAsync(mode);
+            L_Mechrevo.WpfP0.Services.WpfBackend.BatteryAlignResult align =
+                await L_Mechrevo.WpfP0.Services.WpfBackend.AlignBackendBatteryProtectionAsync(mode);
                 L_Mechrevo.WpfP0.Services.WpfBackend.StartChargeModeWatch(reassertMode);
                 string baseText = mode switch
                 {
@@ -5682,8 +5683,9 @@ public partial class OriginalStyleWindow : Window
                     2 => "工作站模式：充电 55~60%",
                     _ => "长效模式：不限制充电"
                 };
-                // 后端没认这个档时如实提示：EC 已写入，但后端可能仍按旧档回写。
-                StatusText.Text = backendAligned ? baseText : baseText + "（后端未确认该档）";
+            // 本机没有 GCU 通道时不是失败（档位已由 EC 写入），只有 GCU 在却发布失败才提示。
+            StatusText.Text = align == L_Mechrevo.WpfP0.Services.WpfBackend.BatteryAlignResult.Failed
+                ? baseText + "（后端未确认该档）" : baseText;
             }
             else
             {

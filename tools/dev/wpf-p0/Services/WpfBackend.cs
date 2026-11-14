@@ -430,24 +430,43 @@ internal static class WpfBackend
         EcChargeLimitOverride.TryReassertMode(mode, 3000, out detail);
 
     /// <summary>把用户选的三档同步给后端（GCU 会按自己的值再写回 EC，必须先让它认这个档）。</summary>
-    internal static async Task<bool> AlignBackendBatteryProtectionAsync(int mode)
+    /// <summary>电池三档与后端对齐的结果：本机没有 GCU 通道时不算失败。</summary>
+    internal enum BatteryAlignResult
+    {
+        /// <summary>GCU 通道存在且已确认。</summary>
+        Aligned,
+
+        /// <summary>本机没有 GCU 通道（EC 本地路由），档位由 EC 写入，无需对齐。</summary>
+        NotApplicable,
+
+        /// <summary>GCU 通道存在但发布失败。</summary>
+        Failed
+    }
+
+    internal static async Task<BatteryAlignResult> AlignBackendBatteryProtectionAsync(int mode)
     {
         MechrevoHw? hw = Hw;
         if (hw == null)
         {
-            return false;
+            return BatteryAlignResult.NotApplicable;
+        }
+        // 没有 GCU 通道时不要去 publish（否则每次点档位都记一条"MQTT 未连接"的假失败）。
+        if (!hw.IsConnected)
+        {
+            Logger.WriteLine("[battery-gcu] 档位对齐跳过：本机无 GCU 通道（EC 本地路由），档位已由 EC 写入 · mode=" + mode);
+            return BatteryAlignResult.NotApplicable;
         }
         try
         {
             bool ok = await hw.SetBatteryProtection(mode);
             Logger.WriteError("[battery-gcu] 后端档位同步 mode=" + mode + " ⇒ " + ok
                 + " · 后端上报=" + hw.BatteryProtection);
-            return ok;
+            return ok ? BatteryAlignResult.Aligned : BatteryAlignResult.Failed;
         }
         catch (Exception ex)
         {
             Logger.WriteError("[battery-gcu] 后端档位同步失败：" + ex.Message);
-            return false;
+            return BatteryAlignResult.Failed;
         }
     }
 
