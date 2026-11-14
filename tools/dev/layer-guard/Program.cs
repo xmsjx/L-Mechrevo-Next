@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace LayerGuard;
 
@@ -46,6 +47,16 @@ internal static class Program
         "BaolongdaWmi",
     };
 
+// 后端能力位（界面层直接读这些就说明"能力由后端声明"还没落地）
+private static readonly string[] CapabilityNames =
+{
+    "Lightbar", "KeyboardLight", "HingeLight", "SyncLight", "LocalDimming", "LcdOverdrive",
+    "DisplayEffect", "ColorCalibration", "FanCurve", "FanBoost", "ChargeLimit", "PerformanceMode",
+    "RefreshRate", "ProfileAvailable", "TurboMode", "SilentTurbo", "SilentTurboAvailability",
+    "DgpuDirect", "IgpuOnly", "GpuHotSwap", "CpuPerformanceTuning", "FanSettings",
+    "WmiBrightness", "DisplayRefresh", "Keyboard", "LogoLight",
+};
+
     private static int Main(string[] args)
     {
         Console.OutputEncoding = Encoding.UTF8;
@@ -67,6 +78,9 @@ internal static class Program
         Console.WriteLine("界面层：" + wpfDir);
         Console.WriteLine("文件数=" + scan.Count + " · 越界行合计=" + totalHits);
         Console.WriteLine("禁用清单=" + string.Join(", ", Forbidden));
+    Dictionary<string, (int Hits, List<string> Lines)> capsScan = ScanCapabilities(wpfDir);
+    int capsTotal = capsScan.Values.Sum(v => v.Hits);
+    Console.WriteLine("能力位直读行=" + capsTotal + "（目标 0：界面只读门控结果）");
 
         if (update)
         {
@@ -82,6 +96,7 @@ internal static class Program
                 lines.Add(item.Key + "\t" + item.Value.Hits);
             }
             File.WriteAllLines(baseline, lines, new UTF8Encoding(false));
+        WriteCapsBaseline(Path.Combine(Path.GetDirectoryName(baseline)!, "caps-baseline.txt"), capsScan);
             Console.WriteLine("[UPDATE] 已写入基线：" + baseline + " · 条目=" + scan.Count);
             return 0;
         }
@@ -128,6 +143,19 @@ internal static class Program
             {
                 Console.WriteLine("[提示] 有 " + shrunk + " 个文件的越界已低于基线，可执行 --update 收紧上限");
             }
+        string capsBaseline = Path.Combine(Path.GetDirectoryName(baseline)!, "caps-baseline.txt");
+        List<string> capsViolations = CheckCaps(capsScan, capsBaseline, list);
+        if (capsViolations.Count > 0)
+        {
+            Console.WriteLine("[caps-guard] PASS=0 FAIL=" + capsViolations.Count + " · 能力位直读超上限");
+            foreach (string line in capsViolations)
+            {
+                Console.WriteLine("  ✗ " + line);
+            }
+            Console.WriteLine("[RESULT] layer-guard FAILED（能力位直读增加，请改走门控）");
+            return 1;
+        }
+        Console.WriteLine("[caps-guard] PASS=1 FAIL=0 · 能力位直读未超上限");
             Console.WriteLine("[RESULT] layer-guard ok");
             return 0;
         }
@@ -247,5 +275,89 @@ internal static class Program
             dir = Path.GetDirectoryName(dir);
         }
         return Directory.GetCurrentDirectory();
+    }
+
+    private static Dictionary<string, (int Hits, List<string> Lines)> ScanCapabilities(string wpfDir)
+    {
+        Dictionary<string, (int Hits, List<string> Lines)> result = new(StringComparer.OrdinalIgnoreCase);
+        foreach (string file in Directory.EnumerateFiles(wpfDir, "*.cs", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(wpfDir, file).Replace('\\', '/');
+            if (IsExempt(relative))
+            {
+                continue;
+            }
+            List<string> hits = new();
+            int lineNo = 0;
+            foreach (string line in File.ReadLines(file))
+            {
+                lineNo++;
+                if (!line.Contains("caps.", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                foreach (string name in CapabilityNames)
+                {
+                    if (Regex.IsMatch(line, "caps\\." + name + "\\b"))
+                    {
+                        hits.Add(relative + ":" + lineNo + "  " + line.Trim());
+                        break;
+                    }
+                }
+            }
+            if (hits.Count > 0)
+            {
+                result[relative] = (hits.Count, hits);
+            }
+        }
+        return result;
+    }
+
+    private static void WriteCapsBaseline(string path, Dictionary<string, (int Hits, List<string> Lines)> scan)
+    {
+        List<string> lines = new()
+        {
+            "# 界面层能力位直读基线（棘轮）：<相对路径>\\t<允许的行数上限>",
+            "# 目标：界面只读门控结果，不直接读后端能力位。",
+        };
+        foreach (KeyValuePair<string, (int Hits, List<string> Lines)> item in scan.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            lines.Add(item.Key + "\t" + item.Value.Hits);
+        }
+        File.WriteAllLines(path, lines, new UTF8Encoding(false));
+        Console.WriteLine("[UPDATE] 已写入能力位基线：" + path + " · 条目=" + scan.Count);
+    }
+
+    private static List<string> CheckCaps(Dictionary<string, (int Hits, List<string> Lines)> scan, string path, bool list)
+    {
+        List<string> violations = new();
+        if (!File.Exists(path))
+        {
+            Console.WriteLine("[caps-guard] 基线不存在，跳过判定：" + path);
+            return violations;
+        }
+        Dictionary<string, int> budget = LoadBudget(path, out string error);
+        if (error != null)
+        {
+            Console.WriteLine("[caps-guard] 基线读取失败：" + error);
+            return violations;
+        }
+        foreach (KeyValuePair<string, (int Hits, List<string> Lines)> item in scan.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            int allowed = budget.TryGetValue(item.Key, out int value) ? value : 0;
+            if (item.Value.Hits <= allowed)
+            {
+                continue;
+            }
+            violations.Add(item.Key + "：能力位直读 " + item.Value.Hits + " > 上限 " + allowed);
+            if (list)
+            {
+                foreach (string line in item.Value.Lines)
+                {
+                    violations.Add("    " + line);
+                }
+            }
+        }
+        return violations;
     }
 }

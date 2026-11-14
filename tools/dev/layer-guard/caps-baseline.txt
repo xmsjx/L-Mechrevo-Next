@@ -1,0 +1,4 @@
+# 界面层能力位直读基线（棘轮）：<相对路径>\t<允许的行数上限>
+# 目标：界面只读门控结果，不直接读后端能力位。
+MainWindow.xaml.cs	8
+OriginalStyleWindow.xaml.cs	11

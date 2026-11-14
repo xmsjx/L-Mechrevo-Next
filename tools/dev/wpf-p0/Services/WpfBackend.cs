@@ -605,6 +605,14 @@ internal static class WpfBackend
     internal static bool ResolveFanCurveSupport(bool legacySupported) =>
         FeatureGate.ResolveSupportOrLegacy(FeatureId.FanCurve, Hw, legacySupported);
 
+
+    /// <summary>键盘灯能力：门控声明优先，未声明回退调用方给的旧判据。</summary>
+    internal static bool KeyboardLightSupported(bool legacySupported) =>
+        FeatureGate.ResolveSupportOrLegacy(FeatureId.KeyboardLight, HwOrProgram, legacySupported);
+
+    /// <summary>灯带能力：门控声明优先，未声明回退调用方给的旧判据。</summary>
+    internal static bool LightbarSupported(bool legacySupported) =>
+        FeatureGate.ResolveSupportOrLegacy(FeatureId.Lightbar, HwOrProgram, legacySupported);
     internal static Task<(bool Ok, string Detail)> SetEcModeAsync(bool ecMode) => GcuEcMode.SetModeAsync(ecMode);
 
     internal static int PowerInputKindBarrel => (int)PowerInputKind.Barrel;
