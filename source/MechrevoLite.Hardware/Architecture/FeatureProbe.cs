@@ -28,7 +28,10 @@ internal sealed record FeatureProbe(
 	bool? EcLcdOverdriveSupport = null,
 	bool? EcKeyboardEvidence = null,
 	IteLightingCapability? IteCapability = null,
-	string EcKeyboardKind = "")
+	string EcKeyboardKind = "",
+	bool GpuModeCapability = false,
+	bool GpuHotSwapCapability = false,
+	bool IgpuOnlyCapability = false)
 {
 	internal static FeatureProbe From(MechrevoHw? hw)
 	{
@@ -63,6 +66,9 @@ internal sealed record FeatureProbe(
 			// 键盘类型探测过就给出结论（不看 EC 实验开关）；否则 null = 不表态（回退旧判据）。
 			GcuEcKeyboard.KindProbed ? GcuEcKeyboard.ControllableProbed : (bool?)null,
 			hw.IteCapability,
-			GcuEcKeyboard.KindProbed ? GcuEcKeyboard.Kind.ToString() : "");
+		GcuEcKeyboard.KindProbed ? GcuEcKeyboard.Kind.ToString() : "",
+		caps != null && caps.DgpuDirect,
+		caps != null && caps.GpuHotSwap,
+		caps != null && caps.IgpuOnly);
 	}
 }

@@ -16,5 +16,14 @@ internal enum FeatureId
 	FanBoost,
 	ChargeLimit,
 	PerformanceMode,
-	RefreshRate
+	RefreshRate,
+
+    /// <summary>能否在独显/混合之间切换。</summary>
+    GpuModeSwitch,
+
+    /// <summary>免重启热切换。</summary>
+    GpuHotSwap,
+
+    /// <summary>仅集显输出。</summary>
+    IgpuOnly
 }

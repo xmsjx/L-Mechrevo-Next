@@ -42,7 +42,13 @@ internal sealed class XingyaoPmcBackend : IBackendModule
 					BackendChannel.None, "星耀未声明强冷通道，回退旧判据", new string[0]),
 				[FeatureId.ChargeLimit] = unsupported,
 				[FeatureId.PerformanceMode] = perf,
-				[FeatureId.RefreshRate] = refreshRate
+				[FeatureId.RefreshRate] = refreshRate,
+        [FeatureId.GpuModeSwitch] = new FeatureDeclaration(FeatureAvailability.Unknown,
+            BackendChannel.None, "显卡模式切换：本后端未声明，交由门控回退旧判据", new string[0]),
+        [FeatureId.GpuHotSwap] = new FeatureDeclaration(FeatureAvailability.Unknown,
+            BackendChannel.None, "免重启热切换：本后端未声明，交由门控回退旧判据", new string[0]),
+        [FeatureId.IgpuOnly] = new FeatureDeclaration(FeatureAvailability.Unknown,
+            BackendChannel.None, "仅集显输出：本后端未声明，交由门控回退旧判据", new string[0])
 			});
 	}
 }
