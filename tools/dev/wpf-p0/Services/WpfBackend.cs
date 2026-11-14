@@ -402,5 +402,12 @@ internal static class WpfBackend
 
     /// <summary>新建一个 HID 键盘实例（未连接）。</summary>
     internal static KeyboardRgb CreateKeyboardRgb() => new KeyboardRgb();
+
+    /// <summary>复查并重写一次 EC 限充档位（GCU 会把自己的档位写回，覆盖用户选择）。</summary>
+    internal static bool EcReassertChargeMode(int mode, out string detail) =>
+        EcChargeLimitOverride.TryReassertMode(mode, 3000, out detail);
+
+    /// <summary>按百分比算 0x7A6 模式位（日志与复查用）。</summary>
+    internal static int EcChargeModeBits(int percent) => EcChargeLimitOverride.ComputeModeBits(percent);
 }
 

@@ -304,6 +304,22 @@ internal static class Program
 		Check("判据是纯函数（幂等）",
 			LightingChannelRouting.Decide(false, true, true) == LightingChannelRouting.Decide(false, true, true), true);
 
+		Console.WriteLine();
+		Console.WriteLine("== 2026-11-14 空闲关灯同步策略（LightingIdleTimerPolicy）：不许把后端的 10 分钟改成 10 秒 ==");
+		Console.WriteLine("起因：旷世 X 报告灯效很快停掉，日志显示启动时把 GCU 的 10 分钟覆盖成 10 秒");
+
+		Check("用户改设置 ⇒ 无条件下发",
+			LightingIdleTimerPolicy.Decide(10, 10, explicitChange: true) == IdleTimerAction.PushLocal, true);
+		Check("本地 10 秒 · 后端 10 分钟 ⇒ 采用后端（不缩小）",
+			LightingIdleTimerPolicy.Decide(10, 10, explicitChange: false) == IdleTimerAction.AdoptGcu, true);
+		Check("本地 30 分钟 · 后端 10 分钟 ⇒ 推送本地",
+			LightingIdleTimerPolicy.Decide(1800, 10, explicitChange: false) == IdleTimerAction.PushLocal, true);
+		Check("两边相同 ⇒ 不动",
+			LightingIdleTimerPolicy.Decide(600, 10, explicitChange: false) == IdleTimerAction.Nothing, true);
+		Check("本地=关闭 ⇒ 不动后端",
+			LightingIdleTimerPolicy.Decide(0, 10, explicitChange: false) == IdleTimerAction.Nothing, true);
+		Check("后端未上报 ⇒ 推本地",
+			LightingIdleTimerPolicy.Decide(120, -1, explicitChange: false) == IdleTimerAction.PushLocal, true);
 
 		Console.WriteLine();
 		Console.WriteLine(_fail == 0 ? $"== 全绿：键盘灯自检 {_total}/{_total} ==" : $"== 失败 {_fail}/{_total} 项 ==");

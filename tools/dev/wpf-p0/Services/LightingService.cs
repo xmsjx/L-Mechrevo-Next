@@ -303,8 +303,8 @@ internal sealed class LightingService : ILightingService
         int normalized = Math.Max(0, seconds);
         AppConfig.Set(IdleSecondsKey, normalized);
         AppConfig.Flush();
-        // GCU 固件侧的键盘计时（无 GCU 时自动 no-op）；真正的关灯由窗口空闲计时器对所有通道执行。
-        ApplyHardwareLightIdleTimer();
+        // 用户显式改设置 ⇒ 以本地为准推送；真正的关灯由窗口空闲计时器对所有通道执行。
+        SyncHardwareLightIdleTimer(userChanged: true);
         try
         {
             KeyboardRgb? rgb = L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
@@ -343,6 +343,16 @@ internal sealed class LightingService : ILightingService
 
     public void ApplyHardwareLightIdleTimer()
     {
+        SyncHardwareLightIdleTimer(userChanged: false);
+    }
+
+    /// <summary>
+    /// 把空闲关灯时间同步到后端（GCU 的该字段按秒计数）。
+    /// <para>⭐ 只有用户显式改设置才无条件推送；启动/刷新时若后端值更长，采用后端值，
+    /// 避免把"10 分钟"悄悄改成"10 秒"导致灯效很快停掉。</para>
+    /// </summary>
+    private void SyncHardwareLightIdleTimer(bool userChanged)
+    {
         try
         {
             if (_backend.IsBaolongda)
@@ -355,9 +365,26 @@ internal sealed class LightingService : ILightingService
                 return;
             }
             int seconds = AppConfig.Get(IdleSecondsKey, 0);
-            // GCU 的 Mins 字段按秒计数：10/15/20/30/45/60/.../10800。
+            int backendMinutes = _backend.Hw?.CloseTimerMinutes ?? -1;
+            IdleTimerAction action = LightingIdleTimerPolicy.Decide(seconds, backendMinutes, userChanged);
+            string backendText = backendMinutes < 0 ? "(未知)" : backendMinutes + " 分钟";
+            if (action == IdleTimerAction.Nothing)
+            {
+                Logger.WriteError("[light-idle] 跳过推送：本地=" + seconds + " 秒 · 后端=" + backendText);
+                return;
+            }
+            if (action == IdleTimerAction.AdoptGcu)
+            {
+                int adopted = backendMinutes * 60;
+                AppConfig.Set(IdleSecondsKey, adopted);
+                AppConfig.Flush();
+                Logger.WriteError("[light-idle] 采用后端值：本地=" + seconds + " 秒 → " + adopted
+                    + " 秒（后端=" + backendText + "；不缩小后端的关灯时间）");
+                return;
+            }
+            Logger.WriteError("[light-idle] 推送：本地=" + seconds + " 秒 · 后端=" + backendText
+                + (userChanged ? "（用户修改）" : "（本地更长）"));
             _ = service.PublishKeyboardCloseTimerSeconds(seconds);
-            Logger.WriteLine("[light] 已同步 GCU 自动关灯计时器：" + (seconds <= 0 ? "关闭" : seconds + " 秒"));
         }
         catch (Exception ex)
         {

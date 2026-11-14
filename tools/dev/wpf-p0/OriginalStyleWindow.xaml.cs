@@ -5672,6 +5672,14 @@ public partial class OriginalStyleWindow : Window
             {
                 MechrevoLite.Battery.BatteryControl.SetSelectedModePercent(percentForMode);
                 ApplyBatteryModeHighlight(mode);
+                // GCU/固件会把自己的档位再写回，覆盖用户选择：3 秒后复查一次，被覆盖就重写一次。
+                int reassertMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcChargeModeBits(percentForMode);
+                _ = Task.Run(() =>
+                {
+                    bool kept = L_Mechrevo.WpfP0.Services.WpfBackend.EcReassertChargeMode(reassertMode, out string reassertDetail);
+                    Logger.WriteError("[battery-gcu] 档位复查 mode=" + mode + " 目标=0x" + reassertMode.ToString("X2")
+                        + " ⇒ " + (kept ? "保持" : "被覆盖/重写失败") + "：" + reassertDetail);
+                });
                 StatusText.Text = mode switch
                 {
                     1 => "平衡模式：充电 75~80%",
@@ -10093,6 +10101,7 @@ public partial class OriginalStyleWindow : Window
             != System.Windows.Forms.PowerLineStatus.Online;
         if (AppConfig.Is("lighting_off_on_battery") && onBattery)
         {
+            Logger.WriteError("[light] 离电自动关灯已启用 ⇒ 本次不恢复灯效（可在设置里关闭该项）");
             return;
         }
         try

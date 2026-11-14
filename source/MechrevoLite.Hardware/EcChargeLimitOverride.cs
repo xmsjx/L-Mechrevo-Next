@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace MechrevoLite.Hardware;
 
@@ -38,6 +38,12 @@ internal static class EcChargeLimitOverride
         return mode >= 0;
     }
 
+    /// <summary>档位对应的 0x7A6 模式位（100% = 不限充 = 0x00；≤65% = 工作站 0x20；其余 0x10）。</summary>
+    internal static int ComputeModeBits(int percent)
+    {
+        return percent >= 95 ? 0x00 : percent <= 65 ? 0x20 : 0x10;
+    }
+
     internal static bool TrySetNoSmartHint(int percent, out string detail)
     {
         detail = "";
@@ -48,7 +54,7 @@ internal static class EcChargeLimitOverride
         }
         try
         {
-            int mode = percent >= 95 ? 0x00 : percent <= 65 ? 0x20 : 0x10;
+        int mode = ComputeModeBits(percent);
             int upper = percent >= 95 ? 0 : percent;
             int lower = percent >= 95 ? 0 : Math.Max(0, percent - 5);
             bool platformRead = AcpiDriverEc.TryReadByte(PlatformIdRegister, out byte platformOriginal);
@@ -134,4 +140,40 @@ internal static class EcChargeLimitOverride
             return false;
         }
     }
+
+	/// <summary>
+	/// 写完后复查一次档位：GCU/固件会把自己的档位再写回 0x7A6，覆盖刚设的值。
+	/// <para>只重写一次、只改档位位，失败就如实返回，不反复刷写。</para>
+	/// </summary>
+	internal static bool TryReassertMode(int mode, int delayMs, out string detail)
+	{
+		detail = "";
+		try
+		{
+			if (delayMs > 0)
+			{
+				System.Threading.Thread.Sleep(delayMs);
+			}
+			if (!AcpiDriverEc.TryReadByte(ProtectionModeRegister, out byte current))
+			{
+				detail = "回读不到档位";
+				return false;
+			}
+			if ((current & 0x31) == mode)
+			{
+				detail = "复查一致=0x" + current.ToString("X2");
+				return true;
+			}
+			bool wrote = AcpiDriverEc.TryWriteByte(ProtectionModeRegister, (byte)((current & ~0x31) | mode));
+			bool readBack = AcpiDriverEc.TryReadByte(ProtectionModeRegister, out byte after);
+			detail = "复查被覆盖=0x" + current.ToString("X2") + " ⇒ 重写" + (wrote ? "OK" : "FAIL")
+				+ " 回读=0x" + (readBack ? after.ToString("X2") : "??");
+			return wrote && readBack && (after & 0x31) == mode;
+		}
+		catch (Exception ex)
+		{
+			detail = ex.GetType().Name + " " + ex.Message;
+			return false;
+		}
+	}
 }
