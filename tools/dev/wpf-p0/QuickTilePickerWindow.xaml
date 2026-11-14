@@ -109,13 +109,13 @@
                   <Path Stroke="{DynamicResource TextBrush}" StrokeThickness="1.3" Data="M5,10 L11,10" />
                 </Canvas>
               </Viewbox>
-              <Viewbox x:Name="CopilotIcon" Width="16" Height="16" Visibility="Collapsed"
-                       HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Canvas Width="16" Height="16">
-                  <Path Stroke="{DynamicResource TextBrush}" StrokeThickness="1.3" Fill="Transparent"
-                        Data="M8,8 C9.2,4.4 13.6,4.8 13.8,6.8 C14,8.8 10,9.6 8,8 Z M8,8 C6.8,11.6 2.4,11.2 2.2,9.2 C2,7.2 6,6.4 8,8 Z" />
-                </Canvas>
-              </Viewbox>
+              <Rectangle x:Name="CopilotIcon" Width="18" Height="17" Visibility="Collapsed"
+                         Fill="{DynamicResource TextBrush}"
+                         HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Rectangle.OpacityMask>
+                  <ImageBrush Stretch="Uniform" ImageSource="/L-Mechrevo;component/Assets/Icons/copilot-line.png" />
+                </Rectangle.OpacityMask>
+              </Rectangle>
                                 </Grid>
                                 <TextBlock Text="{Binding Label}" FontSize="12" VerticalAlignment="Center" />
                             </StackPanel>

@@ -5949,25 +5949,31 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    /// <summary>把单色图形当作遮罩，填充色跟随主题前景色（线条图标不写死颜色）。</summary>
+    private static FrameworkElement CreateMaskedIcon(string resourcePath, double width, double height)
+    {
+        System.Windows.Media.ImageBrush brush = new(new System.Windows.Media.Imaging.BitmapImage(
+            new Uri("pack://application:,,,/L-Mechrevo;component/" + resourcePath)));
+        brush.Stretch = Stretch.Uniform;
+        System.Windows.Shapes.Rectangle rect = new()
+        {
+            Width = width,
+            Height = height,
+            OpacityMask = brush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        rect.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "TextBrush");
+        return rect;
+    }
+
     private FrameworkElement CreateQuickTileIcon(string key, string glyph)
     {
     if (string.Equals(key, "copilot", StringComparison.OrdinalIgnoreCase))
+    if (string.Equals(key, "copilot", StringComparison.OrdinalIgnoreCase))
     {
-        // Copilot 键锁：只用线条勾勒双丝带轮廓，跟随主题前景色，不填色。
-        System.Windows.Shapes.Path ribbon = new()
-        {
-            Data = Geometry.Parse("M8,8 C9.2,4.4 13.6,4.8 13.8,6.8 C14,8.8 10,9.6 8,8 Z M8,8 C6.8,11.6 2.4,11.2 2.2,9.2 C2,7.2 6,6.4 8,8 Z"),
-            StrokeThickness = 1.3,
-            Fill = System.Windows.Media.Brushes.Transparent
-        };
-        ribbon.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, new System.Windows.Data.Binding("Foreground")
-        {
-            RelativeSource = new System.Windows.Data.RelativeSource(
-                System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(ToggleButton), 1)
-        });
-        Canvas ribbonCanvas = new() { Width = 16, Height = 16 };
-        ribbonCanvas.Children.Add(ribbon);
-        return new Viewbox { Width = 16, Height = 16, Child = ribbonCanvas, HorizontalAlignment = HorizontalAlignment.Center };
+        // Copilot 键锁：官方标志形状的"仅线条"版（描边跟随主题前景色，不填色）。
+        return CreateMaskedIcon("Assets/Icons/copilot-line.png", 18, 17);
     }
         if (string.Equals(key, "fanboost", StringComparison.OrdinalIgnoreCase))
         {
