@@ -47,6 +47,7 @@ internal sealed class WmiAcpiComListener : IDisposable
         }
     }
 
+    internal string LastError { get; private set; } = "";
     internal bool TryNext(int timeoutMs, out int code)
     {
         code = -1;
@@ -62,9 +63,9 @@ internal sealed class WmiAcpiComListener : IDisposable
             code = Convert.ToInt32(prop.Value);
             return true;
         }
-        catch
+        catch (Exception ex)
         {
-            // 超时或单次异常：由调用方继续循环。
+            LastError = ex.GetType().Name + " " + ex.Message;
             return false;
         }
     }

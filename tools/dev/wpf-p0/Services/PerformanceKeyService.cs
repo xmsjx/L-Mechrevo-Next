@@ -62,11 +62,21 @@ internal sealed class PerformanceKeyService : IDisposable
     private bool ListenCom(WmiAcpiComListener com)
     {
         Logger.WriteError("[perfkey] 已订阅 ACPI 性能键事件 ULong=" + PerformanceKeyCode + "（COM 半同步 · MTA）");
+        long lastEventTick = Environment.TickCount64;
+        long lastReportTick = Environment.TickCount64;
         while (Volatile.Read(ref _started) != 0)
         {
             if (com.TryNext(2000, out int code))
             {
+                lastEventTick = Environment.TickCount64;
                 HandleCode(code);
+                continue;
+            }
+            long now = Environment.TickCount64;
+            if (now - lastEventTick >= 30000 && now - lastReportTick >= 60000)
+            {
+                lastReportTick = now;
+                Logger.WriteError("[perfkey] COM 30 秒内无事件 · 最近异常=" + (com.LastError.Length == 0 ? "无" : com.LastError));
             }
         }
         return true;
