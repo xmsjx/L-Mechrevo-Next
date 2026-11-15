@@ -102,7 +102,6 @@ internal static class GcuEcExperimental
         }
     }
 
-    /// <summary>GCU 未接管时直接从 EC 读当前模式：狂暴=1963 bit4；静音=1873=0xA0；其余平衡。</summary>
     /// <summary>本程序最近是否写过 EC 模式寄存器（用于区分外部改档）。</summary>
     internal static bool SelfWroteRecently(int ms = 5000)
     {
@@ -123,6 +122,7 @@ internal static class GcuEcExperimental
         }
     }
 
+    /// <summary>GCU 未接管时直接从 EC 读当前模式：狂暴=1963 bit4；静音=1873=0xA0；其余平衡。</summary>
     internal static bool TryReadVisualMode(out int visualMode)
     {
         visualMode = -1;
@@ -139,13 +139,8 @@ internal static class GcuEcExperimental
             {
                 return false;
             }
-            // 静音用 1115(turbo 标志) 判定：1873 是风扇 clamp，会被风扇策略自己改写，不能当档位标志。
-            if (System.Threading.Volatile.Read(ref _selfCustomMode) != 0)
-            {
-                // 自定义档靠自身记忆：EC 的 1798 标志会被固件/其它控制台改写，不能作为唯一判据。
-                visualMode = 3;
-            }
-            else if (custom == 65)
+            // 静音档在硬件上是 mode bit4=0 + clamp(1873) 高半字节=0xA0；clamp 变意味着档位真的在变，不是抖动。
+            if (custom == 65)
             {
                 visualMode = 3;
             }
@@ -153,13 +148,25 @@ internal static class GcuEcExperimental
             {
                 visualMode = 1;
             }
-            else if (turbo == 1)
+            else if ((clamp & 0xF0) == 0xA0)
             {
                 visualMode = 2;
             }
             else
             {
                 visualMode = 0;
+            }
+            // 自定义档兜底：本程序刚写过自定义、而硬件回读还没跟上时，仍按自定义显示；60 秒后以硬件为准。
+            if (visualMode != 3 && System.Threading.Volatile.Read(ref _selfCustomMode) != 0)
+            {
+                if (SelfWroteRecently(60000))
+                {
+                    visualMode = 3;
+                }
+                else
+                {
+                    System.Threading.Volatile.Write(ref _selfCustomMode, 0);
+                }
             }
             Logger.WriteErrorIfChanged("gcu-ec-visual-raw", "[gcu-ec] 视觉档读回 mode=0x" + mode.ToString("X2") + " turbo=0x" + turbo.ToString("X2") + " custom=0x" + custom.ToString("X2") + " clamp=0x" + clamp.ToString("X2") + " ⇒ " + visualMode);
             LogRegisterSnapshot(mode, clamp, custom, turbo);
