@@ -1416,6 +1416,96 @@ public static class OfficialConsoleIsolation
 		}
 	}
 
+	private const string EcPauseFileName = "GcuServicesPausedForEc.json";
+
+	private static string EcPausePath => Path.Combine(
+		Path.GetDirectoryName(SnapshotPath) ?? Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+		EcPauseFileName);
+
+	/// <summary>EC 模式：把 GCU 服务改为手动并停止，避免其抢按键与 EC 寄存器；原启动类型记录在文件里以便恢复。</summary>
+	public static (bool Ok, string Detail) PauseGcuServicesForEcMode()
+	{
+		lock (StateLock)
+		{
+			try
+			{
+				if (File.Exists(EcPausePath))
+				{
+					return (true, "已是手动并停止");
+				}
+				List<ServiceEntry> entries = new List<ServiceEntry>();
+				CaptureServices(entries);
+				entries.RemoveAll((ServiceEntry e) => e.StartMode < 0 || e.StartMode == 3);
+				int changed = 0;
+				foreach (ServiceEntry entry in entries)
+				{
+					RunSc("stop " + entry.Name);
+					if (SetServiceStartMode(entry.Name, 3))
+					{
+						changed++;
+						Logger.WriteLine("[gcu-svc] EC 模式 ⇒ 服务 " + entry.Name + " 改为手动并停止（原=" + entry.StartMode + "）");
+					}
+				}
+				SaveEcPauseState(entries);
+				return (true, "已处理 " + changed + " 项");
+			}
+			catch (Exception ex)
+			{
+				return (false, ex.GetType().Name + " " + ex.Message);
+			}
+		}
+	}
+
+	/// <summary>回到 GCU 模式：按记录恢复 GCU 服务启动类型（原来在跑的重新启动）。</summary>
+	public static (bool Ok, string Detail) ResumeGcuServicesForEcMode()
+	{
+		lock (StateLock)
+		{
+			try
+			{
+				List<ServiceEntry> entries = ReadEcPauseState();
+				if (entries.Count == 0)
+				{
+					return (true, "无记录");
+				}
+				int changed = RestoreServices(entries);
+				File.Delete(EcPausePath);
+				Logger.WriteLine("[gcu-svc] GCU 模式 ⇒ 恢复 GCU 服务 " + changed + " 项");
+				return (true, "已恢复 " + changed + " 项");
+			}
+			catch (Exception ex)
+			{
+				return (false, ex.GetType().Name + " " + ex.Message);
+			}
+		}
+	}
+
+	private static void SaveEcPauseState(List<ServiceEntry> entries)
+	{
+		string? dir = Path.GetDirectoryName(EcPausePath);
+		if (!string.IsNullOrEmpty(dir))
+		{
+			Directory.CreateDirectory(dir);
+		}
+		File.WriteAllText(EcPausePath, JsonSerializer.Serialize(entries, JsonOptions));
+	}
+
+	private static List<ServiceEntry> ReadEcPauseState()
+	{
+		try
+		{
+			if (!File.Exists(EcPausePath))
+			{
+				return new List<ServiceEntry>();
+			}
+			return JsonSerializer.Deserialize<List<ServiceEntry>>(File.ReadAllText(EcPausePath), JsonOptions) ?? new List<ServiceEntry>();
+		}
+		catch
+		{
+			return new List<ServiceEntry>();
+		}
+	}
+
 	private static IsolationSnapshot? TryReadSnapshot()
 	{
 		return ReadSnapshot().Snapshot;

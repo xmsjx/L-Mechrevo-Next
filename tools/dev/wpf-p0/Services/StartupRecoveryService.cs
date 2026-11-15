@@ -113,8 +113,17 @@ internal static class StartupRecoveryService
 
         Try("OfficialConsoleIsolation.SyncServicesForMode", () =>
         {
-            // 已隔离时按当前模式对齐：EC 模式停用 GCU 服务，GCU 模式保留。
-            MechrevoLite.Helpers.OfficialConsoleIsolation.SyncServicesForMode(L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive);
+            // 按模式对齐 GCU 服务：EC 模式改手动并停止（避免抢按键/EC 寄存器），GCU 模式恢复原启动类型。
+            bool ecMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive;
+            if (ecMode)
+            {
+                Logger.WriteLine("[startup-recovery] EC 模式 ⇒ " + MechrevoLite.Helpers.OfficialConsoleIsolation.PauseGcuServicesForEcMode().Item2);
+            }
+            else
+            {
+                Logger.WriteLine("[startup-recovery] GCU 模式 ⇒ " + MechrevoLite.Helpers.OfficialConsoleIsolation.ResumeGcuServicesForEcMode().Item2);
+            }
+            MechrevoLite.Helpers.OfficialConsoleIsolation.SyncServicesForMode(ecMode);
         });
 
         Logger.WriteLine("[startup-recovery] 启动恢复调度结束");
