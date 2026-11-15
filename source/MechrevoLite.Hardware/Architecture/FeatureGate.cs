@@ -5,6 +5,13 @@ using System.Text;
 namespace MechrevoLite.Hardware.Architecture;
 
 /// <summary>统一门控求值：只读事实、声明和探测快照，不触碰硬件。</summary>
+/// <summary>
+/// 门控结论与界面的契约：
+/// <para>Supported ⇒ 显示；Unsupported ⇒ 隐藏；Unknown ⇒ <b>回退旧判据</b>，不得直接隐藏。</para>
+/// <para>要把某个特征改成"Unknown 也隐藏"，必须同时满足两条：</para>
+/// <para>① 六个后端在"确有该硬件"的机型都能给出 Supported（声明覆盖 + 证据齐全）；</para>
+/// <para>② 连续两版诊断包里 [gate] 结论与界面实际表现一致。</para>
+/// </summary>
 internal static class FeatureGate
 {
     /// <summary>本地通道证据提供者（Lightbar/KeyboardLight/LogoLight）：true=本地探测可用，null=不知道。</summary>
@@ -220,6 +227,23 @@ internal static class FeatureGate
         Check(lines, "mifs-keyboard-no-evidence", Facts(BackendKind.TongfangMifs),
             new FeatureProbe(false, false, false, null, false),
             FeatureAvailability.Unknown, BackendChannel.None, FeatureId.KeyboardLight);
+
+        // 灯带 / Logo：本地证据优先，其次能力位 —— 这是"六后端都能判"的前提。
+        Check(lines, "baolongda-lightbar-local-evidence", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, false, false, null, false, EcLightbarEvidence: true),
+            FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
+        Check(lines, "baolongda-lightbar-no-evidence", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
+        Check(lines, "nuc-lightbar-capability", Facts(BackendKind.NucUmiLocal),
+            new FeatureProbe(true, false, false, null, false, LightbarCapability: true),
+            FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
+        Check(lines, "xingyao-logo-capability", Facts(BackendKind.XingyaoPmc),
+            new FeatureProbe(false, false, true, null, false),
+            FeatureAvailability.Supported, BackendChannel.AcpiWmi, FeatureId.LogoLight);
+        Check(lines, "mifs-lightbar-capability", Facts(BackendKind.TongfangMifs),
+            new FeatureProbe(false, false, false, null, false, LightbarCapability: true),
+            FeatureAvailability.Supported, BackendChannel.AcpiWmi, FeatureId.Lightbar);
         Check(lines, "ec-gpu-mode-unknown", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false),
             FeatureAvailability.Unknown, BackendChannel.None, FeatureId.GpuModeSwitch);
@@ -306,7 +330,7 @@ internal static class FeatureGate
 			FeatureAvailability.Unknown, BackendChannel.None);
 		Check(lines, "nuc-unknown", Facts(BackendKind.NucUmiLocal), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None);
-		Check(lines, "xingyao-unknown", Facts(BackendKind.XingyaoPmc), new FeatureProbe(false, true, false, null, false),
+        Check(lines, "xingyao-unknown", Facts(BackendKind.XingyaoPmc), new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None);
 		Check(lines, "baolongda-supported", Facts(BackendKind.BaolongdaWmi), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.WmiMailbox);

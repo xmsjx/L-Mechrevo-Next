@@ -14,9 +14,12 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
 		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.WmiMailbox, "宝龙达功能号 15 提供 Logo 开关",
 			new[] { "wmi:Baolongda.Function15" });
-		FeatureDeclaration lightbar = new FeatureDeclaration(FeatureAvailability.Unknown,
-			BackendChannel.None, "尾部灯带与 LOGO 灯同一路（功能号 15），本后端无独立灯带通道；本地通道由灯效服务判定",
-			new string[0]);
+		// 灯带：本地证据优先（ITE/EC 灯带字节），其次能力位；都没有才 Unknown。
+		FeatureDeclaration lightbar = probe.EcLightbarEvidence == true
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "本地灯带证据", new[] { "usb:IteLightingLocal.HasLightbar" })
+			: probe.LightbarCapability || probe.LightbarSeen || probe.LightbarMbLogoSupport == true
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.WmiMailbox, "能力位或状态上报灯带", new[] { "registry:Capabilities.Lightbar", "gcu:LightbarStatusSeen" })
+				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "灯带证据未采集，回退旧判据", new string[0]);
 		FeatureDeclaration localDimming = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "协议没有分区背光功能号", new string[0]);
 		FeatureDeclaration lcdOverdrive = new FeatureDeclaration(FeatureAvailability.Unsupported,

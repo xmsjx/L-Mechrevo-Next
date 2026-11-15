@@ -11,13 +11,20 @@ internal sealed class XingyaoPmcBackend : IBackendModule
 
 	public BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe)
 	{
-		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Unknown,
-			BackendChannel.None, "星耀后端没有独立 Logo 灯通道", new string[0]);
-		FeatureDeclaration lightbar = new FeatureDeclaration(FeatureAvailability.Unknown,
-			BackendChannel.None, "星耀后端没有独立灯带通道", new string[0]);
+		// Logo：本地证据优先（ITE/EC Logo 字节），其次能力位。
+		FeatureDeclaration logo = probe.EcLogoEvidence == true
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "本地 Logo 证据", new[] { "usb:IteLightingLocal.HasUsbLogo" })
+			: probe.LogoLightCapability || probe.LogoLightSeen || probe.LightbarMbLogoSupport == true
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.AcpiWmi, "能力位或状态上报 Logo", new[] { "registry:Capabilities.LogoLight", "gcu:LogoLightStatusSeen" })
+				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "Logo 证据未采集", new string[0]);
+		// 灯带：本地证据优先（ITE/EC 灯带字节），其次能力位；都没有才 Unknown。
+		FeatureDeclaration lightbar = probe.EcLightbarEvidence == true
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "本地灯带证据", new[] { "usb:IteLightingLocal.HasLightbar" })
+			: probe.LightbarCapability || probe.LightbarSeen || probe.LightbarMbLogoSupport == true
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.AcpiWmi, "能力位或状态上报灯带", new[] { "registry:Capabilities.Lightbar", "gcu:LightbarStatusSeen" })
+				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "灯带证据未采集，回退旧判据", new string[0]);
 		FeatureDeclaration noOemDisplay = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "星耀后端没有 OEM 显示能力通道", new string[0]);
-		// 色彩增强走 Windows 本地 gamma/矩阵（与后端无关），校色走 Windows 颜色管理的本地 ICC。
 		FeatureDeclaration displayEffect = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.Local, "本地软件色彩增强（Win32 gamma/矩阵）", new[] { "win32:gamma" });
 		FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Supported,

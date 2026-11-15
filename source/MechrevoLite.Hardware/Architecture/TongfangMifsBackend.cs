@@ -13,8 +13,12 @@ internal sealed class TongfangMifsBackend : IBackendModule
 	{
 		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "老 MIFS 后端没有 Logo 下发路径", new string[0]);
-		FeatureDeclaration lightbar = new FeatureDeclaration(FeatureAvailability.Unknown,
-			BackendChannel.None, "老 MIFS 未声明灯带通道，回退旧判据", new string[0]);
+		// 灯带：本地证据优先（ITE/EC 灯带字节），其次能力位；都没有才 Unknown。
+		FeatureDeclaration lightbar = probe.EcLightbarEvidence == true
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "本地灯带证据", new[] { "usb:IteLightingLocal.HasLightbar" })
+			: probe.LightbarCapability || probe.LightbarSeen || probe.LightbarMbLogoSupport == true
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.AcpiWmi, "能力位或状态上报灯带", new[] { "registry:Capabilities.Lightbar", "gcu:LightbarStatusSeen" })
+				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "灯带证据未采集，回退旧判据", new string[0]);
 		FeatureDeclaration noOemDisplay = new FeatureDeclaration(FeatureAvailability.Unsupported,
 			BackendChannel.None, "老 MIFS 后端没有 OEM 显示能力通道", new string[0]);
 		// 色彩增强走 Windows 本地 gamma/矩阵（与后端无关），校色走 Windows 颜色管理的本地 ICC。
