@@ -11,9 +11,14 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
 
 	public BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe)
 	{
-		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Supported,
-			BackendChannel.WmiMailbox, "宝龙达功能号 15 提供 Logo 开关",
-			new[] { "wmi:Baolongda.Function15" });
+		// Logo：本地证据 ⇒ 独立 USB Logo；MBlogoSupport ⇒ 与灯带同一路；能力位/状态上报 ⇒ 独立 Logo。
+		FeatureDeclaration logo = probe.EcLogoEvidence == true
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "本地独立 Logo 证据", new[] { "usb:IteLightingLocal.HasUsbLogo" })
+			: probe.LightbarMbLogoSupport == true
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.WmiMailbox, "与灯带同一路的 Logo", new[] { "gcu:MBlogoSupport" })
+				: probe.LogoLightCapability || probe.LogoLightSeen
+					? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.WmiMailbox, "独立 Logo（能力位或状态上报）", new[] { "registry:Capabilities.LogoLight", "gcu:LogoLightStatusSeen" })
+					: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "Logo 证据未采集", new string[0]);
 		// 灯带：本地证据优先（ITE/EC 灯带字节），其次能力位；都没有才 Unknown。
 		FeatureDeclaration lightbar = probe.EcLightbarEvidence == true
 			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "本地灯带证据", new[] { "usb:IteLightingLocal.HasLightbar" })

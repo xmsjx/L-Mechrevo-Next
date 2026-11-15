@@ -244,6 +244,14 @@ internal static class FeatureGate
         Check(lines, "mifs-lightbar-capability", Facts(BackendKind.TongfangMifs),
             new FeatureProbe(false, false, false, null, false, LightbarCapability: true),
             FeatureAvailability.Supported, BackendChannel.AcpiWmi, FeatureId.Lightbar);
+
+        // Logo 两种来源要在结论里能区分：独立 Logo 与"与灯带同一路"。
+        CheckReason(lines, "baolongda-logo-mb-lightbar", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, true, false, true, false),
+            FeatureAvailability.Supported, FeatureId.LogoLight, "与灯带");
+        CheckReason(lines, "gcu-logo-standalone", Facts(BackendKind.TongfangGcu),
+            new FeatureProbe(true, false, true, null, false),
+            FeatureAvailability.Supported, FeatureId.LogoLight, "独立 Logo");
         Check(lines, "ec-gpu-mode-unknown", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false),
             FeatureAvailability.Unknown, BackendChannel.None, FeatureId.GpuModeSwitch);
@@ -328,7 +336,7 @@ internal static class FeatureGate
 			FeatureAvailability.Supported, BackendChannel.LocalHid);
 		Check(lines, "ec-registry-only", Facts(BackendKind.TongfangEc), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None);
-		Check(lines, "nuc-unknown", Facts(BackendKind.NucUmiLocal), new FeatureProbe(false, true, false, null, false),
+        Check(lines, "nuc-unknown", Facts(BackendKind.NucUmiLocal), new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None);
         Check(lines, "xingyao-unknown", Facts(BackendKind.XingyaoPmc), new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None);
@@ -728,6 +736,18 @@ internal static class FeatureGate
 		bool ok = actual == expected;
 		lines.Add((ok ? "PASS " : "FAIL ") + scenario + " ⇒ actual=" + actual + " expected=" + expected);
 	}
+
+    /// <summary>状态与原因同时校验：用于区分"独立 Logo"与"与灯带同一路"这类同状态不同来源。</summary>
+    private static void CheckReason(List<string> lines, string scenario, MachineFacts facts,
+        FeatureProbe probe, FeatureAvailability expectedState, FeatureId feature, string reasonContains)
+    {
+        FeatureDecision decision = Get(feature, facts, probe);
+        bool ok = decision.State == expectedState
+            && decision.Reason.Contains(reasonContains, StringComparison.Ordinal);
+        lines.Add((ok ? "PASS " : "FAIL ") + scenario
+            + " ⇒ state=" + decision.State + " backend=" + decision.Backend
+            + " reason=" + decision.Reason);
+    }
 
 	private static void Check(List<string> lines, string scenario, MachineFacts facts,
 		FeatureProbe probe, FeatureAvailability expectedState, BackendChannel expectedChannel,

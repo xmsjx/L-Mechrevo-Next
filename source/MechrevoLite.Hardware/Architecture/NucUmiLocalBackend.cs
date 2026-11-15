@@ -11,8 +11,14 @@ internal sealed class NucUmiLocalBackend : IBackendModule
 
 	public BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe)
 	{
-		FeatureDeclaration logo = new FeatureDeclaration(FeatureAvailability.Unknown,
-			BackendChannel.None, "NUC/UMI 没有独立 Logo 灯通道", new string[0]);
+		// Logo：本地证据 ⇒ 独立 USB Logo；MBlogoSupport ⇒ 与灯带同一路；能力位/状态上报 ⇒ 独立 Logo。
+		FeatureDeclaration logo = probe.EcLogoEvidence == true
+			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "本地独立 Logo 证据", new[] { "usb:IteLightingLocal.HasUsbLogo" })
+			: probe.LightbarMbLogoSupport == true
+				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "与灯带同一路的 Logo", new[] { "gcu:MBlogoSupport" })
+				: probe.LogoLightCapability || probe.LogoLightSeen
+					? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "独立 Logo（能力位或状态上报）", new[] { "registry:Capabilities.LogoLight", "gcu:LogoLightStatusSeen" })
+					: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "Logo 证据未采集", new string[0]);
 		List<string> sources = new List<string>();
 		if (probe.LightbarCapability)
 		{

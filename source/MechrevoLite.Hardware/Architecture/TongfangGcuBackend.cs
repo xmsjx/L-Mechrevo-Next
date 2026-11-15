@@ -34,7 +34,7 @@ internal sealed class TongfangGcuBackend : IBackendModule
 			}
 			logo = sources.Count > 0
 				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
-					"GCU 上报 Logo 证据", sources.ToArray())
+				(probe.LightbarMbLogoSupport == true ? "与灯带同一路的 Logo" : "独立 Logo（GCU 上报）"), sources.ToArray())
 				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 					"GCU 已连接但未上报 Logo 证据", new string[0]);
 		}
