@@ -209,6 +209,17 @@ internal static class FeatureGate
         Check(lines, "mifs-perf-tuning-no-evidence", Facts(BackendKind.TongfangMifs),
             new FeatureProbe(false, false, false, null, false),
             FeatureAvailability.Unknown, BackendChannel.None, FeatureId.PerfTuning);
+
+        // 键盘灯：本地 USB/EC 证据优先，其次能力位；这是"只认门控"试点能否成立的关键。
+        Check(lines, "gcu-keyboard-local-evidence", Facts(BackendKind.TongfangGcu),
+            new FeatureProbe(true, false, false, null, false, EcKeyboardEvidence: true),
+            FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.KeyboardLight);
+        Check(lines, "baolongda-keyboard-local-evidence", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, false, false, null, false, EcKeyboardEvidence: true),
+            FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.KeyboardLight);
+        Check(lines, "mifs-keyboard-no-evidence", Facts(BackendKind.TongfangMifs),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Unknown, BackendChannel.None, FeatureId.KeyboardLight);
         Check(lines, "ec-gpu-mode-unknown", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false),
             FeatureAvailability.Unknown, BackendChannel.None, FeatureId.GpuModeSwitch);

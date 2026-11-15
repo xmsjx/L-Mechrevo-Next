@@ -74,7 +74,11 @@ internal sealed class TongfangGcuBackend : IBackendModule
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				probe.GcuConnected ? "GCU 未上报同步灯带能力" : "GCU 未连接", new string[0]);
 
-		FeatureDeclaration keyboard = probe.GcuConnected && probe.KeyboardCapability
+    // 键盘灯：本地 USB/EC 证据优先（单键 RGB 走本地 HID），其次 GCU 能力位。
+    FeatureDeclaration keyboard = probe.EcKeyboardEvidence == true
+        ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+            "本地 USB/EC 键盘灯证据", new[] { "usb:IteLightingLocal.HasKeyboard" })
+        : probe.GcuConnected && probe.KeyboardCapability
 			? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
 				"GCU 键盘通道可用", new[] { "registry:Capabilities.Keyboard" })
 			: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,

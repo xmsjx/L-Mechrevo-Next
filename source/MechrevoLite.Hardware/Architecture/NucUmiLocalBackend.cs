@@ -76,9 +76,14 @@ internal sealed class NucUmiLocalBackend : IBackendModule
         };
 
         // 键盘/铰链/同步灯：能力位或本地通道上报了才 Supported，没上报保持 Unknown。
-        FeatureDeclaration keyboardLight4 = probe.KeyboardCapability
-            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位上报键盘灯", new[] { "registry:Capabilities.Keyboard" })
-            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报键盘灯", new string[0]);
+        // 键盘灯：本地 USB/EC 证据优先（单键 RGB 常走本地 HID），其次能力位，都没有才 Unknown。
+        FeatureDeclaration keyboardLight4 = probe.EcKeyboardEvidence == true
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "本地 USB/EC 键盘灯证据", new[] { "usb:IteLightingLocal.HasKeyboard" })
+            : probe.KeyboardCapability
+                ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.
+LocalHid
+, "能力位上报键盘灯", new[] { "registry:Capabilities.Keyboard" })
+                : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "键盘灯证据未采集", new string[0]);
         FeatureDeclaration hingeLight4 = probe.HingeCapability
             ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位上报铰链灯", new[] { "registry:Capabilities.HingeLight" })
             : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报铰链灯", new string[0]);
