@@ -1,2 +1,2 @@
 # 界面层可空能力位直读（caps?. / Capabilities?.）报告基线：只报数，不判失败
-nullable=16
+nullable=0

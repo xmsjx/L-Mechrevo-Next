@@ -337,7 +337,7 @@ internal sealed class BackendProbe : IDisposable
                     // EC 无 GCU：档位由云端/本地标准 ICC 文件决定（default/sRGB/P3/AdobeRGB）。
                     return Math.Clamp(Math.Max(1, MechrevoLite.Display.IccHelper.HighestStandardLevel()), 1, 4);
                 }
-                int level = _hw?.MqttColorCalibrationLevel ?? _hw?.Capabilities?.ColorCalibrationLevel ?? 1;
+                int level = _hw?.MqttColorCalibrationLevel ?? L_Mechrevo.WpfP0.Services.WpfBackend.ColorCalibrationLevel();
                 return Math.Clamp(level, 1, 4);
             }
             catch
@@ -782,7 +782,7 @@ internal sealed class BackendProbe : IDisposable
             MechrevoHw? hw = _hw;
             // 0.293.5.1 基线：只要 GCU 能力位承认超频就显示，不按载荷变体号硬屏蔽。
             return hw != null && (hw.IsGcuConnected || _service == null)
-                && (hw.SupportsGpuOverclock || hw.Capabilities?.OverclockSettings == true || hw.GcuGpuOverclockAvailable
+                && (hw.SupportsGpuOverclock || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("OverclockSettings") || hw.GcuGpuOverclockAvailable
                     || _service == null);
         }
     }

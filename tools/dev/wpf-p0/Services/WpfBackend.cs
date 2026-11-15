@@ -655,6 +655,63 @@ internal static class WpfBackend
 
 
     /// <summary>按特征名读门控；legacy 用"能力位名字"给出，由桥内部取值（界面不直接读能力位）。</summary>
+    /// <summary>读一个能力位（全局实例）。界面层不直接读能力位，统一从这里取。</summary>
+    internal static bool CapabilityFlag(string capability)
+    {
+        return CapabilityFlag(HwOrProgram?.Capabilities, capability);
+    }
+
+    /// <summary>读一个能力位（调用方给的实例）。</summary>
+    internal static bool CapabilityFlag(MechrevoDeviceCapabilities? caps, string capability)
+    {
+        if (caps == null)
+        {
+            return false;
+        }
+        return capability switch
+        {
+            "ColorCalibration" => caps.ColorCalibration,
+            "LocalDimming" => caps.LocalDimming,
+            "LiquidCooling" => caps.LiquidCooling,
+            "DgpuDirect" => caps.DgpuDirect,
+            "IgpuOnly" => caps.IgpuOnly,
+            "GpuHotSwap" => caps.GpuHotSwap,
+            "Keyboard" => caps.Keyboard,
+            "Lightbar" => caps.Lightbar,
+            "LogoLight" => caps.LogoLight,
+            "FanSettings" => caps.FanSettings,
+            "CpuPerformanceTuning" => caps.CpuPerformanceTuning,
+            "ProfileAvailable" => caps.ProfileAvailable,
+            "TurboMode" => caps.TurboMode,
+            "OverclockSettings" => caps.OverclockSettings == true,
+            _ => false
+        };
+    }
+
+    /// <summary>校色等级（缺省按 1 处理）。</summary>
+    internal static int ColorCalibrationLevel()
+    {
+        try
+        {
+            return HwOrProgram?.Capabilities?.ColorCalibrationLevel ?? 1;
+        }
+        catch
+        {
+            return 1;
+        }
+    }
+
+    /// <summary>静音↔狂暴三态（调用方给的实例）：1=支持 · 0=不支持 · 2=未知。</summary>
+    internal static int SilentTurboStateOf(MechrevoDeviceCapabilities? caps)
+    {
+        if (caps == null)
+        {
+            return 2;
+        }
+        return caps.SilentTurboAvailability == FeatureSupported ? 1
+            : caps.SilentTurboAvailability == FeatureUnsupported ? 0 : 2;
+    }
+
     internal static bool SupportsFeatureWithCapability(string feature, string capability)
     {
         bool legacy = false;
@@ -673,6 +730,13 @@ internal static class WpfBackend
                     "DgpuDirect" => caps.DgpuDirect,
                     "GpuHotSwap" => caps.GpuHotSwap,
                     "IgpuOnly" => caps.IgpuOnly,
+                    "ColorCalibration" => caps.ColorCalibration,
+                    "LocalDimming" => caps.LocalDimming,
+                    "LiquidCooling" => caps.LiquidCooling,
+                    "Keyboard" => caps.Keyboard,
+                    "Lightbar" => caps.Lightbar,
+                    "LogoLight" => caps.LogoLight,
+                    "OverclockSettings" => caps.OverclockSettings == true,
                     _ => false
                 };
             }

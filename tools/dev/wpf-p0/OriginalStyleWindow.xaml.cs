@@ -1232,7 +1232,7 @@ public partial class OriginalStyleWindow : Window
                 }
                 bool legacy = _backendProbe?.Hw?.IsNucUmiFamily == true
                     || _backendProbe?.Hw?.DisplayEffectProfiles.Count > 0
-                    || _backendProbe?.Capabilities?.ColorCalibration == true
+                    || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("ColorCalibration")
                     || (IsEcModeActive
                         && _backendProbe?.Hw != null
                         && !_backendProbe.Hw.UsesBaolongda);
@@ -1852,7 +1852,7 @@ public partial class OriginalStyleWindow : Window
                 return true;
             }
             bool legacy = _backendProbe?.Hw?.SupportsLocalDimming == true
-                || _backendProbe?.Capabilities?.LocalDimming == true;
+                || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("LocalDimming");
             return _services?.Display.ResolveMiniLedSupport(legacy) ?? legacy;
         }
     }
@@ -2078,8 +2078,8 @@ public partial class OriginalStyleWindow : Window
             WideSilentTurboVisible,
             L_Mechrevo.WpfP0.Services.WpfBackend.SilentTurboActive,
             WideTurboVisible,
-            probe?.Hw?.SupportsDgpuDirect ?? probe?.Capabilities?.DgpuDirect ?? false,
-            probe?.Hw?.CanOfferIgpuOnly ?? probe?.Capabilities?.IgpuOnly ?? false,
+            probe?.Hw?.SupportsDgpuDirect ?? L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag(probe?.Capabilities, "DgpuDirect"),
+            probe?.Hw?.CanOfferIgpuOnly ?? L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag(probe?.Capabilities, "IgpuOnly"),
             _overlayWindow?.IsLocked ?? OverlayWindow.ReadSavedLocked());
     }
 
@@ -3557,8 +3557,7 @@ public partial class OriginalStyleWindow : Window
         _pendingMode = mode;
         _pendingModeTick = Environment.TickCount64;
         _modeSwitchInFlight = true;
-        bool turboSubModeSupported = _backendProbe?.Capabilities?.SilentTurboAvailability
-            == L_Mechrevo.WpfP0.Services.WpfBackend.FeatureSupported
+        bool turboSubModeSupported = L_Mechrevo.WpfP0.Services.WpfBackend.SilentTurboStateOf(_backendProbe?.Capabilities) == 1
             || (IsEcModeActive
                 && _backendProbe?.Hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50);
         string osdMode = mode switch
@@ -4564,7 +4563,7 @@ public partial class OriginalStyleWindow : Window
                 // 否则 50/40 系无 WMI 的机器会误报静音狂暴失败。
                 bool? turboSilent = null;
                 if (next == 1
-                    && (probe.Capabilities?.SilentTurboAvailability == L_Mechrevo.WpfP0.Services.WpfBackend.FeatureSupported
+                    && (L_Mechrevo.WpfP0.Services.WpfBackend.SilentTurboStateOf(probe.Capabilities) == 1
                         || L_Mechrevo.WpfP0.Services.WpfBackend.TurboSubModeSupported()))
                 {
                     turboSilent = ReadRememberedTurboSubMode();
@@ -7716,7 +7715,7 @@ public partial class OriginalStyleWindow : Window
         var hw = _backendProbe.Hw;
         MechrevoDeviceCapabilities? caps = _backendProbe.Capabilities;
         string igpuMode = AppConfig.GetString("igpu_only_ui") ?? "auto";
-        bool igpuSupported = hw?.CanOfferIgpuOnly ?? ((caps?.IgpuOnly ?? false) || (hw?.SupportsIgpuOnly ?? false));
+        bool igpuSupported = hw?.CanOfferIgpuOnly ?? (L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly") || (hw?.SupportsIgpuOnly ?? false));
         if (hw?.GpuRowHiddenByGcuReports == true)
         {
             GpuEcoButton.Visibility = Visibility.Collapsed;
@@ -7734,16 +7733,16 @@ public partial class OriginalStyleWindow : Window
         }
         bool keyboard = EcKeyboardActive
             ? EcKeyboardControllable
-            : (caps?.Keyboard ?? false) || (hw?.SupportsKeyboard ?? false)
+            : L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("Keyboard") || (hw?.SupportsKeyboard ?? false)
                 || hw?.IsNucUmiFamily == true;
         bool legacyKeyboard = keyboard;
         keyboard = ResolveLightChannel(LightingTopics.Keyboard, legacyKeyboard);
 
-        bool hasStrip = (caps?.Lightbar ?? false) || (hw?.SupportsLightbar ?? false)
+        bool hasStrip = L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("Lightbar") || (hw?.SupportsLightbar ?? false)
             || _services?.Lighting.LocalLightbarSupported == true;
         bool legacyStrip = hasStrip;
         hasStrip = ResolveLightChannel(LightingTopics.Lightbar, legacyStrip);
-        bool hasLogo = (caps?.LogoLight ?? false) || (hw?.SupportsLogoLight ?? false)
+        bool hasLogo = L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("LogoLight") || (hw?.SupportsLogoLight ?? false)
             || _services?.Lighting.LocalLogoSupported == true;
         bool legacyLogo = hasLogo;
         hasLogo = ResolveLightChannel(LightingTopics.Logo, legacyLogo);
@@ -7773,7 +7772,7 @@ public partial class OriginalStyleWindow : Window
             BatteryLimitSlider.Visibility = Visibility.Collapsed;
             BatteryLimitSliderText.Visibility = Visibility.Collapsed;
         }
-        bool liquidSupported = (caps?.LiquidCooling ?? false) || (hw?.SupportsLiquidCooling ?? false);
+        bool liquidSupported = L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("LiquidCooling") || (hw?.SupportsLiquidCooling ?? false);
         LiquidSection.Visibility = (AppConfig.Is("force_liquid_cooling_menu") || liquidSupported) ? Visibility.Visible : Visibility.Collapsed;
         RefreshLiquidCoolingUi();
         _wideWindow?.RefreshLiquidCooling();
@@ -7843,7 +7842,7 @@ public partial class OriginalStyleWindow : Window
         MechrevoLite.AppConfig.Is("force_liquid_cooling_menu")
         || EnsureWaterCoolerRouting()?.Route != LiquidCoolingControlRoute.None
         || _backendProbe?.Hw?.SupportsLiquidCooling == true
-        || _backendProbe?.Capabilities?.LiquidCooling == true;
+        || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("LiquidCooling");
 
     internal bool WideLiquidSupported =>
         MechrevoLite.AppConfig.Is("force_liquid_cooling_menu")
@@ -8012,7 +8011,7 @@ public partial class OriginalStyleWindow : Window
             // 折叠状态只保留区域的显隐，不刷新隐藏的下拉/灯光控件。
             bool forceCollapsed = MechrevoLite.AppConfig.Is("force_liquid_cooling_menu");
             LiquidSection.Visibility = (forceCollapsed || _backendProbe?.Hw?.SupportsLiquidCooling == true
-                || _backendProbe?.Capabilities?.LiquidCooling == true
+                || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("LiquidCooling")
                 || EnsureWaterCoolerRouting()?.Route != LiquidCoolingControlRoute.None)
                 ? Visibility.Visible : Visibility.Collapsed;
             return;
@@ -8024,7 +8023,7 @@ public partial class OriginalStyleWindow : Window
             bool visible = force
                 || routing?.Route != LiquidCoolingControlRoute.None
                 || _backendProbe?.Hw?.SupportsLiquidCooling == true
-                || _backendProbe?.Capabilities?.LiquidCooling == true;
+                || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("LiquidCooling");
             LiquidSection.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
             if (!visible)
             {
