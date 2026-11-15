@@ -142,6 +142,16 @@ internal static class FeatureGate
 			new FeatureProbe(false, false, false, null, false, LightbarCapability: true),
 			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
         // 本地 USB 灯带证据明确为 false 且没有任何能力位来源 ⇒ 断言不支持（不是"未采集"）。
+        // Logo 与灯带的"有/无"两侧都要有断言，才算把该特征的正反结论钉住。
+        Check(lines, "ec-logo-none-evidence", Facts(BackendKind.TongfangEc),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.LogoLight);
+        Check(lines, "ec-logo-usb-evidence", Facts(BackendKind.TongfangEc),
+            new FeatureProbe(false, false, false, null, true),
+            FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.LogoLight);
+        Check(lines, "ec-lightbar-usb-evidence", Facts(BackendKind.TongfangEc),
+            new FeatureProbe(false, false, false, null, false, false, false, true),
+            FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
         Check(lines, "ec-lightbar-none-evidence", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false, false, false, false),
             FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.Lightbar);
