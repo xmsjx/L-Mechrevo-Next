@@ -127,3 +127,39 @@ tools/dev/wpf-p0/preview*.png
 
 # GCU 载荷只放 Release，不进代码仓库
 installer-src/files/GCU/GCU.7z
+
+# 临时脚本与一次性工具不入库（应用源码与棘轮自测见下方例外）
+# 例外：tools/dev/wpf-p0/（WPF 工程）· tools/dev/layer-guard/ · tools/dev/route-probe/ 属源码，照旧提交
+tools/_*.ps1
+tools/dgpu-silence/
+
+# 仓库只放 LM 软件本体：源码(source) · 界面工程(tools/dev/wpf-p0) · 自测(tools/dev/layer-guard, route-probe) · 安装脚本(installer-src) · 许可 · CI
+# 以下目录/文件不入库（本地保留即可）
+docs/
+lm_pkg_files/
+UWACPIDriver/
+抓包工具-宝龙达/
+tools/*
+!tools/dev/
+!tools/dev/wpf-p0/
+!tools/dev/layer-guard/
+!tools/dev/route-probe/
+
+# 根级临时文件与本地工作目录不入库
+_*
+.workbuddy/
+_baseline-*/
+diagnostics/
+rebuild/
+plugins/
+dsh-image-gen/
+archive/
+_upstream/
+
+# 根级临时产物
+/*.png
+/*.json
+ecdump-*.txt
+nul
+requesting
+tmp_*.ps1
