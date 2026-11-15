@@ -135,6 +135,8 @@ internal static class Program
         {
             Type gateType = RequireType(core, "MechrevoLite.Hardware.Architecture.FeatureGate");
             Console.WriteLine((string)InvokeStatic(gateType, "RunDeclarationMatrix")!);
+            Console.WriteLine("--- 声明覆盖率（FeatureGate.RunCoverageCheck）---");
+            Console.WriteLine((string)InvokeStatic(gateType, "RunCoverageCheck")!);
         }
         catch (Exception ex)
         {

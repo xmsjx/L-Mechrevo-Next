@@ -588,6 +588,30 @@ internal static class FeatureGate
 	};
 
     /// <summary>只读导出：特征 × 各后端的声明矩阵（核对用，不参与运行判定）。</summary>
+    /// <summary>声明覆盖率：每个特征在每个后端都必须有声明条目（缺项会被判"尚未纳入"）。</summary>
+    internal static string RunCoverageCheck()
+    {
+        StringBuilder sb = new StringBuilder();
+        int total = 0;
+        int missing = 0;
+        foreach (FeatureId feature in Enum.GetValues<FeatureId>())
+        {
+            foreach (IBackendModule module in BackendModuleRegistry.All)
+            {
+                total++;
+                FeatureDecision decision = Get(feature, Facts(module.Kind), ProbeEmpty());
+                if (decision.Reason.Contains("尚未纳入后端声明", StringComparison.Ordinal))
+                {
+                    missing++;
+                    sb.AppendLine("缺声明：" + module.Kind + " " + feature);
+                }
+            }
+        }
+        string head = "声明覆盖=" + (total - missing) + "/" + total
+            + (missing == 0 ? " ✅" : " ❌") + Environment.NewLine;
+        return head + sb.ToString();
+    }
+
     internal static string RunDeclarationMatrix()
     {
         (string Label, FeatureProbe Probe)[] probes =

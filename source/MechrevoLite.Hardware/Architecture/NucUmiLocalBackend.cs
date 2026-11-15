@@ -74,6 +74,17 @@ internal sealed class NucUmiLocalBackend : IBackendModule
             MechrevoLite.Hardware.FeatureAvailability.Unsupported => new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None, "能力位三态=不支持", new string[0]),
             _ => new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位三态未采集", new string[0])
         };
+
+        // 键盘/铰链/同步灯：能力位或本地通道上报了才 Supported，没上报保持 Unknown。
+        FeatureDeclaration keyboardLight4 = probe.KeyboardCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位上报键盘灯", new[] { "registry:Capabilities.Keyboard" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报键盘灯", new string[0]);
+        FeatureDeclaration hingeLight4 = probe.HingeCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位上报铰链灯", new[] { "registry:Capabilities.HingeLight" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报铰链灯", new string[0]);
+        FeatureDeclaration syncLight4 = probe.SyncCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位上报同步灯", new[] { "registry:Capabilities.SyncLight" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报同步灯", new string[0]);
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
@@ -94,7 +105,10 @@ internal sealed class NucUmiLocalBackend : IBackendModule
         [FeatureId.PerformanceProfile] = perfProfile4,
         [FeatureId.TurboMode] = turboMode4,
         [FeatureId.SilentTurbo] = silentTurbo4,
-        [FeatureId.PerfTuning] = perfTuning4
+        [FeatureId.PerfTuning] = perfTuning4,
+        [FeatureId.KeyboardLight] = keyboardLight4,
+        [FeatureId.HingeLight] = hingeLight4,
+        [FeatureId.SyncLight] = syncLight4
 			});
 	}
 }
