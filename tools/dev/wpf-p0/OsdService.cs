@@ -109,7 +109,12 @@ internal static class OsdService
                     Margin = new Thickness(0, 0, 16, 0)
                 });
             }
-            else if (!string.IsNullOrEmpty(glyph))
+		else if (L_Mechrevo.WpfP0.Services.QuickIconFactory.CreateForOsd(glyph, 30) is { } vector)
+		{
+			vector.Margin = new Thickness(0, 0, 16, 0);
+			row.Children.Add(vector);
+		}
+		else if (!string.IsNullOrEmpty(glyph))
             {
                 row.Children.Add(glyphText);
             }
