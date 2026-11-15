@@ -437,7 +437,6 @@
                                     HorizontalAlignment="Right" Click="Isolation_Click" />
                         </Grid>
                         <TextBlock x:Name="OfficialStatus" Text="{x:Static loc:WpfStrings.OfficialStatus_Text}" Style="{StaticResource Hint}" />
-                        <CheckBox x:Name="IsolateServicesSwitch" Content="同时停用 GCU 服务（开机不再自启）" Margin="0,6,0,0" Checked="IsolateServices_Changed" Unchecked="IsolateServices_Changed" />
                         <Grid Margin="0,6,0,0">
                             <TextBlock Text="{x:Static loc:WpfStrings.SettingsWindow_Text_18}" VerticalAlignment="Center" />
                             <Button x:Name="ReinstallPawnButton" Content="{x:Static loc:WpfStrings.ReinstallPawnButton_Content}" Style="{StaticResource FlatButton}"

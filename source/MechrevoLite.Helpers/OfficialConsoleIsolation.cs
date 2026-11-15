@@ -21,7 +21,7 @@ namespace MechrevoLite.Helpers;
 
 public static class OfficialConsoleIsolation
 {
-	public sealed record IsolationStatus(bool Isolated, bool OfficialUiRunning, bool OfficialUiInstalled, bool GcuRunning, string Detail);
+	public sealed record IsolationStatus(bool Isolated, bool OfficialUiRunning, bool OfficialUiInstalled, bool GcuRunning, string Detail, bool GcuServicesDisabled = false);
 
 	public sealed record OperationResult(bool Success, string Message, int AffectedItems);
 
@@ -212,7 +212,8 @@ public static class OfficialConsoleIsolation
 		}
 		bool gcuRunning = runtimeGcuConnected || (IsProcessRunning("GCUBridge") && IsProcessRunning("GCUService"));
 		string detail = DescribeStatus(isolated, flag, flag2, gcuRunning);
-		return new IsolationStatus(isolated, flag, flag2, gcuRunning, detail);
+		bool servicesDisabled = (TryReadSnapshot()?.Services.Count ?? 0) > 0;
+		return new IsolationStatus(isolated, flag, flag2, gcuRunning, detail, servicesDisabled);
 	}
 
 	internal static string DescribeStatus(bool isolated, bool uiRunning, bool installed, bool gcuRunning)
@@ -234,6 +235,48 @@ public static class OfficialConsoleIsolation
 			return Strings.OffConsoleIsolatedGcuOnly;
 		}
 		return Strings.OffConsoleIsolationError;
+	}
+
+	/// <summary>
+	/// 按当前运行模式对齐服务隔离：EC 模式 ⇒ 停用 GCU 服务；GCU 模式 ⇒ 保持/恢复 GCU 服务。
+	/// 未处于隔离状态时不做任何事。
+	/// </summary>
+	public static void SyncServicesForMode(bool ecMode)
+	{
+		lock (StateLock)
+		{
+			IsolationSnapshot? snapshot = TryReadSnapshot();
+			if (snapshot == null || !snapshot.Isolated)
+			{
+				return;
+			}
+			try
+			{
+				if (ecMode)
+				{
+					if (snapshot.Services.Count == 0)
+					{
+						CaptureServices(snapshot.Services);
+						int changed = StopAndDisableServices(snapshot.Services);
+						snapshot.UpdatedUtc = DateTime.UtcNow;
+						SaveSnapshot(snapshot);
+						Logger.WriteLine("[official-console] EC 模式 ⇒ 停用 GCU 服务 " + changed + " 项");
+					}
+				}
+				else if (snapshot.Services.Count > 0)
+				{
+					int changed = RestoreServices(snapshot.Services);
+					snapshot.Services.Clear();
+					snapshot.UpdatedUtc = DateTime.UtcNow;
+					SaveSnapshot(snapshot);
+					Logger.WriteLine("[official-console] GCU 模式 ⇒ 恢复 GCU 服务 " + changed + " 项");
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.WriteLine("[official-console] 按模式对齐服务失败：" + ex.GetType().Name + " " + ex.Message);
+			}
+		}
 	}
 
 	public static OperationResult Enable(bool includeGcuServices = false)

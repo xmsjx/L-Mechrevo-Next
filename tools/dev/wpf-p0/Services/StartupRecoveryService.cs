@@ -111,6 +111,12 @@ internal static class StartupRecoveryService
             Pl4UnitAutoApply.ApplyIfNeeded("启动");
         });
 
+        Try("OfficialConsoleIsolation.SyncServicesForMode", () =>
+        {
+            // 已隔离时按当前模式对齐：EC 模式停用 GCU 服务，GCU 模式保留。
+            MechrevoLite.Helpers.OfficialConsoleIsolation.SyncServicesForMode(L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive);
+        });
+
         Logger.WriteLine("[startup-recovery] 启动恢复调度结束");
     }
 
