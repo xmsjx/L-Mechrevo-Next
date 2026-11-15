@@ -15,6 +15,7 @@ internal static class GcuEcExperimental
     private static long _lastSelfWriteTicks;
     private static int _lastReadVisual = -1;
     private static int _selfCustomMode;
+    private static string _lastRegisterSnapshot = "";
     private const int FanRampAddress = 1927;
     private static int _probeLogged;
 
@@ -60,6 +61,29 @@ internal static class GcuEcExperimental
         else
         {
             Logger.WriteError("[gcu-ec] 探针失败：ACPIDriver EC 读取不可用");
+        }
+    }
+
+    /// <summary>
+    /// 档位相关寄存器的变化快照（只读）：固件自己处理按键时，用它看是哪一位在变。
+    /// </summary>
+    private static void LogRegisterSnapshot(byte mode, byte clamp, byte custom, byte turbo)
+    {
+        try
+        {
+            AcpiDriverEc.TryReadByte(TriggerAddress, out byte trigger);
+            AcpiDriverEc.TryReadByte(1832, out byte silent);
+            string snapshot = "mode=0x" + mode.ToString("X2") + " trigger=0x" + trigger.ToString("X2")
+                + " turbo=0x" + turbo.ToString("X2") + " silent=0x" + silent.ToString("X2")
+                + " clamp=0x" + clamp.ToString("X2") + " custom=0x" + custom.ToString("X2");
+            if (!string.Equals(snapshot, _lastRegisterSnapshot, StringComparison.Ordinal))
+            {
+                _lastRegisterSnapshot = snapshot;
+                Logger.WriteError("[ec-modespy] " + snapshot);
+            }
+        }
+        catch
+        {
         }
     }
 
@@ -123,6 +147,7 @@ internal static class GcuEcExperimental
                 visualMode = 0;
             }
             Logger.WriteErrorIfChanged("gcu-ec-visual-raw", "[gcu-ec] 视觉档读回 mode=0x" + mode.ToString("X2") + " turbo=0x" + turbo.ToString("X2") + " custom=0x" + custom.ToString("X2") + " clamp=0x" + clamp.ToString("X2") + " ⇒ " + visualMode);
+            LogRegisterSnapshot(mode, clamp, custom, turbo);
             if (_lastReadVisual < 0)
             {
                 _lastReadVisual = visualMode;

@@ -4661,25 +4661,26 @@ public partial class OriginalStyleWindow : Window
 
             if (EcLocalControl)
             {
-                bool viaFallback = !IsEcLocalRoute;
-                if (viaFallback)
+                // 实测：退出本程序后按键照样切档 ⇒ 这颗键由固件自己处理。
+                // 本程序不再下发，只等固件落地后同步界面，避免同一次按键被切两档。
+                ClearStaleCustomDisplay(probe, "按下性能键");
+                _lastObservedGcuRawMode = probe.CurrentMode;
+                _lastObservedGcuMode = ResolveDisplayMode(probe);
+                Logger.WriteError("[perfkey] EC 模式按键交给固件 ⇒ 只同步界面（当前=" + _lastObservedGcuMode + "）");
+                await Task.Delay(800);
+                probe = _backendProbe;
+                if (probe == null)
                 {
-                    Logger.WriteErrorIfChanged("perfkey-ec-fallback", "[perfkey] EC 直写兜底（声明后端 GCU 但未连上）⇒ 本地循环切档");
+                    return;
                 }
-                int before = GcuEcExperimental.TryReadVisualMode(out int ecMode) ? ecMode : ResolveDisplayMode(probe);
-                int next = before switch { 2 => 0, 0 => 1, 1 => 3, 3 => 2, _ => 0 };
-                // 狂暴档记忆上次子模式：只有本机确实有静音子模式通道时才带过去，
-                // 否则 50/40 系无 WMI 的机器会误报静音狂暴失败。
-                bool? turboSilent = null;
-                if (next == 1
-                    && (L_Mechrevo.WpfP0.Services.WpfBackend.SilentTurboStateOf(probe.Capabilities) == 1
-                        || L_Mechrevo.WpfP0.Services.WpfBackend.TurboSubModeSupported()))
+                SyncEcOnlyExternalMode(probe);
+                int visualNow = ResolveDisplayMode(probe);
+                if (visualNow >= 0)
                 {
-                    turboSilent = ReadRememberedTurboSubMode();
+                    OsdService.Show(string.Empty, WpfStrings.OsdPerformance, ModeOsdName(visualNow));
                 }
-                Logger.WriteError("[perfkey] EC 性能键循环 " + before + " -> " + next
-                    + " (silentTurbo=" + (turboSilent.HasValue ? turboSilent.Value.ToString() : "记忆/不适用") + ")");
-                await SwitchModeAsync(next, turboSilent);
+                RefreshFromBackend();
+                _wideWindow?.RefreshFromOwner();
                 return;
             }
 
