@@ -59,6 +59,8 @@ dotnet build tools\dev\wpf-p0\WpfP0.csproj -c Release
 产物：`tools\dev\wpf-p0\bin\Release\net10.0-windows10.0.19041.0\L-Mechrevo.dll` 与 `source\bin\MechrevoLite.Core\Release\net10.0-windows10.0.19041.0\MechrevoLite.Core.dll`。
 需要 .NET 10 SDK（`net10.0-windows10.0.19041.0`）。
 
+打包成安装包还需本地准备 `installer-src\files\GCU\GCU.7z` 与 `7za.exe`（两者不入库；安装器会把 `7za.exe` 装到软件根目录与 `GCU` 子目录）。
+
 ## 功能特性
 
 ### 性能模式

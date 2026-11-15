@@ -174,3 +174,5 @@ tmp_*.ps1
 !docs/refs/**/NOTICE*
 !docs/refs/**/license.txt
 !tools/dev/innoextract/license/
+
+# GCU 载荷与 7za 不入库：打包时本地放置 GCU.7z；7za.exe 由安装器装到软件根目录与 GCU 子目录
