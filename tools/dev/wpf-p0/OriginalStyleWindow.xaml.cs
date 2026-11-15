@@ -8763,8 +8763,9 @@ public partial class OriginalStyleWindow : Window
                 AppConfig.Flush();
                 selected = 0;
             }
-            // 自定义校色关闭时不再把 customICC 的文件塞进主下拉。
-            bool customAvailable = customOn && localIcc.Count > 0;
+            // 导入过的校色文件在两个后端（GCU / EC 本地）都要能出现在下拉里并被选中，
+            // 不能因为"当前没开自定义校色"就把文件列表藏掉（否则 EC 模式看起来像没记住）。
+            bool customAvailable = localIcc.Count > 0;
             if (customAvailable)
             {
                 foreach (string profile in localIcc)
@@ -8795,6 +8796,7 @@ public partial class OriginalStyleWindow : Window
                 }
             }
             CalibrationCombo.SelectedIndex = index;
+            Logger.WriteErrorIfChanged("calib-dropdown", "[calib] 下拉档位=" + CalibrationCombo.Items.Count + " · 自定义文件=" + localIcc.Count + " · 选中=" + ((CalibrationCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "") + " · 后端=" + (probe?.Hw?.IsGcuConnected == true ? "GCU" : "EC 本地"));
             bool calibrationOn = AppConfig.Exists("calib_enabled") && AppConfig.Is("calib_enabled");
             if (calibrationOn
                 && probe?.Hw?.IsGcuConnected != true
