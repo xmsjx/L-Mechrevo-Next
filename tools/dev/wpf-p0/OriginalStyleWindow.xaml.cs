@@ -6829,6 +6829,13 @@ public partial class OriginalStyleWindow : Window
         {
             batteryMode = ModeForPercent(MechrevoLite.Battery.BatteryControl.SelectedModePercent());
         }
+        // 用户刚点过档位：后端回读（GCU 的 probe.BatteryMode）可能还是一拍之前的旧档，
+        // 这段时间内高亮只认用户选的档，避免"工作站 → 平衡 → 工作站"的闪回。
+        if (BatteryModeLocked)
+        {
+            batteryMode = _batteryModeLockedMode;
+            LogBatteryHighlight(batteryMode, "刷新·锁定");
+        }
         for (int i = 0; i < batteryButtons.Length; i++)
         {
             batteryButtons[i].IsChecked = i == batteryMode;
