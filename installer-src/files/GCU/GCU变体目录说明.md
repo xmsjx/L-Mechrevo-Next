@@ -36,12 +36,12 @@
 | `payload\40.7z` | 14,444,731 B | 40 系（内部 `40\AiStoneService`）——**40 系唯一载荷** |
 | `payload\50.7z` | 15,477,703 B | 50 系（内部 `50\AiStoneService`，另有同级 `logo\` / `UWACPIDriver\`，**都不铺**） |
 | `payload\WJXY.7z` | 17,484,769 B | XINGYAO / LNL 机器专用（内部 `WJXY\AiStoneService`） |
-| `7za.exe` | 1,335,808 B | 7-Zip **26.04 x64** console；安装期解压工具（`dontcopy`，用完即删） |
+| `7za.exe` | 1,335,808 B | ⭐ 已移到 `installer-src\files\7za.exe`；7-Zip **26.04 x64** console，安装期解压工具（`dontcopy`），装到 `{app}` 根目录 |
 | `logo\Language\` | 2 文件 / 58,503 B | 由 owner 定位于此（与 `AiStoneService` 同级），落 `{app}\GCU\logo\Language\` |
 | `shared\` | 2 文件 / 2,706 B | 只剩 `README.txt` / `NOTICE.txt`（另 3 个 `.bat` 已删），落 `{app}\GCU\` |
 | `payload-old\` | 281 文件 / 118.4 MB | ⛔ **回退用旧目录树，只读，勿删勿改** |
 
-⚠️ 上表 6 个安装期文件（5 个 7z + `7za.exe`）在 `[Files]` 里是 `Flags: dontcopy`：
+⚠️ 上表涉及的 6 个安装期文件（5 个 7z + `installer-src\files\7za.exe`）在 `[Files]` 里是 `Flags: dontcopy`：
 **它们不属于安装文件集**，只在 setup 进程存活期间被解到 `{tmp}` 使用，装完 `{app}` 里不会出现。
 
 `shared\` 现存清单（每项均与旧 base 树逐字节相同，已实测 `same=True`）：

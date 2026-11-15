@@ -413,8 +413,8 @@ internal static class GcuPackageImport
 		string baseDir = AppContext.BaseDirectory;
 		string[] candidates =
 		{
-			Path.Combine(baseDir, "GCU", "7za.exe"),
-			Path.Combine(baseDir, "7za.exe")
+			Path.Combine(baseDir, "7za.exe"),
+			Path.Combine(baseDir, "GCU", "7za.exe")
 		};
 		foreach (string candidate in candidates)
 		{
@@ -423,7 +423,7 @@ internal static class GcuPackageImport
 				return candidate;
 			}
 		}
-		throw new FileNotFoundException("缺少 7za.exe（应随安装器一起装到 GCU 目录）。请重新运行安装器，或把 7za.exe 放到应用目录。");
+		throw new FileNotFoundException("缺少 7za.exe（应随安装器装到软件根目录）。请重新运行安装器，或把 7za.exe 放到应用目录。");
 	}
 
 	/// <summary>目录里是否真的含 GCU 包/解压树（自动检测路径用；没有就走手动选择）。</summary>

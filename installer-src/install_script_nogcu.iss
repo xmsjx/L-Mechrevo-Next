@@ -1,4 +1,4 @@
-﻿; Created by "innounp" version 2.67.11
+; Created by "innounp" version 2.67.11
 ; Setup file: pkg-20260919-195709-a076c697.exe
 ; Inno Setup Version: 6.7.0 (Unicode)
 
@@ -42,7 +42,7 @@ Source: "files\Install-PawnIO.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "files\GCU\Install-Gcu.ps1"; DestDir: "{app}\GCU"; Flags: ignoreversion
 Source: "files\GCU\Select-GcuPayload.ps1"; DestDir: "{app}\GCU"; Flags: ignoreversion
 Source: "files\GCU\Uninstall-Gcu.ps1"; DestDir: "{app}\GCU"; Flags: ignoreversion
-Source: "files\GCU\7za.exe"; DestDir: "{app}\GCU"; Flags: ignoreversion
+Source: "files\7za.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "files\GCU\logo\Language\*.json"; DestDir: "{app}\GCU\logo\Language"; Flags: ignoreversion
 Source: "files\GCU\shared\README.txt"; DestDir: "{app}\GCU"; Flags: ignoreversion
 Source: "files\GCU\shared\NOTICE.txt"; DestDir: "{app}\GCU"; Flags: ignoreversion
@@ -321,7 +321,7 @@ begin
   Staging := ExpandConstant('{tmp}\lm-external-gcu');
   DelTree(Staging, True, True, True);
   ForceDirectories(Staging + '\payload');
-  SevenZip := ExpandConstant('{app}\GCU\7za.exe');
+  SevenZip := ExpandConstant('{app}\7za.exe');
   if not FileExists(SevenZip) then
   begin
     Log('LM-GCU: 7za.exe 缺失，跳过外置 GCU 包');

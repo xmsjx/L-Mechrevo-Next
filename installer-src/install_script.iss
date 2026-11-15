@@ -1,4 +1,4 @@
-﻿; Created by "innounp" version 2.67.11
+; Created by "innounp" version 2.67.11
 ; Setup file: pkg-20260919-195709-a076c697.exe
 ; Inno Setup Version: 6.7.0 (Unicode)
 
@@ -265,8 +265,8 @@ Source: "files\GCU\payload\50.7z"; DestDir: "{tmp}"; Flags: dontcopy; Check: Sho
 #ifndef NOGCU_PAYLOAD
 Source: "files\GCU\payload\WJ.7z"; DestDir: "{tmp}"; Flags: dontcopy; Check: ShouldInstallGcu
 #endif
-Source: "files\GCU\7za.exe"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallGcu
-Source: "files\GCU\7za.exe"; DestDir: "{tmp}"; Flags: dontcopy; Check: ShouldInstallGcu
+Source: "files\7za.exe"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallGcu
+Source: "files\7za.exe"; DestDir: "{tmp}"; Flags: dontcopy; Check: ShouldInstallGcu
 #endif
 ; --- shared\ 按【目的地】铺开（⛔ 不再整目录落 {app}\GCU\shared\；铺完 shared\ 这个层级就没有了）----
 ;   shared\UWACPIDriver\ 3 件 -> {app}\UWACPIDriver\（见上面那 3 条 Source）

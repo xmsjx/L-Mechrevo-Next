@@ -1,4 +1,4 @@
-﻿# L-Mechrevo 版本控制忽略表
+# L-Mechrevo 版本控制忽略表
 # ============================================================================
 # ⚠️ 目的：**只把"我们写的源码与文档"纳入版本控制**，
 #    ⛔ 排除 **生成物 / 下载物 / 大二进制 / 厂商载荷 / 备份**。
@@ -40,7 +40,6 @@ tools/**/*.ttf
 # ── 三、厂商载荷与大二进制（随包分发，但不属于源码）────────────────────
 # ⭐ GCU 五个变体 ≈ 67 MB；厂商服务端二进制 ≈ 14 MB/个
 installer-src/files/GCU/payload/
-installer-src/files/GCU/7za.exe
 lm_pkg_files/
 *_unpacked.7z
 GCUService_unpacked.7z
@@ -175,4 +174,4 @@ tmp_*.ps1
 !docs/refs/**/license.txt
 !tools/dev/innoextract/license/
 
-# GCU 载荷与 7za 不入库：打包时本地放置 GCU.7z；7za.exe 由安装器装到软件根目录与 GCU 子目录
+# GCU.7z 仍不入库（打包时本地放置）；7za.exe 随仓库走：installer-src/files/7za.exe，安装器把它装到软件根目录
