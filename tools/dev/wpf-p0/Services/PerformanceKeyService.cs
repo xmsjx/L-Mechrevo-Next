@@ -47,36 +47,49 @@ internal sealed class PerformanceKeyService : IDisposable
 
     private void ListenLoop()
     {
-        DateTime subscribedAt = DateTime.MinValue;
         while (Volatile.Read(ref _started) != 0)
         {
+            ManagementEventWatcher? watcher = null;
             try
             {
-                WqlEventQuery query = new("SELECT * FROM AcpiTest_EventULong");
-                _watcher = new ManagementEventWatcher(new ManagementScope("root\\WMI"), query);
-                _watcher.EventArrived += OnEventArrived;
-                _watcher.Stopped += (_, e) => Logger.WriteError("[perfkey] 监听停止：status=" + e.Status);
-                _watcher.Start();
-                subscribedAt = DateTime.UtcNow;
-                Logger.WriteError("[perfkey] 已订阅 ACPI 性能键事件 ULong=" + PerformanceKeyCode + "（独立 MTA 线程）");
-                // 每 20 分钟重建一次订阅，避免长时间运行后事件流静默失效。
-                while (Volatile.Read(ref _started) != 0
-                    && (DateTime.UtcNow - subscribedAt).TotalMinutes < 20)
+                // 拉取模式：与执行通知查询后逐条取事件的语义一致，
+                // 不依赖 WMI 反向回调（某些平台上回调收不到，拉取能收到）。
+                ManagementScope scope = new ManagementScope(@"root\WMI");
+                scope.Options.Impersonation = ImpersonationLevel.Impersonate;
+                scope.Options.EnablePrivileges = true;
+                scope.Connect();
+                watcher = new ManagementEventWatcher(scope, new WqlEventQuery("SELECT * FROM AcpiTest_EventULong"));
+                watcher.Options.Timeout = TimeSpan.FromSeconds(3);
+                _watcher = watcher;
+                Logger.WriteError("[perfkey] 已订阅 ACPI 性能键事件 ULong=" + PerformanceKeyCode + "（MTA · 拉取模式）");
+                while (Volatile.Read(ref _started) != 0)
                 {
-                    Thread.Sleep(1000);
-                }
-                try
-                {
-                    _watcher.EventArrived -= OnEventArrived;
-                    _watcher.Stop();
-                }
-                catch
-                {
-                }
-                _watcher = null;
-                if (Volatile.Read(ref _started) != 0)
-                {
-                    Logger.WriteError("[perfkey] 定期重建订阅（20 分钟）");
+                    ManagementBaseObject? element = null;
+                    try
+                    {
+                        element = watcher.WaitForNextEvent();
+                    }
+                    catch (TimeoutException)
+                    {
+                        continue;
+                    }
+                    catch (ManagementException ex) when (Volatile.Read(ref _started) == 0)
+                    {
+                        Logger.WriteError("[perfkey] 订阅已停止：" + ex.Message);
+                        break;
+                    }
+                    if (element == null)
+                    {
+                        continue;
+                    }
+                    try
+                    {
+                        HandleEventObject(element);
+                    }
+                    finally
+                    {
+                        element.Dispose();
+                    }
                 }
             }
             catch (Exception ex)
@@ -84,14 +97,31 @@ internal sealed class PerformanceKeyService : IDisposable
                 Logger.WriteError("[perfkey] 订阅失败：" + ex.Message);
                 Thread.Sleep(2000);
             }
+            finally
+            {
+                try
+                {
+                    watcher?.Stop();
+                    watcher?.Dispose();
+                }
+                catch
+                {
+                }
+                _watcher = null;
+            }
         }
     }
 
     private void OnEventArrived(object sender, EventArrivedEventArgs e)
     {
+        HandleEventObject(e.NewEvent);
+    }
+
+    private void HandleEventObject(ManagementBaseObject? newEvent)
+    {
         try
         {
-            object? value = e.NewEvent?.Properties["ULong"]?.Value;
+            object? value = newEvent?.Properties["ULong"]?.Value;
             if (value == null)
             {
                 return;
