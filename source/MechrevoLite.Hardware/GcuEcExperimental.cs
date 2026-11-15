@@ -14,6 +14,7 @@ internal static class GcuEcExperimental
     private const int CustomModeFlagAddress = 1798;
     private static long _lastSelfWriteTicks;
     private static int _lastReadVisual = -1;
+    private static int _selfCustomMode;
     private const int FanRampAddress = 1927;
     private static int _probeLogged;
 
@@ -100,7 +101,12 @@ internal static class GcuEcExperimental
                 return false;
             }
             // 静音用 1115(turbo 标志) 判定：1873 是风扇 clamp，会被风扇策略自己改写，不能当档位标志。
-            if (custom == 65)
+            if (System.Threading.Volatile.Read(ref _selfCustomMode) != 0)
+            {
+                // 自定义档靠自身记忆：EC 的 1798 标志会被固件/其它控制台改写，不能作为唯一判据。
+                visualMode = 3;
+            }
+            else if (custom == 65)
             {
                 visualMode = 3;
             }
@@ -266,6 +272,7 @@ internal static class GcuEcExperimental
             if (modeOk && triggerOk && clampOk)
             {
                 System.Threading.Interlocked.Exchange(ref _lastSelfWriteTicks, Environment.TickCount64);
+                System.Threading.Volatile.Write(ref _selfCustomMode, visualMode == 3 ? 1 : 0);
             }
             Logger.WriteError("[gcu-ec] 实验模式切换 " + detail + " ⇒ " + (modeOk && triggerOk && clampOk ? "OK" : "FAIL"));
             return modeWrite && triggerWrite && turboWrite && clampWrite && customWrite && modeOk && triggerOk && clampOk;
