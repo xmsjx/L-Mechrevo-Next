@@ -4661,26 +4661,40 @@ public partial class OriginalStyleWindow : Window
 
             if (EcLocalControl)
             {
-                // 实测：退出本程序后按键照样切档 ⇒ 这颗键由固件自己处理。
-                // 本程序不再下发，只等固件落地后同步界面，避免同一次按键被切两档。
-                ClearStaleCustomDisplay(probe, "按下性能键");
-                _lastObservedGcuRawMode = probe.CurrentMode;
-                _lastObservedGcuMode = ResolveDisplayMode(probe);
-                Logger.WriteError("[perfkey] EC 模式按键交给固件 ⇒ 只同步界面（当前=" + _lastObservedGcuMode + "）");
-                await Task.Delay(800);
+                int before = GcuEcExperimental.TryReadVisualMode(out int ecMode) ? ecMode : ResolveDisplayMode(probe);
+                // 先给固件/其它控制台一点时间落地：真的已经切了档就只跟随，避免同一次按键被切两档。
+                await Task.Delay(400);
                 probe = _backendProbe;
                 if (probe == null)
                 {
                     return;
                 }
-                SyncEcOnlyExternalMode(probe);
-                int visualNow = ResolveDisplayMode(probe);
-                if (visualNow >= 0)
+                int already = GcuEcExperimental.TryReadVisualMode(out int fwMode) ? fwMode : ResolveDisplayMode(probe);
+                if (already >= 0 && before >= 0 && already != before)
                 {
-                    OsdService.Show(string.Empty, WpfStrings.OsdPerformance, ModeOsdName(visualNow));
+                    Logger.WriteError("[perfkey] 档位已被外部切好 " + before + " -> " + already + " ⇒ 只同步界面");
+                    SyncEcOnlyExternalMode(probe);
+                    OsdService.Show(string.Empty, WpfStrings.OsdPerformance, ModeOsdName(already));
+                    RefreshFromBackend();
+                    _wideWindow?.RefreshFromOwner();
+                    return;
                 }
-                RefreshFromBackend();
-                _wideWindow?.RefreshFromOwner();
+                int next = before switch { 2 => 0, 0 => 1, 1 => 3, 3 => 2, _ => 0 };
+                if (!IsEcLocalRoute)
+                {
+                    Logger.WriteErrorIfChanged("perfkey-ec-fallback", "[perfkey] EC 直写（声明后端 GCU 但未连上）⇒ 本地循环切档");
+                }
+                // 狂暴档记忆上次子模式：只有本机确实有静音子模式通道时才带过去。
+                bool? turboSilent = null;
+                if (next == 1
+                    && (L_Mechrevo.WpfP0.Services.WpfBackend.SilentTurboStateOf(probe.Capabilities) == 1
+                        || L_Mechrevo.WpfP0.Services.WpfBackend.TurboSubModeSupported()))
+                {
+                    turboSilent = ReadRememberedTurboSubMode();
+                }
+                Logger.WriteError("[perfkey] EC 性能键循环 " + before + " -> " + next
+                    + " (silentTurbo=" + (turboSilent.HasValue ? turboSilent.Value.ToString() : "记忆/不适用") + ")");
+                await SwitchModeAsync(next, turboSilent);
                 return;
             }
 
