@@ -185,6 +185,7 @@
                                                            Text="开：解锁双倍 PL4 上限（2W/LSB）&#10;关：关闭双倍 PL4 上限（1W/LSB）&#10;默认按钮恢复本机首次记录的口径。" />
                                             </CheckBox.ToolTip>
                                         </CheckBox>
+                                        <TextBlock x:Name="Pl4UnitSavedHint" VerticalAlignment="Center" FontSize="11" Margin="0,0,10,0" Foreground="#3FBF4F" Visibility="Collapsed" Text="" />
                                     </StackPanel>
                                 </StackPanel>
                                 <TextBlock x:Name="Pl4UnitStatus" Margin="0,4,0,0" FontSize="11"

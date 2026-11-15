@@ -105,6 +105,12 @@ internal static class StartupRecoveryService
             });
         });
 
+        Try("Pl4UnitAutoApply.ApplyIfNeeded", () =>
+        {
+            // 用户记录过 PL4 口径时，开机对齐一次 EC；EC 已一致则不重复下发。
+            Pl4UnitAutoApply.ApplyIfNeeded("启动");
+        });
+
         Logger.WriteLine("[startup-recovery] 启动恢复调度结束");
     }
 

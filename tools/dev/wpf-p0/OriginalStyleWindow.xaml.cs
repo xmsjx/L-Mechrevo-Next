@@ -3712,6 +3712,11 @@ public partial class OriginalStyleWindow : Window
                 }
             }
             BackendStatus.Text = ok ? WpfStrings.OriginalStyleWindow_xaml_Text_8 : WpfStrings.PerfModeFailed;
+            if (ok)
+            {
+                // 切换模式时按用户记录的 PL4 口径对齐一次（EC 已一致则不写）。
+                L_Mechrevo.WpfP0.Services.Pl4UnitAutoApply.ApplyIfNeeded("切换模式");
+            }
             if (!ok)
             {
                 // 旧版失败后会 RefreshCurrentModeAsync 再回填；不能拿缓存的 CurrentMode 直接回弹。

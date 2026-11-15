@@ -26,6 +26,7 @@ public partial class CustomModeWindow : Window
     private bool _dirty;
     private bool _syncingPowerWalls;
     private bool _syncingPl4Unit;
+    private bool _pl4DefaultRestoring;
     private int _pl4Unit = 1;
     private readonly DispatcherTimer _powerWallTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private bool _powerWallBusy;
@@ -851,6 +852,17 @@ public partial class CustomModeWindow : Window
                     // 实验开关打开才按 EC 口径覆盖；关闭时不动口径门控。
                     L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram?.SetPl4UnitDouble(pl4Double);
                     RecordPl4Default(pl4Double);
+                    UpdatePl4SavedHint();
+                    // 记录过的口径与 EC 不一致时对齐一次（一致则不写）。
+                    if (Pl4UnitAutoApply.ApplyIfNeeded("打开自定义"))
+                    {
+                        if (L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool nowDouble, out byte nowRaw))
+                        {
+                            _pl4Unit = nowDouble ? 2 : 1;
+                            Pl4UnitSwitch.IsChecked = nowDouble;
+                            Pl4UnitStatus.Text = Pl4StatusText(nowDouble, nowRaw);
+                        }
+                    }
                     RefreshPl4Readback("");
                 }
             }
@@ -870,6 +882,7 @@ public partial class CustomModeWindow : Window
         {
             _syncingPl4Unit = false;
         }
+        UpdatePl4SavedHint();
         // 30 系 NUC/UMI 是固定基础 TGP，只能调 Dynamic Boost；基础 TGP 行直接隐藏。
         bool fixedBaseTgp = hwForRows != null
             && (hwForRows.IsNucUmiFamily)
@@ -1372,6 +1385,25 @@ public partial class CustomModeWindow : Window
         return "pl4_unit_default_" + (string.IsNullOrWhiteSpace(board) ? "unknown" : board.Trim());
     }
 
+    /// <summary>开关右侧的绿色状态：显示用户已设置的口径（没设置则不显示）。</summary>
+    private void UpdatePl4SavedHint()
+    {
+        if (Pl4UnitSavedHint == null)
+        {
+            return;
+        }
+        if (Pl4UnitAutoApply.TryGetDesired(out bool desired))
+        {
+            Pl4UnitSavedHint.Text = desired ? "已设置双倍" : "已设置单倍";
+            Pl4UnitSavedHint.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            Pl4UnitSavedHint.Text = "";
+            Pl4UnitSavedHint.Visibility = Visibility.Collapsed;
+        }
+    }
+
     /// <summary>本机 PL4 口径说明（不带裸 EC 术语，便于用户理解）。</summary>
     private static string Pl4StatusText(bool doubleUnit, byte raw)
     {
@@ -1413,6 +1445,9 @@ public partial class CustomModeWindow : Window
         if (!open)
         {
             // 实验开关关闭：撤掉本次覆盖，口径交回后端/EC 自身。
+            // 关闭外层 = 复位：清掉记录，之后不再自动下发。
+            Pl4UnitAutoApply.Reset();
+            UpdatePl4SavedHint();
             L_Mechrevo.WpfP0.Services.WpfBackend.ClearPl4UnitOverride();
             return;
         }
@@ -1444,17 +1479,28 @@ public partial class CustomModeWindow : Window
     private void Pl4UnitDefault_Click(object sender, RoutedEventArgs e)
     {
         bool target = ReadPl4Default();
-        _syncingPl4Unit = true;
+        _pl4DefaultRestoring = true;
         try
         {
-            Pl4UnitSwitch.IsChecked = target;
+            _syncingPl4Unit = true;
+            try
+            {
+                Pl4UnitSwitch.IsChecked = target;
+            }
+            finally
+            {
+                _syncingPl4Unit = false;
+            }
+            Pl4UnitSwitch_Changed(Pl4UnitSwitch, new RoutedEventArgs());
         }
         finally
         {
-            _syncingPl4Unit = false;
+            _pl4DefaultRestoring = false;
         }
-        Pl4UnitSwitch_Changed(Pl4UnitSwitch, new RoutedEventArgs());
-        Pl4UnitStatus.Text = "已恢复默认 · " + (target ? "2W/LSB" : "1W/LSB") + " · " + Pl4UnitStatus.Text;
+        // 复位：清掉用户记录，之后 LM 不再自动下发。
+        Pl4UnitAutoApply.Reset();
+        UpdatePl4SavedHint();
+        Pl4UnitStatus.Text = "已恢复本机默认（" + (target ? "双倍" : "单倍") + " PL4 上限） · 之后不再自动下发";
     }
 
     private void Pl4UnitSwitch_Changed(object sender, RoutedEventArgs e)
@@ -1520,8 +1566,12 @@ public partial class CustomModeWindow : Window
         }
         L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram?.SetPl4UnitDouble(target);
         RefreshPl4Readback(detail + " · ");
-        MechrevoLite.AppConfig.Set("pl4_unit_double", target ? 1 : 0);
+        if (!_pl4DefaultRestoring)
+        {
+            Pl4UnitAutoApply.Record(target);
+        }
         MechrevoLite.AppConfig.Flush();
+        UpdatePl4SavedHint();
     }
 
     /// <summary>FPPT >= PL2 >= PL1；拖动任意一个时把另一端推到合法范围。</summary>
