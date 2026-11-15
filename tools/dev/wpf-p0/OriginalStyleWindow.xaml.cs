@@ -171,6 +171,24 @@ public partial class OriginalStyleWindow : Window
 
     // 电池三档：用户刚点过的档位与时间戳（2.5 秒内不被后端回包覆盖）。
     private int _batteryModeLockedMode = -1;
+
+    /// <summary>用户选档后的锁定窗口：这段时间内高亮只认用户选的档。</summary>
+    private const long BatteryModeLockMs = 2500;
+
+    private bool BatteryModeLocked => _batteryModeLockedMode >= 0
+        && Environment.TickCount64 - _batteryModeLockedAt < BatteryModeLockMs;
+
+    private void LockBatteryMode(int mode, string source)
+    {
+        _batteryModeLockedMode = mode;
+        _batteryModeLockedAt = Environment.TickCount64;
+        Logger.WriteLine("[battery-ui] 用户选档 mode=" + mode + " 来源=" + source + " ⇒ 锁 " + BatteryModeLockMs + "ms");
+    }
+
+    private static void LogBatteryHighlight(int mode, string source)
+    {
+        Logger.WriteErrorIfChanged("battery-ui-hl", "[battery-ui] 高亮 mode=" + mode + " 来源=" + source);
+    }
     private long _batteryModeLockedAt;
     private bool _batteryLimitLoaded;
     private bool _xingyaoChargeLoaded;
@@ -1656,6 +1674,12 @@ public partial class OriginalStyleWindow : Window
     /// <summary>无极滑块只有正好 60/80/100 才联动三档；其它值不亮任何档位。</summary>
     private void ApplyBatterySliderHighlight(int value)
     {
+        // 用户刚点过档位时，滑块反推不能把高亮清掉（后端回读会晚一拍）。
+        if (BatteryModeLocked)
+        {
+            ApplyBatteryModeHighlight(_batteryModeLockedMode);
+            return;
+        }
         int? mode = value switch
         {
             100 => 0,
@@ -1679,15 +1703,15 @@ public partial class OriginalStyleWindow : Window
 
     private void ApplyBatteryModeHighlight(int mode)
     {
-        // 用户刚点过档位：2.5 秒内不让后端回包把高亮弹走（GCU 自己写 0x7A6 那一拍会滞后）。
-        long nowTick = Environment.TickCount64;
-        if (_batteryModeLockedMode >= 0 && nowTick - _batteryModeLockedAt < 2500)
+        // 用户刚点过档位：这段时间内高亮只认用户选的档，不被后端回包或滑块反推改掉。
+        bool locked = BatteryModeLocked;
+        if (locked)
         {
             mode = _batteryModeLockedMode;
         }
         // 无极限充开启时，三档按钮只是 60/80/100 的快捷高亮；
         // 滑块在其它阈值时保持三个按钮都不高亮，避免误显示成某一档。
-        if (ChargeSliderToggle?.IsChecked == true && BatteryLimitSlider != null)
+        else if (ChargeSliderToggle?.IsChecked == true && BatteryLimitSlider != null)
         {
             int percent = (int)Math.Round(BatteryLimitSlider.Value);
             mode = percent switch
@@ -1698,6 +1722,7 @@ public partial class OriginalStyleWindow : Window
                 _ => -1
             };
         }
+        LogBatteryHighlight(mode, locked ? "锁定" : "后端");
         BatteryLongButton.IsChecked = mode == 0;
         BatteryBalancedButton.IsChecked = mode == 1;
         BatteryWorkButton.IsChecked = mode == 2;
@@ -5534,9 +5559,7 @@ public partial class OriginalStyleWindow : Window
         }
         HighlightSegment(button);
         int mode = int.Parse(text);
-        // 记住用户这次选的档位：后端回包滞后时不要把手上的高亮弹走。
-        _batteryModeLockedMode = mode;
-        _batteryModeLockedAt = Environment.TickCount64;
+        LockBatteryMode(mode, "按钮");
         int percentForMode = mode switch { 0 => 100, 1 => 80, 2 => 60, _ => 80 };
 
         // 宝龙达三档：直接写充电上下限，并把文本框同步到实际阈值。
