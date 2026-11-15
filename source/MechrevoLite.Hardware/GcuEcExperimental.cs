@@ -117,7 +117,11 @@ internal static class GcuEcExperimental
                 visualMode = 0;
             }
             Logger.WriteErrorIfChanged("gcu-ec-visual-raw", "[gcu-ec] 视觉档读回 mode=0x" + mode.ToString("X2") + " turbo=0x" + turbo.ToString("X2") + " custom=0x" + custom.ToString("X2") + " clamp=0x" + clamp.ToString("X2") + " ⇒ " + visualMode);
-            if (_lastReadVisual != visualMode)
+            if (_lastReadVisual < 0)
+            {
+                _lastReadVisual = visualMode;
+            }
+            else if (_lastReadVisual != visualMode)
             {
                 bool self = SelfWroteRecently();
                 Logger.WriteError("[gcu-ec] 视觉档 " + _lastReadVisual + " → " + visualMode
