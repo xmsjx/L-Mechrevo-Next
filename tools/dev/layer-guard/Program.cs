@@ -81,6 +81,10 @@ private static readonly string[] CapabilityNames =
     Dictionary<string, (int Hits, List<string> Lines)> capsScan = ScanCapabilities(wpfDir);
     int capsTotal = capsScan.Values.Sum(v => v.Hits);
     Console.WriteLine("能力位直读行=" + capsTotal + "（目标 0：界面只读门控结果）");
+    int nullableTotal = CountNullableCapabilityReads(wpfDir);
+    string nullableReport = Path.Combine(Path.GetDirectoryName(baseline) ?? ".", "caps-nullable-report.txt");
+    int nullableBase = ReadNullableBaseline(nullableReport);
+    Console.WriteLine("能力位空读行=" + nullableTotal + "（caps?. / Capabilities?. · 基线 " + nullableBase + " · 仅报告不参与闸门）");
 
         if (update)
         {
@@ -97,6 +101,7 @@ private static readonly string[] CapabilityNames =
             }
             File.WriteAllLines(baseline, lines, new UTF8Encoding(false));
         WriteCapsBaseline(Path.Combine(Path.GetDirectoryName(baseline)!, "caps-baseline.txt"), capsScan);
+        WriteNullableBaseline(nullableReport, nullableTotal);
             Console.WriteLine("[UPDATE] 已写入基线：" + baseline + " · 条目=" + scan.Count);
             return 0;
         }
@@ -316,6 +321,61 @@ private static readonly string[] CapabilityNames =
             }
         }
         return result;
+    }
+
+    /// <summary>统计"可空直读"（caps?. / Capabilities?.）：这些绕过既有的 caps. 计数，只报数不判失败。</summary>
+    /// <summary>可空直读的报告基线：只用于显示"比上次多了几处"，不参与判定。</summary>
+    private static int ReadNullableBaseline(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return 0;
+            }
+            string text = File.ReadAllLines(path).FirstOrDefault(l => l.TrimStart().StartsWith("nullable=", StringComparison.Ordinal)) ?? "";
+            return int.TryParse(text.Trim()["nullable=".Length..], out int value) ? value : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static void WriteNullableBaseline(string path, int total)
+    {
+        try
+        {
+            File.WriteAllText(path, "# 界面层可空能力位直读（caps?. / Capabilities?.）报告基线：只报数，不判失败" + Environment.NewLine + "nullable=" + total + Environment.NewLine);
+        }
+        catch
+        {
+        }
+    }
+
+    private static int CountNullableCapabilityReads(string wpfDir)
+    {
+        int total = 0;
+        foreach (string file in Directory.EnumerateFiles(wpfDir, "*.cs", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(wpfDir, file).Replace('\\', '/');
+            if (IsExempt(relative))
+            {
+                continue;
+            }
+            foreach (string line in File.ReadLines(file))
+            {
+                if (line.Contains("Supported(", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                if (line.Contains("caps?.", StringComparison.Ordinal) || line.Contains("Capabilities?.", StringComparison.Ordinal))
+                {
+                    total++;
+                }
+            }
+        }
+        return total;
     }
 
     private static void WriteCapsBaseline(string path, Dictionary<string, (int Hits, List<string> Lines)> scan)
