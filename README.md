@@ -41,6 +41,23 @@ L-Mechrevo 是一个面向机械革命（Mechrevo / Uniwill 代工）机型的�
 - `source/`：共享硬件与业务代码
 - `tools/dev/wpf-p0/`：WPF 界面
 - `tools/core-shims/`：Core 兼容层
+- `lm_pkg_files/{app}/`：编译所需的第三方引用程序集
+- `installer-src/`：安装脚本与资源
+
+## 本地编译
+
+仓库自带第三方引用程序集，不需要联网还原 NuGet：
+
+```powershell
+# 硬件与业务层
+dotnet build source\MechrevoLite.Core.csproj -c Release
+
+# WPF 界面（会连带构建 Core）
+dotnet build tools\dev\wpf-p0\WpfP0.csproj -c Release
+```
+
+产物：`tools\dev\wpf-p0\bin\Release\net10.0-windows10.0.19041.0\L-Mechrevo.dll` 与 `source\bin\MechrevoLite.Core\Release\net10.0-windows10.0.19041.0\MechrevoLite.Core.dll`。
+需要 .NET 10 SDK（`net10.0-windows10.0.19041.0`）。
 
 ## 功能特性
 
