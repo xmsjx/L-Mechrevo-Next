@@ -59,6 +59,20 @@ public static class GcuEcMode
             // EC 模式曾停止/结束 GCUService；回 GCU 必须先拉起服务端，再拉起 Bridge。
             Run("net", "start GCUService");
             Run("net", "start GCUBridge");
+            // 等 GCU 端口就绪再返回：否则紧随其后的自动重启可能过早判定 GCU 不可用，落回 EC-only。
+            bool ready = await Task.Run(() =>
+            {
+                for (int i = 0; i < 20; i++)
+                {
+                    if (ProbeGcuPort())
+                    {
+                        return true;
+                    }
+                    System.Threading.Thread.Sleep(500);
+                }
+                return false;
+            });
+            Logger.WriteLine("[gcu-svc] GCU 端口 13688 就绪=" + ready);
             IteLightingLocal.Invalidate();
             // 回 GCU 模式：隔离状态下把 GCU 服务启动类型恢复回去。
             try { System.ValueTuple<bool, string> resume = MechrevoLite.Helpers.OfficialConsoleIsolation.ResumeGcuServicesForEcMode(); Logger.WriteLine("[gcu-svc] 回 GCU 模式 ⇒ " + resume.Item2); } catch { }
@@ -86,6 +100,21 @@ public static class GcuEcMode
         }
         catch
         {
+        }
+    }
+
+    /// <summary>探测 GCU 服务端口是否已可连接（仅本地连接尝试，不发送报文）。</summary>
+    private static bool ProbeGcuPort()
+    {
+        try
+        {
+            using System.Net.Sockets.TcpClient client = new System.Net.Sockets.TcpClient();
+            System.Threading.Tasks.Task task = client.ConnectAsync("127.0.0.1", 13688);
+            return task.Wait(300) && client.Connected;
+        }
+        catch
+        {
+            return false;
         }
     }
 }
