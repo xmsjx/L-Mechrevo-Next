@@ -82,6 +82,11 @@ internal static class HeadlessStartupService
     /// <summary>识别需要无界面处理的旧启动参数；返回 true 时调用方应设置 ExitCode 并退出。</summary>
     internal static bool TryHandle(string[] args, out int exitCode)
     {
+        if (TryHandleOfficialIsolation(args, out exitCode))
+        {
+            return true;
+        }
+
         exitCode = 0;
         string action = args.Length > 0 ? (args[0] ?? string.Empty).Trim() : string.Empty;
         if (string.Equals(action, "charge", StringComparison.OrdinalIgnoreCase))
@@ -96,4 +101,46 @@ internal static class HeadlessStartupService
         }
         return false;
     }
+    /// <summary>提权子进程的隔离/恢复动作：只做隔离，不打开界面。</summary>
+    internal static bool TryHandleOfficialIsolation(string[] args, out int exitCode)
+    {
+        exitCode = 0;
+        bool isolate = false;
+        bool restore = false;
+        bool includeServices = false;
+        foreach (string arg in args)
+        {
+            if (string.Equals(arg, "--official-isolate", StringComparison.OrdinalIgnoreCase))
+            {
+                isolate = true;
+            }
+            else if (string.Equals(arg, "--official-restore", StringComparison.OrdinalIgnoreCase))
+            {
+                restore = true;
+            }
+            else if (string.Equals(arg, "--official-isolate-services", StringComparison.OrdinalIgnoreCase))
+            {
+                includeServices = true;
+            }
+        }
+        if (!isolate && !restore)
+        {
+            return false;
+        }
+        try
+        {
+            MechrevoLite.Helpers.OfficialConsoleIsolation.OperationResult result = restore
+                ? MechrevoLite.Helpers.OfficialConsoleIsolation.Restore()
+                : MechrevoLite.Helpers.OfficialConsoleIsolation.Enable(includeServices);
+            Logger.WriteLine("[official-console] " + (restore ? "restore" : "isolate") + " · services=" + includeServices + " ⇒ success=" + result.Success + " · " + result.Message);
+            exitCode = result.Success ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[official-console] 提权动作失败：" + ex.GetType().Name + " " + ex.Message);
+            exitCode = 1;
+        }
+        return true;
+    }
+
 }

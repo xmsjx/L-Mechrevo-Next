@@ -23,6 +23,7 @@ public partial class SettingsWindow : Window
     private bool _syncing = true;
     private bool _overlaySyncing;
     private bool _isolated;
+    private bool _syncingIsolateServices;
 
     public SettingsWindow(OriginalStyleWindow owner)
     {
@@ -1006,6 +1007,50 @@ public partial class SettingsWindow : Window
             ? (status.OfficialUiRunning ? WpfStrings.OfficialRunning : WpfStrings.OfficialInstalled)
             : WpfStrings.OfficialNotDetected;
         IsolationButton.Content = status.Isolated ? WpfStrings.CancelIsolation : WpfStrings.IsolateOfficial;
+        _syncingIsolateServices = true;
+        try
+        {
+            if (IsolateServicesSwitch != null)
+            {
+                IsolateServicesSwitch.IsChecked = MechrevoLite.AppConfig.Is("official_isolate_services");
+                IsolateServicesSwitch.IsEnabled = true;
+            }
+        }
+        finally
+        {
+            _syncingIsolateServices = false;
+        }
+    }
+
+    private async void IsolateServices_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_syncingIsolateServices)
+        {
+            return;
+        }
+        bool include = IsolateServicesSwitch.IsChecked == true;
+        MechrevoLite.AppConfig.Set("official_isolate_services", include ? 1 : 0);
+        MechrevoLite.AppConfig.Flush();
+        if (!_isolated)
+        {
+            return;
+        }
+        // 已经隔离着：立即补做/撤掉服务停用，不用手动取消再隔离一次。
+        IsolateServicesSwitch.IsEnabled = false;
+        try
+        {
+            var result = await OfficialConsoleIsolation.SetIsolationAsync(true, include);
+            Status(result.Message);
+            RefreshOfficialConsole();
+        }
+        catch (Exception ex)
+        {
+            Status(WpfStrings.IsolationFailed + ex.Message);
+        }
+        finally
+        {
+            IsolateServicesSwitch.IsEnabled = true;
+        }
     }
 
     private async void Isolation_Click(object sender, RoutedEventArgs e)
@@ -1013,7 +1058,7 @@ public partial class SettingsWindow : Window
         IsolationButton.IsEnabled = false;
         try
         {
-            var result = await OfficialConsoleIsolation.SetIsolationAsync(!_isolated);
+            var result = await OfficialConsoleIsolation.SetIsolationAsync(!_isolated, IsolateServicesSwitch?.IsChecked == true);
             Status(result.Message);
             RefreshOfficialConsole();
         }

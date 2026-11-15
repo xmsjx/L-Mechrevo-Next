@@ -42,6 +42,7 @@ public static class OfficialConsoleIsolation
 		public List<ScheduledTaskEntry> ScheduledTasks { get; set; } = new List<ScheduledTaskEntry>();
 
 		public List<StartupFileEntry> StartupFiles { get; set; } = new List<StartupFileEntry>();
+		public List<ServiceEntry> Services { get; set; } = new List<ServiceEntry>();
 	}
 
 	private sealed class RegistryStartupEntry
@@ -73,6 +74,15 @@ public static class OfficialConsoleIsolation
 		public string DisabledPath { get; set; } = string.Empty;
 	}
 
+
+	private sealed class ServiceEntry
+	{
+		public string Name { get; set; } = string.Empty;
+
+		public int StartMode { get; set; } = -1;
+
+		public bool WasRunning { get; set; }
+	}
 	internal readonly record struct RestoreOutcome(int Restored, int Skipped, int Failed, int Expected)
 	{
 		internal bool IsSilentNoOp
@@ -119,6 +129,8 @@ public static class OfficialConsoleIsolation
 	private const string PackageAumid = "CCU.WinUI_wrbgcf7aesyd8!App";
 
 	private static readonly string[] UiProcessNames = new string[5] { "CCUWinUI", "SystrayComponent", "ControlCenterU", "GamingCenterU", "GCUUI" };
+
+	private static readonly string[] GcuServiceNames = new string[3] { "GCUService", "GCUBridge", "AiStoneService" };
 
 	private static readonly string[] OfficialMarkers = new string[7] { "CCUWinUI.exe", "SystrayComponent.exe", "ControlCenterU.exe", "GamingCenterU.exe", "GCUUI.exe", "CCU.WinUI_", "CCU.WinUI_wrbgcf7aesyd8" };
 
@@ -224,7 +236,7 @@ public static class OfficialConsoleIsolation
 		return Strings.OffConsoleIsolationError;
 	}
 
-	public static OperationResult Enable()
+	public static OperationResult Enable(bool includeGcuServices = false)
 	{
 		EnsureAdministrator();
 		lock (StateLock)
@@ -241,6 +253,13 @@ public static class OfficialConsoleIsolation
 				if (snapshot != null && snapshot.Isolated)
 				{
 					int affectedItems = StopOfficialUiProcesses();
+					if (includeGcuServices && snapshot.Services.Count == 0)
+					{
+						CaptureServices(snapshot.Services);
+						affectedItems += StopAndDisableServices(snapshot.Services);
+						snapshot.UpdatedUtc = DateTime.UtcNow;
+						SaveSnapshot(snapshot);
+					}
 					return new OperationResult(Success: true, Strings.OffConsoleAlreadyIsolated, affectedItems);
 				}
 			}
@@ -253,6 +272,10 @@ public static class OfficialConsoleIsolation
 				num += DisableScheduledTasks(isolationSnapshot.ScheduledTasks);
 				num += DisableStartupFiles(isolationSnapshot.StartupFiles);
 				num += StopOfficialUiProcesses();
+				if (includeGcuServices)
+				{
+					num += StopAndDisableServices(isolationSnapshot.Services);
+				}
 				isolationSnapshot.Isolated = true;
 				isolationSnapshot.UpdatedUtc = DateTime.UtcNow;
 				SaveSnapshot(isolationSnapshot);
@@ -330,18 +353,18 @@ public static class OfficialConsoleIsolation
 		}
 	}
 
-	public static async Task<OperationResult> SetIsolationAsync(bool isolate)
+	public static async Task<OperationResult> SetIsolationAsync(bool isolate, bool includeGcuServices = false)
 	{
 		if (IsAdministrator())
 		{
-			return await System.Threading.Tasks.Task.Run(() => (!isolate) ? Restore() : Enable());
+			return await System.Threading.Tasks.Task.Run(() => (!isolate) ? Restore() : Enable(includeGcuServices));
 		}
 		try
 		{
 			using Process helper = Process.Start(new ProcessStartInfo
 			{
 				FileName = Application.ExecutablePath,
-				Arguments = (isolate ? "--official-isolate" : "--official-restore"),
+				Arguments = isolate ? (includeGcuServices ? "--official-isolate --official-isolate-services" : "--official-isolate") : "--official-restore",
 				UseShellExecute = true,
 				Verb = "runas",
 				WorkingDirectory = AppContext.BaseDirectory,
@@ -483,6 +506,140 @@ public static class OfficialConsoleIsolation
 		return false;
 	}
 
+	private static void CaptureServices(List<ServiceEntry> entries)
+	{
+		foreach (string name in GcuServiceNames)
+		{
+			try
+			{
+				using RegistryKey key = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Services\\" + name);
+				if (key == null)
+				{
+					continue;
+				}
+				object? start = key.GetValue("Start");
+				entries.Add(new ServiceEntry
+				{
+					Name = name,
+					StartMode = start is int mode ? mode : -1,
+					WasRunning = IsServiceRunning(name)
+				});
+			}
+			catch (Exception ex)
+			{
+				Logger.WriteLine("Can't read service " + name + ": " + ex.Message);
+			}
+		}
+	}
+
+	/// <summary>停掉并禁用 GCU 相关服务（Start=4），原启动类型记录在快照里以便恢复。</summary>
+	private static int StopAndDisableServices(IEnumerable<ServiceEntry> entries)
+	{
+		int num = 0;
+		foreach (ServiceEntry entry in entries)
+		{
+			try
+			{
+				RunSc("stop " + entry.Name);
+				if (SetServiceStartMode(entry.Name, 4))
+				{
+					num++;
+					Logger.WriteLine("[official-console] 已停用服务 " + entry.Name + "（原启动类型=" + entry.StartMode + "）");
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.WriteLine("Can't disable service " + entry.Name + ": " + ex.Message);
+			}
+		}
+		return num;
+	}
+
+	private static int RestoreServices(IEnumerable<ServiceEntry> entries)
+	{
+		int num = 0;
+		foreach (ServiceEntry entry in entries)
+		{
+			try
+			{
+				if (entry.StartMode >= 0 && SetServiceStartMode(entry.Name, entry.StartMode))
+				{
+					num++;
+					Logger.WriteLine("[official-console] 已恢复服务 " + entry.Name + " 启动类型=" + entry.StartMode);
+				}
+				if (entry.WasRunning)
+				{
+					RunSc("start " + entry.Name);
+				}
+			}
+			catch (Exception ex)
+			{
+				Logger.WriteLine("Can't restore service " + entry.Name + ": " + ex.Message);
+			}
+		}
+		return num;
+	}
+
+	private static bool SetServiceStartMode(string name, int mode)
+	{
+		try
+		{
+			using RegistryKey key = Registry.LocalMachine.OpenSubKey("SYSTEM\\CurrentControlSet\\Services\\" + name, writable: true);
+			if (key == null)
+			{
+				return false;
+			}
+			key.SetValue("Start", mode, RegistryValueKind.DWord);
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("Can't set start mode " + name + ": " + ex.Message);
+			return false;
+		}
+	}
+
+	private static void RunSc(string arguments)
+	{
+		try
+		{
+			ProcessStartInfo info = new ProcessStartInfo("sc.exe", arguments)
+			{
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardOutput = true,
+				RedirectStandardError = true
+			};
+			using Process process = Process.Start(info)!;
+			process.WaitForExit(8000);
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("sc " + arguments + " failed: " + ex.Message);
+		}
+	}
+
+	private static bool IsServiceRunning(string name)
+	{
+		try
+		{
+			ProcessStartInfo info = new ProcessStartInfo("sc.exe", "query " + name)
+			{
+				UseShellExecute = false,
+				CreateNoWindow = true,
+				RedirectStandardOutput = true
+			};
+			using Process process = Process.Start(info)!;
+			string text = process.StandardOutput.ReadToEnd();
+			process.WaitForExit(5000);
+			return text.Contains("RUNNING", StringComparison.OrdinalIgnoreCase);
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
 	private static IsolationSnapshot CaptureSnapshot()
 	{
 		IsolationSnapshot isolationSnapshot = new IsolationSnapshot
@@ -492,6 +649,7 @@ public static class OfficialConsoleIsolation
 		CaptureRegistryEntries(isolationSnapshot.RegistryEntries);
 		CaptureScheduledTasks(isolationSnapshot.ScheduledTasks);
 		CaptureStartupFiles(isolationSnapshot.StartupFiles);
+		CaptureServices(isolationSnapshot.Services);
 		return isolationSnapshot;
 	}
 
@@ -839,7 +997,7 @@ public static class OfficialConsoleIsolation
 		int num = 0;
 		int num2 = 0;
 		int num3 = 0;
-		int expected = snapshot.RegistryEntries.Count + snapshot.ScheduledTasks.Count + snapshot.StartupFiles.Count;
+		int expected = snapshot.RegistryEntries.Count + snapshot.ScheduledTasks.Count + snapshot.StartupFiles.Count + snapshot.Services.Count;
 		foreach (RegistryStartupEntry registryEntry in snapshot.RegistryEntries)
 		{
 			if (!IsRestorableRegistryEntry(registryEntry.Hive, registryEntry.KeyPath, registryEntry.Name, registryEntry.Kind))
@@ -930,6 +1088,7 @@ public static class OfficialConsoleIsolation
 				num3++;
 			}
 		}
+		num += RestoreServices(snapshot.Services);
 		return new RestoreOutcome(num, num2, num3, expected);
 	}
 
