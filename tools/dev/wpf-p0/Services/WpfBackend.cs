@@ -787,6 +787,29 @@ internal static class WpfBackend
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> GateLogged = new();
 
     /// <summary>每个特征只记一次判定，便于解释"为什么这个区块显示/隐藏"。</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> GateStateLogged = new();
+
+    /// <summary>三态读取也留一行：只认门控的位置出问题时，诊断包里要有线索。</summary>
+    private static void LogGateState(string feature,
+        MechrevoLite.Hardware.Architecture.FeatureId id,
+        MechrevoLite.Hardware.Architecture.FeatureDecision decision)
+    {
+        if (!GateStateLogged.TryAdd(feature + "|state", 0))
+        {
+            return;
+        }
+        try
+        {
+            Logger.WriteLine("[gate] f=" + feature + " backend=" + decision.Backend
+                + " availability=" + decision.State + " channel=" + decision.Channel
+                + " → " + (decision.State == MechrevoLite.Hardware.FeatureAvailability.Supported ? "supported" : "hidden")
+                + " · 只认门控 · " + decision.Reason);
+        }
+        catch
+        {
+        }
+    }
+
     private static void LogGateOnce(string feature, MechrevoHw hw, MechrevoLite.Hardware.Architecture.FeatureId id,
         bool effective, bool legacy)
     {
@@ -822,6 +845,7 @@ internal static class WpfBackend
             }
             MechrevoLite.Hardware.Architecture.FeatureDecision decision =
                 MechrevoLite.Hardware.Architecture.FeatureGate.Get(id.Value, hw);
+            LogGateState(feature, id.Value, decision);
             return decision.State switch
             {
                 MechrevoLite.Hardware.FeatureAvailability.Supported => 1,

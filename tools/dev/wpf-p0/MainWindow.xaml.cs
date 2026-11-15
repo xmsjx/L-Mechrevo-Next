@@ -3008,11 +3008,11 @@ public partial class MainWindow : Window
             ("HidLightbar_Hinge/Ctrl", WpfStrings.LightingHinge, LightingCatalog.HingeEffects),
             ("HidLightbar_Sync/Ctrl", WpfStrings.LightingSync, LightingCatalog.SyncEffects)
         };
-        bool hasKeyboard = hw?.SupportsKeyboard ?? false;
+        bool hasKeyboard = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureState("KeyboardLight") == 1;
         if (hw?.IsNucUmiFamily == true)
         {
             // NUC/UMI：HID 单键 RGB 优先；没有 HID 时看 EC 单区支持位（0x766 bit2）。
-            hasKeyboard = (hw?.SupportsKeyboard ?? false)
+                hasKeyboard = hasKeyboard
                 || WpfBackend.rgb?.IsConnected == true
                 || (hw?.IsNucOnly == true && L_Mechrevo.WpfP0.Services.WpfBackend.IsNucSingleZoneKeyboard());
         }

@@ -7602,7 +7602,8 @@ public partial class OriginalStyleWindow : Window
             AutoRefreshSwitch.Visibility = platform.AutoRefreshVisible ? Visibility.Visible : Visibility.Collapsed;
             bool hasKeyboard = EcKeyboardActive
                 ? EcKeyboardControllable
-                : L_Mechrevo.WpfP0.Services.WpfBackend.FeatureState("KeyboardLight") == 1;
+                : L_Mechrevo.WpfP0.Services.WpfBackend.FeatureState("KeyboardLight") == 1
+                    || hw?.IsNucUmiFamily == true;
         bool hasLightbar = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("Lightbar", (hw?.SupportsLightbar ?? false)
                 || _services?.Lighting.LocalLightbarSupported == true
             || hw?.IsNucUmiFamily == true);
@@ -7748,7 +7749,8 @@ public partial class OriginalStyleWindow : Window
             ? EcKeyboardControllable
             : L_Mechrevo.WpfP0.Services.WpfBackend.FeatureState("KeyboardLight") == 1
                 || hw?.IsNucUmiFamily == true;
-        bool legacyKeyboard = keyboard;
+        // shadow 的 old 必须是独立算出来的旧判据，不能拿门控结果自证。
+        bool legacyKeyboard = (hw?.SupportsKeyboard ?? false) || (EcKeyboardActive && EcKeyboardControllable) || hw?.IsNucUmiFamily == true;
         keyboard = ResolveLightChannel(LightingTopics.Keyboard, legacyKeyboard);
 
         bool hasStrip = L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("Lightbar") || (hw?.SupportsLightbar ?? false)

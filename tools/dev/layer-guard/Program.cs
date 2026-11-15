@@ -84,6 +84,7 @@ private static readonly string[] CapabilityNames =
     int nullableTotal = CountNullableCapabilityReads(wpfDir);
     string nullableReport = Path.Combine(Path.GetDirectoryName(baseline) ?? ".", "caps-nullable-report.txt");
     int nullableBase = ReadNullableBaseline(nullableReport);
+    Console.WriteLine("键盘能力位直读行=" + CountKeyboardCapabilityReads(wpfDir) + "（SupportsKeyboard / Capabilities.Keyboard · 仅报告）");
     Console.WriteLine("能力位空读行=" + nullableTotal + "（caps?. / Capabilities?. · 基线 " + nullableBase + " · 仅报告不参与闸门）");
 
         if (update)
@@ -351,6 +352,33 @@ private static readonly string[] CapabilityNames =
         catch
         {
         }
+    }
+
+    /// <summary>键盘能力位的旁路读取（hw.SupportsKeyboard / Capabilities.Keyboard）：只报数，不判失败。</summary>
+    private static int CountKeyboardCapabilityReads(string wpfDir)
+    {
+        int total = 0;
+        foreach (string file in Directory.EnumerateFiles(wpfDir, "*.cs", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(wpfDir, file).Replace('\\', '/');
+            if (IsExempt(relative))
+            {
+                continue;
+            }
+            foreach (string line in File.ReadLines(file))
+            {
+                if (line.Contains("Supported(", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                if (line.Contains("SupportsKeyboard", StringComparison.Ordinal)
+                    || line.Contains("Capabilities.Keyboard", StringComparison.Ordinal))
+                {
+                    total++;
+                }
+            }
+        }
+        return total;
     }
 
     private static int CountNullableCapabilityReads(string wpfDir)
