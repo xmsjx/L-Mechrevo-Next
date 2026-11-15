@@ -1918,6 +1918,25 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		}
 	}
 
+	/// <summary>EC 口径读不到时清掉覆盖值，回落到后端回报的口径（避免沿用上一次旧口径）。</summary>
+	internal void ClearPl4UnitOverride()
+	{
+		_pl4UnitOverride = null;
+		int readScale = Pl4ReadScale();
+		if (_pl4Raw >= 0)
+		{
+			Pl4 = _pl4Raw * readScale;
+		}
+		if (_pl4RawMinimum >= 0)
+		{
+			Pl4Minimum = _pl4RawMinimum * readScale;
+		}
+		if (_pl4RawMaximum >= 0)
+		{
+			Pl4Maximum = _pl4RawMaximum * readScale;
+		}
+	}
+
 	/// <summary>按 GCU 回报的 PL4 上限判断口径：上限 &gt;255 ⇒ GCU 回报实际瓦数，不能再乘单位。</summary>
 	private int Pl4ReadScale()
 	{

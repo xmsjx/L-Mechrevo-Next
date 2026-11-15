@@ -544,6 +544,8 @@ internal static class WpfBackend
     internal static bool EcPl4TrySetDouble(bool doubleUnit, out string detail) =>
         EcPl4Unit.TrySetDouble(doubleUnit, out detail);
 
+    internal static void ClearPl4UnitOverride() => HwOrProgram?.ClearPl4UnitOverride();
+
     /// <summary>GPU TGP/动态加速的可调范围（读不到返回 false，界面保持原范围）。</summary>
     internal static bool TryGetGpuTgpRange(out GpuTgpRange range) => TryGetGpuTgpRange(Hw, out range);
 

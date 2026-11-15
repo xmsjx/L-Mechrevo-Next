@@ -122,7 +122,8 @@ public partial class CustomModeWindow : Window
         {
             Pl1Label.Text = WpfStrings.Pl1Label_Text;
             Pl2Label.Text = WpfStrings.Pl2Label_Text;
-            Pl4Label.Text = WpfStrings.CustomModeWindow_Text_14;
+            // Intel 平台上这个限值叫 PL4；AMD 才叫 fPPT（见上方 amd 分支）。
+            Pl4Label.Text = "PL4";
         }
     }
 
@@ -847,6 +848,8 @@ public partial class CustomModeWindow : Window
                 Pl4UnitSwitch.IsChecked = false;
                 Pl4UnitSwitch.IsEnabled = false;
                 Pl4UnitStatus.Text = "0x0727 读取失败";
+                // EC 口径读不到：清掉覆盖值，回落到后端回报的口径，避免沿用上一次的旧口径。
+                L_Mechrevo.WpfP0.Services.WpfBackend.ClearPl4UnitOverride();
             }
         }
         finally
@@ -1311,6 +1314,8 @@ public partial class CustomModeWindow : Window
                 if (!string.IsNullOrEmpty(prefix))
                 {
                     Pl4UnitStatus.Text = prefix + "PL4 回读失败";
+                // 同上：读不到就回落后端口径，不要沿用旧口径。
+                L_Mechrevo.WpfP0.Services.WpfBackend.ClearPl4UnitOverride();
                 }
                 return;
             }

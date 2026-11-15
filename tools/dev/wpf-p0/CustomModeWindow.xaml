@@ -165,7 +165,7 @@
                         </Grid>
                         <Grid x:Name="Pl4Row" Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
-                            <TextBlock x:Name="Pl4Label" Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_14}" VerticalAlignment="Center" />
+                            <TextBlock x:Name="Pl4Label" Text="PL4" VerticalAlignment="Center" />
                             <Slider x:Name="Pl4Slider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="250" Value="100" ValueChanged="Pl4_Changed" />
                             <TextBox x:Name="Pl4Text" Grid.Column="2" Text="100" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
