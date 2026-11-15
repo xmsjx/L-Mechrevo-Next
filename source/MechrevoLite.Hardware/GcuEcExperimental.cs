@@ -12,6 +12,8 @@ internal static class GcuEcExperimental
     private const int TurboTriggerAddress = 1115;
     private const int FanBoostClampAddress = 1873;
     private const int CustomModeFlagAddress = 1798;
+    private static long _lastSelfWriteTicks;
+    private static int _lastReadVisual = -1;
     private const int FanRampAddress = 1927;
     private static int _probeLogged;
 
@@ -61,6 +63,26 @@ internal static class GcuEcExperimental
     }
 
     /// <summary>GCU 未接管时直接从 EC 读当前模式：狂暴=1963 bit4；静音=1873=0xA0；其余平衡。</summary>
+    /// <summary>本程序最近是否写过 EC 模式寄存器（用于区分外部改档）。</summary>
+    internal static bool SelfWroteRecently(int ms = 5000)
+    {
+        return Environment.TickCount64 - System.Threading.Interlocked.Read(ref _lastSelfWriteTicks) <= ms;
+    }
+
+    /// <summary>GCU 服务进程是否仍在运行（EC 模式下它与本程序会抢同一批寄存器）。</summary>
+    internal static bool GcuServiceProcessRunning()
+    {
+        try
+        {
+            return System.Diagnostics.Process.GetProcessesByName("GCUService").Length > 0
+                || System.Diagnostics.Process.GetProcessesByName("GCUBridge").Length > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     internal static bool TryReadVisualMode(out int visualMode)
     {
         visualMode = -1;
@@ -95,6 +117,14 @@ internal static class GcuEcExperimental
                 visualMode = 0;
             }
             Logger.WriteErrorIfChanged("gcu-ec-visual-raw", "[gcu-ec] 视觉档读回 mode=0x" + mode.ToString("X2") + " turbo=0x" + turbo.ToString("X2") + " custom=0x" + custom.ToString("X2") + " clamp=0x" + clamp.ToString("X2") + " ⇒ " + visualMode);
+            if (_lastReadVisual != visualMode)
+            {
+                bool self = SelfWroteRecently();
+                Logger.WriteError("[gcu-ec] 视觉档 " + _lastReadVisual + " → " + visualMode
+                    + (self ? "（本程序近期写过 EC）" : "（本程序近期未写 EC ⇒ 外部改档：GCU 服务/固件）")
+                    + (GcuServiceProcessRunning() ? " · GCU 进程在跑" : ""));
+                _lastReadVisual = visualMode;
+            }
             return true;
         }
         catch
@@ -229,6 +259,10 @@ internal static class GcuEcExperimental
                 + $"trigger 0x{currentTrigger:X2}->0x{trigger:X2}/0x{readTrigger:X2} "
                 + $"clamp->0x{clamp:X2}/0x{readClamp:X2} turbo={visualMode == 2} custom={visualMode == 3} "
                 + $"write={modeWrite}/{triggerWrite}/{turboWrite}/{clampWrite}/{customWrite}/{rampWrite}";
+            if (modeOk && triggerOk && clampOk)
+            {
+                System.Threading.Interlocked.Exchange(ref _lastSelfWriteTicks, Environment.TickCount64);
+            }
             Logger.WriteError("[gcu-ec] 实验模式切换 " + detail + " ⇒ " + (modeOk && triggerOk && clampOk ? "OK" : "FAIL"));
             return modeWrite && triggerWrite && turboWrite && clampWrite && customWrite && modeOk && triggerOk && clampOk;
         }
