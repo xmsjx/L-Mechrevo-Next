@@ -219,6 +219,14 @@ public partial class OriginalStyleWindow : Window
     /// <summary>当前是否处于 EC-only 本地路由（EC 模式已接管且路由落在 EC）。</summary>
     private bool IsEcLocalRoute =>
         IsEcModeActive && _backendRoute == BackendRoute.Ec;
+
+    /// <summary>
+    /// 本机能否用 EC 直写控制档位：除了"路由落在 EC"，还包括
+    /// 「声明是 GCU、但 GCU 实际连不上 ⇒ 已落到 EC-only 首页」这种情况。
+    /// </summary>
+    private bool EcLocalControl =>
+        IsEcLocalRoute || (IsEcModeActive && _backendProbe?.Hw?.IsGcuConnected != true);
+    private int _lastEcOnlyVisual = -1;
     private int _gcuConnectFailures;
     private const string QuickTilesConfigKey = "perf_quick_tiles";
     private const string QuickTilesEmptySentinel = "-";
@@ -3659,7 +3667,7 @@ public partial class OriginalStyleWindow : Window
             }
             else
             {
-                if (IsEcLocalRoute
+                if (EcLocalControl
                     && _backendProbe?.Hw != null
                     && _backendProbe.Hw.UsesBaolongda == false
                     && _backendProbe.Hw.IsNucUmiFamily == false
@@ -3691,7 +3699,7 @@ public partial class OriginalStyleWindow : Window
             }
             else if (!nucDirect && !xingyaoDirect && ok && mode == 1 && silentTurbo.HasValue && turboSubModeSupported)
             {
-                if (IsEcLocalRoute)
+                if (EcLocalControl)
                 {
                     ok = GcuEcExperimental.TrySetSilentTurbo(silentTurbo.Value, out string silentDetail);
                     Logger.WriteErrorIfChanged("silent-turbo-ec-path", "[silent-turbo] EC 本地路 · WMI ULong 可用=" + L_Mechrevo.WpfP0.Services.WpfBackend.TurboSubModeSupported() + " · 只写 1832 bit0");
@@ -4433,6 +4441,61 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    /// <summary>EC-only 兜底时，固件自己改了档位就把活动档同步过来，别让界面停在旧档。</summary>
+    private void SyncEcOnlyExternalMode(BackendProbe probe)
+    {
+        try
+        {
+            if (IsEcLocalRoute || !IsEcModeActive || probe.Hw?.IsGcuConnected == true)
+            {
+                _lastEcOnlyVisual = -1;
+                return;
+            }
+            if (_modeSwitchInFlight || _pendingMode >= 0)
+            {
+                return;
+            }
+            if (!GcuEcExperimental.TryReadVisualMode(out int ecVisual))
+            {
+                return;
+            }
+            if (_lastEcOnlyVisual < 0)
+            {
+                _lastEcOnlyVisual = ecVisual;
+                return;
+            }
+            if (_lastEcOnlyVisual == ecVisual)
+            {
+                return;
+            }
+            _lastEcOnlyVisual = ecVisual;
+            string? id = ecVisual switch
+            {
+                1 => MechrevoLite.Mode.PerfModeDefinition.BuiltInId(MechrevoLite.Mode.PerfModeKind.Turbo),
+                2 => MechrevoLite.Mode.PerfModeDefinition.BuiltInId(MechrevoLite.Mode.PerfModeKind.Silent),
+                0 => MechrevoLite.Mode.PerfModeDefinition.BuiltInId(MechrevoLite.Mode.PerfModeKind.Balanced),
+                _ => null
+            };
+            if (string.IsNullOrEmpty(id))
+            {
+                return;
+            }
+            string? active = MechrevoLite.Mode.PerfModeStore.ActiveModeId;
+            if (string.Equals(active, id, StringComparison.Ordinal))
+            {
+                return;
+            }
+            Logger.WriteError("[ec-only] 固件档位变化 ⇒ 同步活动档 " + active + " -> " + id + "（EC 视觉档=" + ecVisual + "）");
+            MechrevoLite.Mode.PerfModeStore.ActiveModeId = id;
+            MechrevoLite.Mode.PerfModeService.Instance?.NotifyExternalSwitch(id);
+            MechrevoLite.Mode.PerfModeService.Instance?.ApplyWindowsPowerOverlayForActiveMode();
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[ec-only] 外部档位同步失败：" + ex.Message);
+        }
+    }
+
     private static int ResolveDisplayMode(BackendProbe probe)
     {
         // 实验通道且 GCU 已让出控制权时，直接读 EC，不依赖 GCU 状态包。
@@ -4563,7 +4626,7 @@ public partial class OriginalStyleWindow : Window
         var keyHw = _backendProbe.Hw;
         bool hasPerformanceKey = IsNucLike()
             || (keyHw.IsGcuConnected && !keyHw.UsesBaolongda && !keyHw.IsNucUmiFamily)
-            || IsEcLocalRoute;
+            || EcLocalControl;
         if (!hasPerformanceKey)
         {
             return;
@@ -4596,8 +4659,13 @@ public partial class OriginalStyleWindow : Window
                 return;
             }
 
-            if (IsEcLocalRoute)
+            if (EcLocalControl)
             {
+                bool viaFallback = !IsEcLocalRoute;
+                if (viaFallback)
+                {
+                    Logger.WriteErrorIfChanged("perfkey-ec-fallback", "[perfkey] EC 直写兜底（声明后端 GCU 但未连上）⇒ 本地循环切档");
+                }
                 int before = GcuEcExperimental.TryReadVisualMode(out int ecMode) ? ecMode : ResolveDisplayMode(probe);
                 int next = before switch { 2 => 0, 0 => 1, 1 => 3, 3 => 2, _ => 0 };
                 // 狂暴档记忆上次子模式：只有本机确实有静音子模式通道时才带过去，
@@ -6607,6 +6675,7 @@ public partial class OriginalStyleWindow : Window
         }
         // 0.293.5.1 限充效果判定：复用界面 2s 心跳，内部 10s 限频；只读/有界重确立。
         try { MechrevoLite.Battery.ChargeLimitMonitor.Tick(DateTime.Now); } catch { }
+        SyncEcOnlyExternalMode(probe);
         probe.SyncNucQuickSwitches();
         probe.SyncCameraQuickState();
         try { RefreshBrightness(); } catch { }
