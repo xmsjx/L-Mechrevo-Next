@@ -3694,6 +3694,7 @@ public partial class OriginalStyleWindow : Window
                 if (IsEcLocalRoute)
                 {
                     ok = GcuEcExperimental.TrySetSilentTurbo(silentTurbo.Value, out string silentDetail);
+                    Logger.WriteErrorIfChanged("silent-turbo-ec-path", "[silent-turbo] EC 本地路 · WMI ULong 可用=" + L_Mechrevo.WpfP0.Services.WpfBackend.TurboSubModeSupported() + " · 只写 1832 bit0");
                     if (!ok)
                     {
                         Logger.WriteError("[gcu-ec] 静音狂暴写入失败：" + silentDetail);

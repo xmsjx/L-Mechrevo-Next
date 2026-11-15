@@ -6004,7 +6004,9 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 			MechrevoHw hw = _hw;
-			if (TurboSubModeWmi.IsSupported())
+			bool ecTurboSupported = TurboSubModeWmi.IsSupported();
+			Logger.WriteErrorIfChanged("silent-turbo-route", "[silent-turbo] 通道=" + (ecTurboSupported ? "EC/WMI(1832+ULong)" : "GCU-Fan/Control") + " · gcu=" + hw.IsGcuConnected + " · cap=" + _hw.Capabilities.SilentTurboAvailability);
+			if (ecTurboSupported)
 			{
 				bool applied = await Task.Run(() => TurboSubModeWmi.TryApply(silent), cancellationToken).ConfigureAwait(continueOnCapturedContext: false);
 				if (applied)
@@ -6050,6 +6052,7 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 				}
 			}
 			Logger.WriteLine($"SwitchTurboSubMode(silent={silent}) not confirmed");
+			Logger.WriteLine("[silent-turbo] 25 次回读仍未确认 · 当前 silent=" + (ReadSilentTurboState()?.ToString() ?? "null") + "（若 GCU 侧未写 1832 bit0，这里会一直读到旧值）");
 			return false;
 		}
 		catch (OperationCanceledException)

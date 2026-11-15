@@ -55,12 +55,24 @@ internal static class TurboSubModeWmi
         }
     }
 
+    internal static readonly object ApplyGate = new();
+
     internal static bool TryApply(bool silent)
     {
         if (!IsSupported())
         {
             return false;
         }
+        // 1832 是读-改-写：界面开关、性能键、档位监视可能同时进来，必须同一把锁串行。
+        lock (ApplyGate)
+        {
+            return ApplyUnlocked(silent);
+        }
+    }
+
+    /// <summary>静音狂暴读-改-写全序列的唯一入口（调用方须持 ApplyGate）。</summary>
+    internal static bool ApplyUnlocked(bool silent)
+    {
         if (!AcpiDriverEc.TryReadByte(SubModeAddress, out byte previous))
         {
             return false;
@@ -76,10 +88,10 @@ internal static class TurboSubModeWmi
             AcpiDriverEc.TryWriteByte(SubModeAddress, previous);
             return false;
         }
-        return AcpiDriverEc.TryReadByte(SubModeAddress, out byte readback)
-            && (readback & 0x01) == (silent ? 0x01 : 0x00);
+        bool readOk = AcpiDriverEc.TryReadByte(SubModeAddress, out byte readback);
+        Logger.WriteErrorIfChanged("silent-turbo-apply", "[silent-turbo] 1832 0x" + previous.ToString("X2") + "→0x" + target.ToString("X2") + " · 回读" + (readOk ? "0x" + readback.ToString("X2") : "失败") + " · silent=" + silent);
+        return readOk && (readback & 0x01) == (silent ? 0x01 : 0x00);
     }
-
     private static bool TryGetInstance(out ManagementObject instance)
     {
         instance = null!;

@@ -103,6 +103,15 @@ internal static class GcuEcExperimental
     /// <summary>EC 本地静音狂暴子模式：1832 bit0。true=静音狂暴，false=高能狂暴。</summary>
     internal static bool TrySetSilentTurbo(bool silent, out string detail)
     {
+        // 与 TurboSubModeWmi 共用同一把锁：两条路径都改 1832 bit0，不能交叉读-改-写。
+        lock (TurboSubModeWmi.ApplyGate)
+        {
+            return TrySetSilentTurboUnlocked(silent, out detail);
+        }
+    }
+
+    private static bool TrySetSilentTurboUnlocked(bool silent, out string detail)
+    {
         detail = "";
         if (!Enabled)
         {
