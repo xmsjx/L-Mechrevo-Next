@@ -70,11 +70,40 @@ internal static class GcuEcKeyboard
         IteLightingLocal.PrimeCaches();
     }
 
+    /// <summary>
+    /// 能力位回报的键盘类型是否表明"不是单分区键盘"（例如 MEZone_* 单键系列）。
+    /// 未知（0 / 读不到）一律返回 false，保持旧分流不动。
+    /// </summary>
+    private static bool CapabilitySaysNotSingleZone()
+    {
+        try
+        {
+            MechrevoHw? hw = MechrevoLite.Program.hw;
+            if (hw == null)
+            {
+                return false;
+            }
+            int type = hw.CustomizeKeyboardType > 0 ? hw.CustomizeKeyboardType : (hw.Capabilities?.KeyboardType ?? 0);
+            if (type <= 0)
+            {
+                return false;
+            }
+            return !KeyboardFirmwareEffects.IsSingleZoneRgb(type);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static GcuEcKeyboardKind Detect(out string detail)
     {
         bool perKey = false;
         bool fourZone = false;
         List<string> seen = new();
+        int kbType = 0;
+        try { MechrevoHw? kbdHw = MechrevoLite.Program.hw; kbType = kbdHw == null ? 0 : (kbdHw.CustomizeKeyboardType > 0 ? kbdHw.CustomizeKeyboardType : (kbdHw.Capabilities?.KeyboardType ?? 0)); } catch { }
+        string typeText = " · 键盘类型=" + kbType;
         try
         {
             foreach (HidDeviceWin device in HidDeviceWin.Enumerate(IteVendorId))
@@ -82,12 +111,22 @@ internal static class GcuEcKeyboard
                 using (device)
                 {
                     seen.Add(device.DeviceInfo);
-                    if (device.ProductID == FourZoneProductId && device.UsagePage == FourZoneUsagePage)
+                    if (device.ProductID == FourZoneProductId)
                     {
-                        fourZone = true;
+                        if (device.UsagePage == FourZoneUsagePage)
+                        {
+                            fourZone = true;
+                            continue;
+                        }
+                        // 同一 PID 的 0xFF03 集合是键盘控制通道：能力位表明"不是单分区键盘"时按单键处理，
+                        // 与 KeyboardRgb 的评分口径一致；能力位未知时保持旧行为，不改变现有分流。
+                        if (device.UsagePage == 0xFF03 && CapabilitySaysNotSingleZone())
+                        {
+                            perKey = true;
+                        }
                         continue;
                     }
-                    if (device.ProductID is LightbarProductId or HingeProductId or FourZoneProductId)
+                    if (device.ProductID is LightbarProductId or HingeProductId)
                     {
                         continue;
                     }
@@ -116,25 +155,25 @@ internal static class GcuEcKeyboard
         string hid = seen.Count == 0 ? "无 ITE HID" : string.Join("; ", seen);
         if (perKey)
         {
-            detail = hid;
+            detail = hid + typeText;
             return GcuEcKeyboardKind.HidPerKey;
         }
         if (fourZone)
         {
-            detail = hid;
+            detail = hid + typeText;
             return GcuEcKeyboardKind.HidFourZone;
         }
         if (NucKeyboardLighting.IsSingleZone())
         {
-            detail = hid + " · 0x766 bit2=1";
+            detail = hid + typeText + " · 0x766 bit2=1";
             return GcuEcKeyboardKind.EcSingleZone;
         }
         if (EcKeyboardLight.ReadRegister() >= 0)
         {
-            detail = hid + " · 0x766 bit2=0 · 0x78C 可读";
+            detail = hid + typeText + " · 0x766 bit2=0 · 0x78C 可读";
             return GcuEcKeyboardKind.EcWhite;
         }
-        detail = hid + " · EC 不可读";
+        detail = hid + typeText + " · EC 不可读";
         return GcuEcKeyboardKind.None;
     }
 
