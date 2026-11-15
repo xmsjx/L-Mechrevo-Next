@@ -169,6 +169,20 @@ internal static class FeatureGate
         Check(lines, "gcu-gpu-mode-no-evidence", Facts(BackendKind.TongfangGcu),
             new FeatureProbe(true, false, false, null, false),
             FeatureAvailability.Unknown, BackendChannel.None, FeatureId.GpuModeSwitch);
+
+        // 性能档三项同样按能力位判：上报了就 Supported，没上报保持 Unknown。
+        Check(lines, "gcu-perf-tuning-supported", Facts(BackendKind.TongfangGcu),
+            new FeatureProbe(true, false, false, null, false, PerfTuningCapability: true),
+            FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.PerfTuning);
+        Check(lines, "gcu-perf-tuning-no-evidence", Facts(BackendKind.TongfangGcu),
+            new FeatureProbe(true, false, false, null, false),
+            FeatureAvailability.Unknown, BackendChannel.None, FeatureId.PerfTuning);
+        Check(lines, "gcu-turbo-mode-supported", Facts(BackendKind.TongfangGcu),
+            new FeatureProbe(true, false, false, null, false, TurboModeCapability: true),
+            FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.TurboMode);
+        Check(lines, "gcu-silent-turbo-unsupported", Facts(BackendKind.TongfangGcu),
+            new FeatureProbe(true, false, false, null, false, SilentTurboAvailability: FeatureAvailability.Unsupported),
+            FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.SilentTurbo);
         Check(lines, "ec-gpu-mode-unknown", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false),
             FeatureAvailability.Unknown, BackendChannel.None, FeatureId.GpuModeSwitch);

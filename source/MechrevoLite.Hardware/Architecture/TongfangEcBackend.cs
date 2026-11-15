@@ -225,6 +225,23 @@ internal sealed class TongfangEcBackend : IBackendModule
         FeatureDeclaration igpuOnly = probe.IgpuOnlyCapability
             ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local, "能力位上报仅集显输出", new[] { "registry:Capabilities.IgpuOnly" })
             : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报仅集显输出", new string[0]);
+
+        // 性能档三项：能力位上报了就按上报判，没上报保持 Unknown（⛔ 不写 Unsupported）。
+        FeatureDeclaration perfTuning = probe.PerfTuningCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local, "能力位上报 CPU 调优/风扇设置", new[] { "registry:Capabilities.CpuPerformanceTuning+FanSettings" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报 CPU 调优/风扇设置", new string[0]);
+        FeatureDeclaration perfProfile = probe.ProfileAvailableCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local, "能力位上报自定义档", new[] { "registry:Capabilities.ProfileAvailable" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报自定义档", new string[0]);
+        FeatureDeclaration turboMode = probe.TurboModeCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local, "能力位上报涡轮档", new[] { "registry:Capabilities.TurboMode" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报涡轮档", new string[0]);
+        FeatureDeclaration silentTurbo = probe.SilentTurboAvailability switch
+        {
+            MechrevoLite.Hardware.FeatureAvailability.Supported => new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local, "能力位三态=支持", new[] { "registry:Capabilities.SilentTurboAvailability" }),
+            MechrevoLite.Hardware.FeatureAvailability.Unsupported => new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None, "能力位三态=不支持", new string[0]),
+            _ => new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位三态未采集", new string[0])
+        };
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
@@ -245,14 +262,10 @@ internal sealed class TongfangEcBackend : IBackendModule
         [FeatureId.GpuModeSwitch] = gpuMode,
         [FeatureId.GpuHotSwap] = gpuHotSwap,
         [FeatureId.IgpuOnly] = igpuOnly,
-        [FeatureId.PerformanceProfile] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "自定义档：本后端未声明，交由门控回退旧判据", new string[0]),
-        [FeatureId.TurboMode] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "涡轮档：本后端未声明，交由门控回退旧判据", new string[0]),
-        [FeatureId.SilentTurbo] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "静音↔狂暴：本后端未声明，交由门控回退旧判据", new string[0]),
-        [FeatureId.PerfTuning] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "CPU 调优/风扇设置：本后端未声明，交由门控回退旧判据", new string[0])
+        [FeatureId.PerformanceProfile] = perfProfile,
+        [FeatureId.TurboMode] = turboMode,
+        [FeatureId.SilentTurbo] = silentTurbo,
+        [FeatureId.PerfTuning] = perfTuning
 			});
 	}
 }

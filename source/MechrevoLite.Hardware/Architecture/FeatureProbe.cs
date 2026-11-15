@@ -31,7 +31,11 @@ internal sealed record FeatureProbe(
 	string EcKeyboardKind = "",
 	bool GpuModeCapability = false,
 	bool GpuHotSwapCapability = false,
-	bool IgpuOnlyCapability = false)
+	bool IgpuOnlyCapability = false,
+	bool PerfTuningCapability = false,
+	bool ProfileAvailableCapability = false,
+	bool TurboModeCapability = false,
+	FeatureAvailability SilentTurboAvailability = FeatureAvailability.Unknown)
 	{
 
 	internal static FeatureProbe From(MechrevoHw? hw)
@@ -70,6 +74,10 @@ internal sealed record FeatureProbe(
 			GcuEcKeyboard.KindProbed ? GcuEcKeyboard.Kind.ToString() : "",
 			caps != null && caps.DgpuDirect,
 			caps != null && caps.GpuHotSwap,
-			caps != null && caps.IgpuOnly);
+			caps != null && caps.IgpuOnly,
+			caps != null && (caps.CpuPerformanceTuning || caps.FanSettings),
+			caps != null && caps.ProfileAvailable,
+			caps != null && caps.TurboMode,
+			caps?.SilentTurboAvailability ?? FeatureAvailability.Unknown);
 	}
 }
