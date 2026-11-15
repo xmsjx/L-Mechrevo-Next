@@ -473,7 +473,20 @@ internal sealed class WaterCoolerRoutingService : IDisposable
         RouteChanged?.Invoke();
     }
 
+    /// <summary>不发下发的档位占位：保存时忽略此项。</summary>
+    private const int NotSaved = -2;
+
     internal async Task<bool> SetPumpAsync(int profile)
+    {
+        bool ok = await SetPumpCoreAsync(profile).ConfigureAwait(false);
+        if (ok)
+        {
+            WaterCoolerRestore.Save(profile, NotSaved);
+        }
+        return ok;
+    }
+
+    private async Task<bool> SetPumpCoreAsync(int profile)
     {
         if (IsGcuRoute)
         {
@@ -493,6 +506,16 @@ internal sealed class WaterCoolerRoutingService : IDisposable
     }
 
     internal async Task<bool> SetFanAsync(int profile)
+    {
+        bool ok = await SetFanCoreAsync(profile).ConfigureAwait(false);
+        if (ok)
+        {
+            WaterCoolerRestore.Save(NotSaved, profile);
+        }
+        return ok;
+    }
+
+    private async Task<bool> SetFanCoreAsync(int profile)
     {
         if (profile >= 0)
         {

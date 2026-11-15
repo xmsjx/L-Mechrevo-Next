@@ -78,6 +78,33 @@ internal static class StartupRecoveryService
             PowerWallRestore.RunOnce();
         });
 
+        Try("WaterCoolerRestore.RunOnce", () =>
+        {
+            // 水冷档位固件不保存：把用户最后选的档位在开机后补发一次（没有保存值则跳过）。
+            if (!WaterCoolerRestore.HasSaved())
+            {
+                return;
+            }
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(4000).ConfigureAwait(false);
+                    WaterCoolerRoutingService? routing = WpfBackend.CreateWaterCoolerRouting();
+                    if (routing == null)
+                    {
+                        return;
+                    }
+                    await routing.InitializeAsync().ConfigureAwait(false);
+                    await WaterCoolerRestore.RunOnce(routing).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteError("[water-cooler] 启动重放异常：" + ex.Message);
+                }
+            });
+        });
+
         Logger.WriteLine("[startup-recovery] 启动恢复调度结束");
     }
 

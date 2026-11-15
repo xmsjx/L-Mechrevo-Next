@@ -507,6 +507,21 @@ internal static class WpfBackend
 
     internal static bool LocalPowerConfig() => GcuEcExperimental.LocalPowerConfig;
 
+    /// <summary>启动恢复用：按当前后端建一个水冷路由实例（不注册到窗口，用完即弃）。</summary>
+    internal static WaterCoolerRoutingService? CreateWaterCoolerRouting()
+    {
+        try
+        {
+            MechrevoHw? hw = Hw;
+            return hw == null ? null : new WaterCoolerRoutingService(hw, Service);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteError("[water-cooler] 建路由实例失败：" + ex.Message);
+            return null;
+        }
+    }
+
     internal static bool SmuReady() => SmuAvailability.IsReady;
 
     internal static bool TongfangFamily() => MachineIdentity.Collect().TongfangFamily;
