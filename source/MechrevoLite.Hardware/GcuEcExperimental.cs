@@ -80,10 +80,22 @@ internal static class GcuEcExperimental
             AcpiDriverEc.TryReadByte(0x0743, out byte db743);
             AcpiDriverEc.TryReadByte(0x0746, out byte db746);
             AcpiDriverEc.TryReadByte(0x072A, out byte biosLevel);
+            AcpiDriverEc.TryReadByte(1987, out byte r1987);
+            AcpiDriverEc.TryReadByte(1904, out byte r1904);
+            AcpiDriverEc.TryReadByte(1977, out byte r1977);
+            AcpiDriverEc.TryReadByte(2000, out byte r2000);
+            AcpiDriverEc.TryReadByte(1958, out byte r1958);
+            AcpiDriverEc.TryReadByte(1857, out byte r1857);
+            AcpiDriverEc.TryReadByte(1927, out byte r1927);
+            AcpiDriverEc.TryReadByte(1990, out byte r1990);
+            string hotkey = " k1987=0x" + r1987.ToString("X2") + " k1904=0x" + r1904.ToString("X2")
+                + " k1977=0x" + r1977.ToString("X2") + " k2000=0x" + r2000.ToString("X2")
+                + " k1958=0x" + r1958.ToString("X2") + " k1857=0x" + r1857.ToString("X2")
+                + " k1927=0x" + r1927.ToString("X2") + " k1990=0x" + r1990.ToString("X2");
             string extra = " led1830=0x" + whiteLed.ToString("X2") + " cam1831=0x" + camFlag.ToString("X2")
                 + " iso1989=0x" + isolated.ToString("X2") + " u727=0x" + unit727.ToString("X2")
                 + " db743=0x" + db743.ToString("X2") + " db746=0x" + db746.ToString("X2")
-                + " lvl72A=0x" + biosLevel.ToString("X2");
+                + " lvl72A=0x" + biosLevel.ToString("X2") + hotkey;
             string snapshot = "mode=0x" + mode.ToString("X2") + " trigger=0x" + trigger.ToString("X2")
                 + " turbo=0x" + turbo.ToString("X2") + " silent=0x" + silent.ToString("X2")
                 + " clamp=0x" + clamp.ToString("X2") + " custom=0x" + custom.ToString("X2") + extra;
