@@ -39,6 +39,31 @@ internal static class QuickIconFactory
 	}
 
 	/// <summary>风扇标（强冷）：磁贴与 OSD 共用同一几何。</summary>
+	/// <summary>Copilot 标志（实心图 + 主题色填充）。</summary>
+	internal static FrameworkElement CreateCopilotShape(Brush? fill = null)
+	{
+		ImageBrush mask = new(new BitmapImage(
+			new Uri("pack://application:,,,/L-Mechrevo;component/Assets/Icons/copilot-line.png")))
+		{
+			Stretch = Stretch.Uniform
+		};
+		Rectangle rect = new()
+		{
+			Width = 15,
+			Height = 14,
+			OpacityMask = mask
+		};
+		if (fill != null)
+		{
+			rect.Fill = fill;
+		}
+		else
+		{
+			rect.SetResourceReference(Shape.FillProperty, "TextBrush");
+		}
+		return rect;
+	}
+
 	internal static FrameworkElement CreateFanShape(Brush? fill = null)
 	{
 		Path fan = new()
@@ -90,6 +115,7 @@ internal static class QuickIconFactory
 		{
 			"fanboost" => CreateFanShape(Brushes.White),
 			"winlogo" => CreateWindowsLogo(16, Brushes.White),
+			"copilot" => CreateCopilotShape(Brushes.White),
 			_ => null
 		};
 		if (shape == null)
@@ -143,19 +169,7 @@ internal static class QuickIconFactory
 
 		if (string.Equals(key, "copilot", StringComparison.OrdinalIgnoreCase))
 		{
-			ImageBrush mask = new(new BitmapImage(
-				new Uri("pack://application:,,,/L-Mechrevo;component/Assets/Icons/copilot-line.png")))
-			{
-				Stretch = Stretch.Uniform
-			};
-			Rectangle rect = new()
-			{
-				Width = 15,
-				Height = 14,
-				OpacityMask = mask
-			};
-			rect.SetResourceReference(Shape.FillProperty, "TextBrush");
-			return rect;
+			return CreateCopilotShape();
 		}
 
 		// 文字图标（Num / Fn / Aa 等）：图标字体没有这些字符，必须用正文字体，否则是方框。

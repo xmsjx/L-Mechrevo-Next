@@ -208,7 +208,7 @@ public partial class OriginalStyleWindow : Window
         ("webcam", QuickSwitchService.Label("webcam", "摄像头"), "\uE722"), ("micmute", QuickSwitchService.Label("micmute", "麦克风"), "\uE720"),
         ("numpad", QuickSwitchService.Label("numpad", "小键盘锁"), "Num"), ("winkey", QuickSwitchService.Label("winkey", "禁用Win键"), "winlogo"),
         ("fnkey", QuickSwitchService.Label("fnkey", "Fn键锁"), "Fn"), ("capslock", QuickSwitchService.Label("capslock", "大小写锁定"), "Aa"),
-        ("osd", QuickSwitchService.Label("osd", "OSD提示"), "\uE7F4"), ("gcuosd", "GCU-OSD", "\uE7F4"), ("copilot", QuickSwitchService.Label("copilot", "Copilot键锁"), "\uE8B7"),
+        ("osd", QuickSwitchService.Label("osd", "OSD提示"), "\uE7F4"), ("gcuosd", "GCU-OSD", "\uE7F4"), ("copilot", QuickSwitchService.Label("copilot", "Copilot键锁"), "copilot"),
         ("usb", QuickSwitchService.Label("usb", "关机USB供电"), "\uE88E"), ("acrecovery", QuickSwitchService.Label("acrecovery", "来电自启"), "\uE7E8"),
         ("highperf", QuickSwitchService.Label("highperf", "高性能电源"), "\uE945"), ("apuboost", QuickSwitchService.Label("apuboost", WpfStrings.QuickApuBoost), "\uE9D9"),
         ("fanboost", QuickSwitchService.Label("fanboost", "强冷"), "fanboost"), ("deepsleep", QuickSwitchService.Label("deepsleep", "深度睡眠"), "\uE708"),
