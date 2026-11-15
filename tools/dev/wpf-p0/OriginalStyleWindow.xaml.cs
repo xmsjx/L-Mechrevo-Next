@@ -168,6 +168,10 @@ public partial class OriginalStyleWindow : Window
     private bool _gpuPromptOpen;
     private bool _syncingDisplayEffect;
     private bool _syncingBatteryLimit;
+
+    // 电池三档：用户刚点过的档位与时间戳（2.5 秒内不被后端回包覆盖）。
+    private int _batteryModeLockedMode = -1;
+    private long _batteryModeLockedAt;
     private bool _batteryLimitLoaded;
     private bool _xingyaoChargeLoaded;
     private bool? _chargeLimitChannelProbe;
@@ -1675,6 +1679,12 @@ public partial class OriginalStyleWindow : Window
 
     private void ApplyBatteryModeHighlight(int mode)
     {
+        // 用户刚点过档位：2.5 秒内不让后端回包把高亮弹走（GCU 自己写 0x7A6 那一拍会滞后）。
+        long nowTick = Environment.TickCount64;
+        if (_batteryModeLockedMode >= 0 && nowTick - _batteryModeLockedAt < 2500)
+        {
+            mode = _batteryModeLockedMode;
+        }
         // 无极限充开启时，三档按钮只是 60/80/100 的快捷高亮；
         // 滑块在其它阈值时保持三个按钮都不高亮，避免误显示成某一档。
         if (ChargeSliderToggle?.IsChecked == true && BatteryLimitSlider != null)
@@ -5429,7 +5439,8 @@ public partial class OriginalStyleWindow : Window
             : await _backendProbe.SwitchGpuModeAsync(mode);
         if (_services != null) { await _services.Gpu.RefreshAsync(); } else { await _backendProbe.RefreshGpuModeAsync(); }
         int current = _backendProbe.CurrentGpuMode;
-        if (ok && current != mode)
+        // 切到核显(0)/独显直连(2) 都需要重启；回读可能已经是目标值，不能拿它当判据。
+        if (ok && mode != 1)
         {
             if (_services != null) { _services.Gpu.MarkRestartPending(mode); } else { _backendProbe.MarkGpuRestartPending(mode); }
             UpdateGpuButtons(mode, pending: true);
@@ -5523,6 +5534,9 @@ public partial class OriginalStyleWindow : Window
         }
         HighlightSegment(button);
         int mode = int.Parse(text);
+        // 记住用户这次选的档位：后端回包滞后时不要把手上的高亮弹走。
+        _batteryModeLockedMode = mode;
+        _batteryModeLockedAt = Environment.TickCount64;
         int percentForMode = mode switch { 0 => 100, 1 => 80, 2 => 60, _ => 80 };
 
         // 宝龙达三档：直接写充电上下限，并把文本框同步到实际阈值。
@@ -5558,8 +5572,8 @@ public partial class OriginalStyleWindow : Window
                 ApplyBatteryModeHighlight(mode);
                 StatusText.Text = mode switch
                 {
-                    1 => "平衡模式：充电 75~80%",
-                    2 => "工作站模式：充电 55~60%",
+                    1 => "平衡模式：充电 80%",
+                    2 => "工作站模式：充电 60%",
                     _ => "长效模式：不限制充电"
                 };
             }
@@ -5602,8 +5616,8 @@ public partial class OriginalStyleWindow : Window
                 ApplyBatteryModeHighlight(mode);
                 StatusText.Text = mode switch
                 {
-                    1 => "平衡模式：充电 75~80%",
-                    2 => "工作站模式：充电 55~60%",
+                    1 => "平衡模式：充电 80%",
+                    2 => "工作站模式：充电 60%",
                     _ => "长效模式：不限制充电"
                 };
             }
@@ -5680,8 +5694,8 @@ public partial class OriginalStyleWindow : Window
                 L_Mechrevo.WpfP0.Services.WpfBackend.StartChargeModeWatch(reassertMode);
                 string baseText = mode switch
                 {
-                    1 => "平衡模式：充电 75~80%",
-                    2 => "工作站模式：充电 55~60%",
+                    1 => "平衡模式：充电 80%",
+                    2 => "工作站模式：充电 60%",
                     _ => "长效模式：不限制充电"
                 };
             // 本机没有 GCU 通道时不是失败（档位已由 EC 写入），只有 GCU 在却发布失败才提示。
