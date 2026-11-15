@@ -141,6 +141,20 @@ internal static class FeatureGate
 		Check(lines, "nuc-lightbar-evidence", Facts(BackendKind.NucUmiLocal),
 			new FeatureProbe(false, false, false, null, false, LightbarCapability: true),
 			FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
+        // 本地 USB 灯带证据明确为 false 且没有任何能力位来源 ⇒ 断言不支持（不是"未采集"）。
+        Check(lines, "ec-lightbar-none-evidence", Facts(BackendKind.TongfangEc),
+            new FeatureProbe(false, false, false, null, false, false, false, false),
+            FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.Lightbar);
+        // 性能档与显卡三项在 EC 路统一先声明 Unknown（界面回退旧判据）。
+        Check(lines, "ec-perf-tuning-unknown", Facts(BackendKind.TongfangEc),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Unknown, BackendChannel.None, FeatureId.PerfTuning);
+        Check(lines, "ec-silent-turbo-unknown", Facts(BackendKind.TongfangEc),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Unknown, BackendChannel.None, FeatureId.SilentTurbo);
+        Check(lines, "ec-gpu-mode-unknown", Facts(BackendKind.TongfangEc),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Unknown, BackendChannel.None, FeatureId.GpuModeSwitch);
 		Check(lines, "nuc-lightbar-unprobed", Facts(BackendKind.NucUmiLocal),
 			new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None, FeatureId.Lightbar);
