@@ -15,9 +15,10 @@ internal sealed class PerformanceKeyService : IDisposable
     private static readonly int[] PerformanceKeyAliases = new int[2] { 192, 201 };
     private ManagementEventWatcher? _watcher;
     private long _lastPressedTick;
-    private bool _started;
+    private int _started;
     private int _eventCount;
     private System.Threading.Timer? _heartbeat;
+    private Thread? _listenThread;
 
     internal event Action? Pressed;
 
@@ -26,28 +27,63 @@ internal sealed class PerformanceKeyService : IDisposable
 
     internal void Start()
     {
-        if (_started)
+        if (Interlocked.Exchange(ref _started, 1) != 0)
         {
             return;
         }
-        try
+        _heartbeat = new System.Threading.Timer(_ =>
         {
-            WqlEventQuery query = new("SELECT * FROM AcpiTest_EventULong");
-            _watcher = new ManagementEventWatcher(new ManagementScope("root\\WMI"), query);
-            _watcher.EventArrived += OnEventArrived;
-            _watcher.Stopped += (_, e) => Logger.WriteError("[perfkey] 监听停止：status=" + e.Status);
-            _watcher.Start();
-            _started = true;
-            Logger.WriteError("[perfkey] 已订阅 ACPI 性能键事件 ULong=" + PerformanceKeyCode);
-            _heartbeat = new System.Threading.Timer(_ =>
+            Logger.WriteErrorIfChanged("perfkey-alive-" + _eventCount, "[perfkey] 监听中 · 本次运行累计收到 ACPI 事件 " + _eventCount + " 条（0 条 = 事件没送到本进程）");
+        }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+        // WMI 事件流放在独立 MTA 线程：界面线程是 STA，事件回调在 STA 上容易收不到。
+        _listenThread = new Thread(ListenLoop)
+        {
+            IsBackground = true,
+            Name = "acpi-event-watcher"
+        };
+        _listenThread.SetApartmentState(ApartmentState.MTA);
+        _listenThread.Start();
+    }
+
+    private void ListenLoop()
+    {
+        DateTime subscribedAt = DateTime.MinValue;
+        while (Volatile.Read(ref _started) != 0)
+        {
+            try
             {
-                Logger.WriteErrorIfChanged("perfkey-alive-" + _eventCount, "[perfkey] 监听中 · 本次运行累计收到 ACPI 事件 " + _eventCount + " 条（0 条 = 事件没送到本进程）");
-            }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
-        }
-        catch (Exception ex)
-        {
-            Logger.WriteError("[perfkey] 订阅失败：" + ex.Message);
-            Dispose();
+                WqlEventQuery query = new("SELECT * FROM AcpiTest_EventULong");
+                _watcher = new ManagementEventWatcher(new ManagementScope("root\\WMI"), query);
+                _watcher.EventArrived += OnEventArrived;
+                _watcher.Stopped += (_, e) => Logger.WriteError("[perfkey] 监听停止：status=" + e.Status);
+                _watcher.Start();
+                subscribedAt = DateTime.UtcNow;
+                Logger.WriteError("[perfkey] 已订阅 ACPI 性能键事件 ULong=" + PerformanceKeyCode + "（独立 MTA 线程）");
+                // 每 20 分钟重建一次订阅，避免长时间运行后事件流静默失效。
+                while (Volatile.Read(ref _started) != 0
+                    && (DateTime.UtcNow - subscribedAt).TotalMinutes < 20)
+                {
+                    Thread.Sleep(1000);
+                }
+                try
+                {
+                    _watcher.EventArrived -= OnEventArrived;
+                    _watcher.Stop();
+                }
+                catch
+                {
+                }
+                _watcher = null;
+                if (Volatile.Read(ref _started) != 0)
+                {
+                    Logger.WriteError("[perfkey] 定期重建订阅（20 分钟）");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteError("[perfkey] 订阅失败：" + ex.Message);
+                Thread.Sleep(2000);
+            }
         }
     }
 
@@ -93,7 +129,8 @@ internal sealed class PerformanceKeyService : IDisposable
     {
         _heartbeat?.Dispose();
         _heartbeat = null;
-        _started = false;
+        System.Threading.Volatile.Write(ref _started, 0);
+        _listenThread = null;
         if (_watcher != null)
         {
             try
