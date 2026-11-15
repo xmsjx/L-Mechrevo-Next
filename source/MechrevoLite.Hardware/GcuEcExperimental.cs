@@ -205,6 +205,15 @@ internal static class GcuEcExperimental
             {
                 visualMode = 0;
             }
+            // mode 的 bit4 仍保留作辅助判据：clamp 落在未知值时靠它兜底；
+            // 两者矛盾时以 clamp 为准，并记一条冲突日志，便于继续观察固件改档行为。
+            bool modeSaysTurbo = (mode & 0x10) != 0;
+            bool clampSaysTurbo = (clamp & 0xF0) == 0x10;
+            bool clampSaysSilent = (clamp & 0xF0) == 0xA0;
+            if (custom != 65 && !clampSaysSilent && modeSaysTurbo != clampSaysTurbo)
+            {
+                Logger.WriteErrorIfChanged("ec-mode-conflict-" + mode + "-" + clamp, "[gcu-ec] 档位判据冲突：mode=0x" + mode.ToString("X2") + " clamp=0x" + clamp.ToString("X2") + " ⇒ 以 clamp 为准（判为 " + visualMode + "）");
+            }
             // 自定义档兜底：本程序刚写过自定义、而硬件回读还没跟上时，仍按自定义显示；60 秒后以硬件为准。
             if (visualMode != 3 && System.Threading.Volatile.Read(ref _selfCustomMode) != 0)
             {
