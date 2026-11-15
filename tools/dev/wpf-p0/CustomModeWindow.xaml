@@ -177,12 +177,12 @@
                                     <CheckBox x:Name="Pl4EditSwitch" Style="{DynamicResource HeaderSwitch}" Checked="Pl4EditSwitch_Changed" Unchecked="Pl4EditSwitch_Changed" />
                                     <StackPanel x:Name="Pl4UnitControls" Orientation="Horizontal" Margin="10,0,0,0" Visibility="Collapsed">
                                         <Button x:Name="Pl4UnitDefaultButton" Content="默认" Style="{DynamicResource FlatButton}" Padding="10,3" Margin="0,0,10,0" Click="Pl4UnitDefault_Click" />
-                                        <TextBlock Text="EC双倍口径" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                        <TextBlock Text="双倍EC值" VerticalAlignment="Center" Margin="0,0,8,0" />
                                         <CheckBox x:Name="Pl4UnitSwitch" Style="{DynamicResource HeaderSwitch}" VerticalAlignment="Center" Margin="0,0,10,0"
                                                   Checked="Pl4UnitSwitch_Changed" Unchecked="Pl4UnitSwitch_Changed">
                                             <CheckBox.ToolTip>
                                                 <TextBlock MaxWidth="320" TextWrapping="Wrap"
-                                                           Text="开：PL4 = 双倍 EC 值（2W/LSB）&#10;关：PL4 = 单倍 EC 值（1W/LSB）&#10;按机型实际 EC 值显示；默认按钮恢复本机首次读取值。" />
+                                                           Text="开：解锁双倍 PL4 上限（2W/LSB）&#10;关：关闭双倍 PL4 上限（1W/LSB）&#10;默认按钮恢复本机首次记录的口径。" />
                                             </CheckBox.ToolTip>
                                         </CheckBox>
                                     </StackPanel>

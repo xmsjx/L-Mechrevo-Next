@@ -3,7 +3,7 @@ using System;
 namespace MechrevoLite.Hardware;
 
 /// <summary>
-/// Intel 星耀 PL4 单位口径（EC 0x0727 bit7）。
+/// 同方模具 Intel 机型的 PL4 单位口径（EC 0x0727 bit7）。
 /// <para>bit7=1 ⇒ PL4 按 2W/LSB；bit7=0 ⇒ 1W/LSB。</para>
 /// <para>⚠️ 实验性：只改这一个位，保留其它位；写完立即回读。</para>
 /// <para>⚠️ PL1/PL2 不受该位影响，恒为 1W/LSB。</para>
@@ -22,6 +22,7 @@ internal static class EcPl4Unit
             {
                 return CpuVendor.IsIntel
                     && !XingyaoPmc2.IsXingyaoPlatform()
+                    && !WujieSmuGate.IsWujieApu()
                     && MechrevoHw.IsGcuServiceInstalled
                     && AcpiDriverEc.TryReadByte(Register, out _);
             }

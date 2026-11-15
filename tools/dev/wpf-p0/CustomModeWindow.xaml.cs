@@ -825,7 +825,11 @@ public partial class CustomModeWindow : Window
             && L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
             && (hwForRows.IsTongfangFamily
                 || L_Mechrevo.WpfP0.Services.WpfBackend.TongfangFamily());
-        Pl4UnitRow.Visibility = tongfangMoldIntel ? Visibility.Visible : Visibility.Collapsed;
+        // PL4 口径只属于同方模具 Intel 机型：星耀 / 无界不显示。
+        bool pl4UnitAvailable = tongfangMoldIntel
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.IsXingyaoPlatform
+            && hwForRows?.WujieSmuApu != true;
+        Pl4UnitRow.Visibility = pl4UnitAvailable ? Visibility.Visible : Visibility.Collapsed;
         _syncingPl4Unit = true;
         try
         {
@@ -838,18 +842,25 @@ public partial class CustomModeWindow : Window
                 _pl4Unit = pl4Double ? 2 : 1;
                 Pl4UnitSwitch.IsChecked = pl4Double;
                 Pl4UnitSwitch.IsEnabled = true;
-                L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram?.SetPl4UnitDouble(pl4Double);
-                Pl4UnitStatus.Text = "0x0727=0x" + pl4Raw.ToString("X2") + " · " + (pl4Double ? "2W/LSB" : "1W/LSB");
-                RefreshPl4Readback("");
-                RecordPl4Default(pl4Double);
+                Pl4UnitStatus.Text = Pl4StatusText(pl4Double, pl4Raw);
+                if (open)
+                {
+                    // 实验开关打开才按 EC 口径覆盖；关闭时不动口径门控。
+                    L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram?.SetPl4UnitDouble(pl4Double);
+                    RecordPl4Default(pl4Double);
+                    RefreshPl4Readback("");
+                }
             }
             else
             {
                 Pl4UnitSwitch.IsChecked = false;
                 Pl4UnitSwitch.IsEnabled = false;
-                Pl4UnitStatus.Text = "0x0727 读取失败";
-                // EC 口径读不到：清掉覆盖值，回落到后端回报的口径，避免沿用上一次的旧口径。
-                L_Mechrevo.WpfP0.Services.WpfBackend.ClearPl4UnitOverride();
+                Pl4UnitStatus.Text = "本机 EC 地址 0x0727 读取失败（口径按后端回报显示）";
+                if (open)
+                {
+                    // 读不到就回落后端口径，不要沿用旧口径。
+                    L_Mechrevo.WpfP0.Services.WpfBackend.ClearPl4UnitOverride();
+                }
             }
         }
         finally
@@ -1331,9 +1342,7 @@ public partial class CustomModeWindow : Window
             {
                 _syncingPowerWalls = false;
             }
-            Pl4UnitStatus.Text = prefix + "0x0727=0x" + gateRaw.ToString("X2")
-                + " · " + (doubleUnit ? "2W/LSB" : "1W/LSB")
-                + " · PL4回读=" + watts + "W（0x0785=" + raw + "）";
+            Pl4UnitStatus.Text = prefix + Pl4StatusText(doubleUnit, gateRaw) + " · PL4回读=" + watts + "W";
         }
         catch
         {
@@ -1348,6 +1357,12 @@ public partial class CustomModeWindow : Window
             board = board.Replace(ch, '_');
         }
         return "pl4_unit_default_" + (string.IsNullOrWhiteSpace(board) ? "unknown" : board.Trim());
+    }
+
+    /// <summary>本机 PL4 口径说明（不带裸 EC 术语，便于用户理解）。</summary>
+    private static string Pl4StatusText(bool doubleUnit, byte raw)
+    {
+        return "本机默认为" + (doubleUnit ? "双倍" : "单倍") + " PL4 上限 · 开关开解锁双倍上限 PL4 · 开关关关闭双倍 PL4 · EC地址 0x" + raw.ToString("X2");
     }
 
     private void RecordPl4Default(bool defaultDouble)
@@ -1382,6 +1397,35 @@ public partial class CustomModeWindow : Window
         Pl4UnitControls.Visibility = open ? Visibility.Visible : Visibility.Collapsed;
         MechrevoLite.AppConfig.Set("pl4_edit_open", open ? 1 : 0);
         MechrevoLite.AppConfig.Flush();
+        if (!open)
+        {
+            // 实验开关关闭：撤掉本次覆盖，口径交回后端/EC 自身。
+            L_Mechrevo.WpfP0.Services.WpfBackend.ClearPl4UnitOverride();
+            return;
+        }
+        // 首次打开：先按 EC 实际读取值显示，未拨动前不写 EC。
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool ecDouble, out byte ecRaw))
+        {
+            _syncingPl4Unit = true;
+            try
+            {
+                Pl4UnitSwitch.IsChecked = ecDouble;
+                Pl4UnitSwitch.IsEnabled = true;
+            }
+            finally
+            {
+                _syncingPl4Unit = false;
+            }
+            _pl4Unit = ecDouble ? 2 : 1;
+            L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram?.SetPl4UnitDouble(ecDouble);
+            RecordPl4Default(ecDouble);
+            Pl4UnitStatus.Text = Pl4StatusText(ecDouble, ecRaw);
+            RefreshPl4Readback("");
+        }
+        else
+        {
+            Pl4UnitStatus.Text = "本机 EC 地址 0x0727 读取失败（口径按后端回报显示）";
+        }
     }
 
     private void Pl4UnitDefault_Click(object sender, RoutedEventArgs e)
@@ -1415,7 +1459,7 @@ public partial class CustomModeWindow : Window
                 if (L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool actual, out byte raw))
                 {
                     Pl4UnitSwitch.IsChecked = actual;
-                    Pl4UnitStatus.Text = "0x0727=0x" + raw.ToString("X2") + " · 仅预览（本机不可写）";
+                    Pl4UnitStatus.Text = Pl4StatusText(actual, raw) + " · 本机不可写，仅显示";
                     RefreshPl4Readback("仅预览 · ");
                 }
             }
@@ -1433,7 +1477,7 @@ public partial class CustomModeWindow : Window
                 if (L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool actual, out byte raw))
                 {
                     Pl4UnitSwitch.IsChecked = actual;
-                    Pl4UnitStatus.Text = "0x0727=0x" + raw.ToString("X2");
+                    Pl4UnitStatus.Text = Pl4StatusText(actual, raw);
                 }
             }
             finally
