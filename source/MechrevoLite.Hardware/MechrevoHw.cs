@@ -1944,6 +1944,23 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		return basis > 255 ? 1 : Pl4Scale;
 	}
 
+	/// <summary>PL4 口径诊断：把原始回报值与最终换算值一起打出来，用于判断上限来源。</summary>
+	internal string Pl4Diagnostic()
+	{
+		try
+		{
+			int scale = Pl4ReadScale();
+			return "pl4=" + Pl4 + "（raw=" + _pl4Raw + "）"
+				+ " · min=" + Pl4Minimum + "（raw=" + _pl4RawMinimum + "）"
+				+ " · max=" + Pl4Maximum + "（raw=" + _pl4RawMaximum + "）"
+				+ " · scale=" + scale + " · double=" + Pl4Double + " · override=" + (_pl4UnitOverride?.ToString() ?? "无");
+		}
+		catch (Exception ex)
+		{
+			return "诊断失败：" + ex.Message;
+		}
+	}
+
 	internal string Pl4WireKey
 	{
 		get

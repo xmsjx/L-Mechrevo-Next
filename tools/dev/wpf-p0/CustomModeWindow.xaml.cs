@@ -164,6 +164,7 @@ public partial class CustomModeWindow : Window
         SetRange(Pl1Slider, hw.Pl1Minimum, hw.Pl1Maximum);
         SetRange(Pl2Slider, hw.Pl2Minimum, hw.Pl2Maximum);
         SetRange(Pl4Slider, hw.Pl4Minimum, hw.Pl4Maximum);
+            Logger.WriteErrorIfChanged("pl4-range", "[pl4] 自定义窗口范围核对 → " + hw.Pl4Diagnostic() + " · 滑块=" + Pl4Slider.Minimum + "…" + Pl4Slider.Maximum);
         SetRange(TccSlider, hw.TccMinimum, hw.TccMaximum);
         SetRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
         SetRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
@@ -1136,6 +1137,7 @@ public partial class CustomModeWindow : Window
             }
         }
         SetSliderRange(Pl4Slider, hw.Pl4Minimum, hw.Pl4Maximum);
+            Logger.WriteErrorIfChanged("pl4-range", "[pl4] 自定义窗口范围核对 → " + hw.Pl4Diagnostic() + " · 滑块=" + Pl4Slider.Minimum + "…" + Pl4Slider.Maximum);
         // GCU Intel 的 PL4/fPPT 可能只回当前值、不回范围；给可调范围，避免 fPPT 被整行隐藏。
         if (IsGcuTongfangMachine() && (hw.Pl4Minimum < 0 || hw.Pl4Maximum <= hw.Pl4Minimum))
         {
@@ -1188,6 +1190,7 @@ public partial class CustomModeWindow : Window
             SetSliderRange(Pl1Slider, hw.Pl1Minimum, hw.Pl1Maximum);
             SetSliderRange(Pl2Slider, hw.Pl2Minimum, hw.Pl2Maximum);
             SetSliderRange(Pl4Slider, hw.Pl4Minimum, hw.Pl4Maximum);
+            Logger.WriteErrorIfChanged("pl4-range", "[pl4] 自定义窗口范围核对 → " + hw.Pl4Diagnostic() + " · 滑块=" + Pl4Slider.Minimum + "…" + Pl4Slider.Maximum);
             SetSliderRange(TccSlider, hw.TccMinimum, hw.TccMaximum);
             SetSliderRange(GpuTgpSlider, hw.GpuTgpMinimum, hw.GpuTgpMaximum);
             SetSliderRange(DbSlider, hw.GpuDbMinimum, hw.GpuDbMaximum);
