@@ -2400,10 +2400,10 @@ public partial class MainWindow : Window
         HomeDisplayGap.Width = displaySupported ? new GridLength(10) : new GridLength(0);
         Grid.SetColumn(BatteryCardHost, displaySupported ? 2 : 0);
         Grid.SetColumnSpan(BatteryCardHost, displaySupported ? 1 : 3);
-        bool hasLighting = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("KeyboardLight", false)
+        bool hasLighting = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureState("KeyboardLight") == 1
             || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("Lightbar", false)
             || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("LogoLight", false)
-            || _probe?.Hw?.SupportsKeyboard == true || _probe?.Hw?.SupportsLightbar == true
+            || _probe?.Hw?.SupportsLightbar == true
             || _probe?.Hw?.SupportsLogoLight == true
             || (ecLocal && (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardActiveNow
                 || L_Mechrevo.WpfP0.Services.WpfBackend.IteHasLightbar

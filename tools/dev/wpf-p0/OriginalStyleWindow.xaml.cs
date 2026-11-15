@@ -7602,8 +7602,7 @@ public partial class OriginalStyleWindow : Window
             AutoRefreshSwitch.Visibility = platform.AutoRefreshVisible ? Visibility.Visible : Visibility.Collapsed;
             bool hasKeyboard = EcKeyboardActive
                 ? EcKeyboardControllable
-                : L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("KeyboardLight", (hw?.SupportsKeyboard ?? false)
-                || hw?.IsNucUmiFamily == true);
+                : L_Mechrevo.WpfP0.Services.WpfBackend.FeatureState("KeyboardLight") == 1;
         bool hasLightbar = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("Lightbar", (hw?.SupportsLightbar ?? false)
                 || _services?.Lighting.LocalLightbarSupported == true
             || hw?.IsNucUmiFamily == true);
@@ -7747,7 +7746,7 @@ public partial class OriginalStyleWindow : Window
         }
         bool keyboard = EcKeyboardActive
             ? EcKeyboardControllable
-            : L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("Keyboard") || (hw?.SupportsKeyboard ?? false)
+            : L_Mechrevo.WpfP0.Services.WpfBackend.FeatureState("KeyboardLight") == 1
                 || hw?.IsNucUmiFamily == true;
         bool legacyKeyboard = keyboard;
         keyboard = ResolveLightChannel(LightingTopics.Keyboard, legacyKeyboard);
