@@ -7566,13 +7566,13 @@ public partial class OriginalStyleWindow : Window
             bool umiGpuMode = hw?.IsUmiMachine == true;
             bool nucNoGpuSwitch = hw?.IsIntelNucMachine == true;
             bool gpuRowHidden = hw?.GpuRowHiddenByGcuReports == true;
-        bool directSupported = hw?.SupportsDgpuDirect ?? L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuModeSwitch", "DgpuDirect");
-        bool gpuSwitchSupported = hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuModeSwitch", "DgpuDirect") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("IgpuOnly", "IgpuOnly") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuHotSwap", "GpuHotSwap"));
+        bool directSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", hw?.SupportsDgpuDirect ?? false);
+        bool gpuSwitchSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("DgpuDirect") || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly") || L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap"))));
             GpuDirectButton.Visibility = directSupported ? Visibility.Visible : Visibility.Collapsed;
             bool dgpuPresent = hw != null && hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
             bool noSwitchButHasDgpu = !gpuSwitchSupported && dgpuPresent;
             GpuSection.Visibility = (!nucNoGpuSwitch && !gpuRowHidden
-                && (gpuSwitchSupported || directSupported || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("GpuHotSwap", "GpuHotSwap") || umiGpuMode || noSwitchButHasDgpu))
+                && (gpuSwitchSupported || directSupported || L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap")) || umiGpuMode || noSwitchButHasDgpu))
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             GpuModeRow.Visibility = gpuSwitchSupported ? Visibility.Visible : Visibility.Collapsed;
@@ -7715,7 +7715,7 @@ public partial class OriginalStyleWindow : Window
         var hw = _backendProbe.Hw;
         MechrevoDeviceCapabilities? caps = _backendProbe.Capabilities;
         string igpuMode = AppConfig.GetString("igpu_only_ui") ?? "auto";
-        bool igpuSupported = hw?.CanOfferIgpuOnly ?? (L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly") || (hw?.SupportsIgpuOnly ?? false));
+        bool igpuSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("IgpuOnly", hw?.CanOfferIgpuOnly ?? ((L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly")) || (hw?.SupportsIgpuOnly ?? false)));
         if (hw?.GpuRowHiddenByGcuReports == true)
         {
             GpuEcoButton.Visibility = Visibility.Collapsed;

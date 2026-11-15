@@ -794,6 +794,70 @@ internal static class WpfBackend
     }
 
     /// <summary>按特征名读门控结论；后端未就绪或名字未知时退回调用方给的 legacy 判定。</summary>
+    /// <summary>门控三态：1=Supported · 0=Unsupported · 2=Unknown（含名字未知、后端未就绪）。</summary>
+    internal static int FeatureState(string feature)
+    {
+        try
+        {
+            MechrevoHw? hw = HwOrProgram;
+            MechrevoLite.Hardware.Architecture.FeatureId? id = MapFeature(feature);
+            if (hw == null || id == null)
+            {
+                return 2;
+            }
+            MechrevoLite.Hardware.Architecture.FeatureDecision decision =
+                MechrevoLite.Hardware.Architecture.FeatureGate.Get(id.Value, hw);
+            return decision.State switch
+            {
+                MechrevoLite.Hardware.FeatureAvailability.Supported => 1,
+                MechrevoLite.Hardware.FeatureAvailability.Unsupported => 0,
+                _ => 2
+            };
+        }
+        catch
+        {
+            return 2;
+        }
+    }
+
+    /// <summary>门控优先、只在 Unknown 时用调用方的硬件事实。</summary>
+    internal static bool FeatureOrHardware(string feature, bool hardwareValue)
+    {
+        int state = FeatureState(feature);
+        return state == 2 ? hardwareValue : state == 1;
+    }
+
+    /// <summary>特征名 → FeatureId（界面只传字符串名，不引用硬件层类型）。</summary>
+    private static MechrevoLite.Hardware.Architecture.FeatureId? MapFeature(string feature)
+    {
+        const string N = "MechrevoLite.Hardware.Architecture.FeatureId.";
+        return feature switch
+        {
+            "LogoLight" => MechrevoLite.Hardware.Architecture.FeatureId.LogoLight,
+            "Lightbar" => MechrevoLite.Hardware.Architecture.FeatureId.Lightbar,
+            "KeyboardLight" => MechrevoLite.Hardware.Architecture.FeatureId.KeyboardLight,
+            "HingeLight" => MechrevoLite.Hardware.Architecture.FeatureId.HingeLight,
+            "SyncLight" => MechrevoLite.Hardware.Architecture.FeatureId.SyncLight,
+            "LocalDimming" => MechrevoLite.Hardware.Architecture.FeatureId.LocalDimming,
+            "LcdOverdrive" => MechrevoLite.Hardware.Architecture.FeatureId.LcdOverdrive,
+            "DisplayEffect" => MechrevoLite.Hardware.Architecture.FeatureId.DisplayEffect,
+            "ColorCalibration" => MechrevoLite.Hardware.Architecture.FeatureId.ColorCalibration,
+            "FanCurve" => MechrevoLite.Hardware.Architecture.FeatureId.FanCurve,
+            "FanBoost" => MechrevoLite.Hardware.Architecture.FeatureId.FanBoost,
+            "ChargeLimit" => MechrevoLite.Hardware.Architecture.FeatureId.ChargeLimit,
+            "PerformanceMode" => MechrevoLite.Hardware.Architecture.FeatureId.PerformanceMode,
+            "RefreshRate" => MechrevoLite.Hardware.Architecture.FeatureId.RefreshRate,
+            "GpuModeSwitch" => MechrevoLite.Hardware.Architecture.FeatureId.GpuModeSwitch,
+            "GpuHotSwap" => MechrevoLite.Hardware.Architecture.FeatureId.GpuHotSwap,
+            "IgpuOnly" => MechrevoLite.Hardware.Architecture.FeatureId.IgpuOnly,
+            "PerformanceProfile" => MechrevoLite.Hardware.Architecture.FeatureId.PerformanceProfile,
+            "TurboMode" => MechrevoLite.Hardware.Architecture.FeatureId.TurboMode,
+            "SilentTurbo" => MechrevoLite.Hardware.Architecture.FeatureId.SilentTurbo,
+            "PerfTuning" => MechrevoLite.Hardware.Architecture.FeatureId.PerfTuning,
+            _ => (MechrevoLite.Hardware.Architecture.FeatureId?)null
+        };
+    }
+
     internal static bool SupportsFeature(string feature, bool legacy)
     {
         try
@@ -803,31 +867,7 @@ internal static class WpfBackend
             {
                 return legacy;
             }
-            MechrevoLite.Hardware.Architecture.FeatureId? id = feature switch
-            {
-                "LogoLight" => MechrevoLite.Hardware.Architecture.FeatureId.LogoLight,
-                "Lightbar" => MechrevoLite.Hardware.Architecture.FeatureId.Lightbar,
-                "KeyboardLight" => MechrevoLite.Hardware.Architecture.FeatureId.KeyboardLight,
-                "HingeLight" => MechrevoLite.Hardware.Architecture.FeatureId.HingeLight,
-                "SyncLight" => MechrevoLite.Hardware.Architecture.FeatureId.SyncLight,
-                "LocalDimming" => MechrevoLite.Hardware.Architecture.FeatureId.LocalDimming,
-                "LcdOverdrive" => MechrevoLite.Hardware.Architecture.FeatureId.LcdOverdrive,
-                "DisplayEffect" => MechrevoLite.Hardware.Architecture.FeatureId.DisplayEffect,
-                "ColorCalibration" => MechrevoLite.Hardware.Architecture.FeatureId.ColorCalibration,
-                "FanCurve" => MechrevoLite.Hardware.Architecture.FeatureId.FanCurve,
-                "FanBoost" => MechrevoLite.Hardware.Architecture.FeatureId.FanBoost,
-                "ChargeLimit" => MechrevoLite.Hardware.Architecture.FeatureId.ChargeLimit,
-                "PerformanceMode" => MechrevoLite.Hardware.Architecture.FeatureId.PerformanceMode,
-                "RefreshRate" => MechrevoLite.Hardware.Architecture.FeatureId.RefreshRate,
-                "GpuModeSwitch" => MechrevoLite.Hardware.Architecture.FeatureId.GpuModeSwitch,
-                "GpuHotSwap" => MechrevoLite.Hardware.Architecture.FeatureId.GpuHotSwap,
-                "IgpuOnly" => MechrevoLite.Hardware.Architecture.FeatureId.IgpuOnly,
-                "PerformanceProfile" => MechrevoLite.Hardware.Architecture.FeatureId.PerformanceProfile,
-                "TurboMode" => MechrevoLite.Hardware.Architecture.FeatureId.TurboMode,
-                "SilentTurbo" => MechrevoLite.Hardware.Architecture.FeatureId.SilentTurbo,
-                "PerfTuning" => MechrevoLite.Hardware.Architecture.FeatureId.PerfTuning,
-                _ => (MechrevoLite.Hardware.Architecture.FeatureId?)null
-            };
+            MechrevoLite.Hardware.Architecture.FeatureId? id = MapFeature(feature);
             if (id == null)
             {
                 // 名字写错会静默回退 legacy，这里留一行便于发现（同一名字只记一次）。

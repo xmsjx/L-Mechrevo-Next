@@ -162,6 +162,13 @@ internal static class FeatureGate
         Check(lines, "ec-silent-turbo-unknown", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false),
             FeatureAvailability.Unknown, BackendChannel.None, FeatureId.SilentTurbo);
+        // GCU 路按能力位判：上报了就 Supported/Gcu，没上报保持 Unknown。
+        Check(lines, "gcu-gpu-mode-supported", Facts(BackendKind.TongfangGcu),
+            new FeatureProbe(true, false, false, null, false, GpuModeCapability: true),
+            FeatureAvailability.Supported, BackendChannel.Gcu, FeatureId.GpuModeSwitch);
+        Check(lines, "gcu-gpu-mode-no-evidence", Facts(BackendKind.TongfangGcu),
+            new FeatureProbe(true, false, false, null, false),
+            FeatureAvailability.Unknown, BackendChannel.None, FeatureId.GpuModeSwitch);
         Check(lines, "ec-gpu-mode-unknown", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false),
             FeatureAvailability.Unknown, BackendChannel.None, FeatureId.GpuModeSwitch);

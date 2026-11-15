@@ -192,6 +192,17 @@ internal sealed class TongfangGcuBackend : IBackendModule
 		FeatureDeclaration performanceMode = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.Gcu, "GCU 性能档通道", new[] { "gcu:OperatingMode" });
 
+
+        // 显卡模式三项：能力位上报了就按上报判，没上报保持 Unknown（⛔ 不写 Unsupported）。
+        FeatureDeclaration gpuMode = probe.GpuModeCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu, "能力位上报显卡模式", new[] { "registry:Capabilities.DgpuDirect" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报显卡模式", new string[0]);
+        FeatureDeclaration gpuHotSwap = probe.GpuHotSwapCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu, "能力位上报免重启热切换", new[] { "registry:Capabilities.GpuHotSwap" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报免重启热切换", new string[0]);
+        FeatureDeclaration igpuOnly = probe.IgpuOnlyCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu, "能力位上报仅集显输出", new[] { "registry:Capabilities.IgpuOnly" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报仅集显输出", new string[0]);
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
@@ -209,12 +220,9 @@ internal sealed class TongfangGcuBackend : IBackendModule
 				[FeatureId.ChargeLimit] = chargeLimit,
 				[FeatureId.PerformanceMode] = performanceMode,
 				[FeatureId.RefreshRate] = refreshRate,
-        [FeatureId.GpuModeSwitch] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "显卡模式切换：本后端未声明，交由门控回退旧判据", new string[0]),
-        [FeatureId.GpuHotSwap] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "免重启热切换：本后端未声明，交由门控回退旧判据", new string[0]),
-        [FeatureId.IgpuOnly] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "仅集显输出：本后端未声明，交由门控回退旧判据", new string[0]),
+        [FeatureId.GpuModeSwitch] = gpuMode,
+        [FeatureId.GpuHotSwap] = gpuHotSwap,
+        [FeatureId.IgpuOnly] = igpuOnly,
         [FeatureId.PerformanceProfile] = new FeatureDeclaration(FeatureAvailability.Unknown,
             BackendChannel.None, "自定义档：本后端未声明，交由门控回退旧判据", new string[0]),
         [FeatureId.TurboMode] = new FeatureDeclaration(FeatureAvailability.Unknown,
