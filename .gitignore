@@ -91,7 +91,7 @@ desktop.ini
 # ✅ docs/              笔记与文档
 # ✅ LICENSES/          许可
 # ✅ 顶层 *.ps1 *.txt   脚本与说明
-# ✅ 修改日志.txt        手动维护的改动记录（⭐ 重要，必须纳入）
+# ⛔ 修改日志.txt       内部记录（根因/寄存器/提交口径），只在本地保留，不对外
 
 # ── 七、第三方参考仓库（克隆下来的，⛔ 不进我们的版本控制）────────────────
 _refs/
@@ -175,3 +175,9 @@ tmp_*.ps1
 !tools/dev/innoextract/license/
 
 # GCU.7z 仍不入库（打包时本地放置）；7za.exe 随仓库走：installer-src/files/7za.exe，安装器把它装到软件根目录
+
+# 修改日志是内部记录，不入库；对外只发 更新日志.txt / 更新说明.txt
+修改日志.txt
+修改日志.txt.bak*
+installer-src/files/修改日志.txt
+installer-src/files/修改日志.txt.bak*
