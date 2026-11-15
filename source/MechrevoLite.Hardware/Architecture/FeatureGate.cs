@@ -206,10 +206,20 @@ internal static class FeatureGate
 		Check(lines, "baolongda-no-localdimming", Facts(BackendKind.BaolongdaWmi),
 			new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.LocalDimming);
-		Check(lines, "baolongda-local-icc-calibration", Facts(BackendKind.BaolongdaWmi),
-			new FeatureProbe(false, false, false, null, false),
-			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.ColorCalibration);
-		// EC 没有 OEM 校色通道，但有本地 ICC（Windows 颜色管理）⇒ 声明 Supported/Local，界面不藏。
+        // 宝龙达机型没有联网校色通道 ⇒ 声明 Unsupported（其它四路为 Supported/Local）。
+        Check(lines, "baolongda-none-calibration", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.ColorCalibration);
+        // 联网校色：星耀 / UMI / 同方 / 无界四路都有，宝龙达没有。
+        Check(lines, "baolongda-no-calibration", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.ColorCalibration);
+        Check(lines, "nuc-calibration-local", Facts(BackendKind.NucUmiLocal),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Supported, BackendChannel.Local, FeatureId.ColorCalibration);
+        Check(lines, "xingyao-calibration-local", Facts(BackendKind.XingyaoPmc),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Supported, BackendChannel.Local, FeatureId.ColorCalibration);
 		Check(lines, "ec-local-icc-calibration", Facts(BackendKind.TongfangEc),
 			new FeatureProbe(false, false, false, null, false),
 			FeatureAvailability.Supported, BackendChannel.Local, FeatureId.ColorCalibration);

@@ -24,9 +24,10 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
 		// 色彩增强走 Windows 本地 gamma/矩阵（与后端无关），校色走 Windows 颜色管理的本地 ICC。
 		FeatureDeclaration displayEffect = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.Local, "本地软件色彩增强（Win32 gamma/矩阵）", new[] { "win32:gamma" });
-		FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Supported,
-			BackendChannel.Local, "本地 ICC 校色（Windows 颜色管理）", new[] { "win:icc" });
-		FeatureDeclaration fanCurve = new FeatureDeclaration(FeatureAvailability.Supported,
+        // 宝龙达机型没有联网校色通道（本地 ICC 也不做该功能）。
+        FeatureDeclaration colorCalibration = new FeatureDeclaration(FeatureAvailability.Unsupported,
+            BackendChannel.None, "宝龙达无联网校色通道", new string[0]);
+        FeatureDeclaration fanCurve = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.WmiMailbox, "宝龙达软件闭环风扇曲线", new[] { "wmi:Baolongda.FanCurve" });
 		FeatureDeclaration fanBoost = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.Ec, "宝龙达本地 EC 强冷（目标 + 掩码）", new[] { "ec:FanTargets+0xB20" });

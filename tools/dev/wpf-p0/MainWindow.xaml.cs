@@ -2387,7 +2387,8 @@ public partial class MainWindow : Window
         Grid.SetColumnSpan(HomePerfCard, gpuSupported ? 1 : 3);
         bool localIccAvailable = MechrevoLite.Display.IccHelper.HasFactoryIccFile()
             || MechrevoLite.Display.IccHelper.ListCustomIccFiles().Count > 0;
-        bool calibrationVisible = _owner?.SupportsOemCalibration == true || localIccAvailable;
+        bool calibrationVisible = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("ColorCalibration",
+            _owner?.SupportsOemCalibration == true || localIccAvailable);
         var platformFacts = L_Mechrevo.WpfP0.Services.DisplayPlatformFacts.Read();
         bool hasWindowsRefresh = platformFacts.WindowsRefreshAvailable;
         bool hasWmiBrightness = platformFacts.WmiBrightnessAvailable;

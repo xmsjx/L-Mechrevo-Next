@@ -1858,7 +1858,8 @@ public partial class OriginalStyleWindow : Window
     }
 
     /// <summary>OEM 校色：GCU/EC 后端声明的校色能力。</summary>
-    internal bool SupportsOemCalibration => _backendProbe?.SupportsColorCalibration == true;
+    internal bool SupportsOemCalibration =>
+        L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("ColorCalibration", _backendProbe?.SupportsColorCalibration == true);
 
     /// <summary>自动刷新率至少要有两档 Windows 刷新率才可用；探测失败时显示，只有明确单档才隐藏。</summary>
     internal bool SupportsAutoRefresh => L_Mechrevo.WpfP0.Services.DisplayPlatformFacts.IsAutoRefreshVisible();
