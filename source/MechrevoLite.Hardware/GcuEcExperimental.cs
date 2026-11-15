@@ -120,6 +120,38 @@ internal static class GcuEcExperimental
         return Environment.TickCount64 - System.Threading.Interlocked.Read(ref _lastSelfWriteTicks) <= ms;
     }
 
+    /// <summary>
+    /// 让固件把性能键上报成 ACPI 事件：EC 1857 的 bit0（AP 存在位）置 1。
+    /// 该位为 0 时按键由固件内部消化，用户态收不到任何事件。
+    /// </summary>
+    internal static bool TryEnableHotkeyNotify()
+    {
+        try
+        {
+            if (!AcpiDriverEc.TryReadByte(1857, out byte ap))
+            {
+                return false;
+            }
+            if ((ap & 0x01) != 0)
+            {
+                return true;
+            }
+            byte target = (byte)(ap | 0x01);
+            if (!AcpiDriverEc.TryWriteByte(1857, target))
+            {
+                return false;
+            }
+            bool ok = AcpiDriverEc.TryReadByte(1857, out byte back) && (back & 0x01) != 0;
+            Logger.WriteErrorIfChanged("hotkey-notify", "[hotkey] 1857 0x" + ap.ToString("X2") + " → 0x" + target.ToString("X2") + " · 按键上报=" + ok);
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[hotkey] 设置按键上报位失败：" + ex.Message);
+            return false;
+        }
+    }
+
     /// <summary>GCU 服务进程是否仍在运行（EC 模式下它与本程序会抢同一批寄存器）。</summary>
     internal static bool GcuServiceProcessRunning()
     {

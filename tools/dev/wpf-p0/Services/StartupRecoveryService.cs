@@ -118,6 +118,7 @@ internal static class StartupRecoveryService
             if (ecMode)
             {
                 Logger.WriteLine("[startup-recovery] EC 模式 ⇒ " + MechrevoLite.Helpers.OfficialConsoleIsolation.PauseGcuServicesForEcMode().Item2);
+                Logger.WriteLine("[startup-recovery] 按键上报=" + MechrevoLite.Hardware.GcuEcExperimental.TryEnableHotkeyNotify());
             }
             else
             {

@@ -48,6 +48,7 @@ public static class GcuEcMode
                 await Task.Run(() => IteLightingLocal.RefreshFromHid());
                 // 若当前处于隔离状态：EC 模式下把 GCU 服务启动类型一并禁用，开机不再自启。
                 try { System.ValueTuple<bool, string> pause = MechrevoLite.Helpers.OfficialConsoleIsolation.PauseGcuServicesForEcMode(); Logger.WriteLine("[gcu-svc] 切 EC 模式 ⇒ " + pause.Item2); } catch { }
+                try { bool notify = GcuEcExperimental.TryEnableHotkeyNotify(); Logger.WriteLine("[hotkey] 切 EC 模式 ⇒ 按键上报=" + notify); } catch { }
                 return (true, "已切换 EC 控制模式：GCUService/GCUBridge 已停止");
             }
 
