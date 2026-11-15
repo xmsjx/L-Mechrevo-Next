@@ -48,6 +48,32 @@ internal sealed class NucUmiLocalBackend : IBackendModule
 			BackendChannel.Local, "NUC/UMI 本地性能档", new[] { "acpi:NucPerformanceMode" });
 		FeatureDeclaration refreshRate = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.Local, "Windows 显示通道", new[] { "win32:EnumDisplaySettings" });
+
+        // 显卡三项与性能档四项：能力位上报了就按上报判，没上报保持 Unknown（⛔ 不写 Unsupported）。
+        FeatureDeclaration gpuMode4 = probe.GpuModeCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位上报显卡模式", new[] { "registry:Capabilities.DgpuDirect" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报显卡模式", new string[0]);
+        FeatureDeclaration gpuHotSwap4 = probe.GpuHotSwapCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位上报免重启热切换", new[] { "registry:Capabilities.GpuHotSwap" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报免重启热切换", new string[0]);
+        FeatureDeclaration igpuOnly4 = probe.IgpuOnlyCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位上报仅集显输出", new[] { "registry:Capabilities.IgpuOnly" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报仅集显输出", new string[0]);
+        FeatureDeclaration perfTuning4 = probe.PerfTuningCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位上报 CPU 调优/风扇设置", new[] { "registry:Capabilities.CpuPerformanceTuning+FanSettings" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报 CPU 调优/风扇设置", new string[0]);
+        FeatureDeclaration perfProfile4 = probe.ProfileAvailableCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位上报自定义档", new[] { "registry:Capabilities.ProfileAvailable" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报自定义档", new string[0]);
+        FeatureDeclaration turboMode4 = probe.TurboModeCapability
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位上报涡轮档", new[] { "registry:Capabilities.TurboMode" })
+            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报涡轮档", new string[0]);
+        FeatureDeclaration silentTurbo4 = probe.SilentTurboAvailability switch
+        {
+            MechrevoLite.Hardware.FeatureAvailability.Supported => new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid, "能力位三态=支持", new[] { "registry:Capabilities.SilentTurboAvailability" }),
+            MechrevoLite.Hardware.FeatureAvailability.Unsupported => new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None, "能力位三态=不支持", new string[0]),
+            _ => new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位三态未采集", new string[0])
+        };
 		return new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
@@ -62,20 +88,13 @@ internal sealed class NucUmiLocalBackend : IBackendModule
 				[FeatureId.ChargeLimit] = chargeLimit,
 				[FeatureId.PerformanceMode] = performanceMode,
 				[FeatureId.RefreshRate] = refreshRate,
-        [FeatureId.GpuModeSwitch] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "显卡模式切换：本后端未声明，交由门控回退旧判据", new string[0]),
-        [FeatureId.GpuHotSwap] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "免重启热切换：本后端未声明，交由门控回退旧判据", new string[0]),
-        [FeatureId.IgpuOnly] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "仅集显输出：本后端未声明，交由门控回退旧判据", new string[0]),
-        [FeatureId.PerformanceProfile] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "自定义档：本后端未声明，交由门控回退旧判据", new string[0]),
-        [FeatureId.TurboMode] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "涡轮档：本后端未声明，交由门控回退旧判据", new string[0]),
-        [FeatureId.SilentTurbo] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "静音↔狂暴：本后端未声明，交由门控回退旧判据", new string[0]),
-        [FeatureId.PerfTuning] = new FeatureDeclaration(FeatureAvailability.Unknown,
-            BackendChannel.None, "CPU 调优/风扇设置：本后端未声明，交由门控回退旧判据", new string[0])
+        [FeatureId.GpuModeSwitch] = gpuMode4,
+        [FeatureId.GpuHotSwap] = gpuHotSwap4,
+        [FeatureId.IgpuOnly] = igpuOnly4,
+        [FeatureId.PerformanceProfile] = perfProfile4,
+        [FeatureId.TurboMode] = turboMode4,
+        [FeatureId.SilentTurbo] = silentTurbo4,
+        [FeatureId.PerfTuning] = perfTuning4
 			});
 	}
 }

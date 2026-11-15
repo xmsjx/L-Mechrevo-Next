@@ -183,6 +183,32 @@ internal static class FeatureGate
         Check(lines, "gcu-silent-turbo-unsupported", Facts(BackendKind.TongfangGcu),
             new FeatureProbe(true, false, false, null, false, SilentTurboAvailability: FeatureAvailability.Unsupported),
             FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.SilentTurbo);
+
+        // 四个"能力位驱动"的后端：真 ⇒ Supported(各自通道)，假 ⇒ Unknown。
+        Check(lines, "baolongda-gpu-mode-supported", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, false, false, null, false, GpuModeCapability: true),
+            FeatureAvailability.Supported, BackendChannel.WmiMailbox, FeatureId.GpuModeSwitch);
+        Check(lines, "baolongda-gpu-mode-no-evidence", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Unknown, BackendChannel.None, FeatureId.GpuModeSwitch);
+        Check(lines, "baolongda-perf-tuning-supported", Facts(BackendKind.BaolongdaWmi),
+            new FeatureProbe(false, false, false, null, false, PerfTuningCapability: true),
+            FeatureAvailability.Supported, BackendChannel.WmiMailbox, FeatureId.PerfTuning);
+        Check(lines, "nuc-gpu-mode-supported", Facts(BackendKind.NucUmiLocal),
+            new FeatureProbe(false, false, false, null, false, GpuModeCapability: true),
+            FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.GpuModeSwitch);
+        Check(lines, "nuc-perf-tuning-supported", Facts(BackendKind.NucUmiLocal),
+            new FeatureProbe(false, false, false, null, false, PerfTuningCapability: true),
+            FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.PerfTuning);
+        Check(lines, "xingyao-perf-tuning-supported", Facts(BackendKind.XingyaoPmc),
+            new FeatureProbe(false, false, false, null, false, PerfTuningCapability: true),
+            FeatureAvailability.Supported, BackendChannel.AcpiWmi, FeatureId.PerfTuning);
+        Check(lines, "mifs-perf-tuning-supported", Facts(BackendKind.TongfangMifs),
+            new FeatureProbe(false, false, false, null, false, PerfTuningCapability: true),
+            FeatureAvailability.Supported, BackendChannel.AcpiWmi, FeatureId.PerfTuning);
+        Check(lines, "mifs-perf-tuning-no-evidence", Facts(BackendKind.TongfangMifs),
+            new FeatureProbe(false, false, false, null, false),
+            FeatureAvailability.Unknown, BackendChannel.None, FeatureId.PerfTuning);
         Check(lines, "ec-gpu-mode-unknown", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false),
             FeatureAvailability.Unknown, BackendChannel.None, FeatureId.GpuModeSwitch);
