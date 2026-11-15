@@ -16,6 +16,8 @@ internal sealed class PerformanceKeyService : IDisposable
     private ManagementEventWatcher? _watcher;
     private long _lastPressedTick;
     private bool _started;
+    private int _eventCount;
+    private System.Threading.Timer? _heartbeat;
 
     internal event Action? Pressed;
 
@@ -33,9 +35,14 @@ internal sealed class PerformanceKeyService : IDisposable
             WqlEventQuery query = new("SELECT * FROM AcpiTest_EventULong");
             _watcher = new ManagementEventWatcher(new ManagementScope("root\\WMI"), query);
             _watcher.EventArrived += OnEventArrived;
+            _watcher.Stopped += (_, e) => Logger.WriteError("[perfkey] 监听停止：status=" + e.Status);
             _watcher.Start();
             _started = true;
             Logger.WriteError("[perfkey] 已订阅 ACPI 性能键事件 ULong=" + PerformanceKeyCode);
+            _heartbeat = new System.Threading.Timer(_ =>
+            {
+                Logger.WriteErrorIfChanged("perfkey-alive-" + _eventCount, "[perfkey] 监听中 · 本次运行累计收到 ACPI 事件 " + _eventCount + " 条（0 条 = 事件没送到本进程）");
+            }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
         }
         catch (Exception ex)
         {
@@ -54,6 +61,7 @@ internal sealed class PerformanceKeyService : IDisposable
                 return;
             }
             int code = Convert.ToInt32(value);
+            System.Threading.Interlocked.Increment(ref _eventCount);
             try
             {
                 AcpiCode?.Invoke(code);
@@ -83,6 +91,8 @@ internal sealed class PerformanceKeyService : IDisposable
 
     public void Dispose()
     {
+        _heartbeat?.Dispose();
+        _heartbeat = null;
         _started = false;
         if (_watcher != null)
         {
