@@ -4490,6 +4490,8 @@ public partial class OriginalStyleWindow : Window
             MechrevoLite.Mode.PerfModeStore.ActiveModeId = id;
             MechrevoLite.Mode.PerfModeService.Instance?.NotifyExternalSwitch(id);
             MechrevoLite.Mode.PerfModeService.Instance?.ApplyWindowsPowerOverlayForActiveMode();
+            // 按键由固件自己处理时也要给用户反馈：档位一变化就弹 OSD。
+            OsdService.Show(string.Empty, WpfStrings.OsdPerformance, ModeOsdName(ecVisual));
         }
         catch (Exception ex)
         {
