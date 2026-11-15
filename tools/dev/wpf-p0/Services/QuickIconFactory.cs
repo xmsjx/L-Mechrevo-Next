@@ -16,6 +16,9 @@ internal static class QuickIconFactory
 	/// <summary>图标宿主尺寸（宽度稍大，给 Num / Fn 这类文字图标留位）。</summary>
 	internal const double HostWidth = 20;
 
+	/// <summary>文字图标（Num / Fn / Aa）的宿主宽度：比矢量图标宽一点，避免右侧被压。</summary>
+	internal const double HostWidthForText = 22;
+
 	internal const double HostHeight = 18;
 
 	internal static FrameworkElement Create(string? key, string? glyph)
@@ -23,7 +26,7 @@ internal static class QuickIconFactory
 		FrameworkElement inner = CreateInner(key, glyph);
 		Grid host = new()
 		{
-			Width = HostWidth,
+			Width = QuickGlyphs.IsText(glyph) ? HostWidthForText : HostWidth,
 			Height = HostHeight,
 			HorizontalAlignment = HorizontalAlignment.Center,
 			VerticalAlignment = VerticalAlignment.Center,
@@ -101,7 +104,15 @@ internal static class QuickIconFactory
 				VerticalAlignment = VerticalAlignment.Center
 			};
 			text.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
-			return text;
+			// 文字比宿主宽时等比缩小（只缩不放）：不同字体/DPI/字符数都不会再被裁。
+			return new Viewbox
+			{
+				Stretch = Stretch.Uniform,
+				StretchDirection = StretchDirection.DownOnly,
+				HorizontalAlignment = HorizontalAlignment.Center,
+				VerticalAlignment = VerticalAlignment.Center,
+				Child = text
+			};
 		}
 
 		TextBlock icon = new()

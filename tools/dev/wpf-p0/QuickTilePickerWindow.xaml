@@ -94,7 +94,7 @@
                                   IsChecked="{Binding IsSelected, Mode=TwoWay}"
                                   Click="Choice_Click">
                             <StackPanel Orientation="Horizontal">
-              <ContentPresenter Content="{Binding Icon}" Width="24" Height="18" VerticalAlignment="Center" />
+              <ContentPresenter Content="{Binding Icon}" Width="26" Height="18" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding Label}" FontSize="12" VerticalAlignment="Center" />
                             </StackPanel>
                         </CheckBox>
