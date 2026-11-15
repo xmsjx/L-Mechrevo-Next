@@ -92,6 +92,7 @@ internal static class GcuEcExperimental
             {
                 visualMode = 0;
             }
+            Logger.WriteErrorIfChanged("gcu-ec-visual-raw", "[gcu-ec] 视觉档读回 mode=0x" + mode.ToString("X2") + " clamp=0x" + clamp.ToString("X2") + " custom=0x" + custom.ToString("X2") + " ⇒ " + visualMode);
             return true;
         }
         catch
@@ -195,6 +196,8 @@ internal static class GcuEcExperimental
                     isolatedWrite = AcpiDriverEc.TryWriteByte(1989, (byte)(isoCustom | 0x80));
                 }
                 customWrite = AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 65);
+                bool customReadBack = AcpiDriverEc.TryReadByte(CustomModeFlagAddress, out byte customRaw);
+                Logger.WriteErrorIfChanged("gcu-ec-custom-flag", "[gcu-ec] 自定义标志写后 0x" + (customReadBack ? customRaw.ToString("X2") : "读取失败"));
             }
             else
             {
