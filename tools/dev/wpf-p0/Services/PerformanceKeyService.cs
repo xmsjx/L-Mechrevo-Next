@@ -47,6 +47,33 @@ internal sealed class PerformanceKeyService : IDisposable
 
     private void ListenLoop()
     {
+        using (WmiAcpiComListener com = new WmiAcpiComListener())
+        {
+            if (com.TryStart(out string comDetail) && ListenCom(com))
+            {
+                Logger.WriteError("[perfkey] 订阅方式=" + comDetail + " · COM 通道结束");
+                return;
+            }
+            Logger.WriteError("[perfkey] COM 通道不可用（" + comDetail + "）⇒ 退回 System.Management");
+        }
+        ListenManagement();
+    }
+    /// <summary>COM 通道循环：半同步取事件，超时/异常都继续等。返回 true 表示通道正常收过事件。</summary>
+    private bool ListenCom(WmiAcpiComListener com)
+    {
+        Logger.WriteError("[perfkey] 已订阅 ACPI 性能键事件 ULong=" + PerformanceKeyCode + "（COM 半同步 · MTA）");
+        while (Volatile.Read(ref _started) != 0)
+        {
+            if (com.TryNext(2000, out int code))
+            {
+                HandleCode(code);
+            }
+        }
+        return true;
+    }
+
+    private void ListenManagement()
+    {
         while (Volatile.Read(ref _started) != 0)
         {
             ManagementEventWatcher? watcher = null;
@@ -73,10 +100,14 @@ internal sealed class PerformanceKeyService : IDisposable
                     {
                         continue;
                     }
-                    catch (ManagementException ex) when (Volatile.Read(ref _started) == 0)
+                    catch (ManagementException ex)
                     {
-                        Logger.WriteError("[perfkey] 订阅已停止：" + ex.Message);
-                        break;
+                        if (Volatile.Read(ref _started) == 0)
+                        {
+                            Logger.WriteError("[perfkey] 订阅已停止：" + ex.Message);
+                            break;
+                        }
+                        continue;   // 取事件超时属正常，继续等
                     }
                     if (element == null)
                     {
@@ -126,7 +157,18 @@ internal sealed class PerformanceKeyService : IDisposable
             {
                 return;
             }
-            int code = Convert.ToInt32(value);
+            HandleCode(Convert.ToInt32(value));
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[perfkey] 事件处理失败：" + ex.Message);
+        }
+    }
+
+    private void HandleCode(int code)
+    {
+        try
+        {
             System.Threading.Interlocked.Increment(ref _eventCount);
             try
             {
@@ -151,7 +193,7 @@ internal sealed class PerformanceKeyService : IDisposable
         }
         catch (Exception ex)
         {
-            Logger.WriteLine("[perfkey] 事件处理失败：" + ex.Message);
+            Logger.WriteLine("[perfkey] 切换失败：" + ex.Message);
         }
     }
 
