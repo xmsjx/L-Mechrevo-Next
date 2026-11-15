@@ -123,7 +123,6 @@ internal static class StartupRecoveryService
             {
                 Logger.WriteLine("[startup-recovery] GCU 模式 ⇒ " + MechrevoLite.Helpers.OfficialConsoleIsolation.ResumeGcuServicesForEcMode().Item2);
             }
-            MechrevoLite.Helpers.OfficialConsoleIsolation.SyncServicesForMode(ecMode);
         });
 
         Logger.WriteLine("[startup-recovery] 启动恢复调度结束");

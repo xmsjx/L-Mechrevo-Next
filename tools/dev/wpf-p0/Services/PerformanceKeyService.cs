@@ -34,7 +34,7 @@ internal sealed class PerformanceKeyService : IDisposable
         _heartbeat = new System.Threading.Timer(_ =>
         {
             Logger.WriteErrorIfChanged("perfkey-alive-" + _eventCount, "[perfkey] 监听中 · 本次运行累计收到 ACPI 事件 " + _eventCount + " 条（0 条 = 事件没送到本进程）");
-        }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
+        }, null, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(20));
         // WMI 事件流放在独立 MTA 线程：界面线程是 STA，事件回调在 STA 上容易收不到。
         _listenThread = new Thread(ListenLoop)
         {

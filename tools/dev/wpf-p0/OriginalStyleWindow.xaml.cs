@@ -4810,9 +4810,9 @@ public partial class OriginalStyleWindow : Window
             _backendTimer.Start();
             Logger.WriteError("[gcu-ec] GCU 不可用 ⇒ 启动 EC-only 实验首页"
                 + "（来源=" + L_Mechrevo.WpfP0.Services.WpfBackend.EcModeReason + "）");
+            L_Mechrevo.WpfP0.Services.KeyboardKeyProbe.Start();
             if (GcuEcExperimental.GcuServiceProcessRunning())
             {
-            L_Mechrevo.WpfP0.Services.KeyboardKeyProbe.Start();
                 Logger.WriteError("[gcu-ec] 注意：GCU 服务进程仍在运行（GCUService/GCUBridge）⇒ 性能键/EC 寄存器可能与本程序抢；建议启用隔离");
             }
             return true;
