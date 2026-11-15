@@ -163,3 +163,14 @@ ecdump-*.txt
 nul
 requesting
 tmp_*.ps1
+
+# 编译必需：第三方引用与 Core 兼容 shim，随源码入库
+!lm_pkg_files/{app}/
+!tools/core-shims/
+
+# 协议文档随仓库保留（第三方许可文本）
+!docs/refs/**/LICENSE
+!docs/refs/**/LICENSE.*
+!docs/refs/**/NOTICE*
+!docs/refs/**/license.txt
+!tools/dev/innoextract/license/
