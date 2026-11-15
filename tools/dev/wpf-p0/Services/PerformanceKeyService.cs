@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Management;
 using System.Threading;
 
@@ -11,6 +11,8 @@ namespace L_Mechrevo.WpfP0.Services;
 internal sealed class PerformanceKeyService : IDisposable
 {
     internal const int PerformanceKeyCode = 176;
+    /// <summary>部分机型把同一按键报到 192(SC_SwitchOC) / 201(SC_CustomMode)，一并当性能键处理。</summary>
+    private static readonly int[] PerformanceKeyAliases = new int[2] { 192, 201 };
     private ManagementEventWatcher? _watcher;
     private long _lastPressedTick;
     private bool _started;
@@ -59,7 +61,8 @@ internal sealed class PerformanceKeyService : IDisposable
             catch
             {
             }
-            if (code != PerformanceKeyCode)
+            Logger.WriteErrorIfChanged("acpi-code-" + code, "[acpi] 收到 ACPI ULong=" + code);
+            if (code != PerformanceKeyCode && Array.IndexOf(PerformanceKeyAliases, code) < 0)
             {
                 return;
             }
@@ -69,7 +72,7 @@ internal sealed class PerformanceKeyService : IDisposable
             {
                 return;
             }
-            Logger.WriteError("[perfkey] ACPI ULong=" + PerformanceKeyCode + " -> 切换性能模式");
+            Logger.WriteError("[perfkey] ACPI ULong=" + code + " -> 切换性能模式");
             Pressed?.Invoke();
         }
         catch (Exception ex)
