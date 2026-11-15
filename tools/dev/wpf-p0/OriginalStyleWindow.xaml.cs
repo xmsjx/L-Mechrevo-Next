@@ -4447,9 +4447,15 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            if (IsEcLocalRoute || !IsEcModeActive || probe.Hw?.IsGcuConnected == true)
+            // EC-only 路由同样要跟随外部改档：之前把 IsEcLocalRoute 排除掉，固件自己切档时界面不会动。
+            if (!IsEcModeActive || probe.Hw?.IsGcuConnected == true)
             {
                 _lastEcOnlyVisual = -1;
+                return;
+            }
+            // 本程序刚写过 EC 的 3 秒内不回读判定，避免自己切换过程中的中间态被当成外部改档。
+            if (GcuEcExperimental.SelfWroteRecently(3000))
+            {
                 return;
             }
             if (_modeSwitchInFlight || _pendingMode >= 0)

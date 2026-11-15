@@ -183,18 +183,23 @@ internal static class GcuEcExperimental
             {
                 return false;
             }
-            // 静音档在硬件上是 mode bit4=0 + clamp(1873) 高半字节=0xA0；clamp 变意味着档位真的在变，不是抖动。
+            // clamp(1873) 高半字节才是可靠档位：固件改档时不一定会清 mode 的 bit4，
+            // 用 mode bit4 优先会把"实际静音/平衡"误判成狂暴（实测：静音 clamp=0xA0 + mode=0x10）。
             if (custom == 65)
             {
                 visualMode = 3;
             }
-            else if ((mode & 0x10) != 0)
-            {
-                visualMode = 1;
-            }
             else if ((clamp & 0xF0) == 0xA0)
             {
                 visualMode = 2;
+            }
+            else if ((clamp & 0xF0) == 0x10)
+            {
+                visualMode = 1;
+            }
+            else if ((mode & 0x10) != 0)
+            {
+                visualMode = 1;
             }
             else
             {
