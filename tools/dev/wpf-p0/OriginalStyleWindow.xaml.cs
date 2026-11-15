@@ -4812,6 +4812,7 @@ public partial class OriginalStyleWindow : Window
             _backendTimer.Start();
             Logger.WriteError("[gcu-ec] GCU 不可用 ⇒ 启动 EC-only 实验首页"
                 + "（来源=" + L_Mechrevo.WpfP0.Services.WpfBackend.EcModeReason + "）");
+            try { Logger.WriteLine("[hotkey] EC-only 启动 ⇒ 按键上报=" + GcuEcExperimental.TryEnableHotkeyNotify()); } catch { }
             L_Mechrevo.WpfP0.Services.KeyboardKeyProbe.Start();
             if (GcuEcExperimental.GcuServiceProcessRunning())
             {
