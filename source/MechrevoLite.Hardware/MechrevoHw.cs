@@ -1094,6 +1094,33 @@ public class MechrevoHw : IDisposable
 internal bool? EcLogoEvidence =>
     IteLightingLocal.TryGetUsbLogoCached(out bool value) ? value : (bool?)null;
 
+    private static bool? _mbaLogoSupport;
+
+    /// <summary>A 面 EC 控制的 Logo（与灯带同一路）能力：只读注册表一次，读不到为 null。</summary>
+    internal bool? MbaLogoSupport
+    {
+        get
+        {
+            if (_mbaLogoSupport.HasValue)
+            {
+                return _mbaLogoSupport;
+            }
+            try
+            {
+                using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.LocalMachine
+                    .OpenSubKey(@"SOFTWARE\OEM\GamingCenter2\Support");
+                if (key?.GetValue("MBALogo") is int value)
+                {
+                    _mbaLogoSupport = value == 1;
+                }
+            }
+            catch
+            {
+            }
+            return _mbaLogoSupport;
+        }
+    }
+
 /// <summary>ITE 7001 的能力字节（灯带 / 铰链 / Logo 三路）；无该设备时 null。</summary>
 internal IteLightingCapability? IteCapability => IteCapabilityProbe.Get(BiosProjectId);
 

@@ -35,7 +35,8 @@ internal sealed record FeatureProbe(
 	bool PerfTuningCapability = false,
 	bool ProfileAvailableCapability = false,
 	bool TurboModeCapability = false,
-	FeatureAvailability SilentTurboAvailability = FeatureAvailability.Unknown)
+	FeatureAvailability SilentTurboAvailability = FeatureAvailability.Unknown,
+	bool? MbaLogoSupport = null)
 	{
 
 	internal static FeatureProbe From(MechrevoHw? hw)
@@ -78,6 +79,7 @@ internal sealed record FeatureProbe(
 			caps != null && (caps.CpuPerformanceTuning || caps.FanSettings),
 			caps != null && caps.ProfileAvailable,
 			caps != null && caps.TurboMode,
-			caps?.SilentTurboAvailability ?? FeatureAvailability.Unknown);
+			caps?.SilentTurboAvailability ?? FeatureAvailability.Unknown,
+			hw.MbaLogoSupport);
 	}
 }

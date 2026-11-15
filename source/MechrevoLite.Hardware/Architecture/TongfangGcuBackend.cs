@@ -19,6 +19,25 @@ internal sealed class TongfangGcuBackend : IBackendModule
 		}
 		else
 		{
+    // 同方两类 Logo：USB lettering/旧 Logo 通道属独立灯；MBALogo 属 A 面 EC Logo（与灯带同一路）。
+    if (probe.IteCapability is { } gcuIteLogo)
+    {
+        logo = gcuIteLogo.NewLogo
+            ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+                "独立 USB Logo（lettering 新通道）", new[] { "usb:IteCapability.NewLogo" })
+            : gcuIteLogo.Logo
+                ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+                    "独立 USB Logo（旧通道）", new[] { "usb:IteCapability.Logo" })
+                : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
+                    "ITE 能力字节无 Logo 通道", new string[0]);
+    }
+    else if (probe.MbaLogoSupport == true)
+    {
+        logo = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Gcu,
+            "A 面 EC Logo（与灯带同一路）", new[] { "registry:OEM.GamingCenter2.Support.MBALogo" });
+    }
+    else
+    {
 			List<string> sources = new List<string>();
 			if (probe.LogoLightCapability)
 			{
@@ -37,6 +56,7 @@ internal sealed class TongfangGcuBackend : IBackendModule
 				(probe.LightbarMbLogoSupport == true ? "与灯带同一路的 Logo" : "独立 Logo（GCU 上报）"), sources.ToArray())
 				: new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 					"GCU 已连接但未上报 Logo 证据", new string[0]);
+    }
 		}
 
 		FeatureDeclaration lightbar;

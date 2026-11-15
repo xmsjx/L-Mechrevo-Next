@@ -20,11 +20,19 @@ internal sealed class TongfangEcBackend : IBackendModule
 		else if (probe.IteCapability is { } iteLogoCap)
 		{
 			// 有 7001 时以能力字节为准：设备在 ≠ Logo 通道在。
-			logo = iteLogoCap.AnyLogo
+			logo = iteLogoCap.NewLogo
 				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
-					"ITE 能力字节有 Logo 通道", new[] { "usb:IteCapability" })
-				: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
-					"ITE 能力字节无 Logo 通道", new[] { "usb:IteCapability" });
+					"独立 USB Logo（lettering 新通道）", new[] { "usb:IteCapability.NewLogo" })
+				: iteLogoCap.Logo
+					? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+						"独立 USB Logo（旧通道）", new[] { "usb:IteCapability.Logo" })
+					: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
+						"ITE 能力字节无 Logo 通道", new[] { "usb:IteCapability" });
+		}
+		else if (probe.MbaLogoSupport == true)
+		{
+			logo = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Ec,
+				"A 面 EC Logo（与灯带同一路）", new[] { "registry:OEM.GamingCenter2.Support.MBALogo" });
 		}
 		else if (probe.EcLogoEvidence == true)
 		{

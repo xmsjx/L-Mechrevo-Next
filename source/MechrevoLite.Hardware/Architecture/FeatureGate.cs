@@ -252,6 +252,14 @@ internal static class FeatureGate
         CheckReason(lines, "gcu-logo-standalone", Facts(BackendKind.TongfangGcu),
             new FeatureProbe(true, false, true, null, false),
             FeatureAvailability.Supported, FeatureId.LogoLight, "独立 Logo");
+
+        // 同方两类 Logo：USB lettering/旧通道 vs A 面 EC Logo（MBALogo）。
+        CheckReason(lines, "tongfang-logo-usb-lettering", Facts(BackendKind.TongfangEc),
+            new FeatureProbe(false, false, false, null, false, IteCapability: new IteLightingCapability(8, false)),
+            FeatureAvailability.Supported, FeatureId.LogoLight, "独立 USB Logo（lettering");
+        CheckReason(lines, "tongfang-logo-ec-mba", Facts(BackendKind.TongfangEc),
+            new FeatureProbe(false, false, false, null, false, MbaLogoSupport: true),
+            FeatureAvailability.Supported, FeatureId.LogoLight, "A 面 EC Logo");
         Check(lines, "ec-gpu-mode-unknown", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false),
             FeatureAvailability.Unknown, BackendChannel.None, FeatureId.GpuModeSwitch);
