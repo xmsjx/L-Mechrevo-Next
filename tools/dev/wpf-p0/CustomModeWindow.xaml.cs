@@ -840,8 +840,11 @@ public partial class CustomModeWindow : Window
             if (L_Mechrevo.WpfP0.Services.WpfBackend.EcPl4TryRead(out bool pl4Double, out byte pl4Raw))
             {
                 _pl4Unit = pl4Double ? 2 : 1;
+                // 内层开关始终按 EC 实际读取值显示（外层未打开时只读显示，不允许拨动）。
                 Pl4UnitSwitch.IsChecked = pl4Double;
-                Pl4UnitSwitch.IsEnabled = true;
+                Pl4UnitSwitch.IsEnabled = open;
+                // 记录来源，便于排障时不猜：EC 读到什么就显示什么。
+                Logger.WriteErrorIfChanged("pl4-unit-init", "[pl4-unit] 初始 EC 读数=0x" + pl4Raw.ToString("X2") + " ⇒ 双倍EC值=" + pl4Double + " · 外层开关=" + open);
                 Pl4UnitStatus.Text = Pl4StatusText(pl4Double, pl4Raw);
                 if (open)
                 {
@@ -1325,10 +1328,20 @@ public partial class CustomModeWindow : Window
                 if (!string.IsNullOrEmpty(prefix))
                 {
                     Pl4UnitStatus.Text = prefix + "PL4 回读失败";
-                // 同上：读不到就回落后端口径，不要沿用旧口径。
-                L_Mechrevo.WpfP0.Services.WpfBackend.ClearPl4UnitOverride();
+                    // 读不到就回落后端口径，不要沿用旧口径。
+                    L_Mechrevo.WpfP0.Services.WpfBackend.ClearPl4UnitOverride();
                 }
                 return;
+            }
+            // 内层开关始终跟 EC 实际值一致（不写 EC），避免出现"显示与读取不一致"。
+            _syncingPl4Unit = true;
+            try
+            {
+                Pl4UnitSwitch.IsChecked = doubleUnit;
+            }
+            finally
+            {
+                _syncingPl4Unit = false;
             }
             _syncingPowerWalls = true;
             try
