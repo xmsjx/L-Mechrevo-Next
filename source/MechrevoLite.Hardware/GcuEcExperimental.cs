@@ -73,12 +73,27 @@ internal static class GcuEcExperimental
         {
             AcpiDriverEc.TryReadByte(TriggerAddress, out byte trigger);
             AcpiDriverEc.TryReadByte(1832, out byte silent);
+            AcpiDriverEc.TryReadByte(1830, out byte whiteLed);
+            AcpiDriverEc.TryReadByte(1831, out byte camFlag);
+            AcpiDriverEc.TryReadByte(1989, out byte isolated);
+            AcpiDriverEc.TryReadByte(0x0727, out byte unit727);
+            AcpiDriverEc.TryReadByte(0x0743, out byte db743);
+            AcpiDriverEc.TryReadByte(0x0746, out byte db746);
+            AcpiDriverEc.TryReadByte(0x072A, out byte biosLevel);
+            string extra = " led1830=0x" + whiteLed.ToString("X2") + " cam1831=0x" + camFlag.ToString("X2")
+                + " iso1989=0x" + isolated.ToString("X2") + " u727=0x" + unit727.ToString("X2")
+                + " db743=0x" + db743.ToString("X2") + " db746=0x" + db746.ToString("X2")
+                + " lvl72A=0x" + biosLevel.ToString("X2");
             string snapshot = "mode=0x" + mode.ToString("X2") + " trigger=0x" + trigger.ToString("X2")
                 + " turbo=0x" + turbo.ToString("X2") + " silent=0x" + silent.ToString("X2")
-                + " clamp=0x" + clamp.ToString("X2") + " custom=0x" + custom.ToString("X2");
-            if (!string.Equals(snapshot, _lastRegisterSnapshot, StringComparison.Ordinal))
+                + " clamp=0x" + clamp.ToString("X2") + " custom=0x" + custom.ToString("X2") + extra;
+            // clamp 是风扇策略位、会自己变，不参与"变化"判定，避免刷日志。
+            string keySnapshot = "mode=0x" + mode.ToString("X2") + " trigger=0x" + trigger.ToString("X2")
+                + " turbo=0x" + turbo.ToString("X2") + " silent=0x" + silent.ToString("X2")
+                + " custom=0x" + custom.ToString("X2") + extra;
+            if (!string.Equals(keySnapshot, _lastRegisterSnapshot, StringComparison.Ordinal))
             {
-                _lastRegisterSnapshot = snapshot;
+                _lastRegisterSnapshot = keySnapshot;
                 Logger.WriteError("[ec-modespy] " + snapshot);
             }
         }
