@@ -3975,6 +3975,11 @@ public partial class OriginalStyleWindow : Window
             }
             // Fn+SCRLK 实际产生 VK_SCROLL，由 LockKeyOsdService 监听 + NumpadOverlayService 映射；
             // 不再把 ACPI 1/3 当成 NumLock，否则 CapsLock 也会连带弹一次小键盘 OSD。
+            // 性能键的码由 PerformanceKeyService 处理，这里不该再报"未处理"，否则日志会把已接管说成没接管。
+            if (code == 176 || code == 192 || code == 201)
+            {
+                return;
+            }
             if (code != 177 && code != 178 && code != 185)
             {
                 Logger.WriteError("[acpikey] 未处理 ACPI ULong=" + code);
