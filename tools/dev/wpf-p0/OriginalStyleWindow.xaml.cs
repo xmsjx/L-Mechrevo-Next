@@ -268,6 +268,7 @@ public partial class OriginalStyleWindow : Window
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         Closed += (_, _) => Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _ = Task.Run(MachineProbeReadOnly.LogOnce);
+        Closed += (_, _) => L_Mechrevo.WpfP0.Services.KeyboardKeyProbe.Stop();
         MainScroll.PreviewMouseWheel += MainScroll_PreviewMouseWheel;
         L_Mechrevo.WpfP0.Services.WindowWorkAreaPolicy.ClampOnLoaded(this);
         RestoreSavedMiniHeight();
@@ -4811,6 +4812,7 @@ public partial class OriginalStyleWindow : Window
                 + "（来源=" + L_Mechrevo.WpfP0.Services.WpfBackend.EcModeReason + "）");
             if (GcuEcExperimental.GcuServiceProcessRunning())
             {
+            L_Mechrevo.WpfP0.Services.KeyboardKeyProbe.Start();
                 Logger.WriteError("[gcu-ec] 注意：GCU 服务进程仍在运行（GCUService/GCUBridge）⇒ 性能键/EC 寄存器可能与本程序抢；建议启用隔离");
             }
             return true;
