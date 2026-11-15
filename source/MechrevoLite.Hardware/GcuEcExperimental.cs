@@ -72,10 +72,12 @@ internal static class GcuEcExperimental
         {
             if (!AcpiDriverEc.TryReadByte(ModeIndexAddress, out byte mode)
                 || !AcpiDriverEc.TryReadByte(1873, out byte clamp)
-                || !AcpiDriverEc.TryReadByte(CustomModeFlagAddress, out byte custom))
+                || !AcpiDriverEc.TryReadByte(CustomModeFlagAddress, out byte custom)
+                || !AcpiDriverEc.TryReadByte(TurboTriggerAddress, out byte turbo))
             {
                 return false;
             }
+            // 静音用 1115(turbo 标志) 判定：1873 是风扇 clamp，会被风扇策略自己改写，不能当档位标志。
             if (custom == 65)
             {
                 visualMode = 3;
@@ -84,7 +86,7 @@ internal static class GcuEcExperimental
             {
                 visualMode = 1;
             }
-            else if ((clamp & 0xF0) == 0xA0)
+            else if (turbo == 1)
             {
                 visualMode = 2;
             }
@@ -92,7 +94,7 @@ internal static class GcuEcExperimental
             {
                 visualMode = 0;
             }
-            Logger.WriteErrorIfChanged("gcu-ec-visual-raw", "[gcu-ec] 视觉档读回 mode=0x" + mode.ToString("X2") + " clamp=0x" + clamp.ToString("X2") + " custom=0x" + custom.ToString("X2") + " ⇒ " + visualMode);
+            Logger.WriteErrorIfChanged("gcu-ec-visual-raw", "[gcu-ec] 视觉档读回 mode=0x" + mode.ToString("X2") + " turbo=0x" + turbo.ToString("X2") + " custom=0x" + custom.ToString("X2") + " clamp=0x" + clamp.ToString("X2") + " ⇒ " + visualMode);
             return true;
         }
         catch
