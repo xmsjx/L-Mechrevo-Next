@@ -428,6 +428,15 @@ public class MechrevoService
 				return ModeSwitchResult.Failed;
 			}
 			// EC 直连（GCU 不可用 ⇒ 本地 ACPI/EC 接管）：档位由本地 EC 写，含自定义档 3。
+			// ⚠️ SMU 机型（无界 APU / 星耀 APU）没有独立的 EC 自定义档：不写 EC 档位/门控，
+			//    自定义只体现为 SMU 功耗参数，档位切换直接视为完成。
+			if (hw != null && (hw.WujieSmuApu || hw.SmuCustomApu) && !hw.IsGcuConnected)
+			{
+				Logger.WriteLine("[gcu-ec] SwitchMode(" + mode + ") 跳过：SMU 机型没有独立 EC 自定义档，本次不写任何 EC 档位/门控");
+				ModeControl.SyncExternalModeStatic(mode);
+				ModeChanged?.Invoke(mode);
+				return ModeSwitchResult.Ok;
+			}
 			if (hw != null && GcuEcMode.IsEcMode && !hw.IsGcuConnected)
 			{
 				bool ecOk = GcuEcExperimental.TryApplyMode(mode, out string ecDetail);

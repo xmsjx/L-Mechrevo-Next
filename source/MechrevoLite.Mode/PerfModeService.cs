@@ -835,7 +835,9 @@ internal sealed class PerfModeService
 		PerfModeSettings expectedSettings = mode.Settings;
 		MechrevoHw hw = _hw;
 		// EC 直连（GCU 不可用、走本地 ACPI/EC）：档位与本地参数仍可应用，不按"GCU 未连接"拒绝。
-		bool ecLocalOnly = MechrevoLite.Hardware.GcuEcMode.IsEcMode && (hw == null || !hw.IsGcuConnected);
+		// SMU 机型（无界/星耀 APU）不算 EC 直连应用：它们的自定义只走 SMU，不碰 EC 档位/门控。
+		bool ecLocalOnly = MechrevoLite.Hardware.GcuEcMode.IsEcMode && (hw == null || !hw.IsGcuConnected)
+			&& hw != null && !hw.WujieSmuApu && !hw.SmuCustomApu;
 		// （无界 APU）：无 GCU 也可走本机 SMU 应用/启动恢复 ⇒ 连接判据放宽（其它机型不变）
 		if (hw == null || (!hw.IsConnected && !hw.SmuCustomApu && !ecLocalOnly))
 		{
