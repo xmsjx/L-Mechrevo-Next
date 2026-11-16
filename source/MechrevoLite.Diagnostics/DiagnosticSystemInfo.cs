@@ -692,7 +692,7 @@ stringBuilder.Append(DiagnosticBackendRouteInfo.Build());
 				? $"（== 上限 − {EcChargeLimit.RechargeHysteresis} = {expectedLower} ⇒ 与我们写入的值一致）"
 				: $"（≠ 期望 {expectedLower}（上限 − {EcChargeLimit.RechargeHysteresis}）⇒ 本机固件可能不推导下限、该值仍是旧值：只影响回充时机，**不影响充电上限**）"));
 		sb.AppendLine($"0x{EcChargeLimit.LowerRegister:X3} 复充下限: {DescribeRaw(probe.Lower)}（固件会自行推导；LM 在上限成功后 best-effort 写一次，不参与成败判定：{lowerCompare}）");
-		sb.AppendLine($"0x{EcChargeLimit.GateRegister:X3} 产品线门控: {DescribeRaw(probe.Gate)}（上游：非 4/5 时固件不跑限充控制循环）");
+		sb.AppendLine($"0x{EcChargeLimit.GateRegister:X3} 产品线门控: {DescribeRaw(probe.Gate)}（非 4/5 时固件不跑限充控制循环；钉住开关 charge_gate_pin={(ChargeGatePin.Enabled ? "开" : "关")}·本程序钉住中={(ChargeGatePin.IsPinnedByUs ? "是" : "否")}）");
 		sb.AppendLine($"0x{EcChargeLimit.EffectRegister:X3} 生效位: {DescribeRaw(probe.Effect)} → {probe.DescribeEffect()}");
 		sb.AppendLine($"0x{EcChargeLimit.RomIdRegister:X3} ROMID 首字节: {DescribeRaw(probe.RomId)}（上游用它做 4/5 产品线判断）");
 		sb.AppendLine($"0x{EcChargeLimit.StoredLimitRegister:X3} 固件存储区: {DescribeRaw(probe.StoredLimit)}（上游指明是 H2RAM 盲区，主机通常读不到）");

@@ -543,12 +543,28 @@ internal static class EcChargeLimit
 				if (gateOriginal >= 0 && !gateWasOpen)
 				{
 					gateTouched = Write(num, GateRegister, (byte)GateOpenValue);
-					if (gateTouched)
+					if (gateTouched && ChargeGatePin.Enabled)
+					{
+						// 配置开关打开：门控保持 4、不排还原（用于固件没在窗口内抄进存储区的机型）。
+						ChargeGatePin.MarkPinned(gateOriginal);
+						Logger.WriteLine($"限充门控钉住：0x{GateRegister:X3} 原值 0x{gateOriginal:X2} → 保持 {GateOpenValue}（配置 charge_gate_pin=1；关掉该开关后下次写入会还原）");
+					}
+					else if (gateTouched)
 					{
 						// 记下未决的原值 + 注册进程退出兜底（幂等），防"退出时门控残留"。
 						System.Threading.Volatile.Write(ref _gateOutstandingOriginal, gateOriginal);
 						EnsureGateExitHook();
 						Logger.WriteLine($"限充门控持久化：0x{GateRegister:X3} 原值 0x{gateOriginal:X2} → 临时置 {GateOpenValue}（等待固件抄上限进存储区）");
+					}
+				}
+				else if (!ChargeGatePin.Enabled && ChargeGatePin.IsPinnedByUs)
+				{
+					// 开关已关掉且门控仍是我们钉住的状态：还原成当初记录的原值。
+					int pinnedBack = ChargeGatePin.PinnedOriginal;
+					if (Write(num, GateRegister, (byte)pinnedBack))
+					{
+						ChargeGatePin.ClearPinned();
+						Logger.WriteLine($"限充门控：钉住已关闭，0x{GateRegister:X3} 还原为 0x{pinnedBack:X2}");
 					}
 				}
 				bool upperWritten = false;

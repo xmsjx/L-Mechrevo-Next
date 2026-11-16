@@ -75,16 +75,19 @@ internal static class EcChargeLimitOverride
                 if (gated)
                 {
                     System.Threading.Thread.Sleep(2500);
-                    // 门控把上限抄进固件存储区后，恢复原平台 ID，再清 0x7B9，避免 Windows 显示智能充电。
-                    if (platformRead)
+                    if (ChargeGatePin.Enabled)
                     {
-                        AcpiDriverEc.TryWriteByte(PlatformIdRegister, platformOriginal);
+                        // 配置开关打开：门控保持 4、不还原；上限仍要清掉，避免 Windows 显示智能充电。
+                        ChargeGatePin.MarkPinned(platformRead ? platformOriginal : 0x07);
+                        AcpiDriverEc.TryWriteByte(UpperRegister, 0);
+                        Logger.WriteLine($"限充门控钉住（三档）：平台ID 原值 0x{(platformRead ? platformOriginal : (byte)0x07):X2} → 保持 4（配置 charge_gate_pin=1）");
                     }
                     else
                     {
-                        AcpiDriverEc.TryWriteByte(PlatformIdRegister, 0x07);
+                        // 门控把上限抄进固件存储区后，恢复原平台 ID，再清 0x7B9。
+                        AcpiDriverEc.TryWriteByte(PlatformIdRegister, platformRead ? platformOriginal : (byte)0x07);
+                        AcpiDriverEc.TryWriteByte(UpperRegister, 0);
                     }
-                    AcpiDriverEc.TryWriteByte(UpperRegister, 0);
                     // 门控恢复/清上限后，固件可能把 0x7A6 的档位位清掉；最后再写一次档位。
                     if (AcpiDriverEc.TryReadByte(ProtectionModeRegister, out byte protectionAfterGate))
                     {
@@ -93,11 +96,20 @@ internal static class EcChargeLimitOverride
                     }
                 }
             }
+            else if (!ChargeGatePin.Enabled && ChargeGatePin.IsPinnedByUs)
+            {
+                int pinnedBack = ChargeGatePin.PinnedOriginal;
+                if (AcpiDriverEc.TryWriteByte(PlatformIdRegister, (byte)pinnedBack))
+                {
+                    ChargeGatePin.ClearPinned();
+                    Logger.WriteLine($"限充门控：钉住已关闭，平台ID 还原为 0x{pinnedBack:X2}（三档）");
+                }
+            }
             bool modeRead = AcpiDriverEc.TryReadByte(ProtectionModeRegister, out byte modeAfter);
             detail = $"上限={percent}% 档位=0x{mode:X2} 平台ID={gated} 覆盖复位={ov}"
                 + $" 上限={up} 下限={down} 模式={modeOk} 回读=0x{modeAfter:X2}"
                 + $"（bit0={((modeAfter & 0x01) != 0 ? "智能充电" : "无提示")}）";
-            return ov && up && down && modeOk && modeRead && (modeAfter & 0x31) == mode;
+            return ov && up && modeOk && modeRead && (modeAfter & 0x31) == mode;   // 下限 best-effort，不参与成败判定
         }
         catch (Exception ex)
         {
@@ -116,6 +128,15 @@ internal static class EcChargeLimitOverride
         }
         try
         {
+            if (!ChargeGatePin.Enabled && ChargeGatePin.IsPinnedByUs && percent >= 95)
+            {
+                int pinnedBack2 = ChargeGatePin.PinnedOriginal;
+                if (AcpiDriverEc.TryWriteByte(PlatformIdRegister, (byte)pinnedBack2))
+                {
+                    ChargeGatePin.ClearPinned();
+                    Logger.WriteLine($"限充门控：钉住已关闭，平台ID 还原为 0x{pinnedBack2:X2}");
+                }
+            }
             int mode = percent >= 95 ? 0x01 : percent <= 65 ? 0x21 : 0x11;
             bool platform = AcpiDriverEc.TryWriteByte(PlatformIdRegister,
                 percent < 95 ? (byte)0x04 : (byte)0x07);
@@ -132,7 +153,7 @@ internal static class EcChargeLimitOverride
             bool read = AcpiDriverEc.TryReadByte(UpperRegister, out byte after);
             int actual = after & 0x7F;
             detail = $"上限={percent}% 平台ID={platform} 覆盖复位={ov} 上限写入={up} 下限写入={down} 模式=0x{mode:X2}({modeOk}) 回读={after:X2}（{actual}%）";
-            return platform && up && down && modeOk && read && actual == percent;
+            return platform && up && modeOk && read && actual == percent;   // 下限 best-effort，不参与成败判定
         }
         catch (Exception ex)
         {
