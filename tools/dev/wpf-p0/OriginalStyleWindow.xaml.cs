@@ -7458,12 +7458,8 @@ public partial class OriginalStyleWindow : Window
         {
             rpm = cpu ? hw.CpuFanRpm : hw.GpuFanRpm;
         }
-        if (rpm <= 0
-            && ( _backendRoute == BackendRoute.Ec || hw.IsGcuConnected != true)
-            && hw.TryReadGcuEcFanSpeeds(out int ecCpu, out int ecGpu))
-        {
-            rpm = cpu ? ecCpu : ecGpu;
-        }
+        // 界面心跳只读缓存：转速由后台采样泵回填（EC 直读在界面线程上每次约几十毫秒，
+        // 叠在心跳里就是可感知的卡顿）。这里不再直读 EC。
         string line = (cpu ? "CPU " : "GPU ") + temp + "℃   " + rpm + "rpm";
         string duty = FanDutyText(cpu);
         return duty.Length == 0 ? line : line + " " + duty;
