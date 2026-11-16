@@ -1,6 +1,18 @@
 L-Mechrevo 打包须知（约定）
 ================================================================================
-最后更新：2026-10-13
+
+⭐ 增量更新包必须带 manifest.json（2026-11-16 踩坑）：
+- 更新器 UpdateInstaller.VerifyDllPackage 会先找 manifest.json，找不到直接报「更新包缺少 manifest.json」，
+  打包时漏了它 = 用户点更新必失败。
+- 格式：{ "files": [ { "path": "L-Mechrevo.dll", "sha256": "<64位小写hex>", "size": 1512960 }, … ] }
+  每条都要能在 zip 里找到同名条目且字节数一致，否则报「更新包文件缺失或大小不符」。
+- 统一用脚本生成，别再手工 Compress-Archive：
+    & installer-src\make_update_zip.ps1 -SourceDir D:\openLM\rebuild\lm_fix_build `
+        -Output D:\openLM\dist\update\LM-<版本>-update.zip `
+        -Files @('L-Mechrevo.dll','MechrevoLite.Core.dll') -ExtraFiles @('D:\openLM\dist\update\更新说明.txt')
+  脚本会自动算 sha256/size、写 manifest.json、连同说明一起打包。
+- 打完包自检：解压看 manifest.json 是否存在，且 files 条目与包内文件大小一致。
+最后更新：2026-11-16（新增：增量更新包必须带 manifest.json，统一用 make_update_zip.ps1）
 
 【一、默认包（不带 GCU 载荷）：2026-11-16 起转正】
 
