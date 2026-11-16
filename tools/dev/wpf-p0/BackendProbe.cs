@@ -375,7 +375,10 @@ internal sealed class BackendProbe : IDisposable
             {
                 // 40 系等部分 GCU 不上报 ProfileNameList；此时用本地 gamma/矩阵色彩增强，
                 // 保证档位按钮实际有可见效果，而不是返回失败。
-                Logger.WriteLine("[display-effect] GCU 无档位表，改用本地软件色彩增强 mode=" + mode);
+                Logger.WriteLine("[display-effect] GCU 无档位表，改用本地软件色彩增强 mode=" + mode
+                    + " · GCU 档位名=" + (_hw.DisplayEffectProfiles.Count == 0
+                        ? "（空）"
+                        : string.Join("/", _hw.DisplayEffectProfiles.Keys)));
                 return SoftwareColorEnhancement.Apply(mode);
             }
             return await _service.ApplyDisplayEffectProfile(profile).ConfigureAwait(false);
@@ -952,13 +955,20 @@ internal sealed class BackendProbe : IDisposable
                     ? SoftwareColorEnhancement.Apply(MechrevoLite.AppConfig.GetString("display_effect_mode"))
                     : SoftwareColorEnhancement.Reset();
             }
-            if (!HasGcuDisplayProfiles)
+            // GCU 的档位表是启动后异步上报的：即使此刻还没拿到表，开关也必须发给 GCU，
+            // 否则之后切档位时 GCU 侧仍是「效果关」，表现为切换档位不生效。
+            if (_service != null)
             {
-                return on
-                    ? SoftwareColorEnhancement.Apply(MechrevoLite.AppConfig.GetString("display_effect_mode"))
-                    : SoftwareColorEnhancement.Reset();
+                bool sent = await _service.SetDisplayEffectSwitch(on).ConfigureAwait(false);
+                if (sent)
+                {
+                    return true;
+                }
             }
-            return _service != null && await _service.SetDisplayEffectSwitch(on).ConfigureAwait(false);
+            // 没有 GCU 通道（或下发失败）才退回本地软件色彩增强。
+            return on
+                ? SoftwareColorEnhancement.Apply(MechrevoLite.AppConfig.GetString("display_effect_mode"))
+                : SoftwareColorEnhancement.Reset();
         }
         catch
         {

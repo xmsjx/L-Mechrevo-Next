@@ -1143,6 +1143,62 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    /// <summary>
+    /// 宽屏导入/删除自定义 ICC 后，把「档位」列表与本机实际 ICC 文件同步（只增删下拉项，⛔ 不应用、不写配置）。
+    /// <para>宽屏的档位按钮由本窗口的下拉项生成，导入动作发生在宽屏，因此需要这一步补上「自定义」档位。</para>
+    /// </summary>
+    internal void WideSyncCustomCalibrationTiers()
+    {
+        try
+        {
+            List<string> files = IccHelper.ListCustomIccFiles()
+                .Where(file => !IccHelper.IsFactoryIcc(file))
+                .ToList();
+            for (int i = CalibrationCombo.Items.Count - 1; i >= 1; i--)
+            {
+                if (CalibrationCombo.Items[i] is not ComboBoxItem item || item.Tag is not int tag || tag != 999)
+                {
+                    continue;
+                }
+                string text = item.Content?.ToString() ?? "";
+                bool stillExists = false;
+                foreach (string file in files)
+                {
+                    if (string.Equals(file, text, StringComparison.OrdinalIgnoreCase))
+                    {
+                        stillExists = true;
+                        break;
+                    }
+                }
+                if (!stillExists)
+                {
+                    CalibrationCombo.Items.RemoveAt(i);
+                }
+            }
+            foreach (string file in files)
+            {
+                bool exists = false;
+                foreach (object entry in CalibrationCombo.Items)
+                {
+                    if (entry is ComboBoxItem item && item.Tag is int tag && tag == 999
+                        && string.Equals(item.Content?.ToString(), file, StringComparison.OrdinalIgnoreCase))
+                    {
+                        exists = true;
+                        break;
+                    }
+                }
+                if (!exists)
+                {
+                    CalibrationCombo.Items.Add(new ComboBoxItem { Content = file, Tag = 999 });
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[calib] 档位同步失败（已吞掉）：" + ex.Message);
+        }
+    }
+
     internal (bool Enabled, (string Label, object? Tag)[] Options, int Selected) WideCalibration()
     {
         List<(string, object?)> options = new();

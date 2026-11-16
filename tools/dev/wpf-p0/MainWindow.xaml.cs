@@ -1937,6 +1937,7 @@ public partial class MainWindow : Window
                 AppConfig.Flush();
             }
         }
+        if (_owner != null) _owner.WideSyncCustomCalibrationTiers();
         BuildCalibrationOptions();
     }
 
@@ -1976,6 +1977,9 @@ public partial class MainWindow : Window
             RefreshIccList();
             int index = CalibrationIccCombo.Items.IndexOf(imported);
             if (index >= 0) CalibrationIccCombo.SelectedIndex = index;
+            // 导入后把「自定义」档位补进档位列表，并立刻重建宽屏的档位按钮。
+            _owner.WideSyncCustomCalibrationTiers();
+            BuildCalibrationOptions();
         }
         finally
         {
