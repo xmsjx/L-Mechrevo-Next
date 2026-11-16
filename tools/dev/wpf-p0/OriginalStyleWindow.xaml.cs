@@ -656,14 +656,15 @@ public partial class OriginalStyleWindow : Window
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         if (UiQaShowAll.Enabled) return true;
         if (GcuEcExperimental.Enabled
-            && hw?.DgpuGeneration is MechrevoLite.Gpu.DgpuGenerationKind.Gen50 or MechrevoLite.Gpu.DgpuGenerationKind.Gen40
+            && hw != null
             && hw.WujieSmuApu != true
             && hw.SmuCustomApu != true
+            && hw.UsesBaolongda != true
             && !XingyaoPerfApplicable())
         {
-            // EC 直连/接管时性能档由本地 EC 实现（clamp 0x10 = 狂暴），GCU 的 TurboMode 能力位在这里不适用；
-            // 无界/星耀等办公本原来就正常，维持原判据不动（不在这里替它们做决定）。
-            return true;
+            // EC 直连/接管时性能档由本地 EC 实现（clamp 0x10 = 狂暴），GCU 的 TurboMode 能力位在这里不适用。
+            // 不再按代际排除：改为读回档位寄存器做实测证据，读得到且取值在已知档位集合内才认为有狂暴档。
+            if (EcClampEvidence()) return true;
         }
         if (AppConfig.Is("perf_allow_on_battery")
             && System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
@@ -680,6 +681,25 @@ public partial class OriginalStyleWindow : Window
         return hw?.UsesBaolongda == true;
     }
 
+    /// <summary>
+    /// EC 直连下的"有没有狂暴档"实测：只读回档位寄存器（mode 1963 / clamp 1873），
+    /// 能读通且取值落在已知档位集合内即认为该机固件实现了档位切换（含狂暴 0x10）。读不到就按原判据走。
+    /// </summary>
+    private static bool EcClampEvidence()
+    {
+        try
+        {
+            if (!GcuEcExperimental.TryReadVisualMode(out _))
+            {
+                return false;
+            }
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
     private static bool ShouldShowSilentTurbo(MechrevoDeviceCapabilities? caps)
     {
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;

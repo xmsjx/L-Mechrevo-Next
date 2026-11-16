@@ -238,9 +238,13 @@ internal sealed class TongfangEcBackend : IBackendModule
         FeatureDeclaration perfTuning = probe.PerfTuningCapability
             ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local, "能力位上报 CPU 调优/风扇设置", new[] { "registry:Capabilities.CpuPerformanceTuning+FanSettings" })
             : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报 CPU 调优/风扇设置", new string[0]);
+        // 自定义档：注册表能力位没上报时，EC 直连（本地自定义槽位可写）也算支持；
+        // 两条来源都缺就保持 Unknown（⛔ 不写 Unsupported）。
         FeatureDeclaration perfProfile = probe.ProfileAvailableCapability
             ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local, "能力位上报自定义档", new[] { "registry:Capabilities.ProfileAvailable" })
-            : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报自定义档", new string[0]);
+            : (MechrevoLite.Hardware.GcuEcExperimental.Enabled
+                ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local, "EC 本地自定义槽位", new[] { "ec:CustomModeFlag" })
+                : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报自定义档", new string[0]));
         FeatureDeclaration turboMode = probe.TurboModeCapability
             ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Local, "能力位上报涡轮档", new[] { "registry:Capabilities.TurboMode" })
             : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报涡轮档", new string[0]);
