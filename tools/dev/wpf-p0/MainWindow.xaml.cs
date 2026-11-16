@@ -23,6 +23,11 @@ public partial class MainWindow : Window
 {
     private readonly OriginalStyleWindow? _owner;
     private BackendProbe? _probe;
+
+    // 顶部状态条：值没变就不重设（心跳每 2 秒都会算一次文本/颜色）。
+    private string _lastStatusText = string.Empty;
+    private string _lastStatusColor = string.Empty;
+    private string _lastStatusTip = string.Empty;
     private readonly DispatcherTimer _sensorTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer _interactionTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
     private bool _dark = true;
@@ -244,9 +249,36 @@ public partial class MainWindow : Window
             color = "#EF4444";
             tip = WpfStrings.BackendGcuDisconnectedTip;
         }
+        // 心跳每次都调这里；值没变就不动 UI（避免每 2 秒新建画刷 + 触发布局）。
+        if (string.Equals(_lastStatusText, text, StringComparison.Ordinal)
+            && string.Equals(_lastStatusColor, color, StringComparison.Ordinal)
+            && string.Equals(_lastStatusTip, tip, StringComparison.Ordinal))
+        {
+            return;
+        }
+        _lastStatusText = text;
+        _lastStatusColor = color;
+        _lastStatusTip = tip;
         WideBackendStatus.Text = text;
-        WideBackendStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
+        WideBackendStatus.Foreground = StatusBrush(color);
         WideBackendStatus.ToolTip = tip;
+    }
+
+    private static readonly Dictionary<string, SolidColorBrush> StatusBrushes = new(StringComparer.OrdinalIgnoreCase);
+
+    private static SolidColorBrush StatusBrush(string hex)
+    {
+        lock (StatusBrushes)
+        {
+            if (StatusBrushes.TryGetValue(hex, out SolidColorBrush? brush))
+            {
+                return brush;
+            }
+            brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            brush.Freeze();
+            StatusBrushes[hex] = brush;
+            return brush;
+        }
     }
 
     private void NoteWindowInteraction()

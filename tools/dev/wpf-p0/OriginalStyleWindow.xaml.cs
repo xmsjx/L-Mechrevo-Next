@@ -7689,11 +7689,42 @@ public partial class OriginalStyleWindow : Window
         SetBackendStatus(WpfStrings.BackendGcuDisconnected, "#EF4444", WpfStrings.BackendGcuDisconnectedTip);
     }
 
+    private string _lastStatusText = string.Empty;
+    private string _lastStatusHex = string.Empty;
+    private string _lastStatusTip = string.Empty;
+
+    private static readonly Dictionary<string, SolidColorBrush> StatusBrushes = new(StringComparer.OrdinalIgnoreCase);
+
     private void SetBackendStatus(string text, string hex, string tooltip)
     {
+        // 心跳每次都调这里；值没变就别再动 UI（否则每 1.4 秒新建画刷 + 触发一次布局）。
+        if (string.Equals(_lastStatusText, text, StringComparison.Ordinal)
+            && string.Equals(_lastStatusHex, hex, StringComparison.Ordinal)
+            && string.Equals(_lastStatusTip, tooltip, StringComparison.Ordinal))
+        {
+            return;
+        }
+        _lastStatusText = text;
+        _lastStatusHex = hex;
+        _lastStatusTip = tooltip;
         BackendStatus.Text = text;
-        BackendStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+        BackendStatus.Foreground = StatusBrush(hex);
         BackendStatus.ToolTip = tooltip;
+    }
+
+    private static SolidColorBrush StatusBrush(string hex)
+    {
+        lock (StatusBrushes)
+        {
+            if (StatusBrushes.TryGetValue(hex, out SolidColorBrush? brush))
+            {
+                return brush;
+            }
+            brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+            brush.Freeze();
+            StatusBrushes[hex] = brush;
+            return brush;
+        }
     }
 
     private void EnsureSilentTurboButton(bool allowed)
