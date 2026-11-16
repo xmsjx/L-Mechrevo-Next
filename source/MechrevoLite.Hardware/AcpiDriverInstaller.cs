@@ -102,20 +102,29 @@ internal static class AcpiDriverInstaller
 			AppConfig.Flush();
 			Logger.WriteError("[acpi-drv] 设备打不开 ⇒ 用安装目录里的驱动装一次：" + inf);
 			int code = RunPnputil(inf, out string output);
-			// 设备节点建立/驱动加载需要一点时间，最多等 6 秒。
-			for (int i = 0; i < 12; i++)
+			// 只导入驱动包不会创建设备节点（控制台卸载时用 devcon 删过 ACPI\INOU0000），
+			// 所以导入后再让 PnP 重新枚举一次，节点才会回来并绑定驱动。
+			bool scanned = false;
+			if (!WaitForDevice(3))
 			{
-				Thread.Sleep(500);
-				if (IsDeviceAvailable(forceProbe: true))
-				{
-					detail = "驱动安装成功（pnputil 退出码 " + code + "）";
-					Logger.WriteError("[acpi-drv] " + detail);
-					// 设备刚能打开：机型判定/门控结论要重算，否则还是"打不开驱动"那一版缓存。
-					RuntimeModelSupport.InvalidateCache();
-					return true;
-				}
+				int scanCode = RunTool("pnputil.exe", "/scan-devices", out string scanOutput);
+				scanned = true;
+				Logger.WriteError("[acpi-drv] 重新枚举设备（pnputil /scan-devices）退出码 " + scanCode
+					+ (string.IsNullOrWhiteSpace(scanOutput) ? "" : "：" + FormatOutput(scanOutput)));
 			}
-			detail = "安装后设备仍打不开（pnputil 退出码 " + code + "）" + FormatOutput(output);
+			if (WaitForDevice(8))
+			{
+				detail = "驱动安装成功（pnputil 退出码 " + code + (scanned ? " · 已重新枚举设备" : "") + "）";
+				Logger.WriteError("[acpi-drv] " + detail);
+				// 设备刚能打开：机型判定/门控结论要重算，否则还是"打不开驱动"那一版缓存。
+				RuntimeModelSupport.InvalidateCache();
+				return true;
+			}
+			bool nodePresent = DeviceNodePresent();
+			detail = nodePresent
+				? "驱动包已导入，但设备仍打不开（节点存在却未启动/被禁用；pnputil 退出码 " + code + "）" + FormatOutput(output)
+				: "ACPI 未枚举设备 ACPI\\INOU0000（控制台卸载时用 devcon 删过设备节点）；重启一次通常可恢复，"
+					+ "重启后仍没有则需重装厂商控制台或检查 BIOS（pnputil 退出码 " + code + "）" + FormatOutput(output);
 			Logger.WriteErrorIfChanged("acpi-drv-fail", "[acpi-drv] " + detail);
 			return false;
 		}
@@ -127,12 +136,45 @@ internal static class AcpiDriverInstaller
 		}
 	}
 
+	/// <summary>设备节点是否在系统里（被删除的节点不存在，需要重新枚举或重启才会回来）。</summary>
+	internal static bool DeviceNodePresent()
+	{
+		try
+		{
+			using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+				@"SYSTEM\CurrentControlSet\Enum\ACPI\INOU0000");
+			return key != null;
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	private static bool WaitForDevice(int seconds)
+	{
+		for (int i = 0; i < seconds * 2; i++)
+		{
+			Thread.Sleep(500);
+			if (IsDeviceAvailable(forceProbe: true))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private static int RunPnputil(string inf, out string output)
+	{
+		return RunTool("pnputil.exe", "/add-driver \"" + inf + "\" /install", out output);
+	}
+
+	private static int RunTool(string fileName, string arguments, out string output)
 	{
 		output = "";
 		try
 		{
-			ProcessStartInfo startInfo = new("pnputil.exe", "/add-driver \"" + inf + "\" /install")
+			ProcessStartInfo startInfo = new(fileName, arguments)
 			{
 				UseShellExecute = false,
 				CreateNoWindow = true,
@@ -151,7 +193,7 @@ internal static class AcpiDriverInstaller
 				catch
 				{
 				}
-				output = "pnputil 超时（60s）";
+				output = fileName + " 超时（60s）";
 				return -1;
 			}
 			output = (stdout + " " + stderr).Trim();
