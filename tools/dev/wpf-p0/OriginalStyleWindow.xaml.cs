@@ -655,14 +655,15 @@ public partial class OriginalStyleWindow : Window
     {
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         if (UiQaShowAll.Enabled) return true;
+        // 无界家族（14X/15X 等，带不带独显都算）本身就有狂暴档（SMU 侧 OP=2），
+        // 不能因为 GCU 没上报 TurboMode 就隐藏。
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.IsWujieFamily()) return true;
         if (GcuEcExperimental.Enabled
             && hw?.DgpuGeneration is MechrevoLite.Gpu.DgpuGenerationKind.Gen50 or MechrevoLite.Gpu.DgpuGenerationKind.Gen40
-            && hw.WujieSmuApu != true
-            && hw.SmuCustomApu != true
             && !XingyaoPerfApplicable())
         {
-            // EC 直连/接管时性能档由本地 EC 实现（clamp 0x10 = 狂暴），GCU 的 TurboMode 能力位在这里不适用；
-            // 办公本（无界/星耀）上报不支持狂暴仍要隐藏，所以上面排除了它们的判据。
+            // EC 直连/接管时性能档由本地 EC 实现（clamp 0x10 = 狂暴），GCU 的 TurboMode 能力位在这里不适用。
+            // 30 系维持原判据（部分机型确实没有狂暴档）。
             return true;
         }
         if (AppConfig.Is("perf_allow_on_battery")

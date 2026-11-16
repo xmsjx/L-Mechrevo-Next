@@ -737,6 +737,7 @@ internal static class WpfBackend
     }
 
     /// <summary>读一个能力位（调用方给的实例）。</summary>
+
     internal static bool CapabilityFlag(MechrevoDeviceCapabilities? caps, string capability)
     {
         if (caps == null)
@@ -761,6 +762,26 @@ internal static class WpfBackend
             "OverclockSettings" => caps.OverclockSettings == true,
             _ => false
         };
+    }
+
+    /// <summary>无界家族（无界 14X/15X 等，含带独显的型号）：这类机型本身有狂暴档，不能因 GCU 未上报就隐藏。</summary>
+    internal static bool IsWujieFamily()
+    {
+        try
+        {
+            MechrevoDeviceCapabilities? caps = HwOrProgram?.Capabilities ?? MechrevoDeviceCapabilities.Current;
+            return MechrevoLite.Hardware.WujieSmuGate.IsWujieMachine(
+                caps?.Model ?? string.Empty,
+                caps?.SystemFamily ?? string.Empty,
+                caps?.SystemSku ?? string.Empty,
+                caps?.BaseboardProduct ?? string.Empty,
+                out _,
+                out _);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>校色等级（缺省按 1 处理）。</summary>
