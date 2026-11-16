@@ -8,6 +8,25 @@ internal static class EcChargeLimitOverride
     private const int UpperRegister = 1977;   // 0x7B9
     private const int LowerRegister = 2000;   // 0x7D0
     private const int OverrideRegister = 1904; // 0x770
+
+    /// <summary>
+    /// 0x770（ROM ID 首字节）只在读到 4/5 时才复位成 0xFF —— 那是旧版本伪装留下的残留值。
+    /// 其它值一律不写：读不到不写、也不据此判失败；正常值原样保留。
+    /// </summary>
+    private static bool NormalizeOverrideIfResidual()
+    {
+        if (!AcpiDriverEc.TryReadByte(OverrideRegister, out byte current))
+        {
+            return true;
+        }
+        if (current != 0x04 && current != 0x05)
+        {
+            return true;
+        }
+        bool reset = AcpiDriverEc.TryWriteByte(OverrideRegister, 0xFF);
+        Logger.WriteLine($"[charge-limit] 0x{OverrideRegister:X3} 残留 0x{current:X2} → 复位 0xFF（残留伪装值，非正常平台值）");
+        return reset;
+    }
     private const int PlatformIdRegister = 1987; // 0x7C3
     private const int ProtectionModeRegister = 1958; // 0x7A6
     private const int TouchpadBit = 0x08;
@@ -58,7 +77,7 @@ internal static class EcChargeLimitOverride
             int upper = percent >= 95 ? 0 : percent;
             int lower = percent >= 95 ? 0 : Math.Max(0, percent - 5);
             bool platformRead = AcpiDriverEc.TryReadByte(PlatformIdRegister, out byte platformOriginal);
-            bool ov = AcpiDriverEc.TryWriteByte(OverrideRegister, 0xFF);
+            bool ov = NormalizeOverrideIfResidual();
             bool up = AcpiDriverEc.TryWriteByte(UpperRegister, (byte)upper);
             bool down = AcpiDriverEc.TryWriteByte(LowerRegister, (byte)lower);
             bool modeOk = false;
@@ -140,7 +159,7 @@ internal static class EcChargeLimitOverride
             int mode = percent >= 95 ? 0x01 : percent <= 65 ? 0x21 : 0x11;
             bool platform = AcpiDriverEc.TryWriteByte(PlatformIdRegister,
                 percent < 95 ? (byte)0x04 : (byte)0x07);
-            bool ov = AcpiDriverEc.TryWriteByte(OverrideRegister, 0xFF);
+            bool ov = NormalizeOverrideIfResidual();
             bool up = AcpiDriverEc.TryWriteByte(UpperRegister, (byte)percent);
             int lower = percent > 5 ? percent - 5 : percent;
             bool down = AcpiDriverEc.TryWriteByte(LowerRegister, (byte)lower);
