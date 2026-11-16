@@ -2,11 +2,18 @@ L-Mechrevo 打包须知（约定）
 ================================================================================
 最后更新：2026-10-13
 
-【一、NoGCU 版：默认不打包】
-- **除非用户明确要求，否则不要打包 `install_script_nogcu.iss`。**
-  用户原话：「NOGPU(应为 NoGCU)我不提就不要打包这个版本」。
-- 若误产出，请把它从 `installer-src\Output\` 挪到 `D:\openLM\backup\`，
-  保持 Output 目录只留主包。
+【一、NoGCU 版：已转正为默认包（2026-11-16 机主决定）】
+- ⭐ **2026-11-16 起：`install_script_nogcu.iss` 就是正式默认包**（不带任何 GCU 载荷）。
+  机主原话：「NoGCU 包转正，以后默认就是不带 GCU 载荷的」。未特别说明时打包就打它。
+- 产物：`installer-src\Output\LM-<版本>-NoGCU-setup.exe`
+  （beta23.8.0 起版本号与主程序同步；此前版本停在各次打包时的号上）。
+- 带 GCU 载荷的 `install_script.iss` 不再默认打包；需要时由机主明确要求再打。
+- 增量更新包（只含变更文件，供覆盖安装）在 `D:\openLM\dist\update\`
+  `LM-<版本>-update.zip`：内含 `L-Mechrevo.dll`、`MechrevoLite.Core.dll`、`更新说明.txt`。
+- 若误产出多余的包，请把它从 `installer-src\Output\` 挪到 `D:\openLM\backup\`，
+  保持 Output 目录只留本次要发布的包。
+- ⚠️ 以下为历史约定，仅作背景（已被上面 2026-11-16 的决定取代）：
+  「NOGPU(应为 NoGCU)我不提就不要打包这个版本」「nogcu 包暂不随主包升版」。
 - ⚠️ **nogcu 包暂不随主包升版：目前只更新 GCU 版本的包**（主 / GCU 包 = 0.291.8-beta22.8）。
   `install_script_nogcu.iss` **保持不动**，现停在 **0.291.5 / beta22.5**；
   `install_script_LMEXP_gen30on40b.iss`（0.291.4 / beta22.4）同样不跟改。
@@ -26,20 +33,34 @@ L-Mechrevo 打包须知（约定）
 - 打包命令（仅在被要求时执行）：
     & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' 'D:\openLM\installer-src\install_script_nogcu.iss'
 
-【二、主包打包流程（今天验证可用）】
+【二、打包流程（2026-11-16 复核可用）】
 1. 编译源码（必须 0 错误）：
-     & 'D:\openLM\dotnet-sdk\dotnet.exe' build 'D:\openLM\source\L-Mechrevo.csproj' -c Release
+     & 'D:\openLM\dotnet-sdk\dotnet.exe' build 'D:\openLM\source\MechrevoLite.Core.csproj' -c Release
+     & 'D:\openLM\dotnet-sdk\dotnet.exe' build 'D:\openLM\tools\dev\wpf-p0\WpfP0.csproj' -c Release
+   ⚠️ 2026-11-16 更正：旧的 `source\L-Mechrevo.csproj` 已不存在，
+      主程序工程就是 `tools\dev\wpf-p0\WpfP0.csproj`（AssemblyName=L-Mechrevo）。
 2. publish 到既有目录：
-     & 'D:\openLM\dotnet-sdk\dotnet.exe' publish 'D:\openLM\source\L-Mechrevo.csproj' -c Release `
+     & 'D:\openLM\dotnet-sdk\dotnet.exe' publish 'D:\openLM\tools\dev\wpf-p0\WpfP0.csproj' -c Release `
          -o 'D:\openLM\rebuild\lm_fix_build' '-p:NoWarn=WFO1000%3BCA1416'
    ⚠️ 不要用 `dotnet publish @tools\publish_lm.rsp`：本 SDK(10.0.401) 下 rsp 里的
       `-c Release`（空格）与 `;` 分隔的 NoWarn 都会报 MSB1001/MSB1006，
       必须用 `-c:Release` 与 `%3B` 转义（见 2026-10-05 18:00 日志的教训）。
 3. 把 publish 产物合并进 installer-src\files：
      py -3 D:\openLM\tools\merge_and_clean.py --apply
-4. ISCC 打包主包（必须 0 Warning / 0 Error）：
+   ⚠️ 2026-11-16 实测：该脚本的 WANT 列表只含 L-Mechrevo.*，**不合并 MechrevoLite.Core.dll**，
+      必须手动补两行（否则包里还是上一次的 Core）：
+     Copy-Item 'D:\openLM\rebuild\lm_fix_build\MechrevoLite.Core.dll'        'D:\openLM\installer-src\files\' -Force
+     Copy-Item 'D:\openLM\rebuild\lm_fix_build\zh-CN\MechrevoLite.Core.resources.dll' 'D:\openLM\installer-src\files\zh-CN\' -Force
+4. ISCC 打包（必须 0 Warning / 0 Error）：
+     默认包（不带 GCU 载荷，2026-11-16 起为正式包）：
+     & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' 'D:\openLM\installer-src\install_script_nogcu.iss'
+     -> installer-src\Output\LM-<版本>-NoGCU-setup.exe
+     带 GCU 载荷的主包（仅在被要求时）：
      & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' 'D:\openLM\installer-src\install_script.iss'
-     -> 产物：installer-src\Output\LM-<版本>-setup.exe
+     -> installer-src\Output\LM-<版本>-setup.exe
+5. 增量更新包（只含变更文件）：
+     把 `L-Mechrevo.dll`、`MechrevoLite.Core.dll`、`更新说明.txt` 压成
+     `D:\openLM\dist\update\LM-<版本>-update.zip`。
 
 【三、绝不能动的东西】
 - `installer-src\files\GCU\Select-GcuPayload.ps1` —— 我们自己的 GCU 分流脚本
