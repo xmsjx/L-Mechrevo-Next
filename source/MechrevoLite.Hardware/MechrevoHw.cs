@@ -881,8 +881,6 @@ public class MechrevoHw : IDisposable
 			{
 				return false;
 			}
-			// （「50 系 + AMD ⇒ 默认隐藏」这条已下移到 **L2 之后** —— 见下方 L2b：默认隐藏保留，
-			//   但用户手工「强制显示」能越过它，即 2026-10-15 用户拍板的「留后路」。）
 			// L2：用户的三态选择（读值为 auto/show/hide，老装机的 show 由 IgpuOnlyUiMode 迁移为 auto）。
 			string igpuOnlyUi = IgpuOnlyUiMode.Current();
 			if (string.Equals(igpuOnlyUi, IgpuOnlyUiMode.Hide, StringComparison.OrdinalIgnoreCase))
@@ -907,30 +905,7 @@ public class MechrevoHw : IDisposable
 				Logger.WriteLineIfChanged("igpu-two-mode-default", "IgpuOnly hidden by default: AMD 6000/7x3x/7x4x family defaults to hybrid + dGPU only; user can force-show via igpu_only_ui=show");
 				return false;
 			}
-			// L2b 2026-10-15（igpu-gen50-amd + 用户拍板「留后路」）：**50 系 + AMD CPU ⇒ 默认隐藏**
-			// （只针对"纯核显模式 / 核显模式"这一个档位）。
-			// 理由（用户原话）：「对于 50 系的 AMD CPU 机型默认隐藏纯核显模式(它们可能硬件上不支持硬切换核显)
-			// 不要误伤核显省电功能」「如果按当前为 50 系 AMD 显示 可能出问题」⇒ 宁可**默认**隐藏。
-			//
-			// ⚠️⚠️ 位置（2026-10-15 用户拍板：「修 修了重新打」+ 上一轮问的「要不要留后路」⇒ 要留）：
-			//   **排在 L2 用户三态【之后】** ⇒ 用户若在设置里选「强制显示」（igpu_only_ui=show），
-			//   L2 上面那一支已经 `return`，本条**根本不会被执行** ⇒ **用户能越过它**（这就是"后路"）。
-			//   而 auto 下本条生效 ⇒ **默认隐藏**。完整链：
-			//     L1(Gen30 硬屏蔽) → L2(用户三态；hide/show 一票定音) → **L2b(Gen50+AMD 默认隐藏)**
-			//     → L3/L4/L5(auto 的其余判据)。
-			//   ⚠️ 不变的一点：本条**仍排在能力位(L3)之前** ⇒ 代际(50 系)+平台(AMD)是**硬件事实**，
-			//   优先于 GCU 上报的 IgpuOnly/IGpuOnlyConnectionSwitch_Support（那是**可被改/可能错**的软件结论）——
-			//   用户原话「代际平台级优先能力位 要不然诊断因为能力被改会不准确」。
-			//
-			// ⚠️ 判据是 `CpuVendor.IsAmd`（== Amd），**不是 `!IsIntel()`** ——
-			// CPU 厂商读不到 / 认不出时是 Unknown ⇒ 本条**不成立**，⛔ 绝不误伤 Intel 与未知机型。
-			// ⚠️ 本机（翼龙15Pro：AMD 8745H + RTX 4060）是 Gen40 ⇒ 本条不成立，行为与改动前逐位一致。
-			// ⚠️ 只影响"纯核显模式"这一个档位；**「核显省电」那一行完全不受影响**（两者本就独立）。
-			if (DgpuGeneration == DgpuGenerationKind.Gen50 && CpuVendor.IsAmd)
-			{
-				Logger.WriteLineIfChanged("igpu-only-gen50-amd", "IgpuOnly hidden by default: Gen50 + AMD CPU (hardware may not support hard iGPU switch); user can force-show via igpu_only_ui=show");
-				return false;
-			}
+			// 2026-11-16（机主决定）：撤销「50 系 + AMD ⇒ 默认隐藏纯核显模式」的自动隐藏，改由能力位与下方 L3/L4/L5 判据决定。
 			// L3：auto —— 硬件能力位一票定音。
 			bool? hardwareVerdict = IgpuOnlyHardwareVerdict;
 			if (hardwareVerdict == true)
