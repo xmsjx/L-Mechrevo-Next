@@ -402,6 +402,12 @@ public partial class OriginalStyleWindow : Window
                 Logger.WriteLine("[startup] startup 参数：抑制错误 Toast：" + message);
                 return;
             }
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupActive)
+            {
+                // 预热期内 GCU 功能下发失败多为服务端未就绪，不弹错误提示，只留日志。
+                Logger.WriteLine("[gcu-warmup] 预热期抑制错误 Toast（" + L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupReason + "）：" + message);
+                return;
+            }
             ToastService.Show(message, failure: true);
         };
         MechrevoLite.Helpers.ToastBridge.NoticeCallback = message =>
@@ -7562,6 +7568,20 @@ public partial class OriginalStyleWindow : Window
                 string reason = _backendHost.TimedOut
                     ? WpfStrings.UpdateTimeoutStatus
                     : _backendHost.LastError;
+                // 预热窗口内（首次安装本程序 / 首次装载 GCU / 刚切回 GCU）GCU 服务端常用启动慢，
+                // 连不上不计数、不判「不可用」、不据此切 EC，也不打红色失败。
+                bool warmingUp = L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupActive;
+                if (warmingUp)
+                {
+                    SetBackendStatus(WpfStrings.BackendGcuDisconnected, "#F59E0B",
+                        WpfStrings.L("GCU 正在启动（预热期，最多 5 分钟）", "GCU is starting (warm-up, up to 5 minutes)"));
+                    BackendLine.Text = WpfStrings.L("GCU 启动中，稍候自动重试…", "GCU starting; retrying automatically…");
+                    Logger.WriteLine("[gcu-warmup] GCU 尚未就绪（" + L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupReason
+                        + " · 剩余 " + L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupRemainingSeconds + " 秒）⇒ 不计数、不切 EC：" + reason);
+                    _backendProbe = null;
+                    _backendRetryTimer.Start();
+                    return;
+                }
                 SetBackendStatus(WpfStrings.BackendGcuDisconnected, "#EF4444", WpfStrings.BackendGcuDisconnectedTip);
                 BackendLine.Text = reason;
                 _backendProbe = null;
@@ -10238,9 +10258,14 @@ public partial class OriginalStyleWindow : Window
     private void ScheduleCapabilityWarmup()
     {
         int generation = ++_capabilityWarmupGeneration;
+        // 预热窗口内 GCU 首次装载可能要好几分钟才把能力位报齐，
+        // 因此窗口内把重读的尾巴拉长，避免"首次装 GCU 少了一批功能"一直不回来。
+        int[] delays = L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupActive
+            ? new[] { 5, 15, 30, 60, 120, 300 }
+            : new[] { 5, 15, 30, 60 };
         _ = Task.Run(async () =>
         {
-            foreach (int delaySeconds in new[] { 5, 15, 30, 60 })
+            foreach (int delaySeconds in delays)
             {
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds));
                 Dispatcher.BeginInvoke(new Action(() =>

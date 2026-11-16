@@ -53,6 +53,8 @@ public static class GcuEcMode
             }
 
             ClearActive();
+            // 刚切回 GCU：服务端才拉起，开预热窗口避免误判「GCU 不可用」。
+            GcuWarmup.BeginAfterEcSwitchBack();
             MechrevoLite.AppConfig.Remove("gcu_ec_experiment");
             MechrevoLite.AppConfig.Set(DirectKey, 0);
             MechrevoLite.AppConfig.Flush();

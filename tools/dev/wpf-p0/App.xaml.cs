@@ -24,6 +24,9 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         InstallCrashHandlers();
+        // GCU 预热窗口：首次安装本程序 / 首次装载 GCU / 从 EC 切回 GCU 后 5 分钟内，
+        // GCU 未就绪属正常，不作为故障上报。
+        L_Mechrevo.WpfP0.Services.WpfBackend.BeginGcuWarmupOnStartup();
         // 空闲时预热一次摄像头设备探测（只读枚举），避免首次打开开关列表才现探测。
         Dispatcher.BeginInvoke(new Action(() =>
         {

@@ -203,6 +203,23 @@ internal static class WpfBackend
     /// <summary>是否属同方家族（只读事实）。</summary>
     internal static bool IsTongfangFamily => MachineIdentity.Collect().TongfangFamily;
 
+    // ── GCU 预热窗口（首次安装本程序 / 首次装载 GCU / 从 EC 切回 GCU 后的 5 分钟） ──
+    /// <summary>启动时按机型事实打开预热窗口（界面层不直接碰硬件类型）。</summary>
+    internal static void BeginGcuWarmupOnStartup()
+    {
+        MechrevoLite.Hardware.GcuWarmup.BeginIfFirstRun();
+        MechrevoLite.Hardware.GcuWarmup.BeginIfFirstGcuInstall();
+    }
+
+    /// <summary>是否处于 GCU 预热窗口内。</summary>
+    internal static bool GcuWarmupActive => MechrevoLite.Hardware.GcuWarmup.IsActive;
+
+    /// <summary>预热窗口的触发原因。</summary>
+    internal static string GcuWarmupReason => MechrevoLite.Hardware.GcuWarmup.Reason;
+
+    /// <summary>预热窗口剩余秒数。</summary>
+    internal static int GcuWarmupRemainingSeconds => MechrevoLite.Hardware.GcuWarmup.RemainingSeconds;
+
     /// <summary>GCU 服务登记在、但可执行载荷缺失（登记残留，写入无人应答）。</summary>
     internal static bool GcuPayloadMissing => !MachineIdentity.Collect().GcuPayloadPresent;
 

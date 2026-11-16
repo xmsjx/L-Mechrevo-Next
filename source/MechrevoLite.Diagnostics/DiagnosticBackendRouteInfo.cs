@@ -99,6 +99,9 @@ internal static class DiagnosticBackendRouteInfo
 				_ = hw.IteCapability;
 			}
 			sb.AppendLine("  ITE 能力字节：" + (hw == null ? "未查询（本次未挂载硬件）" : IteCapabilityProbe.Describe()));
+			sb.AppendLine("  GCU 预热窗口：" + (MechrevoLite.Hardware.GcuWarmup.IsActive
+				? "进行中 · " + MechrevoLite.Hardware.GcuWarmup.Reason + " · 剩余 " + MechrevoLite.Hardware.GcuWarmup.RemainingSeconds + " 秒（期间不把 GCU 未就绪当故障）"
+				: "未激活"));
 			sb.AppendLine("  灯光设置快照（只读）：" + LightingSettingsStore.DescribeForDiagnostics());
 			sb.AppendLine("  门控影子对比（应用运行期，按调用点取最后一次）：" + FeatureGateShadow.Describe(hw));
 			sb.AppendLine("  功能声明表（只读）：");
