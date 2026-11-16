@@ -529,7 +529,24 @@ public static class HardwareControl
 	/// 先走 ACPI 驱动（与转速同一条可用通道），读不到再退回本地寄存器读取；
 	/// 0xFF 是未映射/停转填充值，直接丢弃、不换算成 100%。
 	/// </summary>
-	internal static void ApplyWujieFanDuty(MechrevoHw hw)
+	/// <summary>占空比与转速互相矛盾（0% 却在转 / 高占空比却停转）时判为不可信。</summary>
+	private static bool DutyMatchesRpm(int percent, int rpm)
+	{
+		if (percent < 0 || rpm < 0)
+		{
+			return true;
+		}
+		if (percent == 0 && rpm > 500)
+		{
+			return false;
+		}
+		if (percent >= 40 && rpm == 0)
+		{
+			return false;
+		}
+		return true;
+	}
+	internal static void ApplyWujieFanDuty(MechrevoHw hw, int mainRpm, int secondaryRpm)
 	{
 		try
 		{
@@ -537,7 +554,21 @@ public static class HardwareControl
 			{
 				if (rawCpu != 0xFF && rawGpu != 0xFF && rawCpu <= 200 && rawGpu <= 200)
 				{
-					hw.ApplyWujieFanDuty(Math.Clamp(rawCpu / 2, 0, 100), Math.Clamp(rawGpu / 2, 0, 100));
+					int cpuPercent = Math.Clamp(rawCpu / 2, 0, 100);
+					int gpuPercent = Math.Clamp(rawGpu / 2, 0, 100);
+					// 合理性校验：占空比与转速互相矛盾时不采信（该值的探测曾出现"0% 但 1870rpm"）。
+					if (!DutyMatchesRpm(cpuPercent, mainRpm))
+					{
+						cpuPercent = -1;
+					}
+					if (!DutyMatchesRpm(gpuPercent, secondaryRpm))
+					{
+						gpuPercent = -1;
+					}
+					if (cpuPercent >= 0 || gpuPercent >= 0)
+					{
+						hw.ApplyWujieFanDuty(cpuPercent, gpuPercent);
+					}
 					Logger.WriteLineIfChanged("wujie-ec-duty",
 						"[fan] 无界 EC 占空比（0x75B/0x75C）：主扇(CPU)=" + rawCpu + "/200 ⇒ " + (rawCpu / 2) + "%"
 						+ " · 副扇(GPU)=" + rawGpu + "/200 ⇒ " + (rawGpu / 2) + "%");
@@ -1725,7 +1756,7 @@ public static class HardwareControl
 						"[fan] 无界 EC 风扇转速：主扇(CPU)=" + (mainFanRpm >= 0 ? mainFanRpm + "rpm" : "读不到")
 						+ " · 副扇(GPU)=" + (secondaryFanRpm >= 0 ? secondaryFanRpm + "rpm" : "读不到")
 						+ "（EC 为准，覆盖 GCU FanInfo）");
-					ApplyWujieFanDuty(hw);
+					ApplyWujieFanDuty(hw, mainFanRpm, secondaryFanRpm);
 				}
 				// 界面 RPM 行要求 FanInfo 新鲜 ⇒ 用 EC 值覆盖时也打一次时间戳（否则有值也不显示）
 				hw.MarkFanInfoReceived();
