@@ -4055,7 +4055,15 @@ public partial class OriginalStyleWindow : Window
             }
             else
             {
-                if (EcLocalControl
+                bool smuLocalCustomMode = mode == 3
+                    && (_backendProbe?.Hw?.WujieSmuApu == true || _backendProbe?.Hw?.SmuCustomApu == true);
+                if (smuLocalCustomMode)
+                {
+                    // SMU 机型没有独立的 EC 自定义档：不写 mode/trigger/自定义门控，只按本地 SMU 参数生效。
+                    Logger.WriteError("[gcu-ec] 自定义档：SMU 机型 ⇒ 跳过 EC 门控/档位写入（仅本地 SMU 参数）");
+                    result = L_Mechrevo.WpfP0.Services.WpfBackend.ModeResultOk;
+                }
+                else if (EcLocalControl
                     && _backendProbe?.Hw != null
                     && _backendProbe.Hw.UsesBaolongda == false
                     && _backendProbe.Hw.IsNucUmiFamily == false

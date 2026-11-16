@@ -72,10 +72,12 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		return new PerfModeCapabilities
 		{
 			UsesAmdPowerFields = hw.UsesAmdPowerFields,
-			SupportsPl1 = intelXingyaoMsr || hw.Pl1Adjustable,
-			SupportsPl2 = intelXingyaoMsr || hw.Pl2Adjustable,
+			// SMU 机型（无界/星耀 APU）的 PL1/PL2/温度墙走本机 SMU，不依赖 GCU 能力位；
+			// 否则这里全判 false ⇒ 规划器一条功耗步骤都不生成 ⇒ 点应用等于什么都没下发。
+			SupportsPl1 = intelXingyaoMsr || smuCustomApu || hw.Pl1Adjustable,
+			SupportsPl2 = intelXingyaoMsr || smuCustomApu || hw.Pl2Adjustable,
 			SupportsPl4 = hw.Pl4Adjustable,
-			SupportsTcc = hw.TccAdjustable,
+			SupportsTcc = intelXingyaoMsr || smuCustomApu || hw.TccAdjustable,
 			SupportsTgp = hw.GpuTgpAdjustable,
 			SupportsDynamicBoost = hw.GpuDynamicBoostAdjustable,
 			SupportsGpuOverclock = hw.SupportsGpuOverclock,
