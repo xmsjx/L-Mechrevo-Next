@@ -75,7 +75,12 @@ internal static class StartupRecoveryService
         {
             // 无界 APU 自定义档开机自动曲线（内部等 4s 并判 WujieSmuApu/自定义档）。
             WujieFanCurveAutoApply.Schedule();
+        });
 
+        Try("EcFanCurveAutoApply.Schedule", () =>
+        {
+            // 同方 EC 模式的自定义档曲线：EC 风扇表重启会回固件默认，这里补一次重写（内部判 EC 模式/自定义档/开关）。
+            EcFanCurveAutoApply.Schedule();
         });
 
         Try("PowerWallRestore.RunOnce", () =>

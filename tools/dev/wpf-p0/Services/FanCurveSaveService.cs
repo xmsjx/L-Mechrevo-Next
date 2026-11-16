@@ -104,11 +104,35 @@ internal static class FanCurveSaveService
 				: WpfStrings.L("NUC/UMI 风扇曲线写入失败：", "Failed to write NUC/UMI fan curve: ") + detail);
 	}
 
+
+	/// <summary>记住该档的 EC 温度轴（开机恢复自定义曲线时按同一条轴重写）。</summary>
+	private static void RememberEcTemps(string modeId, byte[] cpuTemps, byte[] gpuTemps)
+	{
+		try
+		{
+			string key = string.IsNullOrWhiteSpace(modeId) ? "active" : modeId;
+			if (cpuTemps != null && cpuTemps.Length > 0)
+			{
+				MechrevoLite.AppConfig.Set("ec_fan_cputemps_" + key, string.Join(",", cpuTemps));
+			}
+			if (gpuTemps != null && gpuTemps.Length > 0)
+			{
+				MechrevoLite.AppConfig.Set("ec_fan_gputemps_" + key, string.Join(",", gpuTemps));
+			}
+			MechrevoLite.AppConfig.Flush();
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[fan] 记录 EC 温度轴失败（已吞掉）：" + ex.Message);
+		}
+	}
+
 	internal static FanCurveSaveResult SaveEc(string modeId, int[] cpu, int[] gpu,
 		byte[] cpuTemps, byte[] gpuTemps, bool push)
 	{
 		if (!push)
 		{
+			RememberEcTemps(modeId, cpuTemps, gpuTemps);
 			PerfModeStore.SaveSettings(modeId, PerfModeStore.LoadSettings(modeId) with
 			{
 				CpuFanDuty = cpu,
@@ -122,6 +146,8 @@ internal static class FanCurveSaveService
 		PerfModeSettings savedSettings = PerfModeStore.LoadSettings(modeId);
 		bool ramp = NucFanTable.TrySetFanRamp(savedSettings.FanSwitchSpeedOn == true,
 			savedSettings.FanSwitchSpeedMs ?? 300, out string rampDetail);
+		// 记下温度轴：EC 的风扇表重启会回固件默认，开机恢复时要用同一条温度轴重写。
+		RememberEcTemps(modeId, cpuTemps, gpuTemps);
 		PerfModeStore.SaveSettings(modeId, PerfModeStore.LoadSettings(modeId) with
 		{
 			CpuFanDuty = cpu,
