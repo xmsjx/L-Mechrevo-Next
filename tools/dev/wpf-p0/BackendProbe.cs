@@ -583,8 +583,7 @@ internal sealed class BackendProbe : IDisposable
             {
                 return MechrevoService.ModeSwitchResult.Failed;
             }
-            Logger.WriteLine("[mode-switch] 入口=BackendProbe.SwitchModeAsync mode=" + mode);
-        return await _service.SwitchMode(mode).ConfigureAwait(false);
+            return await _service.SwitchMode(mode).ConfigureAwait(false);
         }
         catch
         {

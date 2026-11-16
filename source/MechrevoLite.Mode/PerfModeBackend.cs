@@ -152,7 +152,6 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		{
 			return true;
 		}
-		Logger.WriteLine("[mode-switch] 入口=PerfModeBackend.SwitchBuiltIn kind=" + kind);
 		return await _service.SwitchMode(PerfModeMapping.ToServiceMode(kind)) == MechrevoService.ModeSwitchResult.Ok;
 	}
 
