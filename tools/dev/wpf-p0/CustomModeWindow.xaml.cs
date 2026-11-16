@@ -778,18 +778,21 @@ public partial class CustomModeWindow : Window
         bool intelMsrRows = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram is { } intelHw
             && L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
             && !intelHw.IsNucUmiFamily;
-        bool locked = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram is { } lockHw
-            && lockHw.IsGcuConnected
-            && PerfModeCapabilities.IsGen40Plus(lockHw)
-            && _current?.IsCustom != true
-            && !nucDirectRows
-            && !intelMsrRows;
-        CpuPowerCard.IsEnabled = L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig() || !locked;
-        TempGpuCard.IsEnabled = L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig() || !locked;
-        FanCard.IsEnabled = !locked;
+        _ = nucDirectRows;
+        _ = intelMsrRows;
+        // 只有自定义档才允许改参数：其它模式（静音/平衡/狂暴/固件档）把参数区整块置灰，
+        // 不再出现"看着能点、点了没反应"。固件配置编辑器（_firmwareMode）不受影响。
+        bool parameterEditable = _firmwareMode || _current?.IsCustom == true;
+        bool locked = !parameterEditable;
+        CpuPowerCard.IsEnabled = parameterEditable;
+        TempGpuCard.IsEnabled = parameterEditable;
+        FanCard.IsEnabled = parameterEditable;
+        SystemCard.IsEnabled = parameterEditable;
         CpuPowerCard.Opacity = locked ? 0.45 : 1.0;
         TempGpuCard.Opacity = locked ? 0.45 : 1.0;
         FanCard.Opacity = locked ? 0.45 : 1.0;
+        SystemCard.Opacity = locked ? 0.45 : 1.0;
+        ApplyButton.IsEnabled = parameterEditable;
         var hwForRows = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         bool apuOrNoDgpu = hwForRows != null
             && (hwForRows.SmuCustomApu || hwForRows.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu);

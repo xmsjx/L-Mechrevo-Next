@@ -259,6 +259,30 @@ internal static class WpfBackend
         HwOrProgram?.ApplyLcdOverdriveState(on);
         return true;
     }
+    /// <summary>确保自定义档服务已创建（物理键改绑「轮换自定义」与自定义档页都依赖它）。</summary>
+    internal static bool EnsurePerfModeService()
+    {
+        try
+        {
+            if (MechrevoLite.Mode.PerfModeService.Instance != null)
+            {
+                return true;
+            }
+            MechrevoHw? hw = HwOrProgram;
+            if (hw == null)
+            {
+                return false;
+            }
+            MechrevoLite.Mode.PerfModeService.EnsureCreated(hw);
+            Logger.WriteLine("[perfmode] 自定义档服务已创建");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[perfmode] 自定义档服务创建失败：" + ex.GetType().Name + " " + ex.Message);
+            return false;
+        }
+    }
     /// <summary>ACPIDriver 设备是否可用（EC 通道的前提）。</summary>
     internal static bool AcpiDriverAvailable => MechrevoLite.Hardware.AcpiDriverInstaller.IsDeviceAvailable();
 

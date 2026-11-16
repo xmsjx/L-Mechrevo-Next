@@ -329,6 +329,12 @@ internal sealed class PerfModeService
 
 	private bool ApplyInFlight => Volatile.Read(in _applyInFlight) > 0;
 
+	/// <summary>确保服务实例存在：上层只给硬件对象，不用自己组装服务（EC 直连/GCU 都适用）。</summary>
+	public static PerfModeService EnsureCreated(MechrevoHw hw)
+	{
+		ArgumentNullException.ThrowIfNull(hw, "hw");
+		return Instance ?? Create(new MechrevoService(hw), hw);
+	}
 	public static PerfModeService Create(MechrevoService service, MechrevoHw hw)
 	{
 		ArgumentNullException.ThrowIfNull(service, "service");

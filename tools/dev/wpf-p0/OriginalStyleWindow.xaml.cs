@@ -781,17 +781,20 @@ public partial class OriginalStyleWindow : Window
                 .ToList();
             Logger.WriteErrorIfChanged("perfkey-override-cycle-" + customs.Count,
                 "[perfkey] 改绑动作=cycle · 自定义档数=" + customs.Count + " · 当前档=" + perf.ActiveModeId);
-            if (customs.Count < 2)
+            if (customs.Count == 0)
             {
-                Logger.WriteErrorIfChanged("perfkey-override-cycle-short-" + customs.Count,
-                    "[perfkey] 改绑动作=cycle · 自定义档不足 2 个（本机 " + customs.Count + "）⇒ 回退默认档位循环");
+                Logger.WriteErrorIfChanged("perfkey-override-cycle-none",
+                    "[perfkey] 改绑动作=cycle · 本机没有任何自定义档 ⇒ 回退默认档位循环");
                 StatusText.Text = WpfStrings.L(
-                    "没有足够的自定义配置（本机 " + customs.Count + " 个），已按默认循环切档。",
-                    "Not enough custom profiles (" + customs.Count + "); used default cycle.");
+                    "本机还没有自定义配置，已按默认循环切档。",
+                    "No custom profile yet; used default cycle.");
                 return false;
             }
+            // 不在自定义档时先切到列表里的第一个自定义档；已在自定义档则按列表顺序轮换（到末尾回到第一个）。
             int current = customs.FindIndex(mode => string.Equals(mode.Id, perf.ActiveModeId, StringComparison.OrdinalIgnoreCase));
-            MechrevoLite.Mode.PerfModeDefinition next = customs[(current + 1 + customs.Count) % customs.Count];
+            MechrevoLite.Mode.PerfModeDefinition next = current < 0
+                ? customs[0]
+                : customs[(current + 1) % customs.Count];
             MechrevoLite.Mode.PerfApplyOutcome? outcome = await perf.ActivateAsync(next.Id, "custom-button-cycle", forceParameters: true);
             StatusText.Text = (outcome?.AnyFailed == false ? WpfStrings.L("已切换自定义配置：", "Custom profile switched: ")
                 : WpfStrings.L("切换自定义配置失败：", "Custom profile switch failed: ")) + (next.UserName ?? next.Id);
@@ -810,12 +813,12 @@ public partial class OriginalStyleWindow : Window
         }
         try
         {
-            BackendProbe? probe = _backendProbe;
-            if (probe?.Hw == null)
+            if (!L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerfModeService())
             {
+                Logger.WriteError("[perfkey] 自定义档服务补建失败");
                 return null;
             }
-            MechrevoLite.Mode.PerfModeService created = MechrevoLite.Mode.PerfModeService.Create(probe.Service!, probe.Hw);
+            MechrevoLite.Mode.PerfModeService? created = MechrevoLite.Mode.PerfModeService.Instance;
             Logger.WriteError("[perfkey] 自定义档服务缺省补建成功");
             return created;
         }

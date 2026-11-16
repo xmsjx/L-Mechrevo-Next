@@ -54,6 +54,16 @@ internal static class StartupRecoveryService
         });
         StartIsolationGuard();
 
+        Try("PerfModeService.EnsureCreated", () =>
+        {
+            // 自定义档服务要在启动阶段就存在：物理键改绑「轮换自定义配置」依赖它。
+            if (MechrevoLite.Mode.PerfModeService.Instance == null)
+            {
+                bool created = WpfBackend.EnsurePerfModeService();
+                Logger.WriteLine("[startup-recovery] 自定义档服务创建=" + created);
+            }
+        });
+
         Try("BatteryLimitRestore.RunOnce", () =>
         {
             // 宝龙达：正常启动时的限充核对（旧 Program.ScheduleIdleBackendWarmup 路径）；
