@@ -1968,9 +1968,10 @@ public partial class CustomModeWindow : Window
                 MechrevoLite.Mode.PerfModeStore.SaveSettings(_current.Id, edited);
                 bool xyOk = fields.Count == 0 || await WpfBackend.Service.SetCustomDetail(fields);
                 _settings = MechrevoLite.Mode.PerfModeStore.LoadSettings(_current.Id);
+                // Intel 星耀：PL1/PL2/温度墙走本机 MSR 直写（与 UXTU 那条路同一套寄存器），不经 EC/GCU。
                 StatusText.Text = xyOk
-                    ? WpfStrings.L("自定义功耗墙已应用：", "Custom power limits applied: ") + string.Join(" ", fields.Select(kv => kv.Key + "=" + kv.Value))
-                    : WpfStrings.L("自定义功耗墙应用失败：", "Failed to apply custom power limits: ") + string.Join(" ", fields.Select(kv => kv.Key + "=" + kv.Value));
+                    ? WpfStrings.L("自定义功耗墙已应用（本机 MSR）：", "Custom power limits applied (local MSR): ") + string.Join(" ", fields.Select(kv => kv.Key + "=" + kv.Value))
+                    : WpfStrings.L("自定义功耗墙应用失败（本机 MSR）：", "Failed to apply custom power limits (local MSR): ") + string.Join(" ", fields.Select(kv => kv.Key + "=" + kv.Value));
                 if (xyOk)
                 {
                     _dirty = false;
