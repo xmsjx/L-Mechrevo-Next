@@ -41,7 +41,39 @@ internal static class BackendRouter
         GcuPayloadPresent,
 		GcuGenerationSupported,
 		MifsLegacyCompatible,
-		TongfangFamily
+		TongfangFamily,
+		// ── 运行期可用性事实：同一张表在"能连上"的情况下才选得到对应后端 ──
+		GcuReachable,
+		NucLocalReady,
+		XingyaoLocalReady,
+		EcLocalAvailable
+	}
+
+	/// <summary>
+	/// 运行期可用性事实（连接证据）。声明层只有机型事实，实际层把这两类事实一起喂给同一张规则表，
+	/// 由规则自己去匹配后端 —— 不再另起一条优先级链。
+	/// </summary>
+	internal sealed record RouteAvailability(
+		bool GcuReachable,
+		bool NucLocalReady,
+		bool XingyaoLocalReady,
+		bool EcLocalAvailable)
+	{
+		internal static readonly RouteAvailability None = new RouteAvailability(false, false, false, false);
+
+		/// <summary>从当前硬件状态取运行期可用性；不触发机型采集。</summary>
+		internal static RouteAvailability From(MechrevoHw? hw)
+		{
+			if (hw == null)
+			{
+				return None;
+			}
+			return new RouteAvailability(
+				hw.IsGcuConnected,
+				hw.NucLocalReady,
+				hw.XingyaoLocalReady,
+				GcuEcMode.IsEcMode);
+		}
 	}
 
 	internal sealed record RuleCondition(RouteFact Fact, bool Expected = true);
@@ -54,20 +86,29 @@ internal static class BackendRouter
         // ① 板号白名单是硬机型证据；排障开关=0 时让给后续规则。
         new RuleSpec(1, "board in Baolongda whitelist -> Baolongda", MechrevoBackendKind.Baolongda,
             new[] { new RuleCondition(RouteFact.BaolongdaWhitelisted), new RuleCondition(RouteFact.BaolongdaEnabled) }),
-        // ② 代际只能佐证；服务已装且载荷真的在，才声明 GCU。
-        new RuleSpec(2, "gpu gen 30/40/50 && GCU service installed && payload present -> Gcu", MechrevoBackendKind.Gcu,
-            new[] { new RuleCondition(RouteFact.GcuServiceInstalled), new RuleCondition(RouteFact.GcuPayloadPresent), new RuleCondition(RouteFact.GcuGenerationSupported) }),
-        // ③ 服务已装 + 载荷在（代际未知也走这一条）。
-        new RuleSpec(3, "GCU service installed && payload present -> Gcu", MechrevoBackendKind.Gcu,
-            new[] { new RuleCondition(RouteFact.GcuServiceInstalled), new RuleCondition(RouteFact.GcuPayloadPresent) }),
-        // ④ MICommonInterface 存在且 GUID 与老同方一致，且未装 GCU。
-        new RuleSpec(4, "MICommonInterface(legacy GUID) && no GCU service -> LegacyMifs", MechrevoBackendKind.LegacyMifs,
+        // ② 代际只能佐证；服务已装、载荷真的在、并且 GCU 确实连得上，才走 GCU。
+        new RuleSpec(2, "gpu gen 30/40/50 && GCU service installed && payload present && GCU reachable -> Gcu", MechrevoBackendKind.Gcu,
+            new[] { new RuleCondition(RouteFact.GcuServiceInstalled), new RuleCondition(RouteFact.GcuPayloadPresent), new RuleCondition(RouteFact.GcuGenerationSupported), new RuleCondition(RouteFact.GcuReachable) }),
+        // ③ 服务已装 + 载荷在 + 连得上（代际未知也走这一条）。
+        new RuleSpec(3, "GCU service installed && payload present && GCU reachable -> Gcu", MechrevoBackendKind.Gcu,
+            new[] { new RuleCondition(RouteFact.GcuServiceInstalled), new RuleCondition(RouteFact.GcuPayloadPresent), new RuleCondition(RouteFact.GcuReachable) }),
+        // ④ NUC / UMI 本地就绪 ⇒ 走本地 ACPI/EC + HID。
+        new RuleSpec(4, "NUC/UMI local ready -> NucUmiLocal", MechrevoBackendKind.NucUmiLocal,
+            new[] { new RuleCondition(RouteFact.NucLocalReady) }),
+        // ⑤ 星耀本地就绪 ⇒ 走 WMAA。星耀不是同方模具，寄存器位置与同方 EC 不同，不能落到 EC 规则。
+        new RuleSpec(5, "Xingyao local ready -> XingyaoPmc", MechrevoBackendKind.XingyaoPmc,
+            new[] { new RuleCondition(RouteFact.XingyaoLocalReady) }),
+        // ⑥ MICommonInterface 存在且 GUID 与老同方一致，且未装 GCU。
+        new RuleSpec(6, "MICommonInterface(legacy GUID) && no GCU service -> LegacyMifs", MechrevoBackendKind.LegacyMifs,
             new[] { new RuleCondition(RouteFact.MifsLegacyCompatible), new RuleCondition(RouteFact.GcuServiceInstalled, false) }),
-        // ⑤ 同方族即使当前没装 GCU 服务，也归到同方通道。
-        new RuleSpec(5, "Tongfang family -> Gcu（无 GCU 时由本地 EC 接管）", MechrevoBackendKind.Gcu,
+        // ⑦ 同方家族但 GCU 不可达、且已选 EC 直连 ⇒ 本地 ACPI/EC 接管（EC-only）。
+        new RuleSpec(7, "Tongfang family && GCU unreachable && EC mode selected -> TongfangEc", MechrevoBackendKind.TongfangEc,
+            new[] { new RuleCondition(RouteFact.TongfangFamily), new RuleCondition(RouteFact.GcuReachable, false), new RuleCondition(RouteFact.EcLocalAvailable) }),
+        // ⑧ 同方族（声明口径）：装没装 GCU 都归同方通道。
+        new RuleSpec(8, "Tongfang family -> Gcu（无 GCU 时由本地 EC 接管）", MechrevoBackendKind.Gcu,
             new[] { new RuleCondition(RouteFact.TongfangFamily) })
-	};
 
+	};
 	/// <summary>当前生效规则表（可被 <see cref="ReloadRulesIfChanged" /> 原子替换）。</summary>
 	private static BackendRuleStore.RuleTable _table = BackendRuleStore.Load(BuiltInRules, MechrevoBackendKind.Gcu);
 
@@ -132,7 +173,19 @@ internal static class BackendRouter
 		new BackendDeclaration(MechrevoBackendKind.LegacyMifs, "LegacyMifs",
 			new[] { "mifsClass" },
 			identity => !identity.BaolongdaWhitelisted && identity.MifsLegacyCompatible && !identity.GcuServiceInstalled,
-			"老同方 MICommonInterface（GUID 与 LegacyMifsWmi 一致）且未装 GCU 服务；内置性能档、不走 MQTT")
+			"老同方 MICommonInterface（GUID 与 LegacyMifsWmi 一致）且未装 GCU 服务；内置性能档、不走 MQTT"),
+		new BackendDeclaration(MechrevoBackendKind.NucUmiLocal, "NucUmiLocal",
+			new[] { "nucLocalReady" },
+			identity => true,
+			"NUC / UMI（Intel 30 系）：本地 ACPI/EC + HID；需要运行期探测就绪才走这条"),
+		new BackendDeclaration(MechrevoBackendKind.XingyaoPmc, "XingyaoPmc",
+			new[] { "xingyaoLocalReady" },
+			identity => true,
+			"星耀：本地 WMAA（ACPI WMI）；不是同方模具，不走同方 EC 地址"),
+		new BackendDeclaration(MechrevoBackendKind.TongfangEc, "TongfangEc",
+			new[] { "tongfangFamily", "ecMode" },
+			identity => identity.TongfangFamily && !identity.BaolongdaWhitelisted,
+			"同方家族 + GCU 不可达 + 已选 EC 直连：由本地 ACPI/EC 接管")
 	};
 
 	/// <summary>兜底后端（默认 GCU；配置文件只允许与内置一致）。</summary>
@@ -200,13 +253,25 @@ internal static class BackendRouter
 		return sb.ToString().TrimEnd();
 	}
 
+	/// <summary>声明层判定：只用机型事实（不看连接证据）。</summary>
 	internal static BackendRouteDecision Decide(MachineIdentity identity)
 	{
 		BackendRuleStore.RuleTable table = Table;
-		return Decide(identity, table.Rules, table.Fallback);
+		return Decide(identity, table.Rules, table.Fallback, RouteAvailability.None);
 	}
 
-	private static BackendRouteDecision Decide(MachineIdentity identity, RuleSpec[] rules, MechrevoBackendKind fallback)
+	/// <summary>
+	/// 实际层判定：同一张规则表，额外把"运行期可用性事实"喂进去，由规则自己匹配后端。
+	/// <para>不是"声明一个后端、不行再排队退回下一个" —— 不可用的后端在条件上就不成立。</para>
+	/// </summary>
+	internal static BackendRouteDecision Decide(MachineIdentity identity, RouteAvailability availability)
+	{
+		BackendRuleStore.RuleTable table = Table;
+		return Decide(identity, table.Rules, table.Fallback, availability ?? RouteAvailability.None);
+	}
+
+	private static BackendRouteDecision Decide(MachineIdentity identity, RuleSpec[] rules, MechrevoBackendKind fallback,
+		RouteAvailability availability)
 	{
 		if (identity == null)
 		{
@@ -215,7 +280,7 @@ internal static class BackendRouter
 		for (int i = 0; i < rules.Length; i++)
 		{
 			RuleSpec rule = rules[i];
-			if (!Matches(identity, rule))
+			if (!Matches(identity, rule, availability))
 			{
 				continue;
 			}
@@ -235,6 +300,13 @@ internal static class BackendRouter
 	/// <summary>单条事实在当前机型下的取值（路由判定与诊断解释共用同一实现，避免两套判据）。</summary>
 	internal static bool Evaluate(MachineIdentity identity, RouteFact fact)
 	{
+		return Evaluate(identity, fact, RouteAvailability.None);
+	}
+
+	/// <summary>单条事实取值：机型事实 + 运行期可用性事实（同一实现，判定与解释共用）。</summary>
+	internal static bool Evaluate(MachineIdentity identity, RouteFact fact, RouteAvailability availability)
+	{
+		RouteAvailability av = availability ?? RouteAvailability.None;
 		return fact switch
 		{
 			RouteFact.BaolongdaWhitelisted => identity.BaolongdaWhitelisted,
@@ -244,16 +316,21 @@ internal static class BackendRouter
 			RouteFact.GcuGenerationSupported => IsGcuGeneration(identity.GpuGeneration),
 			RouteFact.MifsLegacyCompatible => identity.MifsLegacyCompatible,
 			RouteFact.TongfangFamily => identity.TongfangFamily,
+			// 声明层（未提供可用性）按"会连上"处理，运行层按真实连接证据；NUC/星耀/EC 只在运行层成立。
+			RouteFact.GcuReachable => availability == null || av.GcuReachable,
+			RouteFact.NucLocalReady => av.NucLocalReady,
+			RouteFact.XingyaoLocalReady => av.XingyaoLocalReady,
+			RouteFact.EcLocalAvailable => av.EcLocalAvailable,
 			_ => false
 		};
 	}
 
-	private static bool Matches(MachineIdentity identity, RuleSpec rule)
+	private static bool Matches(MachineIdentity identity, RuleSpec rule, RouteAvailability availability)
 	{
 		for (int i = 0; i < rule.Conditions.Length; i++)
 		{
 			RuleCondition condition = rule.Conditions[i];
-			if (Evaluate(identity, condition.Fact) != condition.Expected)
+			if (Evaluate(identity, condition.Fact, availability) != condition.Expected)
 			{
 				return false;
 			}
@@ -265,7 +342,7 @@ internal static class BackendRouter
 	/// 只读可视化：逐条规则列出**每个条件的实际取值**、是否命中（★ = 最终采用）、以及兜底后端。
 	/// <para>⛔ 只读：不路由、不探测、不写任何东西；诊断包与 UI 只读页共用这一份文本。</para>
 	/// </summary>
-	internal static string Explain(MachineIdentity identity)
+	internal static string Explain(MachineIdentity identity, RouteAvailability availability = null)
 	{
 		if (identity == null)
 		{
@@ -280,10 +357,10 @@ internal static class BackendRouter
 		for (int i = 0; i < table.Rules.Length; i++)
 		{
 			RuleSpec rule = table.Rules[i];
-			bool hit = Matches(identity, rule);
+			bool hit = Matches(identity, rule, availability);
 			bool declarationPassed = DeclarationFor(rule.Backend)?.Supports(identity) ?? true;
 			string conditions = string.Join(" && ", Array.ConvertAll(rule.Conditions,
-				c => (c.Expected ? "" : "!") + c.Fact + "=" + (Evaluate(identity, c.Fact) ? "真" : "假")));
+				c => (c.Expected ? "" : "!") + c.Fact + "=" + (Evaluate(identity, c.Fact, availability) ? "真" : "假")));
 			string verdict = !hit
 				? "未命中"
 				: (!declarationPassed ? "命中但声明不支持 ⇒ 落兜底" : (matched ? "命中（已被更前面的规则抢先）" : "★ 采用"));
@@ -323,6 +400,7 @@ internal static class BackendRouter
 			MechrevoBackendKind.Gcu => BackendRoute.Gcu,
 			MechrevoBackendKind.Baolongda => BackendRoute.Baolongda,
 			MechrevoBackendKind.LegacyMifs => BackendRoute.LegacyMifs,
+			MechrevoBackendKind.TongfangEc => BackendRoute.AcpiEc,
 			_ => BackendRoute.None
 		};
 	}
@@ -355,21 +433,21 @@ internal static class BackendRouter
 		Check("代际未知 + 已装 GCU ⇒ Gcu", MechrevoBackendKind.Gcu, 3,
 			MachineIdentity.ForTest(board: "GM5HG0A", generation: "Unknown", gcuInstalled: true), pass, fail);
 		// ④ 老接口：MICommonInterface(legacy GUID) + 未装 GCU ⇒ LegacyMifs（本轮新增规则）
-		Check("MICommonInterface + 未装 GCU ⇒ LegacyMifs", MechrevoBackendKind.LegacyMifs, 4,
+		Check("MICommonInterface + 未装 GCU ⇒ LegacyMifs", MechrevoBackendKind.LegacyMifs, 6,
 			MachineIdentity.ForTest(board: "GM6IX8B", generation: "Gen30", gcuInstalled: false, mifsClass: true), pass, fail);
 		// ⑤ 装了 GCU 时 MICommonInterface 在也不能抢老接口（设计文档 §2：同方通用类新机型也可能带）
 		Check("MICommonInterface + 已装 GCU ⇒ Gcu（老接口不得抢）", MechrevoBackendKind.Gcu, 3,
 			MachineIdentity.ForTest(board: "GM5HG0A", generation: "Unknown", gcuInstalled: true, mifsClass: true), pass, fail);
 		// ⑥ 同方板号、没有 GCU、没有 MIFS ⇒ 同方族规则（本地 EC 回退）
         // ⑥ 服务键在、但载荷 exe 缺失（登记残留）⇒ 不得声明 GCU，交给同方/回落通道
-        Check("已装 GCU 但载荷缺失 ⇒ 不选 GCU 规则", MechrevoBackendKind.Gcu, 5,
+        Check("已装 GCU 但载荷缺失 ⇒ 不选 GCU 规则", MechrevoBackendKind.Gcu, 8,
             MachineIdentity.ForTest(board: "GM7ZG8S", generation: "Gen30", gcuInstalled: true, gcuPayload: false), pass, fail);
         Check("已装 GCU 且载荷在 ⇒ 仍选规则 2（不误降级）", MechrevoBackendKind.Gcu, 2,
             MachineIdentity.ForTest(board: "GM7ZG8S", generation: "Gen30", gcuInstalled: true, gcuPayload: true), pass, fail);
-		Check("GM 板号 + 无 GCU/MIFS ⇒ 同方族 Gcu", MechrevoBackendKind.Gcu, 5,
+		Check("GM 板号 + 无 GCU/MIFS ⇒ 同方族 Gcu", MechrevoBackendKind.Gcu, 8,
 			MachineIdentity.ForTest(board: "GM5HG0A", generation: "Gen40", gcuInstalled: false), pass, fail);
 		// ⑦ 什么都没识别到 ⇒ 兜底 Gcu（不误判成宝龙达/老接口）
-		Check("无任何事实 ⇒ 兜底 Gcu", MechrevoBackendKind.Gcu, 6,
+		Check("无任何事实 ⇒ 兜底 Gcu", MechrevoBackendKind.Gcu, 9,
 			MachineIdentity.ForTest(), pass, fail);
 		// ⑧ 白名单但 MICommonInterface 缺失：路由仍按机型证据声明 Baolongda（探测失败由候选循环兜底并记日志）
 		Check("白名单 + MIFS 缺失 ⇒ 仍声明 Baolongda", MechrevoBackendKind.Baolongda, 1,
@@ -381,12 +459,12 @@ internal static class BackendRouter
 		// ⑩ 规则文件解析（热重载的解析层）：合法 ⇒ file；version 非 1 / fact 非法 / backend 非法 ⇒ 整份回退内置
 		CheckRuleParse("规则文件：单条合法 ⇒ file", ValidRuleJson, expectFile: true, null, 1, pass, fail);
 		CheckRuleParse("规则文件：condition expected=false 可解析", NegatedRuleJson, expectFile: true, null, 1, pass, fail);
-		CheckRuleParse("规则文件：version=2 ⇒ 回退内置", "{\"version\":2,\"rules\":[]}", expectFile: false, "version=", 5, pass, fail);
+		CheckRuleParse("规则文件：version=2 ⇒ 回退内置", "{\"version\":2,\"rules\":[]}", expectFile: false, "version=", 8, pass, fail);
 		CheckRuleParse("规则文件：fact 非法 ⇒ 回退内置", "{\"version\":1,\"rules\":[{\"index\":1,\"backend\":\"Gcu\",\"conditions\":[{\"fact\":\"NoSuchFact\"}]}]}",
-			expectFile: false, "fact 非法", 5, pass, fail);
+			expectFile: false, "fact 非法", 8, pass, fail);
 		CheckRuleParse("规则文件：backend 非法 ⇒ 回退内置", "{\"version\":1,\"rules\":[{\"index\":1,\"backend\":\"Nope\",\"conditions\":[{\"fact\":\"TongfangFamily\"}]}]}",
-			expectFile: false, "backend 非法", 5, pass, fail);
-		CheckRuleParse("规则文件：空 rules ⇒ 回退内置", "{\"version\":1,\"rules\":[]}", expectFile: false, "rules 为空", 5, pass, fail);
+			expectFile: false, "backend 非法", 8, pass, fail);
+		CheckRuleParse("规则文件：空 rules ⇒ 回退内置", "{\"version\":1,\"rules\":[]}", expectFile: false, "rules 为空", 8, pass, fail);
 		// ⑪ 只读可视化：当前事实下恰好一条「★ 采用」，并列出条件实际取值
 		CheckExplain("规则解释：白名单机型", MachineIdentity.ForTest(board: "MRID6-23", whitelisted: true, gcuInstalled: true), pass, fail);
 		CheckExplain("规则解释：同方无 GCU", MachineIdentity.ForTest(board: "GM5HG0A", generation: "Gen40", gcuInstalled: false), pass, fail);
@@ -407,7 +485,7 @@ internal static class BackendRouter
 
 	private static void Check(string scenario, MechrevoBackendKind expectedBackend, int expectedRule, MachineIdentity identity, List<string> pass, List<string> fail)
 	{
-		BackendRouteDecision decision = Decide(identity, BuiltInRules, MechrevoBackendKind.Gcu);
+		BackendRouteDecision decision = Decide(identity, BuiltInRules, MechrevoBackendKind.Gcu, null);
 		bool ok = decision.Backend == expectedBackend && decision.RuleIndex == expectedRule && decision.DeclarationPassed;
 		string line = scenario + " ⇒ 实际 " + decision.Backend + "(rule=#" + decision.RuleIndex + ", decl=" + (decision.DeclarationPassed ? "pass" : "fail") + ")";
 		if (ok)
@@ -422,7 +500,7 @@ internal static class BackendRouter
 
 	private static void CheckDeclaration(MachineIdentity identity, List<string> pass, List<string> fail)
 	{
-		BackendRouteDecision decision = Decide(identity, BuiltInRules, MechrevoBackendKind.Gcu);
+		BackendRouteDecision decision = Decide(identity, BuiltInRules, MechrevoBackendKind.Gcu, null);
 		if (decision.DeclarationPassed)
 		{
 			pass.Add("能力声明 pass：" + decision.Backend + " rule=#" + decision.RuleIndex);

@@ -14,9 +14,12 @@ internal static class DisplayToggleRestore
     {
         try
         {
-            if (!WpfBackend.EcModeActive)
+            // 只对"同方 EC 本地后端"重放：星耀走 WMAA、宝龙达走 WMI 邮箱、NUC/UMI 走本地 HID，
+            // 那些机型的寄存器位置与同方 EC 不同，不能套同一组 ACPI 命令。
+            var backend = WpfBackend.ActiveBackendKind;
+            if (backend != MechrevoLite.Hardware.Architecture.BackendKind.TongfangEc)
             {
-                Logger.WriteLine("[display-restore] 非 EC 模式 ⇒ 屏幕开关由后端自行恢复，跳过");
+                Logger.WriteLine("[display-restore] 当前后端=" + backend + " ⇒ 屏幕开关由该后端自行恢复，跳过");
                 return;
             }
             if (AppConfig.Get("miniled_on", 0) != 0)

@@ -31,6 +31,15 @@ internal enum MechrevoBackendKind
 	/// 见 <see cref="BaolongdaBackend" />（⚠️ 现在只有骨架、不接真实协议；默认**探不中**，⛔ 不影响现有机型）。</para>
 	/// </summary>
 	Baolongda = 3,
+
+	/// <summary>NUC / UMI（Intel 30 系）：本地 ACPI/EC + HID 控制台，不经 GCU。</summary>
+	NucUmiLocal = 4,
+
+	/// <summary>星耀：本地 WMAA（ACPI WMI）控制，不经 GCU。</summary>
+	XingyaoPmc = 5,
+
+	/// <summary>同方机型在 GCU 不可达时由本地 ACPI/EC 接管（EC 直连）。</summary>
+	TongfangEc = 6,
 }
 
 /// <summary>后端探测表里的一项。探测失败一律返回 <c>null</c>（⛔ 异常由探测循环吞掉，不许让启动崩）。</summary>

@@ -154,6 +154,10 @@ internal static class WpfBackend
     /// <summary>当前是否由本地 EC 接管（EC 模式）。</summary>
     internal static bool EcModeActive => GcuEcMode.IsEcMode;
 
+    /// <summary>当前实际运行的硬件后端（同方 GCU / 同方 EC / 宝龙达 / NUC-UMI / 星耀 / 老 MIFS）。</summary>
+    internal static MechrevoLite.Hardware.Architecture.BackendKind ActiveBackendKind =>
+        MechrevoLite.Hardware.Architecture.MachineFacts.From(HwOrProgram).Backend;
+
     /// <summary>EC 模式的判定来源（诊断展示用）。</summary>
     internal static string EcModeReason => GcuEcMode.Reason;
 
@@ -762,26 +766,6 @@ internal static class WpfBackend
             "OverclockSettings" => caps.OverclockSettings == true,
             _ => false
         };
-    }
-
-    /// <summary>无界家族（无界 14X/15X 等，含带独显的型号）：这类机型本身有狂暴档，不能因 GCU 未上报就隐藏。</summary>
-    internal static bool IsWujieFamily()
-    {
-        try
-        {
-            MechrevoDeviceCapabilities? caps = HwOrProgram?.Capabilities ?? MechrevoDeviceCapabilities.Current;
-            return MechrevoLite.Hardware.WujieSmuGate.IsWujieMachine(
-                caps?.Model ?? string.Empty,
-                caps?.SystemFamily ?? string.Empty,
-                caps?.SystemSku ?? string.Empty,
-                caps?.BaseboardProduct ?? string.Empty,
-                out _,
-                out _);
-        }
-        catch
-        {
-            return false;
-        }
     }
 
     /// <summary>校色等级（缺省按 1 处理）。</summary>
