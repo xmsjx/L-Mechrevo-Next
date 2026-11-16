@@ -4824,6 +4824,12 @@ public partial class OriginalStyleWindow : Window
             {
                 return;
             }
+            // SMU 机型（无界/星耀 APU）没有独立固件档位：当前档由本机配置决定，
+            // ⛔ 不能因为固件回读是平衡/狂暴就把界面上的自定义弹回内置档。
+            if (_backendProbe?.Hw?.SmuCustomApu == true)
+            {
+                return;
+            }
             string? active = MechrevoLite.Mode.PerfModeStore.ActiveModeId;
             bool customActive = active?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) == true;
             bool builtInMismatch = !customActive && !string.Equals(active, id, StringComparison.Ordinal);
@@ -4891,6 +4897,11 @@ public partial class OriginalStyleWindow : Window
             string? active = MechrevoLite.Mode.PerfModeStore.ActiveModeId;
             if (string.Equals(active, id, StringComparison.Ordinal))
             {
+                return;
+            }
+            if (_backendProbe?.Hw?.SmuCustomApu == true)
+            {
+                // SMU 机型没有独立固件档位：自定义档是本机配置，⛔ 不被固件回读覆盖。
                 return;
             }
             Logger.WriteError("[ec-only] 固件档位变化 ⇒ 同步活动档 " + active + " -> " + id + "（EC 视觉档=" + ecVisual + "）");
@@ -7499,7 +7510,8 @@ public partial class OriginalStyleWindow : Window
         {
             duty = cpu ? hw.CpuFanDuty : hw.GpuFanDuty;
         }
-        if (!duty.HasValue || duty.GetValueOrDefault() < (hw.FanZeroIsMeaningful ? 0 : 1))
+        // 占空比 0% 也是有效读数（风扇停转/低速），⛔ 不再因为"小于 1"而整段隐藏。
+        if (!duty.HasValue || duty.GetValueOrDefault() < 0)
         {
             return "";
         }

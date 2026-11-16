@@ -536,10 +536,7 @@ public static class HardwareControl
 		{
 			return true;
 		}
-		if (percent == 0 && rpm > 500)
-		{
-			return false;
-		}
+		// 0% 是有效读数（风扇降速/停转瞬间也会短暂出现），不再因此判为不可信。
 		if (percent >= 40 && rpm == 0)
 		{
 			return false;
