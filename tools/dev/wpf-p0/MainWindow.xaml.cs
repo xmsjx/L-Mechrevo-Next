@@ -84,6 +84,7 @@ public partial class MainWindow : Window
     private TextBox? _chargeHigh;
     private TextBlock? _chargeStatus;
     private CheckBox? _chargeExperiment;
+    private CheckBox? _chargeGatePin;
     private Slider? _chargeSlider;
     private TextBlock? _chargeSliderText;
     private readonly List<ToggleButton> _igpuSavingButtons = new();
@@ -1460,6 +1461,7 @@ public partial class MainWindow : Window
                 sliderRow.Children.Add(_chargeSlider);
                 sliderRow.Children.Add(_chargeSliderText);
                 battery.Children.Add(sliderRow);
+                battery.Children.Add(CreateChargeGatePinRow(sliderOn));
             }
         }
         // GCU 没有宝龙达阈值面板，但「无极限充」属于 EC 传输，必须单独显示。
@@ -1500,6 +1502,7 @@ public partial class MainWindow : Window
                 gcuSliderRow.Children.Add(_chargeSlider);
                 gcuSliderRow.Children.Add(_chargeSliderText);
                 battery.Children.Add(gcuSliderRow);
+                battery.Children.Add(CreateChargeGatePinRow(gcuSliderOn));
             }
         }
 
@@ -2200,6 +2203,49 @@ public partial class MainWindow : Window
         {
             _chargeSlider.Visibility = _chargeExperiment.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         }
+        if (_chargeSliderText != null && _chargeExperiment != null)
+        {
+            _chargeSliderText.Visibility = _chargeExperiment.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        }
+        if (_chargeGatePin != null && _chargeExperiment != null)
+        {
+            _chargeGatePin.Visibility = _chargeExperiment.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>「钉住充电门控」行：只在无极限充滑块开启时出现，开关状态取自配置（与窄窗一致）。</summary>
+    private CheckBox CreateChargeGatePinRow(bool sliderOn)
+    {
+        CheckBox box = new()
+        {
+            Content = WpfStrings.L("钉住充电门控（实验）", "Pin charge gate (experimental)"),
+            Style = (Style)FindResource("HeaderSwitch"),
+            Margin = new Thickness(0, 8, 0, 0),
+            Visibility = sliderOn ? Visibility.Visible : Visibility.Collapsed
+        };
+        try
+        {
+            box.IsChecked = ChargeGatePin.Enabled;
+        }
+        catch
+        {
+            box.IsChecked = false;
+        }
+        box.Click += (_, _) =>
+        {
+            bool on = box.IsChecked == true;
+            AppConfig.Set(ChargeGatePin.ConfigKey, on ? 1 : 0);
+            AppConfig.Flush();
+            Logger.WriteError(on
+                ? "[charge-gate] 宽屏开关打开：写完不再还原门控（0x7C3 保持 4）"
+                : "[charge-gate] 宽屏开关关闭：门控改回临时模式，并立刻还原原值");
+            if (!on)
+            {
+                ChargeGatePin.TryReleaseNow();
+            }
+        };
+        _chargeGatePin = box;
+        return box;
     }
 
     private async void HomeGpuOcToggle_Click(object sender, RoutedEventArgs e)
