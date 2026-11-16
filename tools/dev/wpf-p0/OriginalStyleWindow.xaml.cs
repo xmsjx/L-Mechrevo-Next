@@ -4946,6 +4946,12 @@ public partial class OriginalStyleWindow : Window
         }
         if (customDisplayed)
         {
+            // SMU 机型（无界/星耀 APU）的固件里没有"自定义档"这个概念：固件回读永远是
+            // 平衡/静音/狂暴，拿它做判据会一直把界面亮成平衡（本机配置才是权威）。
+            if (hw?.SmuCustomApu == true || hw?.WujieSmuApu == true)
+            {
+                return 3;
+            }
             // 自定义档在 GCU 上通常回读为 1；若已经回读成 0/2，说明外部已切到内置档，
             // 不能继续把界面钉在自定义档。
             int rawCustom = probe.CurrentMode;
