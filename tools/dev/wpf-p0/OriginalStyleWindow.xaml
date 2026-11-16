@@ -694,6 +694,7 @@
                                 <Slider x:Name="BatteryLimitSlider" Minimum="40" Maximum="100" Value="100" Style="{StaticResource RoundSlider}" ValueChanged="BatteryLimitSlider_Changed" Visibility="Collapsed" />
                                 <TextBlock x:Name="BatteryLimitSliderText" Grid.Column="1" Text="100%" Style="{StaticResource StatText}" Margin="10,0,0,0" Visibility="Collapsed" />
                             </Grid>
+                        <CheckBox x:Name="ChargeGatePinToggle" Content="钉住充电门控（实验）" Style="{StaticResource RowSwitch}" Margin="0,6,0,0" Visibility="Collapsed" Click="ChargeGatePinToggle_Click" />
                         <Grid x:Name="XingyaoChargeRow" Margin="0,8,0,0" Visibility="Collapsed">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />

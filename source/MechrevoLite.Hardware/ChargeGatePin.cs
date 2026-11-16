@@ -81,6 +81,32 @@ internal static class ChargeGatePin
     }
 
     /// <summary>门控已还原后调用，清掉钉住标记。</summary>
+    /// <summary>立刻把门控还原成当初记录的原值（关掉开关时调用），失败返回 false。</summary>
+    internal static bool TryReleaseNow()
+    {
+        try
+        {
+            if (!IsPinnedByUs)
+            {
+                return true;
+            }
+            int back = PinnedOriginal;
+            if (!AcpiDriverEc.TryWriteByte(EcChargeLimit.GateRegister, (byte)back))
+            {
+                Logger.WriteLine("[charge-gate] 还原门控失败：写 0x" + EcChargeLimit.GateRegister.ToString("X3") + "=0x" + back.ToString("X2") + " 不成功");
+                return false;
+            }
+            ClearPinned();
+            Logger.WriteLine("[charge-gate] 开关已关闭，门控 0x" + EcChargeLimit.GateRegister.ToString("X3") + " 还原为 0x" + back.ToString("X2"));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[charge-gate] 还原门控异常：" + ex.Message);
+            return false;
+        }
+    }
+
     internal static void ClearPinned()
     {
         try

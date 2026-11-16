@@ -2835,6 +2835,7 @@ public partial class OriginalStyleWindow : Window
         ChargeSliderToggle.IsChecked = AppConfig.Is("charge_limit_slider");
         BatteryLimitSlider.Visibility = ChargeSliderToggle.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         if (BatteryLimitSliderText != null) BatteryLimitSliderText.Visibility = ChargeSliderToggle.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        RefreshChargeGatePinRow(ChargeSliderToggle.IsChecked == true);
         _syncingBatteryLimit = true;
         int initialLimit = BatteryControl.ResolveDisplayLimitPercent();
         BatteryLimitSlider.Value = initialLimit;
@@ -2856,6 +2857,38 @@ public partial class OriginalStyleWindow : Window
             // 旧版：无极限充/EC 路生效时三档不置灰，点档位直接走 EC 并联动滑块。
             button.IsEnabled = true;
             button.Opacity = 1.0;
+        }
+    }
+
+    /// <summary>「钉住充电门控」行只在无极限充滑块开启时出现，状态取自配置。</summary>
+    private void RefreshChargeGatePinRow(bool sliderVisible)
+    {
+        if (ChargeGatePinToggle == null)
+        {
+            return;
+        }
+        ChargeGatePinToggle.Visibility = sliderVisible ? Visibility.Visible : Visibility.Collapsed;
+        try
+        {
+            ChargeGatePinToggle.IsChecked = ChargeGatePin.Enabled;
+        }
+        catch
+        {
+            ChargeGatePinToggle.IsChecked = false;
+        }
+    }
+
+    private void ChargeGatePinToggle_Click(object sender, RoutedEventArgs e)
+    {
+        bool on = ChargeGatePinToggle.IsChecked == true;
+        AppConfig.Set(ChargeGatePin.ConfigKey, on ? 1 : 0);
+        AppConfig.Flush();
+        Logger.WriteError(on
+            ? "[charge-gate] 界面开关打开：写完不再还原门控（0x7C3 保持 4）"
+            : "[charge-gate] 界面开关关闭：门控改回临时模式，并立刻还原原值");
+        if (!on)
+        {
+            ChargeGatePin.TryReleaseNow();
         }
     }
 
@@ -3281,6 +3314,7 @@ public partial class OriginalStyleWindow : Window
         if (_services != null) { _services.ChargeLimit.SetSliderEnabled(on); } else { AppConfig.Set("charge_limit_slider", on ? 1 : 0); }
         BatteryLimitSlider.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
         if (BatteryLimitSliderText != null) BatteryLimitSliderText.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        RefreshChargeGatePinRow(on);
         ApplyBatterySliderStage();
         if (on)
         {
@@ -7925,6 +7959,7 @@ public partial class OriginalStyleWindow : Window
         if (!chargeExperimentSupported)
         {
             BatteryLimitSlider.Visibility = Visibility.Collapsed;
+            if (ChargeGatePinToggle != null) ChargeGatePinToggle.Visibility = Visibility.Collapsed;
             BatteryLimitSliderText.Visibility = Visibility.Collapsed;
         }
         bool liquidSupported = L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("LiquidCooling") || (hw?.SupportsLiquidCooling ?? false);
