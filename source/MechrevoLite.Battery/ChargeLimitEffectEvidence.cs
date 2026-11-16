@@ -16,8 +16,9 @@ namespace MechrevoLite.Battery;
 ///
 /// 本类的两种判定与区分：
 /// <list type="bullet">
-/// <item><see cref="ChargeLimitEffect.Verified"/> = 0x0742 读得到且 bit2 = 1 ⇒ ✅ 生效；</item>
-/// <item><see cref="ChargeLimitEffect.Ineffective"/> = 0x0742 读得到但 bit2 ≠ 1 ⇒ ❌ 未生效（报原始值 + bit2）；</item>
+	/// <item><see cref="ChargeLimitEffect.Verified"/> = ① 0x0742 可读且 bit2 = 1（控制环路激活），或
+	/// ② bit2 = 0 但 0x07B9 的 bit7（REACHED 已到上限）已置且低 7 位等于目标值 ⇒ ✅ 生效（靠存储值维持的机型走这条）；</item>
+	/// <item><see cref="ChargeLimitEffect.Ineffective"/> = 上面两条都不成立，且 0x0742 可读 ⇒ ❌ 未生效（报原始值 + bit2）；</item>
 /// <item><see cref="ChargeLimitEffect.Undetermined"/> = 0x0742 **读不到** ⇒ ⚠️ 无法判定（⛔ 既不当成功也不当失败）。</item>
 /// </list>
 /// ⛔ 本类全程**只读**：不写任何寄存器、不改 config、不改 <see cref="EcChargeLimit.Verdict"/>、不撤销限充。
@@ -150,7 +151,37 @@ internal static class ChargeLimitEffectEvidence
 	{
 		ChargeLimitEcProbe probe = EcChargeLimit.ProbeRegisters();
 		bool? bitSet = probe.EffectBitSet;
-		ChargeLimitEffect effect = ((!bitSet.HasValue) ? ChargeLimitEffect.Undetermined : (bitSet.Value ? ChargeLimitEffect.Verified : ChargeLimitEffect.Ineffective));
+		ChargeLimitEffect effect;
+		string verdictBasis;
+		if (!bitSet.HasValue)
+		{
+			// 0x7B9 之外的辅助位都读不到 ⇒ 如实按"无法判定"，既不当成功也不当失败。
+			effect = ChargeLimitEffect.Undetermined;
+			verdictBasis = "bit2 读不到";
+		}
+		else if (bitSet.Value)
+		{
+			effect = ChargeLimitEffect.Verified;
+			verdictBasis = "bit2=1（控制环路激活）";
+		}
+		else
+		{
+			// 二级判据：bit2 只表示"控制环路激活"，靠存储值维持的机型上本来就是 0。
+			// 此时若 0x7B9 的 bit7（REACHED 已到上限）已置、且低 7 位等于目标值，同样说明已经限住。
+			bool reached = probe.Upper >= 0
+				&& (probe.Upper & 0x80) != 0
+				&& (probe.Upper & EcChargeLimit.PercentMask) == limit;
+			if (reached)
+			{
+				effect = ChargeLimitEffect.Verified;
+				verdictBasis = "bit2=0，但 0x" + EcChargeLimit.UpperRegister.ToString("X3") + " 已到上限（bit7=1 且值=" + limit + "）";
+			}
+			else
+			{
+				effect = ChargeLimitEffect.Ineffective;
+				verdictBasis = "bit2=0 且 0x" + EcChargeLimit.UpperRegister.ToString("X3") + " 未显示已到上限";
+			}
+		}
 		bool superseded;
 		lock (Gate)
 		{
@@ -171,7 +202,7 @@ internal static class ChargeLimitEffectEvidence
 		string auxUpper = (probe.Upper < 0) ? "不可读" : (EcChargeLimit.PercentFor(probe.Upper) + "%（已掩 bit7「已启用」标志，低 7 位才是百分数；原始值见上面只读探测）");
 		Logger.WriteLine(
 			$"限充真效果判据（上游口径 0x{EcChargeLimit.EffectRegister:X3} bit2）{verdictText}：命令上限 {limit}%；" +
-			$"0x{EcChargeLimit.EffectRegister:X3}={effectRaw}（bit2={bitText}）{(superseded ? "［已被更新的一次写入取代，仅留档］" : "")}；" +
+			$"0x{EcChargeLimit.EffectRegister:X3}={effectRaw}（bit2={bitText}·判据：{verdictBasis}）{(superseded ? "［已被更新的一次写入取代，仅留档］" : "")}；" +
 			$"只读探测 {probe.DescribeAll()}；通道 {probe.ChannelNote}；" +
 			$"辅助信息（旧判据）：0x{EcChargeLimit.UpperRegister:X3} 回读 {auxUpper}");
 		return new ChargeLimitEffectRecord(limit, effect, probe, DateTime.Now, superseded);
