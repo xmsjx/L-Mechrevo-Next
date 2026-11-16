@@ -51,12 +51,7 @@ internal static class FanCurveLoadService
 			return new FanCurveLoadOutcome(FanCurveDefaults.CpuTemperatures, hw.CpuCurveDuty,
 				FanCurveDefaults.GpuTemperatures, hw.GpuCurveDuty, null, null, false, null, null);
 		}
-		if (!hw.IsGcuConnected
-			&& NucFanTable.TryReadCurrent(out byte[] ecCpuT, out byte[] ecCpuD, out byte[] ecGpuT, out byte[] ecGpuD)
-			&& FanTableLooksSane(ecCpuT, ecCpuD) && FanTableLooksSane(ecGpuT, ecGpuD))
-		{
-			return new FanCurveLoadOutcome(ecCpuT, ecCpuD, ecGpuT, ecGpuD, null, null, false, null, null);
-		}
+		// 每个档位自己的已保存曲线优先：切配置时窗口要跟着变（EC 直连没有 GCU 回读，只能靠存档）。
 		PerfModeSettings saved = PerfModeStore.LoadSettings(modeId);
 		int[]? cpuSaved = saved.CpuFanDuty is { Length: >= 2 } cpuDuty ? cpuDuty : null;
 		int[]? gpuSaved = saved.GpuFanDuty is { Length: >= 2 } gpuDuty ? gpuDuty : null;
@@ -67,6 +62,12 @@ internal static class FanCurveLoadService
 				FanCurveDefaults.GpuTemperatures,
 				gpuSaved.Select(v => (byte)Math.Clamp(v, 0, 100)).ToArray(),
 				null, null, false, null, null);
+		}
+		if (!hw.IsGcuConnected
+			&& NucFanTable.TryReadCurrent(out byte[] ecCpuT, out byte[] ecCpuD, out byte[] ecGpuT, out byte[] ecGpuD)
+			&& FanTableLooksSane(ecCpuT, ecCpuD) && FanTableLooksSane(ecGpuT, ecGpuD))
+		{
+			return new FanCurveLoadOutcome(ecCpuT, ecCpuD, ecGpuT, ecGpuD, null, null, false, null, null);
 		}
 		if (modeId.StartsWith("custom", StringComparison.Ordinal)
 			|| modeId.StartsWith("fw", StringComparison.Ordinal))
