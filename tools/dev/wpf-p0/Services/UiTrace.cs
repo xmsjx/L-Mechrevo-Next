@@ -26,10 +26,32 @@ internal static class UiTrace
     /// <summary>汇总日志间隔。</summary>
     private const int SummaryIntervalMs = 60000;
 
-    private static readonly bool Enabled = string.Equals(
-        MechrevoLite.AppConfig.GetString("log_level"),
-        "all",
-        StringComparison.OrdinalIgnoreCase);
+    private static int _enabledCached;
+    private static long _enabledCheckedAt;
+
+    /// <summary>
+    /// 是否开启相位计时：读 log_level=all，按 3 秒缓存。
+    /// 以前是启动时只读一次，改了配置必须重启才生效（机主为了抓一次数据要多退一次）；
+    /// 现在改完配置几秒内自动生效，抓完调回 error 也立即停止计时。
+    /// </summary>
+    private static bool Enabled
+    {
+        get
+        {
+            long now = Environment.TickCount64;
+            if (now - _enabledCheckedAt < 3000)
+            {
+                return Volatile.Read(ref _enabledCached) != 0;
+            }
+            _enabledCheckedAt = now;
+            bool all = string.Equals(
+                MechrevoLite.AppConfig.GetString("log_level"),
+                "all",
+                StringComparison.OrdinalIgnoreCase);
+            Volatile.Write(ref _enabledCached, all ? 1 : 0);
+            return all;
+        }
+    }
     private static readonly IDisposable Empty = new SilentScope();
     private static readonly ConcurrentDictionary<string, long> LastPhaseLogAt = new(StringComparer.Ordinal);
     private static string _inflight = string.Empty;
@@ -43,14 +65,19 @@ internal static class UiTrace
 
     internal static void Start(Dispatcher dispatcher)
     {
-        if (!Enabled || _heartbeat != null)
+        // 心跳定时器常驻创建（每拍只做一次毫秒级比较），这样把 log_level 改成 all 后几秒内自动开始计时，
+        // 改回 error 也立即停止，不需要为了抓一次数据重启程序。
+        if (_heartbeat != null)
         {
             return;
         }
         _dispatcher = dispatcher;
         _windowStartedAt = Environment.TickCount64;
         _heartbeat = new Timer(_ => Beat(), null, 1000, HeartbeatIntervalMs);
-        Logger.WriteLine("[ui-trace] 相位计时已启动（明细限流：相位 500ms/条 · 卡顿 1s/条 · 每 60s 汇总）");
+        if (Enabled)
+        {
+            Logger.WriteLine("[ui-trace] 相位计时已启动（明细限流：相位 500ms/条 · 卡顿 1s/条 · 每 60s 汇总）");
+        }
     }
 
     /// <summary>包裹一段界面线程代码，超过阈值时记录其耗时。</summary>
@@ -76,6 +103,11 @@ internal static class UiTrace
     {
         Dispatcher? dispatcher = _dispatcher;
         if (dispatcher == null || dispatcher.HasShutdownStarted)
+        {
+            return;
+        }
+        // 未开启相位计时（log_level 不是 all）⇒ 这一拍什么都不做，连投递都不投。
+        if (!Enabled)
         {
             return;
         }
