@@ -1778,6 +1778,32 @@ function Install-UwacpiDriver {
     else {
         Write-Log '  driver installed/updated OK'
     }
+
+    # 只导入驱动包不会创建设备节点（旧控制台卸载时会用 devcon 删掉 ACPI\INOU0000），
+    # 设备打不开时让 PnP 重新枚举一次，节点回来才会绑定驱动。
+    if (-not (Test-AcpiDriverAvailable)) {
+        Write-Log '  ACPIDriver device not openable; running pnputil /scan-devices'
+        $scan = & pnputil.exe /scan-devices 2>&1
+        $scan | ForEach-Object { Write-Log ("    " + [string]$_) }
+        Start-Sleep -Milliseconds 2000
+        if (Test-AcpiDriverAvailable) {
+            Write-Log '  ACPIDriver device is available after rescan'
+        }
+        else {
+            Write-Log '  ACPIDriver device still not available (device node may be missing; reboot restores it)'
+        }
+    }
+}
+
+function Test-AcpiDriverAvailable {
+    try {
+        $h = [System.IO.File]::Open('\\.\ACPIDriver', 'Open', 'ReadWrite', 'ReadWrite')
+        $h.Close()
+        return $true
+    }
+    catch {
+        return $false
+    }
 }
 
 function Install-Service {

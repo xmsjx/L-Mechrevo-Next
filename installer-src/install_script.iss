@@ -2298,6 +2298,72 @@ begin
     Log('LM-UPDATE: 未找到旧版卸载键，跳过卸载');
 end;
 
+// ── UWACPIDriver（EC 通道）确保安装 ──────────────────────────────────────────
+// 装机目录里带着驱动三件，但系统里可能根本没有这个设备/驱动（重装系统、卸载旧控制台、
+// 控制台的卸载脚本会用 devcon 删掉 ACPI\INOU0000）。没驱动时 EC 读写全线失败，
+// 所以安装阶段先探一次设备，打不开就导入驱动包，再让 PnP 重新枚举一次把设备节点找回来。
+const
+  ACPI_DEVICE_PATH   = '\\.\ACPIDriver';
+  LM_INVALID_HANDLE  = THandle($FFFFFFFF);
+  LM_GENERIC_RW      = $C0000000;
+  LM_FILE_SHARE_RW   = 3;
+  LM_OPEN_EXISTING   = 3;
+
+function LmCreateFileW(FileName: String; DesiredAccess, ShareMode: LongWord;
+  SecurityAttributes: Cardinal; CreationDisposition, FlagsAndAttributes: LongWord;
+  TemplateFile: Cardinal): THandle;
+  external 'CreateFileW@kernel32.dll stdcall';
+
+function LmCloseHandle(Handle: THandle): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+function AcpiDriverAvailable(): Boolean;
+var
+  H: THandle;
+begin
+  H := LmCreateFileW(ACPI_DEVICE_PATH, LM_GENERIC_RW, LM_FILE_SHARE_RW, 0,
+                     LM_OPEN_EXISTING, 0, 0);
+  Result := H <> LM_INVALID_HANDLE;
+  if Result then
+    LmCloseHandle(H);
+end;
+
+procedure EnsureUwacpiDriverInstalled();
+var
+  InfPath: String;
+  Rc: Integer;
+begin
+  if AcpiDriverAvailable() then
+  begin
+    Log('LM-DRV: ACPIDriver 已可用，跳过安装');
+    Exit;
+  end;
+  InfPath := ExpandConstant('{app}\UWACPIDriver\UWACPIDriver.inf');
+  if not FileExists(InfPath) then
+  begin
+    Log('LM-DRV: 缺少驱动安装文件，跳过：' + InfPath);
+    Exit;
+  end;
+  if Exec(ExpandConstant('{sys}\pnputil.exe'),
+          '/add-driver "' + InfPath + '" /install', '', SW_HIDE,
+          ewWaitUntilTerminated, Rc) then
+    Log('LM-DRV: pnputil /add-driver 退出码=' + IntToStr(Rc))
+  else
+    Log('LM-DRV: pnputil /add-driver 启动失败');
+  if not AcpiDriverAvailable() then
+  begin
+    if Exec(ExpandConstant('{sys}\pnputil.exe'), '/scan-devices', '', SW_HIDE,
+            ewWaitUntilTerminated, Rc) then
+      Log('LM-DRV: pnputil /scan-devices 退出码=' + IntToStr(Rc))
+    else
+      Log('LM-DRV: pnputil /scan-devices 启动失败');
+    Sleep(2000);
+  end;
+  if AcpiDriverAvailable() then
+    Log('LM-DRV: 安装后 ACPIDriver 可用')
+  else
+    Log('LM-DRV: 安装后仍打不开设备（ACPI\INOU0000 可能未被枚举：重启后由程序自愈再试一次）');
+end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   GcuRoot, BackupRoot, OldVariant, IncomingVariant: String;
@@ -2314,6 +2380,7 @@ begin
   end
   else if CurStep = ssPostInstall then
   begin
+    EnsureUwacpiDriverInstalled();
     if GcuExternalUsed then
     begin
       RegWriteStringValue(HKLM, GcuVariantRegKey, 'GcuExternalSource', GcuExternalNote);
