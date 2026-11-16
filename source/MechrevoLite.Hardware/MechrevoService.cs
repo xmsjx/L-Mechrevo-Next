@@ -4519,6 +4519,15 @@ public class MechrevoService
 				pl1Status = $"stapm={staple}";
 				wrotePl1 = staple == PawnIO.SmuStatus.OK;
 				ok &= wrotePl1;
+				// 只写 STAPM 时，固件的持续功耗仍按旧的 slow(sPPT) 走（真机回读 slow 恒为旧值，烤机功耗不变）
+				// ⇒ PL1 同时写 slow，两者一起才能压住持续功耗。
+				PawnIO.SmuStatus wujieSlow = smu.SetSlowLimit(pl1);
+				pl1Status += $" slow={wujieSlow}";
+				if (wujieSlow != PawnIO.SmuStatus.OK)
+				{
+					Logger.WriteError("[smu] Wujie slow(sPPT)=" + pl1 + "W 下发失败=" + wujieSlow
+						+ " ⇒ 持续功耗可能仍按旧值走（如实记录，不假装成功）");
+				}
 				if (wrotePl1)
 				{
 					hw.NoteBaolongdaSmuLimitsApplied(pl1, 0, 0);
