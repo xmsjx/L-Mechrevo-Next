@@ -430,9 +430,11 @@ public class MechrevoService
 			// EC 直连（GCU 不可用 ⇒ 本地 ACPI/EC 接管）：档位由本地 EC 写，含自定义档 3。
 			// ⚠️ SMU 机型（无界 APU / 星耀 APU）没有独立的 EC 自定义档：不写 EC 档位/门控，
 			//    自定义只体现为 SMU 功耗参数，档位切换直接视为完成。
-			if (hw != null && (hw.WujieSmuApu || hw.SmuCustomApu) && !hw.IsGcuConnected)
+			// ⚠️ 只有"自定义档(3)"没有独立的 EC 档位；静音/平衡/狂暴(0/1/2)仍按固件档切，
+			//    否则"目标功耗 ≥ 60W 先切狂暴再下发 SMU"这条会被一起跳过。
+			if (mode == 3 && hw != null && (hw.WujieSmuApu || hw.SmuCustomApu) && !hw.IsGcuConnected)
 			{
-				Logger.WriteLine("[gcu-ec] SwitchMode(" + mode + ") 跳过：SMU 机型没有独立 EC 自定义档，本次不写任何 EC 档位/门控");
+				Logger.WriteLine("[gcu-ec] SwitchMode(3) 跳过：SMU 机型没有独立 EC 自定义档，本次不写 EC 门控");
 				ModeControl.SyncExternalModeStatic(mode);
 				ModeChanged?.Invoke(mode);
 				return ModeSwitchResult.Ok;
