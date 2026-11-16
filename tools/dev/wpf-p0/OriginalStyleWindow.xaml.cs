@@ -4077,6 +4077,7 @@ public partial class OriginalStyleWindow : Window
                 }
                 else
                 {
+                    Logger.WriteLine("[mode-switch] 入口=UI.SetPerformanceMode mode=" + mode);
                     result = (int)await DashboardCommands.SetPerformanceModeResultAsync(mode);
                 }
             }
