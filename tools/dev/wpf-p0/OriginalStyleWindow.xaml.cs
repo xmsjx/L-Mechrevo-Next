@@ -7215,9 +7215,13 @@ public partial class OriginalStyleWindow : Window
         GpuStat.Text = SensorLine(cpu: false);
         using (UiTrace.Phase("mini-igpu"))
         {
-            // 核显省电行的状态要读显卡模式（走 ACPI/WMI），单次约 0.2-0.3 秒；
-            // 界面每 1.4-2 秒刷新一次没必要每次都真读，按 4 秒节流。
-            if (Environment.TickCount64 - _lastIgpuVisualMs >= 4000)
+            // 显卡模式/核显省电状态的读取走 ACPI/WMI，单次 0.2~0.3 秒：
+            // ① 核显机型（没有显卡模式可切）根本不读 —— 那行本来就不会显示，读了纯属白花时间；
+            // ② 能切的机器也不必频繁读：模式只会因为用户/其它程序切档而变化，按 30 秒兜底轮询，
+            //    真正的切换动作发生在 LM 自己手里，那些路径会直接调 VisualiseIgpuSaving() 立即刷新。
+            bool gpuModeSwitchable = hw.SupportsGpuHotSwap || hw.CanOfferGpuModeSwitch;
+            if ((gpuModeSwitchable || UiQaShowAll.Enabled)
+                && Environment.TickCount64 - _lastIgpuVisualMs >= 30000)
             {
                 _lastIgpuVisualMs = Environment.TickCount64;
                 QueueIgpuVisualRefresh();
