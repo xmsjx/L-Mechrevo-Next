@@ -512,6 +512,7 @@ internal static class EcChargeLimit
 				// 恢复到 100% 时先解除钉住：门控常开配上限 0 没有意义，还原成原值更干净。
 				if (percent >= 100 && ChargeGatePin.IsPinnedByUs)
 				{
+					ChargeGateKeepAlive.Stop();
 					ChargeGatePin.TryReleaseNow();
 				}
 				int gateOriginal = Read(num, GateRegister);
@@ -557,7 +558,9 @@ internal static class EcChargeLimit
 					if (gateTouched && ChargeGatePin.Enabled && percent < 100)
 					{
 						pinnedThisWrite = true;
-						ChargeGatePin.MarkPinned(gateOriginal);
+						ChargeGateKeepAlive.Start(percent);
+
+						ChargeGatePin.MarkPinned(gateOriginal, percent);
 						Logger.WriteLine($"限充门控钉住：0x{GateRegister:X3} 原值 0x{gateOriginal:X2} → 保持 {GateOpenValue}（配置 charge_gate_pin=1；关掉该开关后下次写入会还原）");
 					}
 					else if (gateTouched)

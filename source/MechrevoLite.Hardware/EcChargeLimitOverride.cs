@@ -97,7 +97,8 @@ internal static class EcChargeLimitOverride
                     if (ChargeGatePin.Enabled)
                     {
                         // 配置开关打开：门控保持 4、不还原；上限仍要清掉，避免 Windows 显示智能充电。
-                        ChargeGatePin.MarkPinned(platformRead ? platformOriginal : 0x07);
+                        ChargeGatePin.MarkPinned(platformRead ? platformOriginal : 0x07, percent);
+                        ChargeGateKeepAlive.Start(percent);
                         AcpiDriverEc.TryWriteByte(UpperRegister, 0);
                         Logger.WriteLine($"限充门控钉住（三档）：平台ID 原值 0x{(platformRead ? platformOriginal : (byte)0x07):X2} → 保持 4（配置 charge_gate_pin=1）");
                     }

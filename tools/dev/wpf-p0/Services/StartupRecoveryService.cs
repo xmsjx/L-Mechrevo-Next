@@ -40,6 +40,12 @@ internal static class StartupRecoveryService
             // 宝龙达：正常启动时的限充核对（旧 Program.ScheduleIdleBackendWarmup 路径）；
             // 非宝龙达在 BatteryLimitPlatform 内部 0 读 0 写直接返回。
             BatteryLimitRestore.RunOnce("WPF 启动恢复");
+
+        Try("ChargeGateKeepAlive.ResumeIfPinned", () =>
+        {
+            // 上次退出时门控仍处于钉住状态 ⇒ 接着守（只在开关打开时才会真的启动）。
+            MechrevoLite.Hardware.ChargeGateKeepAlive.ResumeIfPinned();
+        });
         });
 
         Try("RunDeferredFanStartupCleanup", () =>

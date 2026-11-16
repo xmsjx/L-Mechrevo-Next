@@ -17,6 +17,8 @@ internal static class ChargeGatePin
 
     private const string PinnedOriginalKey = "charge_gate_pinned_original";
 
+    private const string PinnedTargetKey = "charge_gate_pinned_target";
+
     /// <summary>开关是否打开（默认 0 = 关闭，行为与改前一致）。</summary>
     internal static bool Enabled
     {
@@ -65,12 +67,29 @@ internal static class ChargeGatePin
         }
     }
 
-    /// <summary>钉住门控时调用：记下原始值，供关闭开关后还原。</summary>
-    internal static void MarkPinned(int originalValue)
+    /// <summary>钉住时的目标百分比（心跳核对用），未知为 -1。</summary>
+    internal static int PinnedTarget
+    {
+        get
+        {
+            try
+            {
+                return MechrevoLite.AppConfig.Get(PinnedTargetKey, -1);
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+    }
+
+    /// <summary>钉住门控时调用：记下原始值与目标百分比，供关闭开关后还原、供心跳核对。</summary>
+    internal static void MarkPinned(int originalValue, int targetPercent)
     {
         try
         {
             MechrevoLite.AppConfig.Set(PinnedOriginalKey, originalValue >= 0 ? originalValue : 7);
+            MechrevoLite.AppConfig.Set(PinnedTargetKey, targetPercent);
             MechrevoLite.AppConfig.Set(PinnedMarkerKey, 1);
             MechrevoLite.AppConfig.Flush();
         }
@@ -80,7 +99,23 @@ internal static class ChargeGatePin
         }
     }
 
-    /// <summary>门控已还原后调用，清掉钉住标记。</summary>
+    /// <summary>门控已还原后调用：清掉钉住标记并停掉心跳。</summary>
+    internal static void ClearPinned()
+    {
+        ChargeGateKeepAlive.Stop();
+        try
+        {
+            MechrevoLite.AppConfig.Remove(PinnedMarkerKey);
+            MechrevoLite.AppConfig.Remove(PinnedOriginalKey);
+            MechrevoLite.AppConfig.Remove(PinnedTargetKey);
+            MechrevoLite.AppConfig.Flush();
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[charge-gate] 清除钉住状态失败：" + ex.Message);
+        }
+    }
+
     /// <summary>立刻把门控还原成当初记录的原值（关掉开关时调用），失败返回 false。</summary>
     internal static bool TryReleaseNow()
     {
@@ -88,6 +123,7 @@ internal static class ChargeGatePin
         {
             if (!IsPinnedByUs)
             {
+                ChargeGateKeepAlive.Stop();
                 return true;
             }
             int back = PinnedOriginal;
@@ -104,20 +140,6 @@ internal static class ChargeGatePin
         {
             Logger.WriteLine("[charge-gate] 还原门控异常：" + ex.Message);
             return false;
-        }
-    }
-
-    internal static void ClearPinned()
-    {
-        try
-        {
-            MechrevoLite.AppConfig.Remove(PinnedMarkerKey);
-            MechrevoLite.AppConfig.Remove(PinnedOriginalKey);
-            MechrevoLite.AppConfig.Flush();
-        }
-        catch (Exception ex)
-        {
-            Logger.WriteLine("[charge-gate] 清除钉住状态失败：" + ex.Message);
         }
     }
 }
