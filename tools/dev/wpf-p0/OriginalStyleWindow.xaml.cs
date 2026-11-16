@@ -1979,6 +1979,11 @@ public partial class OriginalStyleWindow : Window
             {
                 return true;
             }
+            // 本地明确读不到通道（读成功但支持位为空）⇒ 以本地为准，不让能力表硬撑显示。
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.LocalDimmingChannelState == false)
+            {
+                return false;
+            }
             bool legacy = _backendProbe?.Hw?.SupportsLocalDimming == true
                 || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("LocalDimming");
             return _services?.Display.ResolveMiniLedSupport(legacy) ?? legacy;
@@ -11622,6 +11627,11 @@ public partial class OriginalStyleWindow : Window
             if (_backendProbe?.Hw != null && L_Mechrevo.WpfP0.Services.WpfBackend.QueryLcdOverdriveSupport())
             {
                 return true;
+            }
+            // 本地明确读不到通道（读成功但支持位为空）⇒ 以本地为准，不让能力表硬撑显示。
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.LcdOverdriveChannelState == false)
+            {
+                return false;
             }
             bool legacy = _backendProbe?.SupportsLcdOverdrive == true;
             return _services?.Display.ResolveLcdOverdriveSupport(legacy) ?? legacy;

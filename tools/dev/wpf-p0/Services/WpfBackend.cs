@@ -234,6 +234,12 @@ internal static class WpfBackend
 
     internal static bool LcdOverdriveChannelAvailable => MechrevoLite.Hardware.AcpiDisplaySwitch.QueryLcdOverdriveSupport();
 
+    /// <summary>分区控光通道的本地区分结果：true=有、false=本地明确无、null=读不到（未知）。</summary>
+    internal static bool? LocalDimmingChannelState => MechrevoLite.Hardware.AcpiDisplaySwitch.LocalDimmingSupportCached;
+
+    /// <summary>Overdrive 通道的本地区分结果：true=有、false=本地明确无、null=读不到（未知）。</summary>
+    internal static bool? LcdOverdriveChannelState => MechrevoLite.Hardware.AcpiDisplaySwitch.LcdOverdriveSupportCached;
+
     internal static bool ApplyLocalDimming(bool on)
     {
         if (!MechrevoLite.Hardware.AcpiDisplaySwitch.TrySetLocalDimming(on))

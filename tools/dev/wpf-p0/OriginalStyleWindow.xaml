@@ -617,7 +617,7 @@
                             <TextBlock x:Name="BrightnessText" Grid.Column="2" Text="100%" Style="{StaticResource StatText}" Margin="10,0,0,0" />
                         </Grid>
                         <!-- MiniLED 分区控光 + LCD Overdrive：同一行，靠左排列；分区控光无通道时提示不占位，后面的开关自动左移 -->
-                        <StackPanel x:Name="MiniledRow" Orientation="Horizontal" Margin="0,2,0,6">
+                        <StackPanel x:Name="MiniledRow" Orientation="Horizontal" Margin="0,2,0,6" Visibility="Collapsed">
                             <TextBlock x:Name="MiniledLabel" Text="{x:Static loc:WpfStrings.SettingsWindow_Text_21}" Style="{StaticResource RowLabel}" Margin="0,0,12,0" VerticalAlignment="Center" />
                             <CheckBox x:Name="MiniledSwitch" Content="{x:Static loc:WpfStrings.CustomModeWindow_Content_3}" Style="{StaticResource HeaderSwitch}"
                                       VerticalAlignment="Center" Click="Miniled_Click" />
