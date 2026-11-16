@@ -7219,7 +7219,8 @@ public partial class OriginalStyleWindow : Window
             // ① 核显机型（没有显卡模式可切）根本不读 —— 那行本来就不会显示，读了纯属白花时间；
             // ② 能切的机器也不必频繁读：模式只会因为用户/其它程序切档而变化，按 30 秒兜底轮询，
             //    真正的切换动作发生在 LM 自己手里，那些路径会直接调 VisualiseIgpuSaving() 立即刷新。
-            bool gpuModeSwitchable = hw.SupportsGpuHotSwap || hw.CanOfferGpuModeSwitch;
+            bool igpuOnlyMachine = hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
+            bool gpuModeSwitchable = !igpuOnlyMachine && (hw.SupportsGpuHotSwap || hw.CanOfferGpuModeSwitch);
             if ((gpuModeSwitchable || UiQaShowAll.Enabled)
                 && Environment.TickCount64 - _lastIgpuVisualMs >= 30000)
             {
@@ -8216,14 +8217,18 @@ public partial class OriginalStyleWindow : Window
             bool gpuModeSwitchable = gpuSwitchSupported || directSupported
                 || L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap"))
                 || umiGpuMode || noSwitchButHasDgpu;
-            GpuSection.Visibility = (!nucNoGpuSwitch && !gpuRowHidden
-                && (gpuModeSwitchable || igpuSensorPresent || dgpuPresent))
+            // 本机没有独显（核显机型）：这一段只保留「显卡」标题行与右侧传感器（温度/占用/副扇转速），
+            // 三档显卡模式按钮一律不显示 —— 没有可切的目标。
+            bool igpuOnlyMachine = hw != null && hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
+            bool gpuModeRowVisible = gpuSwitchSupported && !igpuOnlyMachine;
+            GpuSection.Visibility = (!nucNoGpuSwitch
+                && (igpuOnlyMachine || (!gpuRowHidden && (gpuModeSwitchable || igpuSensorPresent || dgpuPresent))))
                 ? Visibility.Visible
                 : Visibility.Collapsed;
-            GpuModeRow.Visibility = gpuSwitchSupported ? Visibility.Visible : Visibility.Collapsed;
-            GpuPendingText.Visibility = gpuSwitchSupported ? GpuPendingText.Visibility : Visibility.Collapsed;
-            IgpuSavingHost.Visibility = gpuSwitchSupported ? Visibility.Visible : Visibility.Collapsed;
-            GpuSectionHeader.Text = gpuSwitchSupported
+            GpuModeRow.Visibility = gpuModeRowVisible ? Visibility.Visible : Visibility.Collapsed;
+            GpuPendingText.Visibility = gpuModeRowVisible ? GpuPendingText.Visibility : Visibility.Collapsed;
+            IgpuSavingHost.Visibility = gpuModeRowVisible ? Visibility.Visible : Visibility.Collapsed;
+            GpuSectionHeader.Text = gpuModeSwitchable && !igpuOnlyMachine
                 ? WpfStrings.OriginalStyleWindow_Text_15
                 : WpfStrings.L("显卡", "Graphics");
             bool localIccAvailable = IccHelper.HasFactoryIccFile() || IccHelper.ListCustomIccFiles().Count > 0;
