@@ -1317,7 +1317,7 @@ public partial class SettingsWindow : Window
 
     private void Status(string text)
     {
-        StatusText.Text = "beta23.7.9 · " + text;
+        StatusText.Text = AppVersion.Display + " · " + text;
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)
