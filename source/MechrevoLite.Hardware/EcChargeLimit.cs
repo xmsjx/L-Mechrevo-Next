@@ -509,8 +509,18 @@ internal static class EcChargeLimit
 				// 门控本就没开（0x07C3 原值非 4/5）时，先临时写成 4，写入并回读确认后保持 2.5s
 				// 让固件 store_limit() 把上限抄进存储区 0x087F（跨重启/断电持久），最后还原原值。
 				// 全程尽力而为：读不到或写门控失败都跳过，行为与改前逐字一致，不影响原有写入/回读。
+				// 恢复到 100% 时先解除钉住：门控常开配上限 0 没有意义，还原成原值更干净。
+				if (percent >= 100 && ChargeGatePin.IsPinnedByUs)
+				{
+					ChargeGatePin.TryReleaseNow();
+				}
 				int gateOriginal = Read(num, GateRegister);
-				bool gateWasOpen = gateOriginal == 4 || gateOriginal == 5;
+				// 门控有两个位置：0x7C3（平台值）与 0x770（ROM ID 首字节），任一处为 4/5 即门控成立。
+				int romIdGate = Read(num, RomIdRegister);
+				bool gateWasOpen = gateOriginal == 4 || gateOriginal == 5
+					|| romIdGate == 4 || romIdGate == 5;
+				string gateSource = (gateOriginal == 4 || gateOriginal == 5) ? "0x7C3"
+					: ((romIdGate == 4 || romIdGate == 5) ? "0x770(ROMID)" : "无");
 				// 2026-10-16（0.291.9.3 · ⭐ 撤销「写入前固件预检拒绝」——真机实例：翼龙15Pro 无极限充滑块被误挡）：
 				// 原判据「门控 0x07C3 ∉{4,5} **且** ROMID 0x0770 ∉{4,5} **且** 存储区 0x087F 无内容 ⇒ 判本机固件不支持、拒绝盲写」
 				// 经复核：**三条都不是正面证据**，故整条拒绝**删除**（只读预读与默认级别可见日志保留）：
@@ -530,7 +540,7 @@ internal static class EcChargeLimit
 				{
 					int romId = Read(num, RomIdRegister);
 					int stored = Read(num, StoredLimitRegister);
-					string gateText = gateWasOpen ? "已开" : "未开（由本方法按上游口径临时开闸）";
+					string gateText = gateWasOpen ? ("已开（来源=" + gateSource + "）") : "未开（由本方法按上游口径临时开闸）";
 					string romText = ((romId == 4 || romId == 5) ? "为 4/5（正面证据）" : "非 4/5（含 0xFF，按未映射处理、不作否定证据）");
 					string storedText = ((stored >= 0 && stored != 255) ? "有内容" : "无内容/不可读（0x87F 由固件在一次成功写入后才抄写 ⇒ ⛔ 不作为写入前条件）");
 					string precheckFingerprint = $"{gateOriginal}|{romId}|{stored}";
@@ -543,7 +553,7 @@ internal static class EcChargeLimit
 				if (gateOriginal >= 0 && !gateWasOpen)
 				{
 					gateTouched = Write(num, GateRegister, (byte)GateOpenValue);
-					if (gateTouched && ChargeGatePin.Enabled)
+					if (gateTouched && ChargeGatePin.Enabled && percent < 100)
 					{
 						// 配置开关打开：门控保持 4、不排还原（用于固件没在窗口内抄进存储区的机型）。
 						ChargeGatePin.MarkPinned(gateOriginal);
