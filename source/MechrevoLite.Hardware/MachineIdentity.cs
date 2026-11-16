@@ -56,6 +56,19 @@ internal sealed record MachineIdentity(
 	/// 与无界 APU（AMD，走本地 SMU/EC）区分开，不混成一个家族。
 	/// </summary>
 	internal bool WujieLnlFamily { get; init; }
+
+	/// <summary>无界办公本的板号分支（X 系 / IP3 / BLD）；未命中为 None。只用于身份识别，不改后端与写入。</summary>
+	internal WujieBoardKind WujieBoard { get; init; }
+
+	/// <summary>无界 X 系（14X/15X/16X，同方 X 系板）。</summary>
+	internal bool WujieXSeries => WujieBoard == WujieBoardKind.XSeries;
+
+	/// <summary>无界 14（IP3 / ARN39 板）。</summary>
+	internal bool WujieIp3 => WujieBoard == WujieBoardKind.Ip3;
+
+	/// <summary>无界 14 Pro（宝龙达 T140 板）—— 宝龙达的办公本，不是蛟龙。</summary>
+	internal bool WujieBld => WujieBoard == WujieBoardKind.Bld;
+
     /// <summary>后端控制组件的可执行载荷是否存在（服务登记残留时为 false）。</summary>
     internal bool GcuPayloadPresent { get; init; } = true;
 
@@ -252,6 +265,7 @@ internal sealed record MachineIdentity(
 			Xingyao15Family = (model ?? "").Contains("星耀15", StringComparison.OrdinalIgnoreCase)
 				|| (model ?? "").Contains("XINGYAO15", StringComparison.OrdinalIgnoreCase),
 			Xingyao14Family = MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform() && !xingyao15,
+			WujieBoard = WujieBoardProbe.Classify(board, model),
 			WujieLnlFamily = (model ?? "").Contains("无界", StringComparison.OrdinalIgnoreCase)
 				|| (model ?? "").Contains("WUJIE", StringComparison.OrdinalIgnoreCase)
 				? !wujieApu && CpuVendor.IsIntel
@@ -263,6 +277,7 @@ internal sealed record MachineIdentity(
 				model, modelSource, mifsClass, projectId, projectIdSource, gcuVariant, gcuVariantFamily,
 				wujieApu, wujieApuSource, gcuPayloadPresent, gcuPayloadSource)
 				+ " · tongfang=" + tongfangFamily + "(" + tongfangSource + ")"
+				+ " · 无界板=" + WujieBoardProbe.Classify(board, model)
 				+ " · 星耀14=" + (xingyaoBoard && !xingyao15)
 				+ " 星耀15=" + xingyao15
 				+ " 无界LNL=" + (((model ?? "").Contains("无界", StringComparison.OrdinalIgnoreCase) || (model ?? "").Contains("WUJIE", StringComparison.OrdinalIgnoreCase)) && !wujieApu && CpuVendor.IsIntel)

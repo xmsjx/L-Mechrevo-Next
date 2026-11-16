@@ -474,6 +474,11 @@ internal static class BackendRouter
 		CheckRuleParse("规则文件：backend 非法 ⇒ 回退内置", "{\"version\":1,\"rules\":[{\"index\":1,\"backend\":\"Nope\",\"conditions\":[{\"fact\":\"TongfangFamily\"}]}]}",
 			expectFile: false, "backend 非法", 8, pass, fail);
 		CheckRuleParse("规则文件：空 rules ⇒ 回退内置", "{\"version\":1,\"rules\":[]}", expectFile: false, "rules 为空", 8, pass, fail);
+		// ⑩a 无界办公本板号判据（X 系 / IP3 / BLD；蛟龙 MRID6 不得算无界）
+		{
+			string wujieLines = MechrevoLite.Hardware.WujieBoardProbe.RunSelfTest();
+			if (wujieLines.Contains("FAIL=0")) { pass.Add(wujieLines); } else { fail.Add(wujieLines); }
+		}
 		// ⑪ 只读可视化：当前事实下恰好一条「★ 采用」，并列出条件实际取值
 		CheckExplain("规则解释：白名单机型", MachineIdentity.ForTest(board: "MRID6-23", whitelisted: true, gcuInstalled: true), pass, fail);
 		CheckExplain("规则解释：同方无 GCU", MachineIdentity.ForTest(board: "GM5HG0A", generation: "Gen40", gcuInstalled: false), pass, fail);
