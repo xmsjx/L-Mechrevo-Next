@@ -224,6 +224,31 @@ internal static class WpfBackend
     internal static bool GcuConnectedNow => Hw?.IsGcuConnected == true;
 
     // ── ACPIDriver（EC 通道）可用性与自愈 ──
+
+    // ── 屏幕开关（分区控光 / LCD Overdrive）：EC 模式没有回读通道，只能持久化上次状态 ──
+    internal static bool LocalDimmingChannelAvailable => MechrevoLite.Hardware.AcpiDisplaySwitch.QueryLocalDimmingSupport();
+
+    internal static bool LcdOverdriveChannelAvailable => MechrevoLite.Hardware.AcpiDisplaySwitch.QueryLcdOverdriveSupport();
+
+    internal static bool ApplyLocalDimming(bool on)
+    {
+        if (!MechrevoLite.Hardware.AcpiDisplaySwitch.TrySetLocalDimming(on))
+        {
+            return false;
+        }
+        HwOrProgram?.ApplyLocalDimmingState(on);
+        return true;
+    }
+
+    internal static bool ApplyLcdOverdrive(bool on)
+    {
+        if (!MechrevoLite.Hardware.AcpiDisplaySwitch.TrySetLcdOverdrive(on))
+        {
+            return false;
+        }
+        HwOrProgram?.ApplyLcdOverdriveState(on);
+        return true;
+    }
     /// <summary>ACPIDriver 设备是否可用（EC 通道的前提）。</summary>
     internal static bool AcpiDriverAvailable => MechrevoLite.Hardware.AcpiDriverInstaller.IsDeviceAvailable();
 

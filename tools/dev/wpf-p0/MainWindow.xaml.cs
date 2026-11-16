@@ -43,6 +43,7 @@ public partial class MainWindow : Window
     private TextBlock? _displayBrightnessText;
     private Slider? _displayBrightness;
     private bool _miniledRowAdded;
+    private CheckBox? _miniledSwitch;
     private CheckBox? _autoRefresh;
     private readonly List<ToggleButton> _calibrationOptionButtons = new();
     private readonly List<ToggleButton> _effectOptionButtons = new();
@@ -805,7 +806,7 @@ public partial class MainWindow : Window
                 && ((_chargeLimitText == null && _owner.WideChargeLimitVisible)
                     || (_chargeSlider == null && _owner.WideChargeExperimentSupported)
                     || (_autoRefresh == null && _owner.SupportsAutoRefresh)
-                    || (!_miniledRowAdded && _owner.SupportsMiniled)))
+                    || !_miniledRowAdded))
             {
                 BuildHomeExtras();
             }
@@ -1670,29 +1671,47 @@ public partial class MainWindow : Window
             _autoRefresh.Click += (_, _) => _owner?.WideSetAutoRefresh(_autoRefresh.IsChecked == true);
         }
         DisplayDetailsPanel.Children.Add(brightnessRow);
-        if (_owner.SupportsMiniled)
+        // MiniLED 分区控光：亮度下面一行，常显（便于核对通道与状态）；不支持时开关置灰并给原因。
+        StackPanel miniledRow = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
+        miniledRow.Children.Add(new TextBlock
         {
-            StackPanel miniledRow = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-            miniledRow.Children.Add(new TextBlock
+            Text = WpfStrings.L("MiniLED 分区控光", "MiniLED local dimming"),
+            Style = (Style)FindResource("MutedText"),
+            Width = 110,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        CheckBox miniled = new()
+        {
+            Content = WpfStrings.L("开启", "On"),
+            Style = (Style)FindResource("HeaderSwitch"),
+            IsChecked = _owner.MiniledOn,
+            IsEnabled = _owner.SupportsMiniled,
+            Margin = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        miniled.Click += async (_, _) =>
+        {
+            bool target = miniled.IsChecked == true;
+            bool ok = await _owner.SetMiniledAsync(target);
+            if (!ok)
             {
-                Text = WpfStrings.L("MiniLED 分区控光", "MiniLED local dimming"),
-                Style = (Style)FindResource("MutedText"),
-                Width = 110,
-                VerticalAlignment = VerticalAlignment.Center
-            });
-            CheckBox miniled = new()
-            {
-                Content = WpfStrings.L("开启", "On"),
-                Style = (Style)FindResource("HeaderSwitch"),
-                IsChecked = _owner.MiniledOn,
-                Margin = new Thickness(0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            miniled.Click += (_, _) => _owner.ToggleMiniled();
-            miniledRow.Children.Add(miniled);
-            DisplayDetailsPanel.Children.Add(miniledRow);
-            _miniledRowAdded = true;
-        }
+                miniled.IsChecked = _owner.MiniledOn;
+            }
+        };
+        miniledRow.Children.Add(miniled);
+        TextBlock miniledHint = new()
+        {
+            Text = _owner.SupportsMiniled
+                ? string.Empty
+                : WpfStrings.L("未检测到分区控光通道（此行常显，仅用于核对）", "Local dimming channel not detected (row always shown for review)"),
+            Style = (Style)FindResource("MutedText"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 0, 0)
+        };
+        miniledRow.Children.Add(miniledHint);
+        DisplayDetailsPanel.Children.Add(miniledRow);
+        _miniledSwitch = miniled;
+        _miniledRowAdded = true;
     }
 
     private void BuildRefreshRateButtons(int[] rates, int currentHz)
@@ -2352,6 +2371,12 @@ public partial class MainWindow : Window
             _batteryModePanel.Visibility = _owner.WideBatteryModeVisible ? Visibility.Visible : Visibility.Collapsed;
         }
         using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("home-caps")) { ApplyHomeCapabilities(); }
+        // 分区控光的开关状态跟随硬件当前值；不支持时保持置灰。
+        if (_miniledSwitch != null)
+        {
+            _miniledSwitch.IsChecked = _owner.MiniledOn;
+            _miniledSwitch.IsEnabled = _owner.SupportsMiniled;
+        }
         if (MoreSwitchGrid != null && MoreSwitchGrid.Children.Count == 0) BuildMoreSwitchTiles();
         PerfCurrentText.Text = _owner.WidePerformanceText;
         GpuCurrentText.Text = _owner.WideGpuModeText;

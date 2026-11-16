@@ -404,18 +404,15 @@
 
                 <Border x:Name="DisplayCard" Style="{StaticResource Card}">
                     <StackPanel>
-                        <Grid>
-                            <TextBlock Text="{x:Static loc:WpfStrings.TraySensorTooltipCheck_Content}" Style="{StaticResource CardTitle}" />
-                            <CheckBox x:Name="OverdriveCheck" Content="{x:Static loc:WpfStrings.OverdriveCheck_Content}"
-                                      Style="{DynamicResource HeaderSwitch}" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                      Click="Overdrive_Click" />
-                        </Grid>
-                        <TextBlock Text="{x:Static loc:WpfStrings.SettingsWindow_Text_22}" Style="{StaticResource Hint}" />
-                        <Grid x:Name="MiniledRow" Margin="0,6,0,0">
-                            <TextBlock Text="{x:Static loc:WpfStrings.SettingsWindow_Text_21}" VerticalAlignment="Center" />
-                            <CheckBox x:Name="MiniledCheck" Content="{x:Static loc:WpfStrings.CustomModeWindow_Content_3}" Style="{DynamicResource HeaderSwitch}"
-                                      HorizontalAlignment="Right" VerticalAlignment="Center" Click="Miniled_Click" />
-                        </Grid>
+                        <StackPanel x:Name="OverdriveRow">
+                            <Grid>
+                                <TextBlock Text="{x:Static loc:WpfStrings.TraySensorTooltipCheck_Content}" Style="{StaticResource CardTitle}" />
+                                <CheckBox x:Name="OverdriveCheck" Content="{x:Static loc:WpfStrings.OverdriveCheck_Content}"
+                                          Style="{DynamicResource HeaderSwitch}" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                          Click="Overdrive_Click" />
+                            </Grid>
+                            <TextBlock Text="{x:Static loc:WpfStrings.SettingsWindow_Text_22}" Style="{StaticResource Hint}" />
+                        </StackPanel>
                         <Grid x:Name="HdrControlRow" Margin="0,6,0,0">
                             <TextBlock Text="HDR Color Control" VerticalAlignment="Center" />
                             <CheckBox x:Name="HdrControlCheck" Content="{x:Static loc:WpfStrings.CustomModeWindow_Content_3}" Style="{DynamicResource HeaderSwitch}"

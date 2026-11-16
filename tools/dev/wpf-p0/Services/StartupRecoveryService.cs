@@ -83,6 +83,12 @@ internal static class StartupRecoveryService
             EcFanCurveAutoApply.Schedule();
         });
 
+        Try("DisplayToggleRestore.RunOnce", () =>
+        {
+            // 分区控光 / LCD Overdrive 在 EC 模式下没有回读通道，按上次保存的选择重放一次。
+            DisplayToggleRestore.RunOnce();
+        });
+
         Try("PowerWallRestore.RunOnce", () =>
         {
             // 自定义档的 PL1/PL2/fPPT 随档位保存，但开机回档不重写功耗墙；这里补一次重放。

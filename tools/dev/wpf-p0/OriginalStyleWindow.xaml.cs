@@ -656,8 +656,13 @@ public partial class OriginalStyleWindow : Window
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         if (UiQaShowAll.Enabled) return true;
         if (GcuEcExperimental.Enabled
-            && hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
+            && hw?.DgpuGeneration is MechrevoLite.Gpu.DgpuGenerationKind.Gen50 or MechrevoLite.Gpu.DgpuGenerationKind.Gen40
+            && hw.WujieSmuApu != true
+            && hw.SmuCustomApu != true
+            && !XingyaoPerfApplicable())
         {
+            // EC 直连/接管时性能档由本地 EC 实现（clamp 0x10 = 狂暴），GCU 的 TurboMode 能力位在这里不适用；
+            // 办公本（无界/星耀）上报不支持狂暴仍要隐藏，所以上面排除了它们的判据。
             return true;
         }
         if (AppConfig.Is("perf_allow_on_battery")
@@ -2005,6 +2010,81 @@ public partial class OriginalStyleWindow : Window
 
     internal bool MiniledOn => _backendProbe?.Hw?.LocalDimming == true;
 
+    /// <summary>切换分区控光（本地 EC/ACPI 通道）；成功即写进配置，重启后按配置恢复。</summary>
+    internal async Task<bool> SetMiniledAsync(bool on)
+    {
+        BackendProbe? probe = _backendProbe;
+        if (probe?.Hw == null)
+        {
+            return false;
+        }
+        bool ok = await probe.SwitchLocalDimmingAsync(on);
+        if (ok)
+        {
+            MechrevoLite.AppConfig.Set("miniled_on", on ? 1 : 0);
+            MechrevoLite.AppConfig.Flush();
+        }
+        return ok;
+    }
+
+    private bool _syncingMiniled;
+
+    private async void Miniled_Click(object sender, RoutedEventArgs e)
+    {
+        if (_syncingMiniled)
+        {
+            return;
+        }
+        bool target = MiniledSwitch.IsChecked == true;
+        if (!SupportsMiniled)
+        {
+            // 通道没探到就不下发，避免在不适用的机型上盲写。
+            StatusText.Text = WpfStrings.L("未检测到分区控光通道，本次未下发", "Local dimming channel not detected; nothing sent");
+            RefreshMiniledSwitch();
+            return;
+        }
+        MiniledSwitch.IsEnabled = false;
+        try
+        {
+            bool ok = await SetMiniledAsync(target);
+            StatusText.Text = ok
+                ? WpfStrings.L(target ? "分区控光已开启" : "分区控光已关闭", target ? "Local dimming on" : "Local dimming off")
+                : WpfStrings.L("分区控光切换失败", "Local dimming switch failed");
+        }
+        finally
+        {
+            MiniledSwitch.IsEnabled = true;
+            RefreshMiniledSwitch();
+        }
+    }
+
+    /// <summary>同步分区控光这一行：常显（便于核对通道），状态取硬件当前值。</summary>
+    private void RefreshMiniledSwitch()
+    {
+        if (MiniledRow == null || MiniledSwitch == null)
+        {
+            return;
+        }
+        MiniledRow.Visibility = Visibility.Visible;
+        bool supported = SupportsMiniled;
+        _syncingMiniled = true;
+        try
+        {
+            MiniledSwitch.IsChecked = MiniledOn;
+            MiniledSwitch.IsEnabled = supported;
+        }
+        finally
+        {
+            _syncingMiniled = false;
+        }
+        if (MiniledHint != null)
+        {
+            MiniledHint.Text = supported
+                ? string.Empty
+                : WpfStrings.L("未检测到分区控光通道（此行常显，仅用于核对）", "Local dimming channel not detected (row is always shown for review)");
+        }
+    }
+
     // FHD/HDR 当前没有真实写入通道；在补齐前不声明支持，也不触发配置写/重启。
     internal bool SupportsFhd => false;
 
@@ -2024,7 +2104,7 @@ public partial class OriginalStyleWindow : Window
                 return;
             }
             bool target = !probe.Hw.LocalDimming;
-            bool ok = await probe.SwitchLocalDimmingAsync(target);
+            bool ok = await SetMiniledAsync(target);
             StatusText.Text = ok
                 ? (target ? WpfStrings.OriginalStyleWindow_xaml_Text_2 : WpfStrings.OriginalStyleWindow_xaml_Text_2)
                 : WpfStrings.OriginalStyleWindow_xaml_Text_3;
@@ -6885,6 +6965,7 @@ public partial class OriginalStyleWindow : Window
         using (UiTrace.Phase("mini-nuc-switch")) { probe.SyncNucQuickSwitches(); }
         using (UiTrace.Phase("mini-camera")) { probe.SyncCameraQuickState(); }
         using (UiTrace.Phase("mini-brightness")) { try { RefreshBrightness(); } catch { } }
+        using (UiTrace.Phase("mini-miniled")) { try { RefreshMiniledSwitch(); } catch { } }
         BackendLine.Text = probe.Snapshot();
         using (UiTrace.Phase("mini-tooltip")) { UpdateTraySensorTooltip(probe); }
         using (UiTrace.Phase("mini-hook-hw")) { HookHardwareState(); }
@@ -9154,6 +9235,7 @@ public partial class OriginalStyleWindow : Window
         {
             _syncingDisplayEffect = false;
         }
+        RefreshMiniledSwitch();
     }
 
     private int SelectedCalibrationMode()

@@ -302,13 +302,13 @@ public partial class SettingsWindow : Window
         StartupCheck.IsChecked = Startup.IsScheduled();
         WaterCoolingCheck.IsChecked = AppConfig.Is("force_liquid_cooling_menu");
         TraySensorTooltipCheck.IsChecked = _owner.WideTraySensorEnabled;
-        DisplayCard.Visibility = _owner.SupportsLcdOverdrive || _owner.SupportsMiniled || _owner.SupportsFhd || _owner.SupportsHdrControl
+        // 分区控光已移到「屏幕」页（亮度下面一行），这里只剩 OD/HDR/FHD 三行。
+        DisplayCard.Visibility = _owner.SupportsLcdOverdrive || _owner.SupportsFhd || _owner.SupportsHdrControl
             ? Visibility.Visible
             : Visibility.Collapsed;
-        OverdriveCheck.Visibility = _owner.SupportsLcdOverdrive ? Visibility.Visible : Visibility.Collapsed;
+        // 开关和它的说明文字一起显示/隐藏，避免开关藏了提示还挂着。
+        OverdriveRow.Visibility = _owner.SupportsLcdOverdrive ? Visibility.Visible : Visibility.Collapsed;
         OverdriveCheck.IsChecked = _owner.LcdOverdrive;
-        MiniledRow.Visibility = _owner.SupportsMiniled ? Visibility.Visible : Visibility.Collapsed;
-        MiniledCheck.IsChecked = _owner.MiniledOn;
         HdrControlRow.Visibility = _owner.SupportsHdrControl ? Visibility.Visible : Visibility.Collapsed;
         HdrControlCheck.IsChecked = _owner.HdrControlOn;
         FhdRow.Visibility = _owner.SupportsFhd ? Visibility.Visible : Visibility.Collapsed;
@@ -1114,16 +1114,6 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private void Miniled_Click(object sender, RoutedEventArgs e)
-    {
-        if (_syncing)
-        {
-            return;
-        }
-        _owner.ToggleMiniled();
-        MiniledCheck.IsChecked = _owner.MiniledOn;
-    }
-
     private void HdrControl_Click(object sender, RoutedEventArgs e)
     {
         if (_syncing)
@@ -1163,6 +1153,9 @@ public partial class SettingsWindow : Window
             }
             else
             {
+                // EC 模式下没有回读通道，把选择记进配置，下次启动按它恢复。
+                AppConfig.Set("lcd_overdrive_on", requested ? 1 : 0);
+                AppConfig.Flush();
                 Status(requested ? WpfStrings.DisplayResponseOn : WpfStrings.DisplayResponseOff);
             }
         }

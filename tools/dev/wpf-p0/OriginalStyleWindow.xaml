@@ -616,6 +616,18 @@
                             <Slider x:Name="BrightnessSlider" Grid.Column="1" Minimum="0" Maximum="100" Value="100" Style="{StaticResource RoundSlider}" ValueChanged="Brightness_Changed" />
                             <TextBlock x:Name="BrightnessText" Grid.Column="2" Text="100%" Style="{StaticResource StatText}" Margin="10,0,0,0" />
                         </Grid>
+                        <!-- MiniLED 分区控光：亮度下面一行，常显（便于核对通道与状态） -->
+                        <Grid x:Name="MiniledRow" Margin="0,2,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{x:Static loc:WpfStrings.SettingsWindow_Text_21}" Style="{StaticResource RowLabel}" Margin="0,0,12,0" VerticalAlignment="Center" />
+                            <CheckBox x:Name="MiniledSwitch" Grid.Column="1" Content="{x:Static loc:WpfStrings.CustomModeWindow_Content_3}" Style="{StaticResource HeaderSwitch}"
+                                      VerticalAlignment="Center" Click="Miniled_Click" />
+                            <TextBlock x:Name="MiniledHint" Grid.Column="2" Text="" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap" />
+                        </Grid>
                         <Grid Margin="0,4,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
