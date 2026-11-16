@@ -1983,6 +1983,19 @@ public partial class CustomModeWindow : Window
             MechrevoLite.Mode.PerfApplyOutcome? outcome = await perf.UpdateAsync(_current.Id, _ => edited, "wpf-editor");
             if (outcome == null)
             {
+                // 上一次激活还没收尾时 UpdateAsync 会直接返回 null（不是失败）；等收尾后重试一次。
+                if (await perf.WaitForActivationIdleAsync(TimeSpan.FromSeconds(5)))
+                {
+                    outcome = await perf.UpdateAsync(_current.Id, _ => edited, "wpf-editor");
+                }
+            }
+            if (outcome == null)
+            {
+                // 仍然拿不到 ⇒ 直接按当前配置激活一次（自定义档应用就是激活本身）。
+                outcome = await perf.ActivateAsync(_current.Id, "wpf-editor", forceParameters: true);
+            }
+            if (outcome == null)
+            {
                 StatusText.Text = WpfStrings.CustomModeWindow_xaml_Text_13;
                 return;
             }
