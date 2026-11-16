@@ -23,6 +23,8 @@ using System.Windows.Threading;
 using L_Mechrevo.WpfP0.Resources;
 namespace L_Mechrevo.WpfP0;
 
+/// <summary>核显省电行的渲染快照：硬件读取在后台完成，界面只按快照刷。</summary>
+internal readonly record struct IgpuVisualSnapshot(int GpuMode, bool HotSwap, bool PendingRestart, int SaveMode, bool SwitchSupported);
 internal sealed class DragGhostAdorner : Adorner
 {
     private readonly VisualBrush _brush;
@@ -170,6 +172,7 @@ public partial class OriginalStyleWindow : Window
     private bool _syncingBatteryLimit;
     // 核显省电行状态读取节流（读显卡模式约 0.2-0.3 秒，不必每次心跳都读）。
     private long _lastIgpuVisualMs;
+    private int _igpuVisualRefreshBusy;
 
     /// <summary>滑块停手 500ms 后才下发，拖动过程中不反复写 EC、不反复钉门控。</summary>
     private DispatcherTimer? _batteryLimitDebounce;
@@ -5555,10 +5558,20 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        int effectiveGpuMode = _backendProbe?.CurrentGpuMode ?? hardware.GpuMode;
-        bool igpuSavingVisible = (hardware.SupportsGpuHotSwap
-            && effectiveGpuMode == 1
-            && _backendProbe?.HasPendingGpuRestart != true) || UiQaShowAll.Enabled;
+        ApplyIgpuVisual(new IgpuVisualSnapshot(
+            _backendProbe?.CurrentGpuMode ?? hardware.GpuMode,
+            hardware.SupportsGpuHotSwap,
+            _backendProbe?.HasPendingGpuRestart == true,
+            MechrevoLite.AppConfig.Get("acpi_igpu_auto", 0) != 0 ? 3 : hardware.IgpuOnlySaveMode,
+            L_Mechrevo.WpfP0.Services.WpfBackend.IgpuSwitchSupported));
+    }
+
+    /// <summary>核显省电行：只用快照渲染，硬件读取一律在后台完成。</summary>
+    private void ApplyIgpuVisual(IgpuVisualSnapshot snapshot)
+    {
+        bool igpuSavingVisible = (snapshot.HotSwap
+            && snapshot.GpuMode == 1
+            && !snapshot.PendingRestart) || UiQaShowAll.Enabled;
         if (igpuSavingVisible && IgpuSavingPreviewRow == null)
         {
             BuildIgpuSavingRow();
@@ -5570,11 +5583,10 @@ public partial class OriginalStyleWindow : Window
         IgpuSavingPreviewRow.Visibility = igpuSavingVisible ? Visibility.Visible : Visibility.Collapsed;
         if (_igpuSavingLabel != null)
         {
-            _igpuSavingLabel.Text = L_Mechrevo.WpfP0.Services.WpfBackend.IgpuSwitchSupported
+            _igpuSavingLabel.Text = snapshot.SwitchSupported
                 ? "核显省电（热切）" : "静默独显";
         }
-        int mode = MechrevoLite.AppConfig.Get("acpi_igpu_auto", 0) != 0
-            ? 3 : hardware.IgpuOnlySaveMode;
+        int mode = snapshot.SaveMode;
         if (IgpuSavingOffPreview != null) IgpuSavingOffPreview.IsChecked = mode == 1;
         if (IgpuSavingOnPreview != null) IgpuSavingOnPreview.IsChecked = mode == 0;
         if (IgpuSavingAutoPreview != null) IgpuSavingAutoPreview.IsChecked = mode == 3;
@@ -5584,6 +5596,47 @@ public partial class OriginalStyleWindow : Window
                 ? WpfStrings.SwitchingEllipsis
                 : mode switch { 0 => WpfStrings.IgpuSavingCurrentOn, 1 => WpfStrings.IgpuSavingCurrentOff, 3 => WpfStrings.IgpuSavingCurrentAuto, _ => WpfStrings.IgpuSavingCurrentUnknown };
         }
+    }
+
+    /// <summary>
+    /// 心跳里按 4 秒节流触发：显卡模式/核显省电状态的读取（ACPI/WMI，单次 0.2~0.3 秒）放后台线程，
+    /// 读完再回界面渲染——原来放在界面线程上，每 4 秒就会卡一次。
+    /// </summary>
+    private void QueueIgpuVisualRefresh()
+    {
+        if (Interlocked.Exchange(ref _igpuVisualRefreshBusy, 1) != 0)
+        {
+            return;
+        }
+        Task.Run(() =>
+        {
+            IgpuVisualSnapshot? snapshot = null;
+            try
+            {
+                var probe = _backendProbe;
+                var hardware = probe?.Hw;
+                if (hardware != null)
+                {
+                    snapshot = new IgpuVisualSnapshot(
+                        probe?.CurrentGpuMode ?? hardware.GpuMode,
+                        hardware.SupportsGpuHotSwap,
+                        probe?.HasPendingGpuRestart == true,
+                        MechrevoLite.AppConfig.Get("acpi_igpu_auto", 0) != 0 ? 3 : hardware.IgpuOnlySaveMode,
+                        L_Mechrevo.WpfP0.Services.WpfBackend.IgpuSwitchSupported);
+                }
+            }
+            catch
+            {
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _igpuVisualRefreshBusy, 0);
+            }
+            if (snapshot is { } value)
+            {
+                Dispatcher.BeginInvoke(new Action(() => ApplyIgpuVisual(value)));
+            }
+        });
     }
 
     private async Task<bool> TryForceIgpuSavingAsync(string mode, bool occupancyAlreadyConfirmed)
@@ -7154,7 +7207,10 @@ public partial class OriginalStyleWindow : Window
         }
         // 星耀风扇转速已由后端的 2.5 秒常驻采样泵统一回填，界面心跳不再直读硬件。
         bool noDgpu = hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
-        GpuStat.Visibility = noDgpu ? Visibility.Collapsed : Visibility.Visible;
+        // 核显机型（无界/星耀这类 APU 本）也要显示显卡行：温度/占用/风扇都来自核显，
+        // 只有确实没有任何显卡数据时才隐藏。
+        bool igpuSensorPresent = hw.WujieSmuApu || hw.SmuCustomApu;
+        GpuStat.Visibility = (noDgpu && !igpuSensorPresent) ? Visibility.Collapsed : Visibility.Visible;
         CpuStat.Text = SensorLine(cpu: true);
         GpuStat.Text = SensorLine(cpu: false);
         using (UiTrace.Phase("mini-igpu"))
@@ -7164,7 +7220,7 @@ public partial class OriginalStyleWindow : Window
             if (Environment.TickCount64 - _lastIgpuVisualMs >= 4000)
             {
                 _lastIgpuVisualMs = Environment.TickCount64;
-                VisualiseIgpuSaving();
+                QueueIgpuVisualRefresh();
             }
         }
         if (L_Mechrevo.WpfP0.Services.WpfBackend.rgb != null)

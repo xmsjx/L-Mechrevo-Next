@@ -121,6 +121,14 @@ internal static class WujieFanEc
 	/// <summary>2026-10-22：优先 I2EC（inpoutx64）读，回退 ACPI-EC；供诊断与状态读取使用。</summary>
 	private static bool ReadByteAny(int address, out int value, out string note)
 	{
+		// 优先 ACPI 驱动窗口：与风扇转速同一条通道（转速能读 ⇒ 占空比也能读）。
+		// 原来这里只走 I2EC/LPC，这两种在本机不可用时占空比永远读不到，界面就不显示百分比。
+		if (AcpiDriverEc.TryReadByte(address, out byte acpiValue))
+		{
+			value = acpiValue;
+			note = "ACPIDriver";
+			return true;
+		}
 		if (I2ecInpOut.IsAvailable && I2ecInpOut.TryReadEcByte(address, out value, out string i2ecNote))
 		{
 			note = "I2EC";
