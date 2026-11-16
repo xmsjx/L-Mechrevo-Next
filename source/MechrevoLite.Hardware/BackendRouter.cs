@@ -46,6 +46,7 @@ internal static class BackendRouter
 		GcuReachable,
 		NucLocalReady,
 		XingyaoLocalReady,
+		Xingyao14Family,
 		EcLocalAvailable
 	}
 
@@ -83,31 +84,30 @@ internal static class BackendRouter
 	/// <summary>内置规则表（顺序 = 优先级；首条命中即选中）。</summary>
 	private static readonly RuleSpec[] BuiltInRules =
 	{
-        // ① 板号白名单是硬机型证据；排障开关=0 时让给后续规则。
+        // ① 板号白名单是硬机型证据（宝龙达不是同方系，GCU 装了也不参与判定）。
         new RuleSpec(1, "board in Baolongda whitelist -> Baolongda", MechrevoBackendKind.Baolongda,
             new[] { new RuleCondition(RouteFact.BaolongdaWhitelisted), new RuleCondition(RouteFact.BaolongdaEnabled) }),
-        // ② 代际只能佐证；服务已装、载荷真的在、并且 GCU 确实连得上，才走 GCU。
-        new RuleSpec(2, "gpu gen 30/40/50 && GCU service installed && payload present && GCU reachable -> Gcu", MechrevoBackendKind.Gcu,
+        // ② 星耀家族：不是同方模具（板号 P916F），控制走本地 WMAA，GCU 不参与判定。
+        new RuleSpec(2, "Xingyao family -> XingyaoPmc", MechrevoBackendKind.XingyaoPmc,
+            new[] { new RuleCondition(RouteFact.Xingyao14Family) }),
+        // ③ 同方系：代际佐证 + 服务已装 + 载荷真的在 + GCU 确实连得上，才走 GCU 控制模式。
+        new RuleSpec(3, "gpu gen 30/40/50 && GCU service installed && payload present && GCU reachable -> Gcu", MechrevoBackendKind.Gcu,
             new[] { new RuleCondition(RouteFact.GcuServiceInstalled), new RuleCondition(RouteFact.GcuPayloadPresent), new RuleCondition(RouteFact.GcuGenerationSupported), new RuleCondition(RouteFact.GcuReachable) }),
-        // ③ 服务已装 + 载荷在 + 连得上（代际未知也走这一条）。
-        new RuleSpec(3, "GCU service installed && payload present && GCU reachable -> Gcu", MechrevoBackendKind.Gcu,
+        // ④ 同方系：服务 + 载荷 + 连得上（代际未知也走这一条）。
+        new RuleSpec(4, "GCU service installed && payload present && GCU reachable -> Gcu", MechrevoBackendKind.Gcu,
             new[] { new RuleCondition(RouteFact.GcuServiceInstalled), new RuleCondition(RouteFact.GcuPayloadPresent), new RuleCondition(RouteFact.GcuReachable) }),
-        // ④ NUC / UMI 本地就绪 ⇒ 走本地 ACPI/EC + HID。
-        new RuleSpec(4, "NUC/UMI local ready -> NucUmiLocal", MechrevoBackendKind.NucUmiLocal,
+        // ⑤ NUC / UMI 本地就绪 ⇒ 走本地 ACPI/EC + HID（同方系内 GCU 不可用时的本地通道）。
+        new RuleSpec(5, "NUC/UMI local ready -> NucUmiLocal", MechrevoBackendKind.NucUmiLocal,
             new[] { new RuleCondition(RouteFact.NucLocalReady) }),
-        // ⑤ 星耀本地就绪 ⇒ 走 WMAA。星耀不是同方模具，寄存器位置与同方 EC 不同，不能落到 EC 规则。
-        new RuleSpec(5, "Xingyao local ready -> XingyaoPmc", MechrevoBackendKind.XingyaoPmc,
-            new[] { new RuleCondition(RouteFact.XingyaoLocalReady) }),
-        // ⑥ MICommonInterface 存在且 GUID 与老同方一致，且未装 GCU。
-        new RuleSpec(6, "MICommonInterface(legacy GUID) && no GCU service -> LegacyMifs", MechrevoBackendKind.LegacyMifs,
-            new[] { new RuleCondition(RouteFact.MifsLegacyCompatible), new RuleCondition(RouteFact.GcuServiceInstalled, false) }),
-        // ⑦ 同方家族但 GCU 不可达、且已选 EC 直连 ⇒ 本地 ACPI/EC 接管（EC-only）。
-        new RuleSpec(7, "Tongfang family && GCU unreachable && EC mode selected -> TongfangEc", MechrevoBackendKind.TongfangEc,
+        // ⑥ 同方系：GCU 不可达 + 已选 EC 直连 ⇒ 本地 ACPI/EC 接管（EC-only）。
+        new RuleSpec(6, "Tongfang family && GCU unreachable && EC mode selected -> TongfangEc", MechrevoBackendKind.TongfangEc,
             new[] { new RuleCondition(RouteFact.TongfangFamily), new RuleCondition(RouteFact.GcuReachable, false), new RuleCondition(RouteFact.EcLocalAvailable) }),
-        // ⑧ 同方族（声明口径）：装没装 GCU 都归同方通道。
+        // ⑦ 老同方接口：MICommonInterface(legacy GUID) 且未装 GCU。
+        new RuleSpec(7, "MICommonInterface(legacy GUID) && no GCU service -> LegacyMifs", MechrevoBackendKind.LegacyMifs,
+            new[] { new RuleCondition(RouteFact.MifsLegacyCompatible), new RuleCondition(RouteFact.GcuServiceInstalled, false) }),
+        // ⑧ 同方系（声明口径）：装没装 GCU 都归同方通道。
         new RuleSpec(8, "Tongfang family -> Gcu（无 GCU 时由本地 EC 接管）", MechrevoBackendKind.Gcu,
             new[] { new RuleCondition(RouteFact.TongfangFamily) })
-
 	};
 	/// <summary>当前生效规则表（可被 <see cref="ReloadRulesIfChanged" /> 原子替换）。</summary>
 	private static BackendRuleStore.RuleTable _table = BackendRuleStore.Load(BuiltInRules, MechrevoBackendKind.Gcu);
@@ -320,6 +320,7 @@ internal static class BackendRouter
 			RouteFact.GcuReachable => availability == null || av.GcuReachable,
 			RouteFact.NucLocalReady => av.NucLocalReady,
 			RouteFact.XingyaoLocalReady => av.XingyaoLocalReady,
+			RouteFact.Xingyao14Family => identity.Xingyao14Family,
 			RouteFact.EcLocalAvailable => av.EcLocalAvailable,
 			_ => false
 		};
@@ -426,23 +427,31 @@ internal static class BackendRouter
 		// ① 宝龙达白名单：GCU 服务同时存在也必须优先宝龙达（设计文档 §2 蛟龙事故）
 		Check("白名单机型（同时装了 GCU）⇒ Baolongda", MechrevoBackendKind.Baolongda, 1,
 			MachineIdentity.ForTest(board: "MRID6-23", whitelisted: true, generation: "Gen40", gcuInstalled: true, mifsClass: true), pass, fail);
-		// ② 40 系 + 已装 GCU ⇒ Gcu（代际佐证）
-		Check("Gen40 + 已装 GCU ⇒ Gcu", MechrevoBackendKind.Gcu, 2,
+		// ② 星耀家族（板号 P916F）⇒ 星耀后端，装了 GCU 也不抢
+		Check("星耀家族 ⇒ XingyaoPmc（GCU 不参与）", MechrevoBackendKind.XingyaoPmc, 2,
+			MachineIdentity.ForTest(board: "P916F", generation: "Gen50", gcuInstalled: true) with { Xingyao14Family = true }, pass, fail);
+		// ② 星耀15：身份单独识别，但暂时挂靠 GCU 控制（有机主未反馈、带 GCU 载荷）
+		Check("星耀15（暂挂 GCU）⇒ Gcu", MechrevoBackendKind.Gcu, 3,
+			MachineIdentity.ForTest(board: "GM6XY15", generation: "Gen50", gcuInstalled: true) with { Model = "星耀15 Pro Series GM6XY15", Xingyao15Family = true }, pass, fail);
+		// ② LNL 无界：身份单独识别，暂时挂靠 GCU 控制（与无界 APU 分开）
+		Check("无界 LNL（暂挂 GCU）⇒ Gcu", MechrevoBackendKind.Gcu, 3,
+			MachineIdentity.ForTest(board: "GM6LNL", generation: "Gen50", gcuInstalled: true) with { WujieLnlFamily = true }, pass, fail);		// ② 40 系 + 已装 GCU ⇒ Gcu（代际佐证）
+		Check("Gen40 + 已装 GCU ⇒ Gcu", MechrevoBackendKind.Gcu, 3,
 			MachineIdentity.ForTest(board: "GM5HG0A", generation: "Gen40", gcuInstalled: true), pass, fail);
 		// ③ 代际未知但已装 GCU ⇒ Gcu（规则 3）
-		Check("代际未知 + 已装 GCU ⇒ Gcu", MechrevoBackendKind.Gcu, 3,
+		Check("代际未知 + 已装 GCU ⇒ Gcu", MechrevoBackendKind.Gcu, 4,
 			MachineIdentity.ForTest(board: "GM5HG0A", generation: "Unknown", gcuInstalled: true), pass, fail);
 		// ④ 老接口：MICommonInterface(legacy GUID) + 未装 GCU ⇒ LegacyMifs（本轮新增规则）
-		Check("MICommonInterface + 未装 GCU ⇒ LegacyMifs", MechrevoBackendKind.LegacyMifs, 6,
+		Check("MICommonInterface + 未装 GCU ⇒ LegacyMifs", MechrevoBackendKind.LegacyMifs, 7,
 			MachineIdentity.ForTest(board: "GM6IX8B", generation: "Gen30", gcuInstalled: false, mifsClass: true), pass, fail);
 		// ⑤ 装了 GCU 时 MICommonInterface 在也不能抢老接口（设计文档 §2：同方通用类新机型也可能带）
-		Check("MICommonInterface + 已装 GCU ⇒ Gcu（老接口不得抢）", MechrevoBackendKind.Gcu, 3,
+		Check("MICommonInterface + 已装 GCU ⇒ Gcu（老接口不得抢）", MechrevoBackendKind.Gcu, 4,
 			MachineIdentity.ForTest(board: "GM5HG0A", generation: "Unknown", gcuInstalled: true, mifsClass: true), pass, fail);
 		// ⑥ 同方板号、没有 GCU、没有 MIFS ⇒ 同方族规则（本地 EC 回退）
         // ⑥ 服务键在、但载荷 exe 缺失（登记残留）⇒ 不得声明 GCU，交给同方/回落通道
         Check("已装 GCU 但载荷缺失 ⇒ 不选 GCU 规则", MechrevoBackendKind.Gcu, 8,
             MachineIdentity.ForTest(board: "GM7ZG8S", generation: "Gen30", gcuInstalled: true, gcuPayload: false), pass, fail);
-        Check("已装 GCU 且载荷在 ⇒ 仍选规则 2（不误降级）", MechrevoBackendKind.Gcu, 2,
+        Check("已装 GCU 且载荷在 ⇒ 仍选规则 3（不误降级）", MechrevoBackendKind.Gcu, 3,
             MachineIdentity.ForTest(board: "GM7ZG8S", generation: "Gen30", gcuInstalled: true, gcuPayload: true), pass, fail);
 		Check("GM 板号 + 无 GCU/MIFS ⇒ 同方族 Gcu", MechrevoBackendKind.Gcu, 8,
 			MachineIdentity.ForTest(board: "GM5HG0A", generation: "Gen40", gcuInstalled: false), pass, fail);

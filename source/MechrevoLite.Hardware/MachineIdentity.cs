@@ -42,6 +42,20 @@ internal sealed record MachineIdentity(
 
 	internal string TongfangFamilySource { get; init; } = "";
 
+	/// <summary>星耀 14（板号 P916F）：有自己的后端（本地 WMAA），不走同方 GCU/EC。</summary>
+	internal bool Xingyao14Family { get; init; }
+
+	/// <summary>
+	/// 星耀 15：机型身份单独识别，但**暂时挂靠 GCU 控制**（有机主未反馈、且带 GCU 载荷）。
+	/// 将来要切自己的后端时只改规则表，不动这里。
+	/// </summary>
+	internal bool Xingyao15Family { get; init; }
+
+	/// <summary>
+	/// 无界 LNL（Intel）：身份单独识别，暂时挂靠 GCU 控制（未有机主反馈）；
+	/// 与无界 APU（AMD，走本地 SMU/EC）区分开，不混成一个家族。
+	/// </summary>
+	internal bool WujieLnlFamily { get; init; }
     /// <summary>后端控制组件的可执行载荷是否存在（服务登记残留时为 false）。</summary>
     internal bool GcuPayloadPresent { get; init; } = true;
 
@@ -221,6 +235,12 @@ internal sealed record MachineIdentity(
 		catch { }
 		bool hasFunctionalMulong = false;
 		try { hasFunctionalMulong = MechrevoLite.Hardware.TurboSubModeWmi.IsSupported(); } catch { }
+		// 星耀 15：名字里有"星耀"但板号不是 P916F（P916F = 星耀 14，有自己的后端）。
+		string xingyaoModel = model ?? "";
+		bool xingyaoBoard = MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
+		bool xingyaoNamed = xingyaoModel.Contains("星耀", StringComparison.OrdinalIgnoreCase)
+			|| xingyaoModel.Contains("XINGYAO", StringComparison.OrdinalIgnoreCase);
+		bool xingyao15 = xingyaoNamed && !xingyaoBoard;
 		bool tongfangFamily = ProbeTongfangFamily(board, model, generation, gcuInstalled, whitelisted,
 			hasTongfangNvram, hasNvidiaDgpu, hasUwacpiService, hasFunctionalMulong, out string tongfangSource);
 		return new MachineIdentity(board, boardSource, whitelisted, generation, gcuInstalled,
@@ -229,6 +249,13 @@ internal sealed record MachineIdentity(
 			wujieApu, wujieApuSource, string.Empty)
 		{
 			TongfangFamily = tongfangFamily,
+			Xingyao15Family = (model ?? "").Contains("星耀15", StringComparison.OrdinalIgnoreCase)
+				|| (model ?? "").Contains("XINGYAO15", StringComparison.OrdinalIgnoreCase),
+			Xingyao14Family = MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform() && !xingyao15,
+			WujieLnlFamily = (model ?? "").Contains("无界", StringComparison.OrdinalIgnoreCase)
+				|| (model ?? "").Contains("WUJIE", StringComparison.OrdinalIgnoreCase)
+				? !wujieApu && CpuVendor.IsIntel
+				: false,
             GcuPayloadPresent = gcuPayloadPresent,
             GcuPayloadSource = gcuPayloadSource,
 			TongfangFamilySource = tongfangSource,
@@ -236,6 +263,9 @@ internal sealed record MachineIdentity(
 				model, modelSource, mifsClass, projectId, projectIdSource, gcuVariant, gcuVariantFamily,
 				wujieApu, wujieApuSource, gcuPayloadPresent, gcuPayloadSource)
 				+ " · tongfang=" + tongfangFamily + "(" + tongfangSource + ")"
+				+ " · 星耀14=" + (xingyaoBoard && !xingyao15)
+				+ " 星耀15=" + xingyao15
+				+ " 无界LNL=" + (((model ?? "").Contains("无界", StringComparison.OrdinalIgnoreCase) || (model ?? "").Contains("WUJIE", StringComparison.OrdinalIgnoreCase)) && !wujieApu && CpuVendor.IsIntel)
 		};
 	}
 
@@ -264,6 +294,12 @@ internal sealed record MachineIdentity(
 		string mifsText = mifsClass ? "present(guid=legacy)" : "absent";
 		string boardSource = boardText.Length == 0 ? "unknown" : "test";
 		string modelSource = modelText.Length == 0 ? "unknown" : "test";
+		// 星耀 15：名字里有"星耀"但板号不是 P916F（P916F = 星耀 14，有自己的后端）。
+		string xingyaoModel = model ?? "";
+		bool xingyaoBoard = MechrevoLite.Hardware.XingyaoPmc2.IsXingyaoPlatform();
+		bool xingyaoNamed = xingyaoModel.Contains("星耀", StringComparison.OrdinalIgnoreCase)
+			|| xingyaoModel.Contains("XINGYAO", StringComparison.OrdinalIgnoreCase);
+		bool xingyao15 = xingyaoNamed && !xingyaoBoard;
 		bool tongfangFamily = ProbeTongfangFamily(boardText, modelText, generationText, gcuInstalled, whitelisted,
 			hasTongfangNvram: false, hasNvidiaDgpu: false, hasUwacpiService: false, hasFunctionalMulong: false,
 			out string tongfangSource);
