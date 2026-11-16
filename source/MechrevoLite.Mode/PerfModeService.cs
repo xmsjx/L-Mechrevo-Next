@@ -806,8 +806,10 @@ internal sealed class PerfModeService
 		// Intel 星耀 PTL 的自定义 PL1/PL2 已通过本机 MSR 验证，允许继续走自定义应用。
 		PerfModeSettings expectedSettings = mode.Settings;
 		MechrevoHw hw = _hw;
+		// EC 直连（GCU 不可用、走本地 ACPI/EC）：档位与本地参数仍可应用，不按"GCU 未连接"拒绝。
+		bool ecLocalOnly = MechrevoLite.Hardware.GcuEcMode.IsEcMode && (hw == null || !hw.IsGcuConnected);
 		// （无界 APU）：无 GCU 也可走本机 SMU 应用/启动恢复 ⇒ 连接判据放宽（其它机型不变）
-		if (hw == null || (!hw.IsConnected && !hw.SmuCustomApu))
+		if (hw == null || (!hw.IsConnected && !hw.SmuCustomApu && !ecLocalOnly))
 		{
 			Logger.WriteLine("PerfModes: activate(" + modeId + ") refused, GCU not connected");
 			// ⭐⭐ 2026-10-16（宝龙达 · 诚实性）：⭐ 失败原因【按后端如实写】✅ ——
@@ -834,7 +836,7 @@ internal sealed class PerfModeService
 		}		PerfModeCapabilities caps = Capabilities();
 		IReadOnlyList<FirmwareSlotState> slots = PerfModeStore.LoadSlots(SlotCount);
 		FirmwareSlotPlan plan = null;
-		if (mode.Route == PerfModeRoute.FirmwareSlot)
+		if (mode.Route == PerfModeRoute.FirmwareSlot && !ecLocalOnly)
 		{
 			string activeModeId = ActiveModeId;
 			plan = FirmwareSlotPlanner.Plan(mode.Id, mode.Settings.FirmwareSignature(), slots, activeModeId);
@@ -858,7 +860,26 @@ internal sealed class PerfModeService
 				Logger.WriteError(wujieLog);
 			}
 		}
-		IReadOnlyList<PerfApplyStep> readOnlyList = PerfModeApplyPlanner.Build(mode, plan, caps);
+		IReadOnlyList<PerfApplyStep> readOnlyList = PerfModeApplyPlanner.Build(mode, plan, caps,
+			includeSwitch: true, routeOverride: ecLocalOnly ? PerfModeRoute.BuiltIn : (PerfModeRoute?)null);
+		// EC 直连：没有 GCU 固件通道 ⇒ 字段步不下发，记 Stale（不算失败，界面提示"可能没生效"）。
+		List<PerfApplyStepOutcome> ecSkippedSteps = new List<PerfApplyStepOutcome>();
+		if (ecLocalOnly)
+		{
+			List<PerfApplyStep> kept = new List<PerfApplyStep>();
+			foreach (PerfApplyStep step in readOnlyList)
+			{
+				if (step.Kind == PerfApplyStepKind.WriteFirmwareField)
+				{
+					ecSkippedSteps.Add(new PerfApplyStepOutcome(step, PerfApplyResult.Stale,
+						"EC 直连：GCU 固件字段通道不可用，本项未下发"));
+					continue;
+				}
+				kept.Add(step);
+			}
+			readOnlyList = kept;
+			Logger.WriteLine("[perfmode] EC 直连应用：" + mode.Id + " ⇒ 档位走本地 EC，跳过固件字段 " + ecSkippedSteps.Count + " 项");
+		}
 		// （机主：「显卡超频设置了但频率没变化」· 可观测性①）
 		LogGpuOverclockPlan(mode, plan, caps, readOnlyList);
 		LogFanAndRefreshPlan(mode, plan, caps, readOnlyList);
@@ -892,6 +913,10 @@ internal sealed class PerfModeService
 		try
 		{
 			outcome = await RunStepsAsync(mode.Id, readOnlyList, ct, willActivate: true).ConfigureAwait(continueOnCapturedContext: false);
+			if (ecSkippedSteps.Count > 0 && outcome != null)
+			{
+				outcome = outcome with { Steps = outcome.Steps.Concat(ecSkippedSteps).ToArray() };
+			}
 		}
 		catch (OperationCanceledException)
 		{

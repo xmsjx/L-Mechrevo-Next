@@ -427,6 +427,19 @@ public class MechrevoService
 				}
 				return ModeSwitchResult.Failed;
 			}
+			// EC 直连（GCU 不可用 ⇒ 本地 ACPI/EC 接管）：档位由本地 EC 写，含自定义档 3。
+			if (hw != null && GcuEcMode.IsEcMode && !hw.IsGcuConnected)
+			{
+				bool ecOk = GcuEcExperimental.TryApplyMode(mode, out string ecDetail);
+				Logger.WriteLine($"[gcu-ec] SwitchMode({mode}) 本地 EC ⇒ {ecOk} · {ecDetail}");
+				if (ecOk)
+				{
+					ModeControl.SyncExternalModeStatic(mode);
+					ModeChanged?.Invoke(mode);
+					return ModeSwitchResult.Ok;
+				}
+				return ModeSwitchResult.Failed;
+			}
 			if (hw == null || !hw.IsGcuConnected)
 			{
 				return ModeSwitchResult.Failed;
