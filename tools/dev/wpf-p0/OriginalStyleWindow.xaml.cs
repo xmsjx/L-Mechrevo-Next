@@ -7219,6 +7219,9 @@ public partial class OriginalStyleWindow : Window
         bool igpuSensorPresent = hw.WujieSmuApu || hw.SmuCustomApu;
         // 核显模式下独显会从总线上消失（此时也是 NoDgpu），但机型仍有独显 ⇒ 不能当核显本处理。
         GpuStat.Visibility = (noDgpu && !hw.DgpuEverPresent && !igpuSensorPresent) ? Visibility.Collapsed : Visibility.Visible;
+        // 状态行的文本必须每次心跳都刷（之前这两行被改漏了，界面就一直停在默认的 "CPU —"/"GPU —"）。
+        CpuStat.Text = SensorLine(cpu: true);
+        GpuStat.Text = SensorLine(cpu: false);
         using (UiTrace.Phase("mini-igpu"))
         {
             // 显卡模式/核显省电状态的读取走 ACPI/WMI，单次 0.2~0.3 秒：
