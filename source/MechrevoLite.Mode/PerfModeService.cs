@@ -917,6 +917,30 @@ internal sealed class PerfModeService
 			{
 				outcome = outcome with { Steps = outcome.Steps.Concat(ecSkippedSteps).ToArray() };
 			}
+			if (ecLocalOnly && outcome != null)
+			{
+				// EC 直连：显卡超频/显卡功耗这两步依赖 GCU 侧通道，本机写不进去时不报"失败"，
+				// 改记"未生效"（Stale），避免把一次成功的档位切换整单判失败。
+				List<PerfApplyStepOutcome> adjusted = new List<PerfApplyStepOutcome>(outcome.Steps.Count);
+				bool downgraded = false;
+				foreach (PerfApplyStepOutcome item in outcome.Steps)
+				{
+					if (item.Result == PerfApplyResult.Failed
+						&& (item.Step.Kind == PerfApplyStepKind.ApplyGpuOverclock || item.Step.Kind == PerfApplyStepKind.ApplyGpuPowerLimit))
+					{
+						adjusted.Add(new PerfApplyStepOutcome(item.Step, PerfApplyResult.Stale,
+							"EC 直连：该步骤本机无写入通道，未生效"));
+						downgraded = true;
+						continue;
+					}
+					adjusted.Add(item);
+				}
+				if (downgraded)
+				{
+					outcome = outcome with { Steps = adjusted.ToArray() };
+					Logger.WriteLine("[perfmode] EC 直连：" + mode.Id + " 显卡超频/功耗步记为未生效（不算失败）");
+				}
+			}
 		}
 		catch (OperationCanceledException)
 		{
