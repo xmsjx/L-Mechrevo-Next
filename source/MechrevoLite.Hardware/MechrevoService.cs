@@ -4643,6 +4643,26 @@ public class MechrevoService
 			verifyDetail = "UXTU 口径：不回读（命令被 SMU 接受即视为已下发）";
 			Logger.WriteError("[smu] Wujie 应用（UXTU 口径）：PL1=" + pl1 + "W · PL2=" + pl2 + "W · tctl=" + tempWallC
 				+ "℃ · 命令已接受，不做回读校验");
+			// 判定口径不回转，但把 PM 表回读打进日志：否则"写了但没生效"在日志里看不出来。
+			try
+			{
+				System.Threading.Thread.Sleep(150);
+				PawnIO.SmuPowerSnapshot wujieSnap = smu.GetPowerSnapshot();
+				if (wujieSnap != null)
+				{
+					Logger.WriteError("[smu] Wujie 回读（仅供诊断，不参与判定）：slow=" + (int)Math.Round(wujieSnap.Slow)
+						+ "W · fast=" + (int)Math.Round(wujieSnap.Fast) + "W"
+						+ "（本次目标 PL1=" + pl1 + "W / PL2=" + pl2 + "W）");
+				}
+				else
+				{
+					Logger.WriteError("[smu] Wujie 回读失败（PM 表读不到）⇒ 命令已接受但无法确认");
+				}
+			}
+			catch (Exception exWujieRb)
+			{
+				Logger.WriteError("[smu] Wujie 回读异常：" + exWujieRb.GetType().Name + " " + exWujieRb.Message);
+			}
 		}
 		else
 		{
