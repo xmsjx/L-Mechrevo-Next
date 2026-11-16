@@ -33,13 +33,14 @@ internal static class AcpiDisplaySwitch
             _localDimmingSupport = supported;
             MechrevoLite.AppConfig.Set("ec_miniled_supported", supported ? 1 : 0);
             MechrevoLite.AppConfig.Flush();
+            Logger.WriteLine("[acpi-display] EC MiniLED 支持=" + supported + " raw=0x" + raw.ToString("X2"));
+            return supported;
         }
-        else
-        {
-            _localDimmingSupport = MechrevoLite.AppConfig.Get("ec_miniled_supported", 0) != 0;
-        }
-        Logger.WriteLine("[acpi-display] EC MiniLED 支持=" + _localDimmingSupport + " raw=0x" + raw.ToString("X2"));
-        return _localDimmingSupport.Value;
+        // 读不到（驱动未装/通道暂不可用）不写缓存：否则"读不到"会被固化成"不支持"，
+        // 等通道恢复后界面还是灰的，必须重启才认。
+        bool fallback = MechrevoLite.AppConfig.Get("ec_miniled_supported", 0) != 0;
+        Logger.WriteLineIfChanged("acpi-display-miniled", "[acpi-display] MiniLED 通道暂不可读 ⇒ 按上次记录=" + fallback);
+        return fallback;
     }
 
     /// <summary>EC 路能力：查询 GetSetULong 0x50000000016，返回 0x55 为支持 OD。</summary>
@@ -56,13 +57,13 @@ internal static class AcpiDisplaySwitch
             _lcdOverdriveSupport = supported;
             MechrevoLite.AppConfig.Set("ec_od_supported", supported ? 1 : 0);
             MechrevoLite.AppConfig.Flush();
+            Logger.WriteLine("[acpi-display] EC OD 支持=" + supported + " raw=0x" + value.ToString("X"));
+            return supported;
         }
-        else
-        {
-            _lcdOverdriveSupport = MechrevoLite.AppConfig.Get("ec_od_supported", 0) != 0;
-        }
-        Logger.WriteLine("[acpi-display] EC OD 支持=" + _lcdOverdriveSupport + " raw=0x" + value.ToString("X"));
-        return _lcdOverdriveSupport.Value;
+        // 同上：通道不可读时不写缓存，等能读时再判。
+        bool fallback = MechrevoLite.AppConfig.Get("ec_od_supported", 0) != 0;
+        Logger.WriteLineIfChanged("acpi-display-od", "[acpi-display] OD 通道暂不可读 ⇒ 按上次记录=" + fallback);
+        return fallback;
     }
 
     internal static bool TrySetLocalDimming(bool on)
