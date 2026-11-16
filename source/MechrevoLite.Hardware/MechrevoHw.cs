@@ -900,7 +900,8 @@ public class MechrevoHw : IDisposable
 				Logger.WriteLineIfChanged("igpu-mux-legacy", "IgpuOnly hidden by default: no modern OemDisplayMode NVRAM (Legacy Dual-Mode / unknown chassis)");
 				return false;
 			}
-			if (CpuVendor.AmdDefaultsTwoGpuModes)
+			// 2026-11-16（机主决定）：50 系不再按「AMD 两模式平台」默认隐藏，改由能力位与后续判据决定。
+			if (CpuVendor.AmdDefaultsTwoGpuModes && DgpuGeneration != DgpuGenerationKind.Gen50)
 			{
 				Logger.WriteLineIfChanged("igpu-two-mode-default", "IgpuOnly hidden by default: AMD 6000/7x3x/7x4x family defaults to hybrid + dGPU only; user can force-show via igpu_only_ui=show");
 				return false;

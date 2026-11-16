@@ -1340,8 +1340,8 @@ public partial class OriginalStyleWindow : Window
                     return false;
                 }
                 MechrevoLite.Gpu.DgpuGenerationKind generation = MechrevoLite.Gpu.GpuGenerationProvider.Current().Generation;
-                return generation != MechrevoLite.Gpu.DgpuGenerationKind.Gen30
-                    && generation != MechrevoLite.Gpu.DgpuGenerationKind.Unknown;
+                // 2026-11-16（机主决定）：30 系不再隐藏无极限充；仍然排除识别不出独显的 Unknown。
+                return generation != MechrevoLite.Gpu.DgpuGenerationKind.Unknown;
             }
             catch
             {

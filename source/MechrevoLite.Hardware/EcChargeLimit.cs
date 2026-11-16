@@ -379,6 +379,7 @@ internal static class EcChargeLimit
 	}
 
 	// 2026-10-15（限充代系门控 · 用户原话「10系-30系用这个可能损坏硬件必须强制隐藏EC三档和滑块 只保留GCU路」）：
+	// 2026-11-16（机主决定）：30 系改为放开 EC 直写；10/16/20 系维持强制拦截。
 	// 判据选**安装器登记的 GCU 变体** HKLM\SOFTWARE\L-Mechrevo\GcuVariant —— 它直接编码代际
 	// （Select-GcuPayload.ps1：'1020' = legacy 10/16/20-series、'30' = 30-series），随程序集持久化，
 	// 硬件没连上也能判，且与 GCU 载荷选择同源。
@@ -425,11 +426,12 @@ internal static class EcChargeLimit
 				Logger.WriteLine("限充代系门控：读 GcuVariant 失败（按「不阻断」处理，零回归）：" + ex.Message);
 			}
 			string family = GcuVariantFamily.Resolve(variant);
-			blocked = family == "1020" || family == "30";
+			// 2026-11-16（机主决定）：30 系放开，只保留 10/16/20 系的强制拦截。
+			blocked = family == "1020";
 			_legacyGenerationCache = (blocked ? 1 : 0);
 			if (blocked)
 			{
-				Logger.WriteLine($"限充代系门控：GcuVariant={family} 属 10/16/20/30 系 ⇒ EC 直写方式判为不可用（规则 B：可能损坏硬件，只保留 GCU 路；⛔ 未写任何寄存器/注册表）");
+				Logger.WriteLine($"限充代系门控：GcuVariant={family} 属 10/16/20 系 ⇒ EC 直写方式判为不可用（规则 B：可能损坏硬件，只保留 GCU 路；⛔ 未写任何寄存器/注册表）");
 			}
 			return blocked;
 		}
