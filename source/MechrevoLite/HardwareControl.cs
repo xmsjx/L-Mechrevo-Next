@@ -524,6 +524,41 @@ public static class HardwareControl
 
 	public static LhmMonitor? lhm;
 
+	/// <summary>
+	/// 无界风扇占空比：EC 0x75B（主扇）/0x75C（副扇）原始值 0..200，除以 2 得到百分比。
+	/// 先走 ACPI 驱动（与转速同一条可用通道），读不到再退回本地寄存器读取；
+	/// 0xFF 是未映射/停转填充值，直接丢弃、不换算成 100%。
+	/// </summary>
+	internal static void ApplyWujieFanDuty(MechrevoHw hw)
+	{
+		try
+		{
+			if (AcpiDriverEc.TryReadByte(0x75B, out byte rawCpu) && AcpiDriverEc.TryReadByte(0x75C, out byte rawGpu))
+			{
+				if (rawCpu != 0xFF && rawGpu != 0xFF && rawCpu <= 200 && rawGpu <= 200)
+				{
+					hw.ApplyWujieFanDuty(Math.Clamp(rawCpu / 2, 0, 100), Math.Clamp(rawGpu / 2, 0, 100));
+					Logger.WriteLineIfChanged("wujie-ec-duty",
+						"[fan] 无界 EC 占空比（0x75B/0x75C）：主扇(CPU)=" + rawCpu + "/200 ⇒ " + (rawCpu / 2) + "%"
+						+ " · 副扇(GPU)=" + rawGpu + "/200 ⇒ " + (rawGpu / 2) + "%");
+					return;
+				}
+				Logger.WriteLineIfChanged("wujie-ec-duty-bad",
+					"[fan] 无界 EC 占空比不可用：0x75B=0x" + rawCpu.ToString("X2") + " · 0x75C=0x" + rawGpu.ToString("X2") + "（填充值/越界，不显示百分比）");
+				return;
+			}
+		}
+		catch
+		{
+		}
+		if (MechrevoLite.Hardware.WujieFanEc.TryReadState(out _, out int wjDuty1, out int wjDuty2,
+			out _, out _, out _, out _))
+		{
+			int wjCpuDuty = wjDuty1 >= 0 ? Math.Clamp(wjDuty1 * 100 / 200, 0, 100) : -1;
+			int wjGpuDuty = wjDuty2 >= 0 ? Math.Clamp(wjDuty2 * 100 / 200, 0, 100) : -1;
+			hw.ApplyWujieFanDuty(wjCpuDuty, wjGpuDuty);
+		}
+	}
 	private static readonly object lhmLock = new object();
 
 	private static CpuPowerSampler? cpuPowerSampler;
@@ -1690,13 +1725,7 @@ public static class HardwareControl
 						"[fan] 无界 EC 风扇转速：主扇(CPU)=" + (mainFanRpm >= 0 ? mainFanRpm + "rpm" : "读不到")
 						+ " · 副扇(GPU)=" + (secondaryFanRpm >= 0 ? secondaryFanRpm + "rpm" : "读不到")
 						+ "（EC 为准，覆盖 GCU FanInfo）");
-					if (MechrevoLite.Hardware.WujieFanEc.TryReadState(out _, out int wjDuty1, out int wjDuty2,
-						out _, out _, out _, out _))
-					{
-						int wjCpuDuty = wjDuty1 >= 0 ? Math.Clamp(wjDuty1 * 100 / 200, 0, 100) : -1;
-						int wjGpuDuty = wjDuty2 >= 0 ? Math.Clamp(wjDuty2 * 100 / 200, 0, 100) : -1;
-						hw.ApplyWujieFanDuty(wjCpuDuty, wjGpuDuty);
-					}
+					ApplyWujieFanDuty(hw);
 				}
 				// 界面 RPM 行要求 FanInfo 新鲜 ⇒ 用 EC 值覆盖时也打一次时间戳（否则有值也不显示）
 				hw.MarkFanInfoReceived();
