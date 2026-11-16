@@ -1179,7 +1179,11 @@ public class KeyboardRgb : IDisposable
 
 	private void RunEffect(int mode, int generation)
 	{
-		AcquirePreciseTimer();
+		bool preciseTimer = mode != 9;   // 静态灯效不需要 1ms 定时器：省电、省 CPU
+		if (preciseTimer)
+		{
+			AcquirePreciseTimer();
+		}
 		try
 		{
 			switch (mode)
@@ -1218,7 +1222,10 @@ public class KeyboardRgb : IDisposable
 		}
 		finally
 		{
-			ReleasePreciseTimer();
+			if (preciseTimer)
+			{
+				ReleasePreciseTimer();
+			}
 		}
 	}
 
@@ -1251,16 +1258,41 @@ public class KeyboardRgb : IDisposable
 		}
 	}
 
-	private void FrameLoop(int generation, Action<byte[]> fill, Func<double> tick)
+	private void FrameLoop(int generation, Action<byte[]> fill, Func<double> tick, bool staticFrame = false)
 	{
 		double num = 0.0;
 		byte[] array = new byte[512];
+		byte[] lastSent = null;
 		int frames = 0;
+		long lastSendTicks = Stopwatch.GetTimestamp();
 		while (!_stop && generation == _generation)
 		{
 			Array.Clear(array);
 			fill(array);
-			SendFrame(array);
+			if (staticFrame)
+			{
+				// 静态灯效：画面不变就不重发，最多每 5 秒补一帧防设备休眠/重连丢帧；不空转、不占精确定时器。
+				bool changed = lastSent == null || !array.AsSpan().SequenceEqual(lastSent);
+				bool keepAlive = Stopwatch.GetElapsedTime(lastSendTicks).TotalSeconds >= 5.0;
+				if (changed || keepAlive)
+				{
+					SendFrame(array);
+					if (changed)
+					{
+						lastSent = (byte[])array.Clone();
+					}
+					lastSendTicks = Stopwatch.GetTimestamp();
+					frames++;
+				}
+				Thread.Sleep(250);
+				continue;
+			}
+			// 动画灯效：与上一帧完全一致就不重复下发，省 USB 与 CPU，画面无差别。
+			if (lastSent == null || !array.AsSpan().SequenceEqual(lastSent))
+			{
+				SendFrame(array);
+				lastSent = (byte[])array.Clone();
+			}
 			frames++;
 			num += tick();
 			PaceFrame(TargetFps);
@@ -1925,7 +1957,7 @@ public class KeyboardRgb : IDisposable
 				Color color = StaticColors[num3];
 				SetKey(buf, Keymap[i].Offset, color.R, color.G, color.B);
 			}
-		}, () => 1.0);
+		}, () => 1.0, staticFrame: true);
 	}
 
 	private static int HorizontalZoneForRow(int row, int zoneCount)

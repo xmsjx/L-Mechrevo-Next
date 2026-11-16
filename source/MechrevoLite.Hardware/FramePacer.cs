@@ -30,7 +30,10 @@ internal sealed class FramePacer
 		{
 			_spinMarginTicks = frequency / 1000;
 		}
-		long num3 = Math.Min(_spinMarginTicks, num2);
+		// 自旋上限固定 2ms：历史版本允许涨到半帧（16ms@30fps），一旦被调度抖动抬高就会
+		// 每帧忙等十几毫秒 ⇒ 后台 CPU 飙高（独立 HID 软件没有这个问题）。上限之后 CPU 有界。
+		long spinCap = frequency / 500;
+		long num3 = Math.Min(_spinMarginTicks, Math.Min(num2, spinCap));
 		long num4 = _nextTick - timestamp;
 		if (num4 > num3)
 		{
@@ -44,7 +47,7 @@ internal sealed class FramePacer
 				long num7 = num6 - num5;
 				if (num7 > _spinMarginTicks)
 				{
-					_spinMarginTicks = num7;
+					_spinMarginTicks = Math.Min(num7, frequency / 500);
 				}
 			}
 		}
