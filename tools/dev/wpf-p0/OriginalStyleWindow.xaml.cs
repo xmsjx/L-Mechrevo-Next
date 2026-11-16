@@ -796,8 +796,14 @@ public partial class OriginalStyleWindow : Window
                 ? customs[0]
                 : customs[(current + 1) % customs.Count];
             MechrevoLite.Mode.PerfApplyOutcome? outcome = await perf.ActivateAsync(next.Id, "custom-button-cycle", forceParameters: true);
-            StatusText.Text = (outcome?.AnyFailed == false ? WpfStrings.L("已切换自定义配置：", "Custom profile switched: ")
+            bool switched = outcome?.AnyFailed == false;
+            StatusText.Text = (switched ? WpfStrings.L("已切换自定义配置：", "Custom profile switched: ")
                 : WpfStrings.L("切换自定义配置失败：", "Custom profile switch failed: ")) + (next.UserName ?? next.Id);
+            if (switched)
+            {
+                // 物理键看不到窗口，切到哪个配置要靠 OSD 说清楚。
+                OsdService.Show(string.Empty, WpfStrings.OsdPerformance, next.UserName ?? next.Id);
+            }
             return true;
         }
         return false;
