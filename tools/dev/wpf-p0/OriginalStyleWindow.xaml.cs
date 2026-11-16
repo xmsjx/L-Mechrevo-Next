@@ -7208,18 +7208,16 @@ public partial class OriginalStyleWindow : Window
         // 星耀风扇转速已由后端的 2.5 秒常驻采样泵统一回填，界面心跳不再直读硬件。
         bool noDgpu = hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
         // 核显机型（无界/星耀这类 APU 本）也要显示显卡行：温度/占用/风扇都来自核显，
-        // 只有确实没有任何显卡数据时才隐藏。
         bool igpuSensorPresent = hw.WujieSmuApu || hw.SmuCustomApu;
-        GpuStat.Visibility = (noDgpu && !igpuSensorPresent) ? Visibility.Collapsed : Visibility.Visible;
-        CpuStat.Text = SensorLine(cpu: true);
-        GpuStat.Text = SensorLine(cpu: false);
+        // 核显模式下独显会从总线上消失（此时也是 NoDgpu），但机型仍有独显 ⇒ 不能当核显本处理。
+        GpuStat.Visibility = (noDgpu && !hw.DgpuEverPresent && !igpuSensorPresent) ? Visibility.Collapsed : Visibility.Visible;
         using (UiTrace.Phase("mini-igpu"))
         {
             // 显卡模式/核显省电状态的读取走 ACPI/WMI，单次 0.2~0.3 秒：
             // ① 核显机型（没有显卡模式可切）根本不读 —— 那行本来就不会显示，读了纯属白花时间；
             // ② 能切的机器也不必频繁读：模式只会因为用户/其它程序切档而变化，按 30 秒兜底轮询，
             //    真正的切换动作发生在 LM 自己手里，那些路径会直接调 VisualiseIgpuSaving() 立即刷新。
-            bool igpuOnlyMachine = hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
+            bool igpuOnlyMachine = hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu && !hw.DgpuEverPresent;
             bool gpuModeSwitchable = !igpuOnlyMachine && (hw.SupportsGpuHotSwap || hw.CanOfferGpuModeSwitch);
             if ((gpuModeSwitchable || UiQaShowAll.Enabled)
                 && Environment.TickCount64 - _lastIgpuVisualMs >= 30000)
@@ -8205,7 +8203,7 @@ public partial class OriginalStyleWindow : Window
         bool directSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", hw?.SupportsDgpuDirect ?? false);
         bool gpuSwitchSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("DgpuDirect") || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly") || L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap"))));
             GpuDirectButton.Visibility = directSupported ? Visibility.Visible : Visibility.Collapsed;
-            bool dgpuPresent = hw != null && hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
+            bool dgpuPresent = hw != null && (hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu || hw.DgpuEverPresent);
             bool noSwitchButHasDgpu = !gpuSwitchSupported && dgpuPresent;
             // 核显机型（无界/星耀 APU）：没有显卡模式可切，但显卡传感器（温度/占用/副扇转速）就在这一行，
             // 所以这一行照样显示，只把三档切换按钮藏起来（标题退化成「显卡」）。
@@ -8215,7 +8213,7 @@ public partial class OriginalStyleWindow : Window
                 || umiGpuMode || noSwitchButHasDgpu;
             // 本机没有独显（核显机型）：这一段只保留「显卡」标题行与右侧传感器（温度/占用/副扇转速），
             // 三档显卡模式按钮一律不显示 —— 没有可切的目标。
-            bool igpuOnlyMachine = hw != null && hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
+            bool igpuOnlyMachine = hw != null && hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu && !hw.DgpuEverPresent;
             bool gpuModeRowVisible = gpuSwitchSupported && !igpuOnlyMachine;
             GpuSection.Visibility = (!nucNoGpuSwitch
                 && (igpuOnlyMachine || (!gpuRowHidden && (gpuModeSwitchable || igpuSensorPresent || dgpuPresent))))

@@ -835,6 +835,40 @@ public class MechrevoHw : IDisposable
 
 	public DgpuGenerationKind DgpuGeneration => GpuGenerationProvider.Current().Generation;
 
+	private bool? _dgpuEverPresent;
+
+	/// <summary>
+	/// 本机是否有独立显卡（含"核显模式下独显被关掉、枚举不到"的情况）。
+	/// <para>只看当前枚举是不够的：核显模式下独显会从总线上消失，这时 <see cref="DgpuGeneration" /> 也会是 NoDgpu，
+	/// 若据此当成"核显机型"就会把显卡模式整段藏掉、再也切不回独显。所以一旦见过独显就记下来，之后一直按有独显处理。</para>
+	/// </summary>
+	public bool DgpuEverPresent
+	{
+		get
+		{
+			if (_dgpuEverPresent.HasValue)
+			{
+				return _dgpuEverPresent.Value;
+			}
+			bool present;
+			if (DgpuGeneration != DgpuGenerationKind.NoDgpu)
+			{
+				present = true;
+				if (MechrevoLite.AppConfig.Get("dgpu_ever_present", 0) == 0)
+				{
+					MechrevoLite.AppConfig.Set("dgpu_ever_present", 1);
+					Logger.WriteLine("[gpu] 首次识别到独立显卡 ⇒ 记为有独显机型（核显模式下也不再当作核显本）");
+				}
+			}
+			else
+			{
+				present = MechrevoLite.AppConfig.Get("dgpu_ever_present", 0) != 0;
+			}
+			_dgpuEverPresent = present;
+			return present;
+		}
+	}
+
 	/// <summary>
 	/// 2026-10-09（igpugate）：auto 口径下「核显模式」的**硬件权威结论**（三态）：
 	///   * <c>true</c>  —— 能力位明确说支持。**本批起 40 系的 <c>iGPUModeOnlySupport</c> 也算数**
