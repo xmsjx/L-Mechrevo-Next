@@ -2,10 +2,16 @@ L-Mechrevo 打包须知（约定）
 ================================================================================
 最后更新：2026-10-13
 
-【一、NoGCU 版：已转正为默认包（2026-11-16 机主决定）】
+【一、默认包（不带 GCU 载荷）：2026-11-16 起转正】
+
+⭐ 包名规则（2026-11-16 机主决定，覆盖此前写法）：
+- 默认包（不带 GCU 载荷）= `LM-<版本>-setup.exe` —— 文件名与界面都**不再标注 NoGCU**。
+- 完整包（带 GCU 载荷）= `LM-<版本>-full-setup.exe` —— 只有需要时才打，加 full 后缀。
+- 宝龙达变体 = `LM-<版本>-baolongda-setup.exe`；不带载荷的中间变体 = `LM-<版本>-nopayload-setup.exe`（同一个 iss 的 define 分支）。
+- 安装器里的 AppVerName / UninstallDisplayName 也不再带 (NoGCU)。
 - ⭐ **2026-11-16 起：`install_script_nogcu.iss` 就是正式默认包**（不带任何 GCU 载荷）。
   机主原话：「NoGCU 包转正，以后默认就是不带 GCU 载荷的」。未特别说明时打包就打它。
-- 产物：`installer-src\Output\LM-<版本>-NoGCU-setup.exe`
+- 产物：`installer-src\Output\LM-<版本>-setup.exe`（文件名不带 NoGCU）
   （beta23.8.0 起版本号与主程序同步；此前版本停在各次打包时的号上）。
 - 带 GCU 载荷的 `install_script.iss` 不再默认打包；需要时由机主明确要求再打。
 - 增量更新包（只含变更文件，供覆盖安装）在 `D:\openLM\dist\update\`
