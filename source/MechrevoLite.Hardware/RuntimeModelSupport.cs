@@ -5,7 +5,39 @@ namespace MechrevoLite.Hardware;
 
 public static class RuntimeModelSupport
 {
+	// 这个判定会被界面心跳、门控、诊断在 1 秒内调用很多次；每次都要开设备/读注册表，
+	// 设备打不开时还会刷同一个错误。结论 5 秒内复用，日志按状态变化只记一次。
+	private const int CacheTtlMs = 5000;
+	private static readonly object CacheGate = new();
+	private static SupportDecision? _cached;
+	private static long _cachedAt;
+
 	public static SupportDecision Current()
+	{
+		lock (CacheGate)
+		{
+			long now = Environment.TickCount64;
+			if (_cached != null && now - _cachedAt < CacheTtlMs)
+			{
+				return _cached;
+			}
+			_cached = CurrentCore();
+			_cachedAt = now;
+			return _cached;
+		}
+	}
+
+	/// <summary>丢掉缓存（硬件状态变化、驱动刚装好、连接状态变化后调用）。</summary>
+	public static void InvalidateCache()
+	{
+		lock (CacheGate)
+		{
+			_cached = null;
+			_cachedAt = 0;
+		}
+	}
+
+	private static SupportDecision CurrentCore()
 	{
 		string text = ModelOverrideStateMachine.EnvironmentOverride();
 		if (text != null)
@@ -72,7 +104,7 @@ public static class RuntimeModelSupport
 			}
 			if (!AcpiDriverReadTransport.TryOpen(out AcpiDriverReadTransport transport, out string error) || transport == null)
 			{
-				Logger.WriteLine("Model identity unavailable: " + error);
+				Logger.WriteErrorIfChanged("model-identity", "Model identity unavailable: " + error);
 				// ⭐⭐ 2026-10-16（0.291.8.1 · 修「首次安装的刷新效果不明显」的根因之一）：GCU 没连上时
 				// **不再直接判 Unparsable**。首次安装的真实时序是：应用先起来 → GCU 服务刚注册/刚启动
 				// （真机日志里 ServiceReady=0）→ MQTT 还没连上 ⇒ IsServiceServed()=false ⇒ 整机只读、

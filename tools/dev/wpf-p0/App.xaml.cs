@@ -27,6 +27,19 @@ public partial class App : Application
         // GCU 预热窗口：首次安装本程序 / 首次装载 GCU / 从 EC 切回 GCU 后 5 分钟内，
         // GCU 未就绪属正常，不作为故障上报。
         L_Mechrevo.WpfP0.Services.WpfBackend.BeginGcuWarmupOnStartup();
+        // ACPIDriver 自愈：装机目录里带着驱动文件、但系统里设备打不开时，后台装一次（EC 通道全靠它）。
+        // 放后台线程执行，安装/等待设备就绪不会卡启动；失败只写日志。
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                L_Mechrevo.WpfP0.Services.WpfBackend.EnsureAcpiDriverInBackground();
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteError("[acpi-drv] 自愈异常（已吞掉）：" + ex.GetType().Name + " " + ex.Message);
+            }
+        });
         // 空闲时预热一次摄像头设备探测（只读枚举），避免首次打开开关列表才现探测。
         Dispatcher.BeginInvoke(new Action(() =>
         {

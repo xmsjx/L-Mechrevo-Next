@@ -223,9 +223,20 @@ public partial class MainWindow : Window
         }
         else if (connected || nonGcu)
         {
-            text = WpfStrings.BackendNonGcuReady;
-            color = "#4ADE80";
-            tip = WpfStrings.L("本机后端已就绪（GCU 未连接）", "Local backend ready (GCU not connected)");
+            // EC/本地后端要靠 ACPIDriver 才能读写；驱动没装时不能显示「已就绪」。
+            if (!L_Mechrevo.WpfP0.Services.WpfBackend.AcpiDriverAvailable)
+            {
+                text = WpfStrings.BackendNonGcuNotReady;
+                color = "#F59E0B";
+                tip = WpfStrings.L("EC 通道不可用：ACPIDriver（UWACPIDriver）未安装或未加载；安装目录已带驱动，程序会尝试自动安装",
+                    "EC channel unavailable: ACPIDriver missing; the app will retry installation");
+            }
+            else
+            {
+                text = WpfStrings.BackendNonGcuReady;
+                color = "#4ADE80";
+                tip = WpfStrings.L("本机后端已就绪（GCU 未连接）", "Local backend ready (GCU not connected)");
+            }
         }
         else
         {

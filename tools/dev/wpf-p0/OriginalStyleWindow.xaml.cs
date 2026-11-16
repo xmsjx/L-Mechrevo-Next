@@ -4958,7 +4958,16 @@ public partial class OriginalStyleWindow : Window
             catch
             {
             }
-            BackendLine.Text = WpfStrings.BackendNonGcuReady + " · " + WpfStrings.L("EC 本地模式（GCU 未连接）", "EC local mode (GCU unavailable)");
+            bool ecChannelReady = L_Mechrevo.WpfP0.Services.WpfBackend.AcpiDriverAvailable;
+            BackendLine.Text = ecChannelReady
+                ? WpfStrings.BackendNonGcuReady + " · " + WpfStrings.L("EC 本地模式（GCU 未连接）", "EC local mode (GCU unavailable)")
+                : WpfStrings.BackendNonGcuNotReady + " · " + WpfStrings.L("EC 通道不可用（ACPIDriver 未安装）", "EC channel unavailable (ACPIDriver missing)");
+            if (!ecChannelReady)
+            {
+                // 驱动缺失时 EC-only 只是"界面先起来"，读写全在失败兜底；如实标未就绪并说明下一步。
+                Logger.WriteError("[gcu-ec] 注意：ACPIDriver 设备打不开 ⇒ EC-only 模式下 EC 读写会全部失败；"
+                    + "安装目录已带驱动，见 [acpi-drv] 日志。");
+            }
             try
             {
                 MechrevoLite.HardwareControl.EnableLocalMonitoring();
@@ -4972,8 +4981,13 @@ public partial class OriginalStyleWindow : Window
             EnsureEcKeyboardReady();
             ApplyCapabilities();
             SyncEcKeyboardSwitch();
-            SetBackendStatus(WpfStrings.BackendNonGcuReady, "#4ADE80",
-                WpfStrings.L("EC 本地模式已就绪（无需 GCU）", "EC local mode ready (GCU not required)"));
+            SetBackendStatus(
+                ecChannelReady ? WpfStrings.BackendNonGcuReady : WpfStrings.BackendNonGcuNotReady,
+                ecChannelReady ? "#4ADE80" : "#F59E0B",
+                ecChannelReady
+                    ? WpfStrings.L("EC 本地模式已就绪（无需 GCU）", "EC local mode ready (GCU not required)")
+                    : WpfStrings.L("EC 通道不可用：ACPIDriver 未安装或未加载；安装目录已带驱动，程序会尝试自动安装",
+                        "EC channel unavailable: ACPIDriver missing; the app will retry installation"));
             BackendReady?.Invoke();
             _ = RestoreGpuOverclockOnStartupAsync();
             _backendRetryTimer.Stop();
@@ -7626,6 +7640,14 @@ public partial class OriginalStyleWindow : Window
         }
         if (_backendRoute == BackendRoute.Ec)
         {
+            // EC 通道全靠 ACPIDriver；驱动没装/没加载时不能说「已就绪」，否则界面绿着、功能全在失败。
+            if (!L_Mechrevo.WpfP0.Services.WpfBackend.AcpiDriverAvailable)
+            {
+                SetBackendStatus(WpfStrings.BackendNonGcuNotReady, "#F59E0B",
+                    WpfStrings.L("EC 通道不可用：ACPIDriver（UWACPIDriver）未安装或未加载；安装目录里已带驱动，程序会尝试自动安装，装好后此指示会自动变绿",
+                        "EC channel unavailable: ACPIDriver is not installed or loaded; the app will retry installation"));
+                return;
+            }
             SetBackendStatus(WpfStrings.BackendNonGcuReady, "#4ADE80",
                 WpfStrings.L("EC 本地模式已就绪（无需 GCU）", "EC local mode ready (GCU not required)"));
             return;

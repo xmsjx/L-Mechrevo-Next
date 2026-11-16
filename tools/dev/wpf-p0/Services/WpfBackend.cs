@@ -223,6 +223,19 @@ internal static class WpfBackend
     /// <summary>当前 GCU 是否真的连上（预热豁免只适用于「连上但功能未就绪」）。</summary>
     internal static bool GcuConnectedNow => Hw?.IsGcuConnected == true;
 
+    // ── ACPIDriver（EC 通道）可用性与自愈 ──
+    /// <summary>ACPIDriver 设备是否可用（EC 通道的前提）。</summary>
+    internal static bool AcpiDriverAvailable => MechrevoLite.Hardware.AcpiDriverInstaller.IsDeviceAvailable();
+
+    /// <summary>装机目录带着驱动文件时，后台尝试把驱动装上（失败只记日志，不弹窗）。</summary>
+    internal static void EnsureAcpiDriverInBackground()
+    {
+        MechrevoLite.Hardware.AcpiDriverInstaller.EnsureInstalled(force: false, out _);
+    }
+
+    /// <summary>诊断用：ACPIDriver 状态一行。</summary>
+    internal static string AcpiDriverDetail => MechrevoLite.Hardware.AcpiDriverInstaller.Describe();
+
     /// <summary>GCU 服务登记在、但可执行载荷缺失（登记残留，写入无人应答）。</summary>
     internal static bool GcuPayloadMissing => !MachineIdentity.Collect().GcuPayloadPresent;
 
