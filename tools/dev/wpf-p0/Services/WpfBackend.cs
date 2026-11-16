@@ -220,6 +220,9 @@ internal static class WpfBackend
     /// <summary>预热窗口剩余秒数。</summary>
     internal static int GcuWarmupRemainingSeconds => MechrevoLite.Hardware.GcuWarmup.RemainingSeconds;
 
+    /// <summary>当前 GCU 是否真的连上（预热豁免只适用于「连上但功能未就绪」）。</summary>
+    internal static bool GcuConnectedNow => Hw?.IsGcuConnected == true;
+
     /// <summary>GCU 服务登记在、但可执行载荷缺失（登记残留，写入无人应答）。</summary>
     internal static bool GcuPayloadMissing => !MachineIdentity.Collect().GcuPayloadPresent;
 

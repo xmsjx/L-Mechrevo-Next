@@ -402,9 +402,11 @@ public partial class OriginalStyleWindow : Window
                 Logger.WriteLine("[startup] startup 参数：抑制错误 Toast：" + message);
                 return;
             }
-            if (L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupActive)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupActive && L_Mechrevo.WpfP0.Services.WpfBackend.GcuConnectedNow)
             {
-                // 预热期内 GCU 功能下发失败多为服务端未就绪，不弹错误提示，只留日志。
+                // 预热期（首次装载 GCU / 带 GCU 包装 LM / 从 EC 切回 GCU）功能位可能还没报齐，
+                // 下发失败多为「功能未就绪」，不弹错误提示，只留日志。
+                // ⚠️ 只对「GCU 已连上」的预热期生效；连不上不适用预热。
                 Logger.WriteLine("[gcu-warmup] 预热期抑制错误 Toast（" + L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupReason + "）：" + message);
                 return;
             }
@@ -7568,20 +7570,7 @@ public partial class OriginalStyleWindow : Window
                 string reason = _backendHost.TimedOut
                     ? WpfStrings.UpdateTimeoutStatus
                     : _backendHost.LastError;
-                // 预热窗口内（首次安装本程序 / 首次装载 GCU / 刚切回 GCU）GCU 服务端常用启动慢，
-                // 连不上不计数、不判「不可用」、不据此切 EC，也不打红色失败。
-                bool warmingUp = L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupActive;
-                if (warmingUp)
-                {
-                    SetBackendStatus(WpfStrings.BackendGcuDisconnected, "#F59E0B",
-                        WpfStrings.L("GCU 正在启动（预热期，最多 5 分钟）", "GCU is starting (warm-up, up to 5 minutes)"));
-                    BackendLine.Text = WpfStrings.L("GCU 启动中，稍候自动重试…", "GCU starting; retrying automatically…");
-                    Logger.WriteLine("[gcu-warmup] GCU 尚未就绪（" + L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupReason
-                        + " · 剩余 " + L_Mechrevo.WpfP0.Services.WpfBackend.GcuWarmupRemainingSeconds + " 秒）⇒ 不计数、不切 EC：" + reason);
-                    _backendProbe = null;
-                    _backendRetryTimer.Start();
-                    return;
-                }
+                // ⛔ 连不上不走预热豁免：预热窗口只覆盖「GCU 能连上、但功能位/档位表还没报齐」的情况。
                 SetBackendStatus(WpfStrings.BackendGcuDisconnected, "#EF4444", WpfStrings.BackendGcuDisconnectedTip);
                 BackendLine.Text = reason;
                 _backendProbe = null;
