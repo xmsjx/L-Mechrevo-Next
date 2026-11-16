@@ -389,6 +389,24 @@ public class MechrevoService
 
 	public async Task<ModeSwitchResult> SwitchMode(int mode)
 	{
+		// 诊断：记录"谁要求切档"（只记前 3 帧，避免日志噪音），用于定位"自定义被弹回平衡"。
+		try
+		{
+			System.Diagnostics.StackTrace trace = new System.Diagnostics.StackTrace(1, false);
+			System.Text.StringBuilder frames = new System.Text.StringBuilder();
+			for (int i = 0; i < trace.FrameCount && i < 3; i++)
+			{
+				System.Reflection.MethodBase? m = trace.GetFrame(i)?.GetMethod();
+				if (m != null)
+				{
+					frames.Append(i == 0 ? "" : " ← ").Append(m.DeclaringType?.Name).Append('.').Append(m.Name);
+				}
+			}
+			Logger.WriteLine("[mode-switch] SwitchMode(" + mode + ") 调用来源=" + frames);
+		}
+		catch
+		{
+		}
 		CancellationTokenSource requestCts = new CancellationTokenSource();
 		Interlocked.Exchange(ref _modeSwitchCts, requestCts)?.Cancel();
 		bool lockTaken = false;
