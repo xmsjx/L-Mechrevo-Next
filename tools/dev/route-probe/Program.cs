@@ -149,7 +149,8 @@ internal static class Program
             {
                 Console.WriteLine("  " + line);
             }
-            bool ok = selfTest.Contains("FAIL=0", StringComparison.Ordinal);
+            bool backoffOk = RunBackoffSelfTest();
+            bool ok = backoffOk && selfTest.Contains("FAIL=0", StringComparison.Ordinal);
             Console.WriteLine();
             Console.WriteLine(ok ? "[RESULT] 规则矩阵自测全部通过 ✅（只读，无硬件动作）"
                                  : "[RESULT] ⚠️ 规则矩阵自测存在失败项，见上方 ✗");
@@ -374,6 +375,37 @@ internal static class Program
         return target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public)?.GetValue(target);
     }
 
+    /// <summary>读取失败阶梯退避的状态机自检（反射调用 Core 内部实现；纯内存、不碰硬件）。</summary>
+    private static bool RunBackoffSelfTest()
+    {
+        try
+        {
+            Type? backoff = System.Reflection.Assembly.Load("MechrevoLite.Core")
+                ?.GetType("MechrevoLite.Hardware.ReadFailureBackoff");
+            if (backoff == null)
+            {
+                Console.WriteLine("[backoff] 自检失败：未找到 ReadFailureBackoff");
+                return false;
+            }
+            var log = new System.Collections.Generic.List<string>();
+            backoff.GetMethod("RunSelfTest", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public)
+                ?.Invoke(null, new object[] { log });
+            Console.WriteLine();
+            Console.WriteLine("== 读取失败阶梯退避自检 ==");
+            foreach (string line in log)
+            {
+                Console.WriteLine("  " + line);
+            }
+            bool ok = log.Count > 0 && !log.Exists(l => l.Contains("FAIL", StringComparison.Ordinal));
+            Console.WriteLine(ok ? "[RESULT] 阶梯退避自检通过 ✅" : "[RESULT] ⚠️ 阶梯退避自检存在失败项");
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("[backoff] 自检异常: " + ex.GetType().Name + " " + ex.Message);
+            return false;
+        }
+    }
     private static object? GetStaticProperty(Type type, string name)
     {
         return type.GetProperty(name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic)?.GetValue(null);

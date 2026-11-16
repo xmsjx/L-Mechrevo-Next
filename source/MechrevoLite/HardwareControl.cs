@@ -545,6 +545,11 @@ public static class HardwareControl
 	}
 	internal static void ApplyWujieFanDuty(MechrevoHw hw, int mainRpm, int secondaryRpm)
 	{
+		// 这一路失败时会退到更贵的多字节读取：反复失败同样走阶梯退避。
+		if (MechrevoLite.Hardware.ReadFailureBackoff.ShouldSkip("wujie-ec-duty"))
+		{
+			return;
+		}
 		try
 		{
 			if (AcpiDriverEc.TryReadByte(0x75B, out byte rawCpu) && AcpiDriverEc.TryReadByte(0x75C, out byte rawGpu))
@@ -569,6 +574,7 @@ public static class HardwareControl
 					Logger.WriteLineIfChanged("wujie-ec-duty",
 						"[fan] 无界 EC 占空比（0x75B/0x75C）：主扇(CPU)=" + rawCpu + "/200 ⇒ " + (rawCpu / 2) + "%"
 						+ " · 副扇(GPU)=" + rawGpu + "/200 ⇒ " + (rawGpu / 2) + "%");
+					MechrevoLite.Hardware.ReadFailureBackoff.NoteSuccess("wujie-ec-duty");
 					return;
 				}
 				Logger.WriteLineIfChanged("wujie-ec-duty-bad",
@@ -582,9 +588,14 @@ public static class HardwareControl
 		if (MechrevoLite.Hardware.WujieFanEc.TryReadState(out _, out int wjDuty1, out int wjDuty2,
 			out _, out _, out _, out _))
 		{
+			MechrevoLite.Hardware.ReadFailureBackoff.NoteSuccess("wujie-ec-duty");
 			int wjCpuDuty = wjDuty1 >= 0 ? Math.Clamp(wjDuty1 * 100 / 200, 0, 100) : -1;
 			int wjGpuDuty = wjDuty2 >= 0 ? Math.Clamp(wjDuty2 * 100 / 200, 0, 100) : -1;
 			hw.ApplyWujieFanDuty(wjCpuDuty, wjGpuDuty);
+		}
+		else
+		{
+			MechrevoLite.Hardware.ReadFailureBackoff.NoteFailure("wujie-ec-duty");
 		}
 	}
 	private static readonly object lhmLock = new object();
@@ -1727,20 +1738,32 @@ public static class HardwareControl
 			// 参考 OpenRevo：Fan RPM 直接轮询 EC（CPU 0x0464/0x0465，GPU 0x046C/0x046B），
 			// GCU FanInfo 缺失或超过 5 秒没更新时作为只读备路，避免界面停在旧转速。
 			bool fanInfoStale = !hw.IsFanInfoFresh(TimeSpan.FromSeconds(5));
+			// 反复读失败（设备缺失/驱动未就绪）时每拍重试会让一次失败付几百毫秒代价：
+			// 走阶梯退避，退避期内直接跳过这一路读取（成功一次即复位）。
 			if (!hw.WujieSmuApu && !hw.UsesBaolongda
 				&& (fanInfoStale || cpuFanRPM <= 0 || gpuFanRPM <= 0)
-				&& hw.TryReadGcuEcFanSpeeds(out int gcuCpuFanRpm, out int gcuGpuFanRpm))
+				&& !MechrevoLite.Hardware.ReadFailureBackoff.ShouldSkip("acpi-ec-fan"))
 			{
-				if (gcuCpuFanRpm > 0) cpuFanRPM = gcuCpuFanRpm;
-				if (gcuGpuFanRpm > 0) gpuFanRPM = gcuGpuFanRpm;
-				hw.ApplyGcuEcFanSpeeds(gcuCpuFanRpm, gcuGpuFanRpm);
-				Logger.WriteLineIfChanged("gcu-ec-fan",
-					"[fan] GCU FanInfo 缺失 ⇒ EC 只读兜底：CPU=" + gcuCpuFanRpm + "rpm/" + hw.CpuFanDuty + "% · GPU=" + gcuGpuFanRpm + "rpm/" + hw.GpuFanDuty + "%");
-			}
-			if (hw.WujieSmuApu)
-			{
-				if (hw.TryReadWujieEcFanSpeeds(out int mainFanRpm, out int secondaryFanRpm))
+				if (hw.TryReadGcuEcFanSpeeds(out int gcuCpuFanRpm, out int gcuGpuFanRpm))
 				{
+					MechrevoLite.Hardware.ReadFailureBackoff.NoteSuccess("acpi-ec-fan");
+					if (gcuCpuFanRpm > 0) cpuFanRPM = gcuCpuFanRpm;
+					if (gcuGpuFanRpm > 0) gpuFanRPM = gcuGpuFanRpm;
+					hw.ApplyGcuEcFanSpeeds(gcuCpuFanRpm, gcuGpuFanRpm);
+					Logger.WriteLineIfChanged("gcu-ec-fan",
+						"[fan] GCU FanInfo 缺失 ⇒ EC 只读兜底：CPU=" + gcuCpuFanRpm + "rpm/" + hw.CpuFanDuty + "% · GPU=" + gcuGpuFanRpm + "rpm/" + hw.GpuFanDuty + "%");
+				}
+				else
+				{
+					MechrevoLite.Hardware.ReadFailureBackoff.NoteFailure("acpi-ec-fan");
+				}
+			}
+			if (hw.WujieSmuApu && !MechrevoLite.Hardware.ReadFailureBackoff.ShouldSkip("wujie-ec-fan"))
+			{
+				bool wujieFanOk = hw.TryReadWujieEcFanSpeeds(out int mainFanRpm, out int secondaryFanRpm);
+				if (wujieFanOk)
+				{
+					MechrevoLite.Hardware.ReadFailureBackoff.NoteSuccess("wujie-ec-fan");
 					if (mainFanRpm >= 0)
 					{
 						cpuFanRPM = mainFanRpm;
@@ -1754,6 +1777,10 @@ public static class HardwareControl
 						+ " · 副扇(GPU)=" + (secondaryFanRpm >= 0 ? secondaryFanRpm + "rpm" : "读不到")
 						+ "（EC 为准，覆盖 GCU FanInfo）");
 					ApplyWujieFanDuty(hw, mainFanRpm, secondaryFanRpm);
+				}
+				else
+				{
+					MechrevoLite.Hardware.ReadFailureBackoff.NoteFailure("wujie-ec-fan");
 				}
 				// 界面 RPM 行要求 FanInfo 新鲜 ⇒ 用 EC 值覆盖时也打一次时间戳（否则有值也不显示）
 				hw.MarkFanInfoReceived();
@@ -3038,6 +3065,8 @@ public static class HardwareControl
 		_nextRebuildAtTicks = 0L;
 		Interlocked.Exchange(ref _samplingFailures, 0);
 		NvmlHelper.Reset();
+		// 手动恢复也清掉各通道的读取失败退避（含"本进程停用"）：这是唯一的人工自愈入口。
+		MechrevoLite.Hardware.ReadFailureBackoff.ResetAll();
 		Logger.WriteLine("本地功耗采样：手动重置（恢复尝试）");
 	}
 
