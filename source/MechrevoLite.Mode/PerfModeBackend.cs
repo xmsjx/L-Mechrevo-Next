@@ -190,7 +190,47 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 				value = clamped.ToString();
 			}
 		}
+		// EC 直连：显卡功耗/动态加速走本地 EC 通道（GCU 不在时 SetCustomDetail 必然失败）。
+		if (MechrevoLite.Hardware.GcuEcMode.IsEcMode && !_hw.IsGcuConnected
+			&& (wireKey == "GpuDynamicBoost" || wireKey == "GpuConfigurableTGPTarget" || wireKey == "GpuDynamicBoostSwitch"))
+		{
+			return Task.FromResult(ApplyEcGpuPower(wireKey, value));
+		}
 		return _service.SetCustomDetail(new Dictionary<string, string> { [wireKey] = value });
+	}
+
+	/// <summary>EC 直连下的显卡基础功耗/动态加速下发（三个字段一次写全，带读回校验）。</summary>
+	private bool ApplyEcGpuPower(string wireKey, string value)
+	{
+		try
+		{
+			PerfModeService? perf = PerfModeService.Instance;
+			PerfModeDefinition? mode = perf?.Find(perf.DisplayedModeId ?? string.Empty) ?? perf?.Find(perf.ActiveModeId ?? string.Empty);
+			PerfModeSettings settings = mode?.Settings ?? new PerfModeSettings();
+			int tgp = settings.GpuTgp.GetValueOrDefault();
+			int dbWatts = settings.GpuDynamicBoost.GetValueOrDefault();
+			bool dbOn = settings.GpuDynamicBoostOn == true;
+			if (wireKey == "GpuConfigurableTGPTarget" && int.TryParse(value, out int parsedTgp))
+			{
+				tgp = parsedTgp;
+			}
+			else if (wireKey == "GpuDynamicBoost" && int.TryParse(value, out int parsedDb))
+			{
+				dbWatts = parsedDb;
+			}
+			else if (wireKey == "GpuDynamicBoostSwitch")
+			{
+				dbOn = value == "1";
+			}
+			bool ok = EcGpuPower.TryApply(_hw, tgp, dbWatts, dbOn, out string detail);
+			Logger.WriteError("[perfmode] EC 直连显卡功耗应用 ok=" + ok + " · " + detail);
+			return ok;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[perfmode] EC 直连显卡功耗应用异常：" + ex.Message);
+			return false;
+		}
 	}
 
 	public async Task<bool> WriteFanCurveAsync(bool cpu, int[] duty, CancellationToken ct)
@@ -306,7 +346,7 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 	public async Task<bool> ApplyGpuOverclockAsync(bool on, int core, int memory, CancellationToken ct)
 	{
 		// 走的是厂商 MQTT LCHWOC 字段，必然失败（机主实测：核心滑块值恒 0）。
-		if (_hw.UsesBaolongda)
+		if (_hw.UsesBaolongda || (MechrevoLite.Hardware.GcuEcMode.IsEcMode && !_hw.IsGcuConnected))
 		{
 			int targetCore = (on ? core : 0);
 			int targetMemory = (on ? memory : 0);

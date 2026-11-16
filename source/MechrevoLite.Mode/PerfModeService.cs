@@ -795,6 +795,34 @@ internal sealed class PerfModeService
 		}
 	}
 
+	/// <summary>
+	/// EC 直连下的显卡超频与功耗下发：超频走 NVAPI P0 直写，基础功耗/动态加速走本地 EC（一次写全、带回读）。
+	/// </summary>
+	private async Task ApplyEcLocalGpuAsync(PerfModeDefinition mode, CancellationToken ct)
+	{
+		try
+		{
+			PerfModeSettings settings = mode.Settings;
+			bool ocOn = settings.GpuOverclockOn == true;
+			int core = ocOn ? settings.GpuCoreOffset.GetValueOrDefault() : 0;
+			int memory = ocOn ? settings.GpuMemoryOffset.GetValueOrDefault() : 0;
+			bool ocOk = await _backend.ApplyGpuOverclockAsync(ocOn, core, memory, ct).ConfigureAwait(continueOnCapturedContext: false);
+			bool powerOk = true;
+			string powerDetail = "未配置";
+			if (settings.GpuTgp.HasValue || settings.GpuDynamicBoost.HasValue || settings.GpuDynamicBoostOn.HasValue)
+			{
+				powerOk = MechrevoLite.Hardware.EcGpuPower.TryApply(_hw,
+					settings.GpuTgp.GetValueOrDefault(), settings.GpuDynamicBoost.GetValueOrDefault(),
+					settings.GpuDynamicBoostOn == true, out powerDetail);
+			}
+			Logger.WriteError("[perfmode] EC 直连本地应用：" + mode.Id + " 显卡超频=" + ocOk
+				+ "（core=" + core + " mem=" + memory + "MHz）· 显卡功耗/动态加速=" + powerOk + " · " + powerDetail);
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[perfmode] EC 直连本地显卡应用异常：" + ex.Message);
+		}
+	}
 	private async Task<PerfApplyOutcome?> ActivateLockedAsync(string modeId, string reason, bool forceParameters, CancellationToken ct)
 	{
 		PerfModeDefinition mode = Find(modeId);
@@ -916,6 +944,12 @@ internal sealed class PerfModeService
 			if (ecSkippedSteps.Count > 0 && outcome != null)
 			{
 				outcome = outcome with { Steps = outcome.Steps.Concat(ecSkippedSteps).ToArray() };
+			}
+			if (ecLocalOnly && mode.IsCustom)
+			{
+				// EC 直连：显卡超频（NVAPI P0 直写）与显卡基础功耗/动态加速（本地 EC）单独下发，
+				// 这两条本机有通道，不进 GCU 字段步。
+				await ApplyEcLocalGpuAsync(mode, ct).ConfigureAwait(continueOnCapturedContext: false);
 			}
 			if (ecLocalOnly && outcome != null)
 			{
