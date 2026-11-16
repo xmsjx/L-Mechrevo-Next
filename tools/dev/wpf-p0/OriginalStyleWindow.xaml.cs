@@ -2079,9 +2079,78 @@ public partial class OriginalStyleWindow : Window
         }
         if (MiniledHint != null)
         {
-            MiniledHint.Text = supported
+            // 不支持的提示不占位：后面的 Overdrive 开关要能自动左移。
+            MiniledHint.Text = string.Empty;
+            MiniledHint.Visibility = Visibility.Collapsed;
+        }
+        RefreshOverdriveSwitch();
+    }
+
+    private bool _syncingOverdrive;
+
+    /// <summary>切换 LCD Overdrive（本地 ACPI 通道）；成功即写进配置，重启后按配置恢复。</summary>
+    internal async Task<bool> SetOverdriveAsync(bool on)
+    {
+        bool ok = await SetLcdOverdriveAsync(on);
+        if (ok)
+        {
+            MechrevoLite.AppConfig.Set("lcd_overdrive_on", on ? 1 : 0);
+            MechrevoLite.AppConfig.Flush();
+        }
+        return ok;
+    }
+
+    private async void Overdrive_Click(object sender, RoutedEventArgs e)
+    {
+        if (_syncingOverdrive)
+        {
+            return;
+        }
+        bool target = OverdriveSwitch.IsChecked == true;
+        if (!SupportsLcdOverdrive)
+        {
+            StatusText.Text = WpfStrings.L("未检测到 Overdrive 通道，本次未下发", "LCD Overdrive channel not detected; nothing sent");
+            RefreshOverdriveSwitch();
+            return;
+        }
+        OverdriveSwitch.IsEnabled = false;
+        try
+        {
+            bool ok = await SetOverdriveAsync(target);
+            StatusText.Text = ok
+                ? WpfStrings.L(target ? "Overdrive 已开启" : "Overdrive 已关闭", target ? "LCD Overdrive on" : "LCD Overdrive off")
+                : WpfStrings.L("Overdrive 切换失败", "LCD Overdrive switch failed");
+        }
+        finally
+        {
+            OverdriveSwitch.IsEnabled = true;
+            RefreshOverdriveSwitch();
+        }
+    }
+
+    /// <summary>同步 Overdrive 这一格：常显（便于核对通道），状态取硬件当前值。</summary>
+    private void RefreshOverdriveSwitch()
+    {
+        if (OverdriveSwitch == null)
+        {
+            return;
+        }
+        bool supported = SupportsLcdOverdrive;
+        _syncingOverdrive = true;
+        try
+        {
+            OverdriveSwitch.IsChecked = LcdOverdrive;
+            OverdriveSwitch.IsEnabled = supported;
+        }
+        finally
+        {
+            _syncingOverdrive = false;
+        }
+        if (OverdriveHint != null)
+        {
+            OverdriveHint.Text = supported
                 ? string.Empty
-                : WpfStrings.L("未检测到分区控光通道（此行常显，仅用于核对）", "Local dimming channel not detected (row is always shown for review)");
+                : WpfStrings.L("未检测到 Overdrive 通道（此行常显，仅用于核对）", "LCD Overdrive channel not detected (row shown for review)");
         }
     }
 
@@ -6965,7 +7034,7 @@ public partial class OriginalStyleWindow : Window
         using (UiTrace.Phase("mini-nuc-switch")) { probe.SyncNucQuickSwitches(); }
         using (UiTrace.Phase("mini-camera")) { probe.SyncCameraQuickState(); }
         using (UiTrace.Phase("mini-brightness")) { try { RefreshBrightness(); } catch { } }
-        using (UiTrace.Phase("mini-miniled")) { try { RefreshMiniledSwitch(); } catch { } }
+        using (UiTrace.Phase("mini-miniled")) { try { RefreshMiniledSwitch(); RefreshOverdriveSwitch(); } catch { } }
         BackendLine.Text = probe.Snapshot();
         using (UiTrace.Phase("mini-tooltip")) { UpdateTraySensorTooltip(probe); }
         using (UiTrace.Phase("mini-hook-hw")) { HookHardwareState(); }

@@ -44,6 +44,7 @@ public partial class MainWindow : Window
     private Slider? _displayBrightness;
     private bool _miniledRowAdded;
     private CheckBox? _miniledSwitch;
+    private CheckBox? _overdriveSwitch;
     private CheckBox? _autoRefresh;
     private readonly List<ToggleButton> _calibrationOptionButtons = new();
     private readonly List<ToggleButton> _effectOptionButtons = new();
@@ -1699,18 +1700,68 @@ public partial class MainWindow : Window
             }
         };
         miniledRow.Children.Add(miniled);
+        // 分区控光无通道时不占位：后面的 Overdrive 开关要能自动左移。
         TextBlock miniledHint = new()
         {
-            Text = _owner.SupportsMiniled
+            Text = string.Empty,
+            Style = (Style)FindResource("MutedText"),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 0, 0),
+            Visibility = Visibility.Collapsed
+        };
+        miniledRow.Children.Add(miniledHint);
+        miniledRow.Children.Add(new TextBlock
+        {
+            Text = "Overdrive",
+            Style = (Style)FindResource("MutedText"),
+            Margin = new Thickness(22, 0, 10, 0),
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        CheckBox overdrive = new()
+        {
+            Content = WpfStrings.L("开启", "On"),
+            Style = (Style)FindResource("HeaderSwitch"),
+            IsChecked = _owner.LcdOverdrive,
+            IsEnabled = _owner.SupportsLcdOverdrive,
+            Margin = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        overdrive.Click += async (_, _) =>
+        {
+            if (!_owner.SupportsLcdOverdrive)
+            {
+                overdrive.IsChecked = _owner.LcdOverdrive;
+                return;
+            }
+            bool target = overdrive.IsChecked == true;
+            overdrive.IsEnabled = false;
+            try
+            {
+                bool ok = await _owner.SetOverdriveAsync(target);
+                if (!ok)
+                {
+                    overdrive.IsChecked = _owner.LcdOverdrive;
+                }
+            }
+            finally
+            {
+                overdrive.IsEnabled = _owner.SupportsLcdOverdrive;
+            }
+        };
+        miniledRow.Children.Add(overdrive);
+        TextBlock overdriveHint = new()
+        {
+            Text = _owner.SupportsLcdOverdrive
                 ? string.Empty
-                : WpfStrings.L("未检测到分区控光通道（此行常显，仅用于核对）", "Local dimming channel not detected (row always shown for review)"),
+                : WpfStrings.L("未检测到 Overdrive 通道（此行常显，仅用于核对）", "LCD Overdrive channel not detected (row shown for review)"),
             Style = (Style)FindResource("MutedText"),
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 0, 0, 0)
         };
-        miniledRow.Children.Add(miniledHint);
+        miniledRow.Children.Add(overdriveHint);
         DisplayDetailsPanel.Children.Add(miniledRow);
         _miniledSwitch = miniled;
+        _overdriveSwitch = overdrive;
         _miniledRowAdded = true;
     }
 
@@ -2376,6 +2427,11 @@ public partial class MainWindow : Window
         {
             _miniledSwitch.IsChecked = _owner.MiniledOn;
             _miniledSwitch.IsEnabled = _owner.SupportsMiniled;
+        }
+        if (_overdriveSwitch != null)
+        {
+            _overdriveSwitch.IsChecked = _owner.LcdOverdrive;
+            _overdriveSwitch.IsEnabled = _owner.SupportsLcdOverdrive;
         }
         if (MoreSwitchGrid != null && MoreSwitchGrid.Children.Count == 0) BuildMoreSwitchTiles();
         PerfCurrentText.Text = _owner.WidePerformanceText;
