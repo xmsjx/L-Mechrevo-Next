@@ -47,7 +47,7 @@ public static class GcuEcMode
                 MechrevoLite.AppConfig.Flush();
                 await Task.Run(() => IteLightingLocal.RefreshFromHid());
                 // 若当前处于隔离状态：EC 模式下把 GCU 服务启动类型一并禁用，开机不再自启。
-                try { System.ValueTuple<bool, string> pause = MechrevoLite.Helpers.OfficialConsoleIsolation.PauseGcuServicesForEcMode(); Logger.WriteLine("[gcu-svc] 切 EC 模式 ⇒ " + pause.Item2); } catch { }
+                try { System.ValueTuple<bool, string> pause = MechrevoLite.Helpers.OfficialConsoleIsolation.EnsureEcModeIsolation(); Logger.WriteLine("[gcu-svc] 切 EC 模式 ⇒ " + pause.Item2); } catch { }
                 try { bool notify = GcuEcExperimental.TryEnableHotkeyNotify(); Logger.WriteLine("[hotkey] 切 EC 模式 ⇒ 按键上报=" + notify); } catch { }
                 return (true, "已切换 EC 控制模式：GCUService/GCUBridge 已停止");
             }
@@ -77,7 +77,7 @@ public static class GcuEcMode
             Logger.WriteLine("[gcu-svc] GCU 端口 13688 就绪=" + ready);
             IteLightingLocal.Invalidate();
             // 回 GCU 模式：隔离状态下把 GCU 服务启动类型恢复回去。
-            try { System.ValueTuple<bool, string> resume = MechrevoLite.Helpers.OfficialConsoleIsolation.ResumeGcuServicesForEcMode(); Logger.WriteLine("[gcu-svc] 回 GCU 模式 ⇒ " + resume.Item2); } catch { }
+            try { System.ValueTuple<bool, string> resume = MechrevoLite.Helpers.OfficialConsoleIsolation.ResumeGcuServicesForEcMode(); MechrevoLite.Helpers.OfficialConsoleIsolation.EnsureGcuModeUiIsolation(); Logger.WriteLine("[gcu-svc] 回 GCU 模式 ⇒ " + resume.Item2); } catch { }
             return (true, "已切换 GCU 模式：已请求启动 GCUService / GCUBridge");
         }
         catch (Exception ex)

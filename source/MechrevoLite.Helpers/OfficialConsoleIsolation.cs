@@ -1175,6 +1175,46 @@ public static class OfficialConsoleIsolation
 				}
 			}
 		}
+		// 名称对不上时再按可执行路径里的官方标记扫一遍：官方控制台更新后进程名可能变，
+		// 只认"路径里带官方标记"的进程，避免误杀其它同名软件。
+		foreach (Process process in Process.GetProcesses())
+		{
+			try
+			{
+				if (process.Id == Environment.ProcessId || process.SessionId != CurrentSessionId)
+				{
+					continue;
+				}
+				string processPath = TryGetProcessPath(process);
+				if (processPath.Length == 0 || Array.IndexOf(UiProcessNames, process.ProcessName) >= 0)
+				{
+					continue;
+				}
+				bool official = false;
+				foreach (string marker in OfficialMarkers)
+				{
+					if (processPath.IndexOf(marker, StringComparison.OrdinalIgnoreCase) >= 0)
+					{
+						official = true;
+						break;
+					}
+				}
+				if (!official)
+				{
+					continue;
+				}
+				process.Kill();
+				if (process.WaitForExit(1500))
+				{
+					num++;
+					Logger.WriteLine("[official-console] 按路径关闭官方界面：" + process.ProcessName + " (" + process.Id + ")");
+				}
+			}
+			catch
+			{
+			}
+		}
+
 		if (num > 0)
 		{
 			RefreshTrayArea();
@@ -1363,6 +1403,18 @@ public static class OfficialConsoleIsolation
 		}
 	}
 
+	/// <summary>取进程可执行路径；权限不足返回空串（不抛异常）。</summary>
+	internal static string TryGetProcessPath(Process process)
+	{
+		try
+		{
+			return process.MainModule?.FileName ?? string.Empty;
+		}
+		catch
+		{
+			return string.Empty;
+		}
+	}
 	private static bool IsProcessRunning(string name)
 	{
 		Process[] processesByName = Process.GetProcessesByName(name);
@@ -1422,6 +1474,110 @@ public static class OfficialConsoleIsolation
 		Path.GetDirectoryName(SnapshotPath) ?? Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
 		EcPauseFileName);
 
+	/// <summary>官方控制台界面进程是否还在跑。</summary>
+	public static bool OfficialUiRunning() => IsOfficialUiRunning();
+
+	/// <summary>GCU 服务/桥进程是否还在跑。</summary>
+	public static bool GcuRuntimeRunning() => IsProcessRunning("GCUBridge") || IsProcessRunning("GCUService");
+
+	/// <summary>当前是否处于官方控制台隔离状态。</summary>
+	public static bool IsIsolated => TryReadSnapshot()?.Isolated ?? false;
+
+	/// <summary>
+	/// EC 模式对齐（启动与运行期都可调用）：关掉官方界面进程，GCU 服务停止并改手动。
+	/// <para>⛔ 不看"已经处理过"的标记：官方控制台会自己重启，这里每次都按实际状态核对。</para>
+	/// </summary>
+	public static (bool Ok, string Detail) EnsureEcModeIsolation()
+	{
+		lock (StateLock)
+		{
+			try
+			{
+				int killed = StopOfficialUiProcesses();
+				List<ServiceEntry> entries = ReadEcPauseState();
+				if (entries.Count == 0)
+				{
+					CaptureServices(entries);
+					entries.RemoveAll((ServiceEntry e) => e.StartMode < 0 || e.StartMode == 3);
+				}
+				int touched = 0;
+				foreach (ServiceEntry entry in entries)
+				{
+					RunSc("stop " + entry.Name);
+					if (SetServiceStartMode(entry.Name, 3))
+					{
+						touched++;
+					}
+				}
+				if (entries.Count > 0)
+				{
+					SaveEcPauseState(entries);
+				}
+				bool uiLeft = IsOfficialUiRunning();
+				bool gcuLeft = GcuRuntimeRunning();
+				string detail = "关界面=" + killed + " · 处理服务=" + touched + "/" + entries.Count
+					+ " · 仍有界面=" + uiLeft + " 仍有服务=" + gcuLeft;
+				Logger.WriteLine("[official-console] EC 模式对齐：" + detail);
+				return (!uiLeft && !gcuLeft, detail);
+			}
+			catch (Exception ex)
+			{
+				Logger.WriteLine("[official-console] EC 模式对齐失败：" + ex.GetType().Name + " " + ex.Message);
+				return (false, ex.GetType().Name + " " + ex.Message);
+			}
+		}
+	}
+
+	/// <summary>GCU 模式：已开启隔离时只关官方界面进程，不动 GCU 服务。</summary>
+	public static (bool Ok, string Detail) EnsureGcuModeUiIsolation()
+	{
+		if (!IsIsolated)
+		{
+			return (true, "未开启隔离，跳过");
+		}
+		int killed = StopOfficialUiProcesses();
+		bool uiLeft = IsOfficialUiRunning();
+		string detail = "关界面=" + killed + " · 仍有界面=" + uiLeft + "（服务保持不动）";
+		if (killed > 0 || uiLeft)
+		{
+			Logger.WriteLine("[official-console] GCU 模式界面对齐：" + detail);
+		}
+		return (!uiLeft, detail);
+	}
+
+	/// <summary>运行期守卫：只有真的检测到界面/服务在跑才动作，返回本次处理说明（没动作返回空串）。</summary>
+	public static string GuardEcModeIsolation()
+	{
+		try
+		{
+			if (!IsOfficialUiRunning() && !GcuRuntimeRunning())
+			{
+				return string.Empty;
+			}
+			return EnsureEcModeIsolation().Detail;
+		}
+		catch
+		{
+			return string.Empty;
+		}
+	}
+
+	/// <summary>运行期守卫（GCU 模式）：已开启隔离时，官方界面又起来了就再关一次。</summary>
+	public static string GuardGcuModeUiIsolation()
+	{
+		try
+		{
+			if (!IsIsolated || !IsOfficialUiRunning())
+			{
+				return string.Empty;
+			}
+			return EnsureGcuModeUiIsolation().Detail;
+		}
+		catch
+		{
+			return string.Empty;
+		}
+	}
 	/// <summary>EC 模式：把 GCU 服务改为手动并停止，避免其抢按键与 EC 寄存器；原启动类型记录在文件里以便恢复。</summary>
 	public static (bool Ok, string Detail) PauseGcuServicesForEcMode()
 	{
@@ -1429,7 +1585,8 @@ public static class OfficialConsoleIsolation
 		{
 			try
 			{
-				if (File.Exists(EcPausePath))
+				// 不因"处理过"就直接返回：官方控制台可能自己重开，这里按实际状态重新对齐。
+				if (File.Exists(EcPausePath) && !IsOfficialUiRunning() && !GcuRuntimeRunning())
 				{
 					return (true, "已是手动并停止");
 				}

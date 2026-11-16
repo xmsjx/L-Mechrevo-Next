@@ -27,6 +27,28 @@ public partial class App : Application
         // GCU 预热窗口：首次安装本程序 / 首次装载 GCU / 从 EC 切回 GCU 后 5 分钟内，
         // GCU 未就绪属正常，不作为故障上报。
         L_Mechrevo.WpfP0.Services.WpfBackend.BeginGcuWarmupOnStartup();
+        // 官方控制台对齐放在最前面：EC 模式下如果官方 GCU 还开着（界面/服务），先关掉，
+        // 避免它和本地 EC 抢档位/按键；GCU 模式下只关界面（开了隔离时）。
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                if (L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive)
+                {
+                    (bool ok, string detail) = MechrevoLite.Helpers.OfficialConsoleIsolation.EnsureEcModeIsolation();
+                    Logger.WriteLine("[official-console] 启动对齐(EC) ⇒ " + (ok ? "完成" : "未完全生效") + " · " + detail);
+                }
+                else
+                {
+                    (bool _, string detail) = MechrevoLite.Helpers.OfficialConsoleIsolation.EnsureGcuModeUiIsolation();
+                    Logger.WriteLine("[official-console] 启动对齐(GCU) ⇒ " + detail);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("[official-console] 启动对齐异常：" + ex.Message);
+            }
+        });
         // ACPIDriver 自愈：装机目录里带着驱动文件、但系统里设备打不开时，后台装一次（EC 通道全靠它）。
         // 放后台线程执行，安装/等待设备就绪不会卡启动；失败只写日志。
         _ = System.Threading.Tasks.Task.Run(() =>

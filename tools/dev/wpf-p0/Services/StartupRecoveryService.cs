@@ -35,6 +35,25 @@ internal static class StartupRecoveryService
         }
         Logger.WriteLine("[startup-recovery] 后端已连接 ⇒ 开始启动恢复");
 
+        // 隔离对齐放在最前面：EC 模式下如果官方 GCU 还开着，先关掉再继续后面的恢复与就绪。
+        // GCU 模式下已开启隔离则只关界面，不动 GCU 服务。
+        Try("OfficialConsoleIsolation.AlignBeforeReady", () =>
+        {
+            if (WpfBackend.EcModeActive)
+            {
+                (bool ok, string detail) = MechrevoLite.Helpers.OfficialConsoleIsolation.EnsureEcModeIsolation();
+                Logger.WriteLine("[startup-recovery] EC 模式隔离对齐 ⇒ " + (ok ? "完成" : "未完全生效")
+                    + " · " + detail);
+                Logger.WriteLine("[startup-recovery] 按键上报=" + MechrevoLite.Hardware.GcuEcExperimental.TryEnableHotkeyNotify());
+            }
+            else
+            {
+                (bool ok, string detail) = MechrevoLite.Helpers.OfficialConsoleIsolation.EnsureGcuModeUiIsolation();
+                Logger.WriteLine("[startup-recovery] GCU 模式界面隔离 ⇒ " + (ok ? "完成" : "未完成") + " · " + detail);
+            }
+        });
+        StartIsolationGuard();
+
         Try("BatteryLimitRestore.RunOnce", () =>
         {
             // 宝龙达：正常启动时的限充核对（旧 Program.ScheduleIdleBackendWarmup 路径）；
@@ -130,12 +149,11 @@ internal static class StartupRecoveryService
 
         Try("OfficialConsoleIsolation.SyncServicesForMode", () =>
         {
-            // 按模式对齐 GCU 服务：EC 模式改手动并停止（避免抢按键/EC 寄存器），GCU 模式恢复原启动类型。
+            // 后面这一步只做"模式↔服务启动类型"的对账（隔离对齐已在最前面做过一次）。
             bool ecMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive;
             if (ecMode)
             {
                 Logger.WriteLine("[startup-recovery] EC 模式 ⇒ " + MechrevoLite.Helpers.OfficialConsoleIsolation.PauseGcuServicesForEcMode().Item2);
-                Logger.WriteLine("[startup-recovery] 按键上报=" + MechrevoLite.Hardware.GcuEcExperimental.TryEnableHotkeyNotify());
             }
             else
             {
@@ -146,6 +164,47 @@ internal static class StartupRecoveryService
         Logger.WriteLine("[startup-recovery] 启动恢复调度结束");
     }
 
+    private static int _guardStarted;
+
+    /// <summary>
+    /// 运行期守卫：每 20 秒核对一次官方控制台状态。
+    /// EC 模式 ⇒ 界面与服务都要关（官方会自己重启，所以反复核对）；GCU 模式 ⇒ 开了隔离只关界面。
+    /// </summary>
+    private static void StartIsolationGuard()
+    {
+        if (Interlocked.Exchange(ref _guardStarted, 1) != 0)
+        {
+            return;
+        }
+        _ = Task.Run(async () =>
+        {
+            PeriodicTimer timer = new PeriodicTimer(TimeSpan.FromSeconds(20));
+            try
+            {
+                while (await timer.WaitForNextTickAsync().ConfigureAwait(false))
+                {
+                    try
+                    {
+                        string detail = WpfBackend.EcModeActive
+                            ? MechrevoLite.Helpers.OfficialConsoleIsolation.GuardEcModeIsolation()
+                            : MechrevoLite.Helpers.OfficialConsoleIsolation.GuardGcuModeUiIsolation();
+                        if (detail.Length > 0)
+                        {
+                            Logger.WriteLine("[startup-recovery] 隔离守卫 ⇒ " + detail);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.WriteLine("[startup-recovery] 隔离守卫生效异常：" + ex.Message);
+                    }
+                }
+            }
+            finally
+            {
+                timer.Dispose();
+            }
+        });
+    }
     private static async Task<MechrevoHw?> WaitForConnectedHwAsync(TimeSpan timeout)
     {
         DateTime deadline = DateTime.UtcNow + timeout;
