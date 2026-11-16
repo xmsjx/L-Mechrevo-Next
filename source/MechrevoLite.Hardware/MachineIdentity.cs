@@ -60,7 +60,7 @@ internal sealed record MachineIdentity(
 	/// <summary>无界办公本的板号分支（X 系 / IP3 / BLD）；未命中为 None。只用于身份识别，不改后端与写入。</summary>
 	internal WujieBoardKind WujieBoard { get; init; }
 
-	/// <summary>无界 X 系（14X/15X/16X，同方 X 系板）。</summary>
+	/// <summary>无界 X 系（14X/15X，同方 X 系板）。</summary>
 	internal bool WujieXSeries => WujieBoard == WujieBoardKind.XSeries;
 
 	/// <summary>无界 14（IP3 / ARN39 板）。</summary>

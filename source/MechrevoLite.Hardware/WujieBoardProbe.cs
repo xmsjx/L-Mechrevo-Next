@@ -8,7 +8,7 @@ namespace MechrevoLite.Hardware;
 internal enum WujieBoardKind
 {
 	None = 0,
-	/// <summary>无界 14X/15X/16X（同方 X 系板，多有 SMU 自定义档 + 独立风扇通道）。</summary>
+	/// <summary>无界 14X/15X（同方 X 系板，多有 SMU 自定义档 + 独立风扇通道）。</summary>
 	XSeries,
 	/// <summary>无界 14（IP3 板，ARN39），三档、无自定义档。</summary>
 	Ip3,
@@ -27,13 +27,13 @@ internal static class WujieBoardProbe
 	private static readonly string[] XSeriesBoards =
 	{
 		"WUJIE14-GX*", "WUJIE SERIES-X5*", "*GX4HRXL*", "*X5SP4NAG*",
-		"*WUJIE*14X*", "*WUJIE*15X*", "*WUJIE*16X*"
+		"*WUJIE*14X*", "*WUJIE*15X*"
 	};
 
 	private static readonly string[] XSeriesNames =
 	{
-		"WUJIE14X*", "WUJIE15X*", "WUJIE16X*",
-		"WUJIE 14X*", "WUJIE 15X*", "WUJIE 16X*", "WUJIE SERIES*"
+		"WUJIE14X*", "WUJIE15X*",
+		"WUJIE 14X*", "WUJIE 15X*", "WUJIE SERIES*"
 	};
 
 	private static readonly string[] Ip3Boards = { "IP3_ARN39*", "ARN39*" };
