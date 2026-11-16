@@ -4946,9 +4946,19 @@ public partial class OriginalStyleWindow : Window
         }
         if (customDisplayed)
         {
-            // SMU 机型（无界/星耀 APU）的固件里没有"自定义档"这个概念：固件回读永远是
-            // 平衡/静音/狂暴，拿它做判据会一直把界面亮成平衡（本机配置才是权威）。
-            if (hw?.SmuCustomApu == true || hw?.WujieSmuApu == true)
+            // 自定义档不落在固件里的后端：本机配置（PerfModeStore.ActiveModeId）才是权威，
+            // ⛔ 不能用固件回读（那永远是 平衡/静音/狂暴）去覆盖高亮。
+            //   · 无界 APU / 星耀 APU：本机 SMU
+            //   · Intel 星耀：本机 MSR
+            //   · 宝龙达（含 30 系蛟龙）：WMI 功能号 23
+            //   · 同方 EC 直连：EC 里有独立自定义档位，仍按固件回读（下面那支不变）
+            bool customIsLocalOnly = hw?.UsesBaolongda == true
+                || hw?.SmuCustomApu == true
+                || hw?.WujieSmuApu == true
+                || (L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
+                    && hw?.IsNucUmiFamily != true
+                    && L_Mechrevo.WpfP0.Services.WpfBackend.IsXingyaoPlatform);
+            if (customIsLocalOnly)
             {
                 return 3;
             }
