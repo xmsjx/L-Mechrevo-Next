@@ -549,13 +549,14 @@ internal static class EcChargeLimit
 						Logger.WriteError($"限充写入前预读（⭐ 只读 · ⭐ 仅作诊断 · ⛔ 不再据此拒绝）：0x{GateRegister:X3}={ChargeLimitEcProbe.FormatRaw(gateOriginal)}、0x{RomIdRegister:X3}={ChargeLimitEcProbe.FormatRaw(romId)}、0x{StoredLimitRegister:X3}={ChargeLimitEcProbe.FormatRaw(stored)}；门控 {gateText}、0x{RomIdRegister:X3} {romText}、存储区 {storedText}；⭐ 按上游口径继续尝试写入 0x{UpperRegister:X3}");
 					}
 				}
+				bool pinnedThisWrite = false;   // 本次是否按配置把门控钉住（钉住则不排还原）
 				bool gateTouched = false;
 				if (gateOriginal >= 0 && !gateWasOpen)
 				{
 					gateTouched = Write(num, GateRegister, (byte)GateOpenValue);
 					if (gateTouched && ChargeGatePin.Enabled && percent < 100)
 					{
-						// 配置开关打开：门控保持 4、不排还原（用于固件没在窗口内抄进存储区的机型）。
+						pinnedThisWrite = true;
 						ChargeGatePin.MarkPinned(gateOriginal);
 						Logger.WriteLine($"限充门控钉住：0x{GateRegister:X3} 原值 0x{gateOriginal:X2} → 保持 {GateOpenValue}（配置 charge_gate_pin=1；关掉该开关后下次写入会还原）");
 					}
@@ -631,7 +632,7 @@ internal static class EcChargeLimit
 				}
 				finally
 				{
-					if (gateTouched)
+					if (gateTouched && !pinnedThisWrite)
 					{
 						// 保持门控开着等固件完成存储，再还原原值（用完即还、零残留）。
 						// 18:50（卡顿修复 · 用户反馈「开启 EC 限充卡一下」）：原先在这里同步 Sleep 2.5s，
