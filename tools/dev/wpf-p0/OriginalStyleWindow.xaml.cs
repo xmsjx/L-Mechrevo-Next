@@ -8210,8 +8210,14 @@ public partial class OriginalStyleWindow : Window
             GpuDirectButton.Visibility = directSupported ? Visibility.Visible : Visibility.Collapsed;
             bool dgpuPresent = hw != null && hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
             bool noSwitchButHasDgpu = !gpuSwitchSupported && dgpuPresent;
+            // 核显机型（无界/星耀 APU）：没有显卡模式可切，但显卡传感器（温度/占用/副扇转速）就在这一行，
+            // 所以这一行照样显示，只把三档切换按钮藏起来（标题退化成「显卡」）。
+            bool igpuSensorPresent = hw?.WujieSmuApu == true || hw?.SmuCustomApu == true;
+            bool gpuModeSwitchable = gpuSwitchSupported || directSupported
+                || L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap"))
+                || umiGpuMode || noSwitchButHasDgpu;
             GpuSection.Visibility = (!nucNoGpuSwitch && !gpuRowHidden
-                && (gpuSwitchSupported || directSupported || L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap")) || umiGpuMode || noSwitchButHasDgpu))
+                && (gpuModeSwitchable || igpuSensorPresent || dgpuPresent))
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             GpuModeRow.Visibility = gpuSwitchSupported ? Visibility.Visible : Visibility.Collapsed;
