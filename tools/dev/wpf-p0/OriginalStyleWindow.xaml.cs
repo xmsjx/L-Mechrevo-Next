@@ -169,6 +169,11 @@ public partial class OriginalStyleWindow : Window
     private bool _syncingDisplayEffect;
     private bool _syncingBatteryLimit;
 
+    /// <summary>滑块停手 500ms 后才下发，拖动过程中不反复写 EC、不反复钉门控。</summary>
+    private DispatcherTimer? _batteryLimitDebounce;
+
+    private int _batteryLimitPendingPercent = -1;
+
     // 电池三档：用户刚点过的档位与时间戳（2.5 秒内不被后端回包覆盖）。
     private int _batteryModeLockedMode = -1;
 
@@ -2285,6 +2290,7 @@ public partial class OriginalStyleWindow : Window
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         _appClosing = true;
+        FlushPendingBatteryLimit();
         base.OnClosing(e);
     }
 
@@ -3337,6 +3343,49 @@ public partial class OriginalStyleWindow : Window
         }
         int value = (int)Math.Round(e.NewValue);
         if (BatteryLimitSliderText != null) BatteryLimitSliderText.Text = value + "%";
+        ArmBatteryLimitDebounce(value);
+    }
+
+    /// <summary>拖动中只记值、不落 EC；停手 500ms 后下发一次。</summary>
+    private void ArmBatteryLimitDebounce(int percent)
+    {
+        if (_batteryLimitDebounce == null)
+        {
+            _batteryLimitDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _batteryLimitDebounce.Tick += BatteryLimitDebounce_Tick;
+        }
+        _batteryLimitPendingPercent = percent;
+        _batteryLimitDebounce.Stop();
+        _batteryLimitDebounce.Start();
+    }
+
+    private void BatteryLimitDebounce_Tick(object? sender, EventArgs e)
+    {
+        _batteryLimitDebounce?.Stop();
+        int percent = _batteryLimitPendingPercent;
+        if (percent < 0)
+        {
+            return;
+        }
+        ApplyBatteryLimitNow(percent);
+        _batteryLimitPendingPercent = -1;
+    }
+
+    /// <summary>窗口关闭前把还没下发的滑块值补发一次，避免"拖完立刻关窗口"丢设置。</summary>
+    private void FlushPendingBatteryLimit()
+    {
+        _batteryLimitDebounce?.Stop();
+        int percent = _batteryLimitPendingPercent;
+        if (percent < 0)
+        {
+            return;
+        }
+        _batteryLimitPendingPercent = -1;
+        ApplyBatteryLimitNow(percent);
+    }
+
+    private void ApplyBatteryLimitNow(int value)
+    {
         ChargeSliderOutcome outcome = ChargeLimitApplyService.ApplySliderPercent(_backendProbe?.Hw, value);
         if (!outcome.Ok)
         {
