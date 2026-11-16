@@ -618,12 +618,12 @@
                         </Grid>
                         <!-- MiniLED 分区控光 + LCD Overdrive：同一行，靠左排列；分区控光无通道时提示不占位，后面的开关自动左移 -->
                         <StackPanel x:Name="MiniledRow" Orientation="Horizontal" Margin="0,2,0,6">
-                            <TextBlock Text="{x:Static loc:WpfStrings.SettingsWindow_Text_21}" Style="{StaticResource RowLabel}" Margin="0,0,12,0" VerticalAlignment="Center" />
+                            <TextBlock x:Name="MiniledLabel" Text="{x:Static loc:WpfStrings.SettingsWindow_Text_21}" Style="{StaticResource RowLabel}" Margin="0,0,12,0" VerticalAlignment="Center" />
                             <CheckBox x:Name="MiniledSwitch" Content="{x:Static loc:WpfStrings.CustomModeWindow_Content_3}" Style="{StaticResource HeaderSwitch}"
                                       VerticalAlignment="Center" Click="Miniled_Click" />
                             <TextBlock x:Name="MiniledHint" Text="" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="10,0,0,0"
                                        TextWrapping="Wrap" Visibility="Collapsed" />
-                            <TextBlock Text="Overdrive" Style="{StaticResource RowLabel}" Margin="22,0,12,0" VerticalAlignment="Center" />
+                            <TextBlock x:Name="OverdriveLabel" Text="Overdrive" Style="{StaticResource RowLabel}" Margin="22,0,12,0" VerticalAlignment="Center" />
                             <CheckBox x:Name="OverdriveSwitch" Content="{x:Static loc:WpfStrings.CustomModeWindow_Content_3}" Style="{StaticResource HeaderSwitch}"
                                       VerticalAlignment="Center" Click="Overdrive_Click" />
                             <TextBlock x:Name="OverdriveHint" Text="" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="10,0,0,0" TextWrapping="Wrap" />

@@ -45,6 +45,9 @@ public partial class MainWindow : Window
     private bool _miniledRowAdded;
     private CheckBox? _miniledSwitch;
     private CheckBox? _overdriveSwitch;
+    private StackPanel? _displayToggleRow;
+    private TextBlock? _miniledLabel;
+    private TextBlock? _overdriveLabel;
     private CheckBox? _autoRefresh;
     private readonly List<ToggleButton> _calibrationOptionButtons = new();
     private readonly List<ToggleButton> _effectOptionButtons = new();
@@ -1674,13 +1677,14 @@ public partial class MainWindow : Window
         DisplayDetailsPanel.Children.Add(brightnessRow);
         // MiniLED 分区控光：亮度下面一行，常显（便于核对通道与状态）；不支持时开关置灰并给原因。
         StackPanel miniledRow = new() { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-        miniledRow.Children.Add(new TextBlock
+        TextBlock miniledLabel = new()
         {
             Text = WpfStrings.L("MiniLED 分区控光", "MiniLED local dimming"),
             Style = (Style)FindResource("MutedText"),
             Width = 110,
             VerticalAlignment = VerticalAlignment.Center
-        });
+        };
+        miniledRow.Children.Add(miniledLabel);
         CheckBox miniled = new()
         {
             Content = WpfStrings.L("开启", "On"),
@@ -1710,13 +1714,14 @@ public partial class MainWindow : Window
             Visibility = Visibility.Collapsed
         };
         miniledRow.Children.Add(miniledHint);
-        miniledRow.Children.Add(new TextBlock
+        TextBlock overdriveLabel = new()
         {
             Text = "Overdrive",
             Style = (Style)FindResource("MutedText"),
             Margin = new Thickness(22, 0, 10, 0),
             VerticalAlignment = VerticalAlignment.Center
-        });
+        };
+        miniledRow.Children.Add(overdriveLabel);
         CheckBox overdrive = new()
         {
             Content = WpfStrings.L("开启", "On"),
@@ -2423,15 +2428,31 @@ public partial class MainWindow : Window
         }
         using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("home-caps")) { ApplyHomeCapabilities(); }
         // 分区控光的开关状态跟随硬件当前值；不支持时保持置灰。
+        bool miniledSupported = _owner.SupportsMiniled;
+        bool overdriveSupported = _owner.SupportsLcdOverdrive;
+        if (_displayToggleRow != null)
+        {
+            _displayToggleRow.Visibility = (miniledSupported || overdriveSupported) ? Visibility.Visible : Visibility.Collapsed;
+        }
+        if (_miniledLabel != null)
+        {
+            _miniledLabel.Visibility = miniledSupported ? Visibility.Visible : Visibility.Collapsed;
+        }
         if (_miniledSwitch != null)
         {
+            _miniledSwitch.Visibility = miniledSupported ? Visibility.Visible : Visibility.Collapsed;
             _miniledSwitch.IsChecked = _owner.MiniledOn;
-            _miniledSwitch.IsEnabled = _owner.SupportsMiniled;
+            _miniledSwitch.IsEnabled = miniledSupported;
+        }
+        if (_overdriveLabel != null)
+        {
+            _overdriveLabel.Visibility = overdriveSupported ? Visibility.Visible : Visibility.Collapsed;
         }
         if (_overdriveSwitch != null)
         {
+            _overdriveSwitch.Visibility = overdriveSupported ? Visibility.Visible : Visibility.Collapsed;
             _overdriveSwitch.IsChecked = _owner.LcdOverdrive;
-            _overdriveSwitch.IsEnabled = _owner.SupportsLcdOverdrive;
+            _overdriveSwitch.IsEnabled = overdriveSupported;
         }
         if (MoreSwitchGrid != null && MoreSwitchGrid.Children.Count == 0) BuildMoreSwitchTiles();
         PerfCurrentText.Text = _owner.WidePerformanceText;

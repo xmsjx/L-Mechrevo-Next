@@ -2058,20 +2058,26 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    /// <summary>同步分区控光这一行：常显（便于核对通道），状态取硬件当前值。</summary>
+    /// <summary>同步分区控光/Overdrive 这一行：各自按能力显示，两个都没有就整行隐藏。</summary>
     private void RefreshMiniledSwitch()
     {
         if (MiniledRow == null || MiniledSwitch == null)
         {
             return;
         }
-        MiniledRow.Visibility = Visibility.Visible;
-        bool supported = SupportsMiniled;
+        bool miniledSupported = SupportsMiniled;
+        bool overdriveSupported = SupportsLcdOverdrive;
+        MiniledRow.Visibility = (miniledSupported || overdriveSupported) ? Visibility.Visible : Visibility.Collapsed;
+        if (MiniledLabel != null)
+        {
+            MiniledLabel.Visibility = miniledSupported ? Visibility.Visible : Visibility.Collapsed;
+        }
+        MiniledSwitch.Visibility = miniledSupported ? Visibility.Visible : Visibility.Collapsed;
         _syncingMiniled = true;
         try
         {
             MiniledSwitch.IsChecked = MiniledOn;
-            MiniledSwitch.IsEnabled = supported;
+            MiniledSwitch.IsEnabled = miniledSupported;
         }
         finally
         {
@@ -2079,7 +2085,6 @@ public partial class OriginalStyleWindow : Window
         }
         if (MiniledHint != null)
         {
-            // 不支持的提示不占位：后面的 Overdrive 开关要能自动左移。
             MiniledHint.Text = string.Empty;
             MiniledHint.Visibility = Visibility.Collapsed;
         }
@@ -2136,6 +2141,11 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         bool supported = SupportsLcdOverdrive;
+        if (OverdriveLabel != null)
+        {
+            OverdriveLabel.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
+        }
+        OverdriveSwitch.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
         _syncingOverdrive = true;
         try
         {
@@ -2148,9 +2158,8 @@ public partial class OriginalStyleWindow : Window
         }
         if (OverdriveHint != null)
         {
-            OverdriveHint.Text = supported
-                ? string.Empty
-                : WpfStrings.L("未检测到 Overdrive 通道（此行常显，仅用于核对）", "LCD Overdrive channel not detected (row shown for review)");
+            OverdriveHint.Text = string.Empty;
+            OverdriveHint.Visibility = Visibility.Collapsed;
         }
     }
 
