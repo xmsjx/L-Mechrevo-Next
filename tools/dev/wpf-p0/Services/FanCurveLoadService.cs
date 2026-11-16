@@ -51,15 +51,18 @@ internal static class FanCurveLoadService
 			return new FanCurveLoadOutcome(FanCurveDefaults.CpuTemperatures, hw.CpuCurveDuty,
 				FanCurveDefaults.GpuTemperatures, hw.GpuCurveDuty, null, null, false, null, null);
 		}
-		// 每个档位自己的已保存曲线优先：切配置时窗口要跟着变（EC 直连没有 GCU 回读，只能靠存档）。
+		// 每个档位自己的已保存曲线优先：切配置/点应用后窗口要跟着变（EC 直连没有 GCU 回读，只能靠存档）。
+		// 温度轴用保存时记下的那一条，避免重画时轴变了、看起来"曲线被改掉了"。
 		PerfModeSettings saved = PerfModeStore.LoadSettings(modeId);
 		int[]? cpuSaved = saved.CpuFanDuty is { Length: >= 2 } cpuDuty ? cpuDuty : null;
 		int[]? gpuSaved = saved.GpuFanDuty is { Length: >= 2 } gpuDuty ? gpuDuty : null;
 		if (cpuSaved != null && gpuSaved != null)
 		{
-			return new FanCurveLoadOutcome(FanCurveDefaults.CpuTemperatures,
+			byte[] savedCpuTemps = ReadRememberedTemps("ec_fan_cputemps_", modeId) ?? FanCurveDefaults.CpuTemperatures;
+			byte[] savedGpuTemps = ReadRememberedTemps("ec_fan_gputemps_", modeId) ?? FanCurveDefaults.GpuTemperatures;
+			return new FanCurveLoadOutcome(savedCpuTemps,
 				cpuSaved.Select(v => (byte)Math.Clamp(v, 0, 100)).ToArray(),
-				FanCurveDefaults.GpuTemperatures,
+				savedGpuTemps,
 				gpuSaved.Select(v => (byte)Math.Clamp(v, 0, 100)).ToArray(),
 				null, null, false, null, null);
 		}
@@ -97,6 +100,37 @@ internal static class FanCurveLoadService
 		return Defaults();
 	}
 
+	/// <summary>读保存风扇曲线时记下的温度轴（CSV）；没有或格式不对返回 null。</summary>
+	private static byte[]? ReadRememberedTemps(string prefix, string modeId)
+	{
+		try
+		{
+			string key = string.IsNullOrWhiteSpace(modeId) ? "active" : modeId;
+			string raw = MechrevoLite.AppConfig.GetString(prefix + key) ?? string.Empty;
+			if (raw.Length == 0)
+			{
+				return null;
+			}
+			string[] parts = raw.Split(',');
+			if (parts.Length < 16)
+			{
+				return null;
+			}
+			byte[] temps = new byte[16];
+			for (int i = 0; i < temps.Length; i++)
+			{
+				if (!byte.TryParse(parts[i].Trim(), out temps[i]))
+				{
+					return null;
+				}
+			}
+			return temps;
+		}
+		catch
+		{
+			return null;
+		}
+	}
 	private static FanCurveLoadOutcome Defaults()
 	{
 		return new FanCurveLoadOutcome(FanCurveDefaults.CpuTemperatures, FanCurveDefaults.CpuDutyBytes,
