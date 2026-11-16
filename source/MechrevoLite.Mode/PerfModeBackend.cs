@@ -624,6 +624,25 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		{
 			return await _hw.WaitForStateAsync(() => _hw.OperatingMode == 3 && _hw.CustomProfileIndex == step.Number, TimeSpan.FromMilliseconds(1200L), ct).ConfigureAwait(continueOnCapturedContext: false) || (_hw.OperatingMode == 3 && _hw.CustomProfileIndex == step.Number);
 		}
+		// EC 直连：档位回读走本地 EC（GCU 不在时 OperatingMode 读不到，用它会假失败）。
+		if (_hw != null && MechrevoLite.Hardware.GcuEcMode.IsEcMode && !_hw.IsGcuConnected)
+		{
+			int expectedVisual = PerfModeMapping.ToServiceMode((PerfModeKind)step.Number);
+			long deadline = Environment.TickCount64 + 1200;
+			while (true)
+			{
+				if (MechrevoLite.Hardware.GcuEcExperimental.TryReadVisualMode(out int ecVisual)
+					&& ecVisual == expectedVisual)
+				{
+					return true;
+				}
+				if (Environment.TickCount64 >= deadline || ct.IsCancellationRequested)
+				{
+					return false;
+				}
+				await Task.Delay(120, ct).ConfigureAwait(continueOnCapturedContext: false);
+			}
+		}
 		int expected = PerfModeMapping.ToFirmwareOperatingMode((PerfModeKind)step.Number);
 		return await _hw.WaitForStateAsync(() => _hw.OperatingMode == expected, TimeSpan.FromMilliseconds(1200L), ct).ConfigureAwait(continueOnCapturedContext: false) || _hw.OperatingMode == expected;
 	}
