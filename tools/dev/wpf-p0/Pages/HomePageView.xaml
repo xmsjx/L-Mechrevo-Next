@@ -35,9 +35,9 @@
                                         </Grid.ColumnDefinitions>
                                         <Viewbox Width="48" Height="48" Margin="0,0,16,0" VerticalAlignment="Center">
                                             <Canvas Width="24" Height="24">
-                                                <Path Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M3,18 A10,10 0 0 1 21,18" />
-                                                <Path Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M12,18 L17,10" />
-                                                <Ellipse Fill="{DynamicResource MutedBrush}" Width="2.4" Height="2.4" Canvas.Left="10.8" Canvas.Top="16.8" />
+                                                <Path Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M4.5,15.9 A7.5,7.5 0 0 1 19.5,15.9" />
+                                                <Path Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M12,15.9 L15.5,11.2" />
+                                                <Ellipse Fill="{DynamicResource MutedBrush}" Width="3.3" Height="3.3" Canvas.Left="10.35" Canvas.Top="14.25" />
                                             </Canvas>
                                         </Viewbox>
                                         <StackPanel Grid.Column="1">
