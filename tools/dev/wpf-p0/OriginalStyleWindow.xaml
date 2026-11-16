@@ -461,9 +461,9 @@
                             <StackPanel Orientation="Horizontal">
                                 <Viewbox Width="16" Height="16" Margin="0,0,8,0" VerticalAlignment="Center">
                                             <Canvas Width="16" Height="16">
-                                                <Path Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M2.5,12 A5.8,5.8 0 0 1 13.5,12" />
-                                                <Path Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M8,12 L11.2,7.2" />
-                                                <Ellipse Fill="{DynamicResource MutedBrush}" Width="2.2" Height="2.2" Canvas.Left="6.9" Canvas.Top="10.9" />
+                                                <Path Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M3,10.6 A5,5 0 0 1 13,10.6" />
+                                                <Path Stroke="{DynamicResource MutedBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" Data="M8,10.6 L10.34,7.48" />
+                                                <Ellipse Fill="{DynamicResource MutedBrush}" Width="2.2" Height="2.2" Canvas.Left="6.9" Canvas.Top="9.5" />
                                             </Canvas>
                                         </Viewbox>
                                 <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Title}" Style="{StaticResource SectionHeader}" Margin="0" />
