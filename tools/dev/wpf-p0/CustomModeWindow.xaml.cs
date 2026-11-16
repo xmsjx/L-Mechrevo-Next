@@ -1762,16 +1762,24 @@ public partial class CustomModeWindow : Window
         }
             L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryApplyMode(3, out string customModeDetail);
             detail += " · " + customModeDetail;
+            // 不显示的项：不下发、也不参与成功/失败判定。
             bool gpuPowerOk = true;
-            string gpuPowerDetail = "未提供 TGP";
-            if (L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram is { } powerHw && edited.GpuTgp is int tgp && tgp > 0)
+            string gpuPowerDetail = "未显示（未下发）";
+            if (GpuTgpRow.IsVisible
+                && L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram is { } powerHw && edited.GpuTgp is int tgp && tgp > 0)
             {
             gpuPowerOk = L_Mechrevo.WpfP0.Services.WpfBackend.EcGpuPowerTryApply(
                 tgp, edited.GpuDynamicBoost ?? 25,
                 edited.GpuDynamicBoostOn == true, out gpuPowerDetail);
             }
             bool gpuOk = true;
-            if (L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram is not { } ocHw)
+            bool ocVisible = CoreOffsetSlider.IsVisible || GpuOcSwitch.IsVisible;
+            if (!ocVisible)
+            {
+                // 超频项没显示 ⇒ 不下发、不检查（原来会因"直写初始化失败"把整体判成部分失败）。
+                detail += " · GPU超频=未显示";
+            }
+            else if (L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram is not { } ocHw)
             {
                 gpuOk = false;
             }
@@ -1796,11 +1804,16 @@ public partial class CustomModeWindow : Window
             bool fanOk = true;
             string fanDetail = "未启用曲线";
             // 灵敏度是独立项：即使风扇曲线关闭，也要把 FanRamp(1927) 写进去。
-            bool ramp = L_Mechrevo.WpfP0.Services.WpfBackend.NucFanTableTrySetFanRamp(
-                edited.FanSwitchSpeedOn == true, edited.FanSwitchSpeedMs ?? 300, out string rampDetail);
-            fanOk = fanOk && ramp;
-            fanDetail += " · " + rampDetail;
-            if (edited.FanCurveOn != false
+            bool ramp = true;
+            string rampDetail = "";
+            if (FanDelaySlider.IsVisible)
+            {
+                ramp = L_Mechrevo.WpfP0.Services.WpfBackend.NucFanTableTrySetFanRamp(
+                    edited.FanSwitchSpeedOn == true, edited.FanSwitchSpeedMs ?? 300, out rampDetail);
+                fanOk = fanOk && ramp;
+                fanDetail += " · " + rampDetail;
+            }
+            if (FanCurveButton.IsVisible && edited.FanCurveOn != false
                 && edited.CpuFanDuty is { Length: 16 } cpuFan
                 && edited.GpuFanDuty is { Length: 16 } gpuFan)
             {
@@ -1837,11 +1850,19 @@ public partial class CustomModeWindow : Window
         {
             return;
         }
-        if (L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig()
+        // SMU 控制的机器（无界 APU / 星耀 APU）功耗走本机 SMU，不进 EC 功耗墙那条路。
+        bool smuControlled = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram is { } smuHw
+            && (smuHw.WujieSmuApu || smuHw.SmuCustomApu);
+        if (!smuControlled
+            && L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig()
             && L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram?.IsGcuConnected != true)
         {
             await ApplyEcExperimentalCustomAsync();
             return;
+        }
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerfModeService())
+        {
+            // 服务没建成时这里补建一次（启动顺序不同，可能还没建）。
         }
         MechrevoLite.Mode.PerfModeService? perf = MechrevoLite.Mode.PerfModeService.Instance;
         if (perf == null)
