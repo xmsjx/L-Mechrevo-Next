@@ -168,6 +168,8 @@ public partial class OriginalStyleWindow : Window
     private bool _gpuPromptOpen;
     private bool _syncingDisplayEffect;
     private bool _syncingBatteryLimit;
+    // 核显省电行状态读取节流（读显卡模式约 0.2-0.3 秒，不必每次心跳都读）。
+    private long _lastIgpuVisualMs;
 
     /// <summary>滑块停手 500ms 后才下发，拖动过程中不反复写 EC、不反复钉门控。</summary>
     private DispatcherTimer? _batteryLimitDebounce;
@@ -269,6 +271,7 @@ public partial class OriginalStyleWindow : Window
     public OriginalStyleWindow()
     {
         InitializeComponent();
+        UiTrace.Start(Dispatcher);
         AutoRefreshSwitch.Visibility = SupportsAutoRefresh ? Visibility.Visible : Visibility.Collapsed;
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         Closed += (_, _) => Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
@@ -352,7 +355,10 @@ public partial class OriginalStyleWindow : Window
                 L_Mechrevo.WpfP0.Services.MemoryTrimService.TrimIfIdle(idle: true);
                 return;
             }
-            RefreshFromBackend();
+            using (UiTrace.Phase("mini-tick"))
+            {
+                RefreshFromBackend();
+            }
         };
         _lightingIdleTimer.Tick += (_, _) => CheckLightingIdle();
         _lightingIdleTimer.Start();
@@ -1633,17 +1639,21 @@ public partial class OriginalStyleWindow : Window
         }
         foreach (string key in keys)
         {
-            if (_backendProbe != null && !_backendProbe.SupportsQuick(key))
+            // 每项都要读系统/硬件通道，单项慢就把耗时记到对应 key 上（>40ms 才记）。
+            using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("quick-" + key))
             {
-                continue;
+                if (_backendProbe != null && !_backendProbe.SupportsQuick(key))
+                {
+                    continue;
+                }
+                (string Key, string Label, string Glyph) info = QuickTileCatalog.FirstOrDefault(item => item.Key == key);
+                if (info.Key == null)
+                {
+                    continue;
+                }
+                bool on = _backendProbe?.QuickState(key) == true;
+                result.Add((key, QuickSwitchService.Label(key, info.Label), info.Glyph, on));
             }
-            (string Key, string Label, string Glyph) info = QuickTileCatalog.FirstOrDefault(item => item.Key == key);
-            if (info.Key == null)
-            {
-                continue;
-            }
-            bool on = _backendProbe?.QuickState(key) == true;
-            result.Add((key, QuickSwitchService.Label(key, info.Label), info.Glyph, on));
         }
         return result.ToArray();
     }
@@ -6857,20 +6867,20 @@ public partial class OriginalStyleWindow : Window
         }
         // 0.293.5.1 限充效果判定：复用界面 2s 心跳，内部 10s 限频；只读/有界重确立。
         try { MechrevoLite.Battery.ChargeLimitMonitor.Tick(DateTime.Now); } catch { }
-        SyncEcOnlyExternalMode(probe);
-        probe.SyncNucQuickSwitches();
-        probe.SyncCameraQuickState();
-        try { RefreshBrightness(); } catch { }
+        using (UiTrace.Phase("mini-sync-ec")) { SyncEcOnlyExternalMode(probe); }
+        using (UiTrace.Phase("mini-nuc-switch")) { probe.SyncNucQuickSwitches(); }
+        using (UiTrace.Phase("mini-camera")) { probe.SyncCameraQuickState(); }
+        using (UiTrace.Phase("mini-brightness")) { try { RefreshBrightness(); } catch { } }
         BackendLine.Text = probe.Snapshot();
-        UpdateTraySensorTooltip(probe);
-        HookHardwareState();
+        using (UiTrace.Phase("mini-tooltip")) { UpdateTraySensorTooltip(probe); }
+        using (UiTrace.Phase("mini-hook-hw")) { HookHardwareState(); }
         if (probe.Hw.IsNucUmiFamily)
         {
             L_Mechrevo.WpfP0.Services.WpfBackend.NucSyncQuickSwitches(probe.Hw);
         }
         else if (_backendRoute == BackendRoute.Ec)
         {
-            probe.SyncEcExperimentalQuickSwitches();
+            using (UiTrace.Phase("mini-ec-switch")) { probe.SyncEcExperimentalQuickSwitches(); }
         }
         EnsurePerformanceKeyService();
         try
@@ -6891,7 +6901,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             // 本地采样由后台泵负责，界面心跳只读缓存，避免原生调用卡 UI。
-            L_Mechrevo.WpfP0.Services.PowerStatusService.Read();
+            using (UiTrace.Phase("mini-power")) { L_Mechrevo.WpfP0.Services.PowerStatusService.Read(); }
         }
         catch
         {
@@ -6900,12 +6910,21 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        RefreshXingyaoFanIfNeeded();
+        // 星耀风扇转速已由后端的 2.5 秒常驻采样泵统一回填，界面心跳不再直读硬件。
         bool noDgpu = hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
         GpuStat.Visibility = noDgpu ? Visibility.Collapsed : Visibility.Visible;
         CpuStat.Text = SensorLine(cpu: true);
         GpuStat.Text = SensorLine(cpu: false);
-        VisualiseIgpuSaving();
+        using (UiTrace.Phase("mini-igpu"))
+        {
+            // 核显省电行的状态要读显卡模式（走 ACPI/WMI），单次约 0.2-0.3 秒；
+            // 界面每 1.4-2 秒刷新一次没必要每次都真读，按 4 秒节流。
+            if (Environment.TickCount64 - _lastIgpuVisualMs >= 4000)
+            {
+                _lastIgpuVisualMs = Environment.TickCount64;
+                VisualiseIgpuSaving();
+            }
+        }
         if (L_Mechrevo.WpfP0.Services.WpfBackend.rgb != null)
         {
             string? selectedHidTag = (KeyboardEffectCombo.SelectedItem as ComboBoxItem)?.Tag as string;
@@ -7114,29 +7133,6 @@ public partial class OriginalStyleWindow : Window
                 }
             }
             UpdateMoreSwitchCount();
-        }
-    }
-
-    private static void RefreshXingyaoFanIfNeeded()
-    {
-        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
-        try
-        {
-            if (hw.CpuFanRpm > 0 && hw.GpuFanRpm > 0)
-            {
-                return;
-            }
-            if (!IsXingyaoPlatform)
-            {
-                return;
-            }
-            if (L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoReadFanRpm(out int main, out int second))
-            {
-                hw.ApplyXingyaoFanSpeeds(main, second);
-            }
-        }
-        catch
-        {
         }
     }
 

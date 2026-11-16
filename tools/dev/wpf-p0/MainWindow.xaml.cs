@@ -247,13 +247,18 @@ public partial class MainWindow : Window
 
     private void RefreshSensors()
     {
+        using IDisposable trace = L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-tick");
         if (_owner == null || L_Mechrevo.WpfP0.Services.WindowInteractionState.Active)
         {
             return;
         }
         // ⭐ P0-3：宽屏也直接消费共享 ISensorService 快照（⛔ 不再经 WideSensors 读静态字段）；
         //   未连接/异常 ⇒ Empty ⇒ 0，占位显示与原来的 ParseNumber("--") 一致 ✅
-        SensorSnapshot snapshot = _owner.Services?.Sensors.Read() ?? SensorSnapshot.Empty;
+        SensorSnapshot snapshot;
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-snapshot"))
+        {
+            snapshot = _owner.Services?.Sensors.Read() ?? SensorSnapshot.Empty;
+        }
 
         double rpmMax = snapshot.FanRpmMaxForPercent;
         bool hasRpmDenominator = rpmMax > 1;
@@ -277,9 +282,18 @@ public partial class MainWindow : Window
         if (_cpuDutyText != null) _cpuDutyText.Text = WpfStrings.MainWindow_xaml_Text_2 + snapshot.CpuFanDutyPercent + "%";
         if (_gpuDutyText != null) _gpuDutyText.Text = WpfStrings.MainWindow_xaml_Text_2 + snapshot.GpuFanDutyPercent + "%";
         // ⭐ task-26：连接状态可能后变（GCU 服务重连/掉线）⇒ 每次传感器 tick 顺带校正一次屏幕页门控（有缓存，只在变化时改 UI）
-        UpdateScreenBackendGating();
-        UpdateWideBackendStatus();
-        RefreshHomeExtras();
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-gating"))
+        {
+            UpdateScreenBackendGating();
+        }
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-status"))
+        {
+            UpdateWideBackendStatus();
+        }
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-home"))
+        {
+            RefreshHomeExtras();
+        }
     }
 
     private static void SetMetric(List<(RoundedBar Bar, TextBlock Value, string Unit)> metrics, int index, double value, string unit)
@@ -1311,9 +1325,21 @@ public partial class MainWindow : Window
         {
             return;
         }
+        // ⚠️ 只取一次全量状态：这里每一项都要读系统/硬件通道，逐项取会变成 n×n 次
+        //    （宽屏曾因此每 3 秒卡 ~0.8 秒）。
+        (string Key, string Label, string Glyph, bool On)[] tiles;
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("quick-tiles-fetch"))
+        {
+            tiles = _owner.WideQuickTiles();
+        }
+        Dictionary<string, bool> states = new(StringComparer.OrdinalIgnoreCase);
+        foreach ((string key, string _, string _, bool on) in tiles)
+        {
+            states[key] = on;
+        }
         foreach ((string key, Button button, TextBlock state, string label) in _quickTileButtons)
         {
-            bool on = _owner.WideQuickTiles().FirstOrDefault(item => item.Key == key).On;
+            bool on = states.TryGetValue(key, out bool tileOn) && tileOn;
             if (_quickTilePending.TryGetValue(key, out bool pending))
             {
                 if (on == pending)
@@ -2282,7 +2308,7 @@ public partial class MainWindow : Window
         {
             _batteryModePanel.Visibility = _owner.WideBatteryModeVisible ? Visibility.Visible : Visibility.Collapsed;
         }
-        ApplyHomeCapabilities();
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("home-caps")) { ApplyHomeCapabilities(); }
         if (MoreSwitchGrid != null && MoreSwitchGrid.Children.Count == 0) BuildMoreSwitchTiles();
         PerfCurrentText.Text = _owner.WidePerformanceText;
         GpuCurrentText.Text = _owner.WideGpuModeText;
@@ -2329,9 +2355,9 @@ public partial class MainWindow : Window
             HomeGpu独显.IsChecked = gpu.Contains(WpfStrings.GpuModeDedicated) || gpu.Contains(WpfStrings.GpuDedicated);
             HomeGpu集显.IsChecked = gpu.Contains(WpfStrings.GpuModeIntegrated) || gpu.Contains(WpfStrings.GpuIntegrated);
         }
-        RefreshQuickTiles();
-        RefreshMoreSwitchTiles();
-        (string batteryInfo, int batteryMode, string batteryCharge) = _owner.WideBattery();
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("home-quick-tiles")) { RefreshQuickTiles(); }
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("home-switch-tiles")) { RefreshMoreSwitchTiles(); }
+        (string batteryInfo, int batteryMode, string batteryCharge) = L_Mechrevo.WpfP0.Services.UiTrace.Measure("home-battery", () => _owner.WideBattery());
         if (_batteryInfoText != null) _batteryInfoText.Text = batteryInfo;
         for (int i = 0; i < _batteryModeButtons.Count; i++)
         {
@@ -2345,7 +2371,7 @@ public partial class MainWindow : Window
                 && !string.Equals(chargeText, _chargeStatus?.Text, StringComparison.Ordinal)
                 ? Visibility.Visible : Visibility.Collapsed;
         }
-        (string info, int currentHz, int maxHz, bool auto, int brightness) = _owner.WideDisplay();
+        (string info, int currentHz, int maxHz, bool auto, int brightness) = L_Mechrevo.WpfP0.Services.UiTrace.Measure("home-display", () => _owner.WideDisplay());
         DisplayInfoText.Text = info;
         if (_displayBrightnessText != null) _displayBrightnessText.Text = brightness + "%";
         if (_displayBrightness != null
@@ -2354,7 +2380,7 @@ public partial class MainWindow : Window
         {
             _displayBrightness.Value = brightness;
         }
-        int[] refreshRates = _owner.WideRefreshRates();
+        int[] refreshRates = L_Mechrevo.WpfP0.Services.UiTrace.Measure("home-refresh-rates", () => _owner.WideRefreshRates());
         string refreshSignature = string.Join(",", refreshRates);
         if (refreshSignature != _refreshRatesSignature)
         {
@@ -2368,9 +2394,9 @@ public partial class MainWindow : Window
             }
         }
         if (_autoRefresh != null) _autoRefresh.IsChecked = auto;
-        RefreshLiquidCooling();
-        RefreshScreenControls();
-        (bool limitEnabled2, string lowText2, string highText2, string limitStatus2, bool experiment2) = _owner.WideChargeLimit();
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("home-liquid")) { RefreshLiquidCooling(); }
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("home-screen")) { RefreshScreenControls(); }
+        (bool limitEnabled2, string lowText2, string highText2, string limitStatus2, bool experiment2) = L_Mechrevo.WpfP0.Services.UiTrace.Measure("home-charge-limit", () => _owner.WideChargeLimit());
         if (_chargeLimitSwitch != null) _chargeLimitSwitch.IsChecked = limitEnabled2;
         if (_chargeLow != null && !_chargeLow.IsKeyboardFocusWithin) _chargeLow.Text = lowText2;
         if (_chargeHigh != null && !_chargeHigh.IsKeyboardFocusWithin) _chargeHigh.Text = highText2;

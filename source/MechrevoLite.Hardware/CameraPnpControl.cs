@@ -101,7 +101,9 @@ internal static class CameraPnpControl
 	private static readonly IntPtr InvalidHandleValue = new IntPtr(-1);
 
 	/// <summary>⭐ 枚举缓存 TTL（3 s 周期状态回读时不必每次重新枚举；写后强制刷缓存 ✅）。</summary>
-	private const int CacheTtlMs = 2000;
+	    // 摄像头枚举走 PnP，单次可达数百毫秒；界面每 1.4-2 秒刷新一次状态，缓存太短就等于每次都真枚举。
+    // 开关状态另有事件与显式失效（InvalidateCache），不需要靠短 TTL 保鲜。
+    private const int CacheTtlMs = 15000;
 
 	private static readonly object Gate = new object();
 
@@ -115,6 +117,20 @@ internal static class CameraPnpControl
 	internal readonly record struct CameraDeviceInfo(string Name, string ClassName, bool Disabled, uint ProblemCode);
 
 	/// <summary>
+	/// <summary>丢掉摄像头枚举缓存（开关切换后调用，避免读回旧状态）。</summary>
+	internal static void InvalidateCache()
+	{
+		try
+		{
+			_cache = null!;
+			_cacheAtMs = 0;
+			_cacheDetail = string.Empty;
+		}
+		catch
+		{
+		}
+	}
+
 	/// ⭐ 本机是否存在可控制的摄像头设备（Camera/Image 类，排除扫描仪、虚拟摄像头、Windows Hello 红外相机）。
 	/// <para>⚠️ 只读；枚举失败/没有摄像头 ⇒ <c>false</c>（调用方据此决定是否退回隐私键兜底）。</para>
 	/// </summary>

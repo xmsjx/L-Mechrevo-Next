@@ -491,6 +491,9 @@ public static class HardwareControl
 
 	public static int gpuCoreFreq;
 
+	/// <summary>显存频率（MHz；0 = 未知）。由本地采样泵刷新，界面只读快照。</summary>
+	public static int gpuMemoryClockMhz;
+
 	public static float? cpuPower;
 
 	public static float? gpuPower;
@@ -2653,6 +2656,7 @@ public static class HardwareControl
 		}
 		float? gpuPowerViaNvml = null;
 		(long, long)? memoryViaNvml = null;
+		float? memoryClockViaNvml = null;
 		if (!NvmlHelper.Unavailable)
 		{
 			// (c) NVML 已隔离/模块失效时跳过；正常时 (b) 句柄每次现取、(e) 结果 TTL 复用。
@@ -2660,6 +2664,7 @@ public static class HardwareControl
 			{
 				gpuPowerViaNvml = NvmlHelper.GetGpuPower();
 				memoryViaNvml = NvmlHelper.GetMemoryInfo();
+				memoryClockViaNvml = NvmlHelper.GetGpuMemoryClockMhz();
 			}, "nvml-sample");
 		}
 		// (a) 性能计数器回退也单独兜底：它同样会抛（计数器缺失/被删/权限不足），不能让它穿出去。
@@ -2769,6 +2774,69 @@ public static class HardwareControl
 		long num4 = ((lhmTotal > 0) ? lhmTotal : (tuple?.Item2 ?? 0));
 		vramUsedMb = ((num3 > 0) ? new int?((int)Math.Min(num3, 2147483647L)) : ((int?)null));
 		vramUsage = ((num3 > 0 && num4 > 0) ? new int?((int)Math.Clamp(num3 * 100 / num4, 0L, 100L)) : ((int?)null));
+		// 显存频率：NVML 优先；NVML 没给值时才用 nvidia-smi 子进程兜底（该子进程自带 2.5 s 节流）。
+		if (memoryClockViaNvml.HasValue && memoryClockViaNvml.Value > 0f)
+		{
+			gpuMemoryClockMhz = (int)Math.Round(memoryClockViaNvml.Value);
+		}
+		if (gpuMemoryClockMhz <= 0 || !IsUsablePower(gpuPower))
+		{
+			TryStep(delegate
+			{
+				if (gpuMemoryClockMhz <= 0)
+				{
+					int? smiClock = MechrevoLite.Hardware.NvidiaSmiSensor.GetMemoryClockMhz();
+					if (smiClock.HasValue && smiClock.Value > 0)
+					{
+						gpuMemoryClockMhz = smiClock.Value;
+					}
+				}
+				if (!IsUsablePower(gpuPower))
+				{
+					gpuPower = MechrevoLite.Hardware.NvidiaSmiSensor.GetPowerWatts();
+				}
+			}, "gpu-smi-fallback", countsAsHealthFailure: false);
+		}
+		// NUC/UMI 与星耀机型的本地风扇读取：由采样泵统一负责，界面只取快照，不直接读硬件。
+		MechrevoHw fanHw = Program.hw;
+		if (fanHw != null && fanHw.IsIntelNucMachine)
+		{
+			try
+			{
+				if (MechrevoLite.Hardware.UmiFanReader.TryReadFanRpm(out int umiMain, out int umiSecond))
+				{
+					fanHw.ApplyIntelNucFanSpeeds(umiMain, umiSecond);
+				}
+				if (MechrevoLite.Hardware.UmiFanReader.TryReadFanDuty(out int umiMainDuty, out int umiSecondDuty))
+				{
+					fanHw.ApplyIntelNucFanDuty(umiMainDuty, umiSecondDuty);
+				}
+			}
+			catch
+			{
+			}
+		}
+		if (cpuFanRPM <= 0 || gpuFanRPM <= 0)
+		{
+			try
+			{
+				if (MechrevoLite.Hardware.XingyaoFanReader.TryReadFanRpm(out int xingyaoMain, out int xingyaoSecond))
+				{
+					fanHw?.ApplyXingyaoFanSpeeds(xingyaoMain, xingyaoSecond);
+					if (cpuFanRPM <= 0 && xingyaoMain > 0)
+					{
+						cpuFanRPM = xingyaoMain;
+					}
+					if (gpuFanRPM <= 0 && xingyaoSecond > 0)
+					{
+						gpuFanRPM = xingyaoSecond;
+					}
+				}
+			}
+			catch
+			{
+			}
+		}
 	}
 
 	/// <summary>
@@ -3031,6 +3099,46 @@ public static class HardwareControl
 	public static void ReadSensorsOverlay()
 	{
 		SampleLocalPower();
+	}
+
+	/// <summary>
+	/// 本地传感器快照：界面只取这一份，自身不做任何硬件 I/O。
+	/// <para>数值由 2.5 s 常驻采样泵刷新；本类型只负责搬运，不触发采样。</para>
+	/// </summary>
+	public sealed record LocalSensorSnapshot(
+		int CpuTemp,
+		int GpuTemp,
+		int CpuFanRpm,
+		int GpuFanRpm,
+		int? CpuFanDuty,
+		int? GpuFanDuty,
+		int? CpuUsage,
+		int? GpuUsage,
+		int CpuFrequency,
+		int GpuCoreFreq,
+		float? CpuPower,
+		float? GpuPower,
+		int GpuMemoryClockMhz,
+		int? VramUsage);
+
+	/// <summary>取当前本地采样快照；不采样、不做硬件 I/O。</summary>
+	public static LocalSensorSnapshot CurrentLocalSnapshot()
+	{
+		return new LocalSensorSnapshot(
+			cpuTemp,
+			gpuTemp,
+			cpuFanRPM,
+			gpuFanRPM,
+			cpuFan,
+			gpuFan,
+			cpuUsage,
+			gpuUsage,
+			cpuFrequency,
+			gpuCoreFreq,
+			cpuPower,
+			gpuPower,
+			gpuMemoryClockMhz,
+			vramUsage);
 	}
 
 	internal static void SampleLocalPower()

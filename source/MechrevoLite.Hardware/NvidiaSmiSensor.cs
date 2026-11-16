@@ -4,9 +4,8 @@ using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using MechrevoLite;
 
-namespace L_Mechrevo.WpfP0.Services;
+namespace MechrevoLite.Hardware;
 
 /// <summary>
 /// 用独立的 nvidia-smi 子进程读取 GPU 功耗/显存频率。

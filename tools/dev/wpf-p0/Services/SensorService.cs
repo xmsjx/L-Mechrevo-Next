@@ -4,11 +4,9 @@ using MechrevoLite.Hardware;
 namespace L_Mechrevo.WpfP0.Services;
 
 /// <summary>
-/// ⭐ 传感器读取（两窗共用同一份快照口径）✅
-/// <para>⭐ 解决的原问题：<c>WideSensors()</c> 既读后端又拼中文单位字符串
-/// （<c>" ℃" / " RPM" / " W"</c>）⇒ 迷你窗的传感器行只能通过宽屏窗口方法间接拿数据。</para>
-/// <para>⛔ 本服务**不格式化**：返回原始数值，显示单位/占位符由各自 View 决定；⛔ 不触发采样
-/// （采样仍由既有 2 s 遥测定时器驱动，见 <c>HardwareControl.ReadSensors()</c>）。</para>
+/// 传感器读取（两窗共用同一份快照口径）。
+/// <para>本服务只做「后端快照 → 显示快照」的映射：⛔ 不读 NVML / nvidia-smi / EC，
+/// ⛔ 不触发采样（采样由后端的 2.5 s 常驻采样泵负责，见 HardwareControl.CurrentLocalSnapshot）。</para>
 /// </summary>
 internal interface ISensorService
 {
@@ -33,107 +31,48 @@ internal sealed class SensorService : ISensorService
         return backend > 0 ? backend : local;
     }
 
+    /// <summary>
+    /// 取一次传感器快照。
+    /// <para>本地值一律来自后端快照，界面线程不碰任何硬件通道 —— 原先在界面线程上同步读
+    /// EC 风扇寄存器 / NVML / nvidia-smi，会与后台采样泵争同一条串行通路，窗口在前台时每 2 s 卡一次。</para>
+    /// </summary>
     public SensorSnapshot Read()
     {
         MechrevoHw? hw = _backend.Hw;
         bool connected = hw != null && hw.IsConnected;
         try
         {
-            // 后端暂时未连上时仍使用本地采样值（LHM/NVML），不要整页归零。
-            float? gpuMemoryClock = NvmlHelper.Unavailable ? null : NvmlHelper.GetGpuMemoryClockMhz();
-            int? gpuMemoryClockMhz = gpuMemoryClock.HasValue && gpuMemoryClock.Value > 0
-                ? (int)Math.Round(gpuMemoryClock.Value)
-                : NvidiaSmiSensor.GetMemoryClockMhz();
-            int umiMain = -1;
-            int umiSecond = -1;
-            int umiMainDuty = -1;
-            int umiSecondDuty = -1;
-            bool umiFan = hw != null && hw.IsIntelNucMachine
-                && UmiFanReader.TryReadFanRpm(out umiMain, out umiSecond);
-            bool umiDuty = hw != null && hw.IsIntelNucMachine
-                && UmiFanReader.TryReadFanDuty(out umiMainDuty, out umiSecondDuty);
-            if (umiFan)
-            {
-                hw!.ApplyIntelNucFanSpeeds(umiMain, umiSecond);
-            }
-            if (umiDuty)
-            {
-                hw!.ApplyIntelNucFanDuty(umiMainDuty, umiSecondDuty);
-            }
-            float? gpuPower = HardwareControl.gpuPower;
-            if (!gpuPower.HasValue && NvmlHelper.Unavailable)
-            {
-                gpuPower = NvidiaSmiSensor.GetPowerWatts();
-            }
+            HardwareControl.LocalSensorSnapshot snap = HardwareControl.CurrentLocalSnapshot();
             bool preferLocalTemp = hw?.SmuCustomApu == true || hw?.WujieSmuApu == true
                 || hw?.IsNucUmiFamily == true
                 || hw?.IsYaoshiMachine == true;
-            int cpuTemp = preferLocalTemp && HardwareControl.cpuTemp > 0
-                ? HardwareControl.cpuTemp
-                : Prefer(connected ? hw!.CpuTemp : -1, HardwareControl.cpuTemp);
-            int gpuTemp = preferLocalTemp && HardwareControl.gpuTemp > 0
-                ? HardwareControl.gpuTemp
-                : Prefer(connected ? hw!.GpuTemp : -1, HardwareControl.gpuTemp);
-            int cpuFanRpm = umiFan && umiMain >= 0 ? umiMain : Prefer(connected ? hw!.CpuFanRpm : -1, HardwareControl.cpuFanRPM);
-            int gpuFanRpm = umiFan && umiSecond >= 0 ? umiSecond : Prefer(connected ? hw!.GpuFanRpm : -1, HardwareControl.gpuFanRPM);
-            if (cpuFanRpm <= 0 || gpuFanRpm <= 0)
-            {
-                try
-                {
-                    if (MechrevoLite.Hardware.XingyaoFanReader.TryReadFanRpm(out int xyMain, out int xySecond))
-                    {
-                        if (cpuFanRpm <= 0 && xyMain > 0) cpuFanRpm = xyMain;
-                        if (gpuFanRpm <= 0 && xySecond > 0) gpuFanRpm = xySecond;
-                        hw?.ApplyXingyaoFanSpeeds(xyMain, xySecond);
-                    }
-                }
-                catch
-                {
-                }
-            }
-            int cpuDutyPercent = umiDuty && umiMainDuty >= 0
-                ? umiMainDuty
-                : Prefer(connected ? hw!.CpuFanDuty : -1, HardwareControl.cpuFan ?? 0);
-            int gpuDutyPercent = umiDuty && umiSecondDuty >= 0
-                ? umiSecondDuty
-                : Prefer(connected ? hw!.GpuFanDuty : -1, HardwareControl.gpuFan ?? 0);
-            if (hw != null && !hw.IsNucUmiFamily && !hw.UsesBaolongda
-                && (!connected || cpuFanRpm <= 0 || gpuFanRpm <= 0))
-            {
-                try
-                {
-                    if (hw.TryReadGcuEcFanSpeeds(out int ecCpu, out int ecGpu))
-                    {
-                        if (ecCpu > 0) cpuFanRpm = ecCpu;
-                        if (ecGpu > 0) gpuFanRpm = ecGpu;
-                    }
-                    if (hw.TryReadGcuEcFanDuties())
-                    {
-                        cpuDutyPercent = hw.CpuFanDuty;
-                        gpuDutyPercent = hw.GpuFanDuty;
-                    }
-                }
-                catch
-                {
-                }
-            }
+            int cpuTemp = preferLocalTemp && snap.CpuTemp > 0
+                ? snap.CpuTemp
+                : Prefer(connected ? hw!.CpuTemp : -1, snap.CpuTemp);
+            int gpuTemp = preferLocalTemp && snap.GpuTemp > 0
+                ? snap.GpuTemp
+                : Prefer(connected ? hw!.GpuTemp : -1, snap.GpuTemp);
+            int cpuFanRpm = Prefer(connected ? hw!.CpuFanRpm : -1, snap.CpuFanRpm);
+            int gpuFanRpm = Prefer(connected ? hw!.GpuFanRpm : -1, snap.GpuFanRpm);
+            int cpuDutyPercent = Prefer(connected ? hw!.CpuFanDuty : -1, snap.CpuFanDuty ?? 0);
+            int gpuDutyPercent = Prefer(connected ? hw!.GpuFanDuty : -1, snap.GpuFanDuty ?? 0);
             return new SensorSnapshot(
                 HardwareAvailable: true,
                 CpuTempC: cpuTemp,
                 GpuTempC: gpuTemp,
                 CpuFanRpm: cpuFanRpm,
                 GpuFanRpm: gpuFanRpm,
-                CpuUsagePercent: Prefer(connected ? hw!.CpuUsage : -1, HardwareControl.cpuUsage ?? 0),
-                GpuUsagePercent: Prefer(connected ? hw!.GpuUsage : -1, HardwareControl.gpuUsage ?? 0),
+                CpuUsagePercent: Prefer(connected ? hw!.CpuUsage : -1, snap.CpuUsage ?? 0),
+                GpuUsagePercent: Prefer(connected ? hw!.GpuUsage : -1, snap.GpuUsage ?? 0),
                 CpuFanDutyPercent: cpuDutyPercent,
                 GpuFanDutyPercent: gpuDutyPercent,
-                CpuFrequencyMhz: Prefer(connected ? hw!.CpuFrequency : -1, HardwareControl.cpuFrequency),
-                GpuCoreFrequencyMhz: Prefer(connected ? hw!.GpuCoreFreq : -1, HardwareControl.gpuCoreFreq),
+                CpuFrequencyMhz: Prefer(connected ? hw!.CpuFrequency : -1, snap.CpuFrequency),
+                GpuCoreFrequencyMhz: Prefer(connected ? hw!.GpuCoreFreq : -1, snap.GpuCoreFreq),
                 FanRpmMaxForPercent: connected ? hw!.FanRpmMaxForPercent : 5000,
-                CpuPowerWatts: HardwareControl.cpuPower,
-                GpuPowerWatts: gpuPower,
-                GpuMemoryClockMhz: gpuMemoryClockMhz,
-                GpuVramUsagePercent: HardwareControl.vramUsage ?? -1);
+                CpuPowerWatts: snap.CpuPower,
+                GpuPowerWatts: snap.GpuPower,
+                GpuMemoryClockMhz: snap.GpuMemoryClockMhz > 0 ? snap.GpuMemoryClockMhz : null,
+                GpuVramUsagePercent: snap.VramUsage ?? -1);
         }
         catch
         {

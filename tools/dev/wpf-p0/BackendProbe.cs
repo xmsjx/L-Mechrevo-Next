@@ -20,6 +20,11 @@ internal sealed class BackendProbe : IDisposable
     private bool _disposed;
     private int _cameraSyncBusy;
     private int _cameraQuickState = -1;
+    // 快捷开关状态缓存：这些状态要读无线/摄像头/音频等系统通道，单次可达数十毫秒，
+    // 界面每次 tick 都全量重读会把 UI 线程拖住（宽屏 home 卡片曾因此每 3 秒卡 ~0.8 秒）。
+    private const int QuickStateCacheMs = 4000;
+    private readonly Dictionary<string, (bool Value, long At)> _quickStateCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly object _quickStateCacheGate = new();
 
     internal BackendProbe()
     {
@@ -416,10 +421,17 @@ internal sealed class BackendProbe : IDisposable
     {
         if (_hw != null && !_hw.UsesBaolongda && !_hw.IsNucUmiFamily)
         {
-            NucQuickSwitches.Sync(_hw);
-            if (AcpiDriverEc.TryReadByte(1873, out byte clamp))
+            // 拆两段计时：NucQuickSwitches.Sync 里有摄像头 PnP 枚举（慢），clamp 是一次 EC 读。
+            using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("ec-quick-nuc"))
             {
-                _hw.QuickSwitches["fanboost"] = (clamp & 0x40) != 0;
+                NucQuickSwitches.Sync(_hw);
+            }
+            using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("ec-quick-clamp"))
+            {
+                if (AcpiDriverEc.TryReadByte(1873, out byte clamp))
+                {
+                    _hw.QuickSwitches["fanboost"] = (clamp & 0x40) != 0;
+                }
             }
         }
     }
@@ -1447,6 +1459,42 @@ internal sealed class BackendProbe : IDisposable
     }
 
     internal bool QuickState(string key)
+    {
+        // 命中缓存直接返回（开关点过之后会主动失效，见 InvalidateQuickState）
+        long now = Environment.TickCount64;
+        lock (_quickStateCacheGate)
+        {
+            if (_quickStateCache.TryGetValue(key, out (bool Value, long At) cached)
+                && now - cached.At < QuickStateCacheMs)
+            {
+                return cached.Value;
+            }
+        }
+        bool value = QuickStateCore(key);
+        lock (_quickStateCacheGate)
+        {
+            _quickStateCache[key] = (value, now);
+        }
+        return value;
+    }
+
+    /// <summary>让快捷开关状态缓存立刻失效（开关切换、外部状态变化后调用）。</summary>
+    internal void InvalidateQuickState(string? key = null)
+    {
+        lock (_quickStateCacheGate)
+        {
+            if (string.IsNullOrEmpty(key))
+            {
+                _quickStateCache.Clear();
+            }
+            else
+            {
+                _quickStateCache.Remove(key);
+            }
+        }
+    }
+
+    private bool QuickStateCore(string key)
     {
         if (_hw == null && !string.Equals(key, "winupdate", StringComparison.OrdinalIgnoreCase))
         {

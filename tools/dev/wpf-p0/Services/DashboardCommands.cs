@@ -60,6 +60,14 @@ internal sealed class DashboardCommands : IDashboardCommands
             bool cameraBefore = string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase)
                 && _probe != null && _probe.QuickState("webcam");
             bool ok = (await _services.QuickSwitches.ToggleAsync(key).ConfigureAwait(false)).Ok;
+            if (ok)
+            {
+                _probe?.InvalidateQuickState(key);
+                if (string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase))
+                {
+                    MechrevoLite.Hardware.CameraPnpControl.InvalidateCache();
+                }
+            }
             if (ok && string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase) && _probe != null)
             {
                 _probe.SetCameraQuickState(!cameraBefore);
@@ -72,6 +80,14 @@ internal sealed class DashboardCommands : IDashboardCommands
         }
         bool current = _probe.QuickState(key);
         bool switched = await _probe.SwitchQuickAsync(key, !current).ConfigureAwait(false);
+        if (switched)
+        {
+            _probe.InvalidateQuickState(key);
+            if (string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase))
+            {
+                MechrevoLite.Hardware.CameraPnpControl.InvalidateCache();
+            }
+        }
         if (switched && string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase))
         {
             _probe.SetCameraQuickState(!current);
@@ -84,6 +100,14 @@ internal sealed class DashboardCommands : IDashboardCommands
         if (_services != null)
         {
             bool ok = (await _services.QuickSwitches.SetAsync(key, on).ConfigureAwait(false)).Ok;
+            if (ok)
+            {
+                _probe?.InvalidateQuickState(key);
+                if (string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase))
+                {
+                    MechrevoLite.Hardware.CameraPnpControl.InvalidateCache();
+                }
+            }
             if (ok && string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase) && _probe != null)
             {
                 _probe.SetCameraQuickState(on);
@@ -95,6 +119,14 @@ internal sealed class DashboardCommands : IDashboardCommands
             return false;
         }
         bool switched = await _probe.SwitchQuickAsync(key, on).ConfigureAwait(false);
+        if (switched)
+        {
+            _probe.InvalidateQuickState(key);
+            if (string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase))
+            {
+                MechrevoLite.Hardware.CameraPnpControl.InvalidateCache();
+            }
+        }
         if (switched && string.Equals(key, "webcam", StringComparison.OrdinalIgnoreCase))
         {
             _probe.SetCameraQuickState(on);
