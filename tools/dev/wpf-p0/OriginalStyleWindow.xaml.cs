@@ -1997,8 +1997,9 @@ public partial class OriginalStyleWindow : Window
             double? cpuPower = snapshot.CpuPowerWatts;
             double? gpuPower = snapshot.GpuPowerWatts;
             int? memClock = snapshot.GpuMemoryClockMhz;
-            return (snapshot.CpuTempC + " ℃", snapshot.GpuTempC + " ℃",
-                snapshot.CpuFanRpm + " RPM", snapshot.GpuFanRpm + " RPM",
+            static string Num(int v, string unit) => v >= 0 ? v + " " + unit : "--";
+            return (Num(snapshot.CpuTempC, "℃"), Num(snapshot.GpuTempC, "℃"),
+                Num(snapshot.CpuFanRpm, "RPM"), Num(snapshot.GpuFanRpm, "RPM"),
                 snapshot.CpuUsagePercent + "%", snapshot.GpuUsagePercent + "%",
                 snapshot.CpuFanDutyPercent + "%", snapshot.GpuFanDutyPercent + "%",
                 snapshot.CpuFrequencyMhz + " MHz", snapshot.GpuCoreFrequencyMhz + " MHz",
@@ -7469,7 +7470,10 @@ public partial class OriginalStyleWindow : Window
         }
         // 界面心跳只读缓存：转速由后台采样泵回填（EC 直读在界面线程上每次约几十毫秒，
         // 叠在心跳里就是可感知的卡顿）。这里不再直读 EC。
-        string line = (cpu ? "CPU " : "GPU ") + temp + "℃   " + rpm + "rpm";
+        // 读不到时后端会给 -1：⛔ 不能把它当数值显示（会出现 "-1rpm"），按"未知"显示破折号。
+        string tempText = temp > 0 ? temp + "℃" : "—";
+        string rpmText = rpm > 0 ? rpm + "rpm" : (rpm == 0 ? "0rpm" : "—");
+        string line = (cpu ? "CPU " : "GPU ") + tempText + "   " + rpmText;
         string duty = FanDutyText(cpu);
         return duty.Length == 0 ? line : line + " " + duty;
     }
