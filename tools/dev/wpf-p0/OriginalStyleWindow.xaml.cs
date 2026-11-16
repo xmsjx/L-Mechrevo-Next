@@ -720,11 +720,12 @@ public partial class OriginalStyleWindow : Window
     /// <summary>电脑实体性能模式按键的替代行为：快捷开关 / 轮换自定义配置；只在 EC 模式生效。</summary>
     private async Task<bool> TryHandlePerformanceKeyOverrideAsync()
     {
+        string action = AppConfig.GetString("perf_key_action") ?? "mode";
         if (!L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive)
         {
+            Logger.WriteErrorIfChanged("perfkey-override-nonec", "[perfkey] 改绑动作=" + action + " · 当前不是 EC 模式 ⇒ 交给默认循环");
             return false;
         }
-        string action = AppConfig.GetString("perf_key_action") ?? "mode";
         if (string.Equals(action, "quick", StringComparison.OrdinalIgnoreCase))
         {
             string key = AppConfig.GetString("perf_key_quick") ?? "";
@@ -747,18 +748,27 @@ public partial class OriginalStyleWindow : Window
         }
         if (string.Equals(action, "cycle", StringComparison.OrdinalIgnoreCase))
         {
-            MechrevoLite.Mode.PerfModeService? perf = MechrevoLite.Mode.PerfModeService.Instance;
+            MechrevoLite.Mode.PerfModeService? perf = EnsurePerfModeService();
             if (perf == null)
             {
+                Logger.WriteErrorIfChanged("perfkey-override-noservice",
+                    "[perfkey] 改绑动作=cycle · 自定义档服务不可用 ⇒ 回退默认档位循环");
+                StatusText.Text = WpfStrings.L("自定义档服务未就绪，已按默认循环切档。", "Custom profile service not ready; used default cycle.");
                 return false;
             }
             List<MechrevoLite.Mode.PerfModeDefinition> customs = perf.Modes
                 .Where(mode => mode.IsCustom)
                 .ToList();
+            Logger.WriteErrorIfChanged("perfkey-override-cycle-" + customs.Count,
+                "[perfkey] 改绑动作=cycle · 自定义档数=" + customs.Count + " · 当前档=" + perf.ActiveModeId);
             if (customs.Count < 2)
             {
-                StatusText.Text = WpfStrings.L("只有一个自定义配置，无法轮换。", "Only one custom profile.");
-                return true;
+                Logger.WriteErrorIfChanged("perfkey-override-cycle-short-" + customs.Count,
+                    "[perfkey] 改绑动作=cycle · 自定义档不足 2 个（本机 " + customs.Count + "）⇒ 回退默认档位循环");
+                StatusText.Text = WpfStrings.L(
+                    "没有足够的自定义配置（本机 " + customs.Count + " 个），已按默认循环切档。",
+                    "Not enough custom profiles (" + customs.Count + "); used default cycle.");
+                return false;
             }
             int current = customs.FindIndex(mode => string.Equals(mode.Id, perf.ActiveModeId, StringComparison.OrdinalIgnoreCase));
             MechrevoLite.Mode.PerfModeDefinition next = customs[(current + 1 + customs.Count) % customs.Count];
@@ -770,6 +780,31 @@ public partial class OriginalStyleWindow : Window
         return false;
     }
 
+    /// <summary>取自定义档服务；启动时若没建成（后端连接顺序不同），这里补建一次，失败返回 null。</summary>
+    private MechrevoLite.Mode.PerfModeService? EnsurePerfModeService()
+    {
+        MechrevoLite.Mode.PerfModeService? perf = MechrevoLite.Mode.PerfModeService.Instance;
+        if (perf != null)
+        {
+            return perf;
+        }
+        try
+        {
+            BackendProbe? probe = _backendProbe;
+            if (probe?.Hw == null)
+            {
+                return null;
+            }
+            MechrevoLite.Mode.PerfModeService created = MechrevoLite.Mode.PerfModeService.Create(probe.Service!, probe.Hw);
+            Logger.WriteError("[perfkey] 自定义档服务缺省补建成功");
+            return created;
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteError("[perfkey] 自定义档服务补建失败：" + ex.GetType().Name + " " + ex.Message);
+            return null;
+        }
+    }
     private async Task WideActivateCustomModeAsync()
     {
         MechrevoLite.Mode.PerfModeService? perf = MechrevoLite.Mode.PerfModeService.Instance;
