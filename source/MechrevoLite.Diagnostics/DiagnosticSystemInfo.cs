@@ -689,9 +689,9 @@ stringBuilder.Append(DiagnosticBackendRouteInfo.Build());
 		string lowerCompare = ((probe.Lower < 0 || expectedLower < 0)
 			? "（0x7B9 或 0x7D0 读不到，无法比对）"
 			: ((probe.Lower == expectedLower)
-				? $"（== 上限 − {EcChargeLimit.RechargeHysteresis} = {expectedLower} ⇒ 固件自己推的下限成立，我们以前那笔显式写入是冗余的）"
+				? $"（== 上限 − {EcChargeLimit.RechargeHysteresis} = {expectedLower} ⇒ 与我们写入的值一致）"
 				: $"（≠ 期望 {expectedLower}（上限 − {EcChargeLimit.RechargeHysteresis}）⇒ 本机固件可能不推导下限、该值仍是旧值：只影响回充时机，**不影响充电上限**）"));
-		sb.AppendLine($"0x{EcChargeLimit.LowerRegister:X3} 复充下限: {DescribeRaw(probe.Lower)}（上游**不写**、交由固件 store_limit() 推导；LM 自 2026-10-10 起只读不改：{lowerCompare}）");
+		sb.AppendLine($"0x{EcChargeLimit.LowerRegister:X3} 复充下限: {DescribeRaw(probe.Lower)}（固件会自行推导；LM 在上限成功后 best-effort 写一次，不参与成败判定：{lowerCompare}）");
 		sb.AppendLine($"0x{EcChargeLimit.GateRegister:X3} 产品线门控: {DescribeRaw(probe.Gate)}（上游：非 4/5 时固件不跑限充控制循环）");
 		sb.AppendLine($"0x{EcChargeLimit.EffectRegister:X3} 生效位: {DescribeRaw(probe.Effect)} → {probe.DescribeEffect()}");
 		sb.AppendLine($"0x{EcChargeLimit.RomIdRegister:X3} ROMID 首字节: {DescribeRaw(probe.RomId)}（上游用它做 4/5 产品线判断）");

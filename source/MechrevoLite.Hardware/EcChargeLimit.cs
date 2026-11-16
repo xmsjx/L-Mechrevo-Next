@@ -8,8 +8,8 @@ internal static class EcChargeLimit
 {
 	public const int UpperRegister = 1977;
 
-	// 2026-10-10（对齐旧版 · 复充下限只读）：旧版 Leo-stro/mechrevo-charge-limit **只写 0x07B9**，
-	// 0x07D0 由固件 store_limit() 自己推导。我们仍**读**它（诊断/观察），但 ⛔ 不再写、不再参与成败判定。
+	// 复充下限 0x07D0：上限写成功后会 best-effort 补写一次（= 上限 − 5），⛔ 不参与成败判定。
+	// 另有一条只读观察（ScheduleLowerBoundObservation），用来核对固件是否自己推导出了同一个值。
 	public const int LowerRegister = 2000;
 
 	public const int RechargeHysteresis = 5;
@@ -587,12 +587,11 @@ internal static class EcChargeLimit
 								+ "（best-effort，不影响上限成败）");
 						}
 					}
-					// 2026-10-10（对齐旧版 Leo-stro/mechrevo-charge-limit · 停写复充下限 0x7D0）：
-					// 旧版**只写 0x07B9**，复充下限 0x07D0 由固件 store_limit() 在门控保持窗口内自己推导。
-					// 我们以前把 0x07D0 的写入成败与 0x07B9 绑成"全或无"（0x7D0 写失败或回读不符就回滚
-					// 0x7D0 + 0x7B9 并整次返回 false）—— 多出一个本不该存在的失败模式，且 0x7D0 的语义
-					// 在不同机型上未必一致。现在：**0x7D0 只读、不写、不回滚**，上限成败只由 0x07B9
-					// （掩掉 bit7 后）决定；只读观察见 ScheduleLowerBoundObservation（2.5s 后等固件推完再看）。
+					// 复充下限 0x07D0 的定位（当前实现，以此为准）：
+					// · 上限成功后 best-effort 写一次（见上），⚠️ 不参与成败判定、失败也不回滚上限；
+					// · 整次成败只由 0x07B9（掩掉 bit7 后）决定，避免多出一个本不该存在的失败模式；
+					// · 另有只读观察（ScheduleLowerBoundObservation）：2.5s 后等固件推完，核对两者是否一致。
+					//   —— 历史注释里"只读不写"的说法已作废，现实现是"写一次 + 只读观察"。
 					bool applied = appliedPercent == PercentFor(num2);
 					if (applied)
 					{
