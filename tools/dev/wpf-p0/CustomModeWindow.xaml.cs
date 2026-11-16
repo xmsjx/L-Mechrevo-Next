@@ -1850,10 +1850,18 @@ public partial class CustomModeWindow : Window
         {
             return;
         }
-        // SMU 控制的机器（无界 APU / 星耀 APU）功耗走本机 SMU，不进 EC 功耗墙那条路。
-        bool smuControlled = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram is { } smuHw
-            && (smuHw.WujieSmuApu || smuHw.SmuCustomApu);
-        if (!smuControlled
+        // 这些机器的自定义功耗都不走 EC 功耗墙：
+        //   · 无界 APU / 星耀 APU —— 本机 SMU
+        //   · Intel 星耀       —— 本机 MSR
+        //   · 宝龙达（含 30 系蛟龙）—— WMI 功能号 23
+        bool vendorPowerChannel = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram is { } smuHw
+            && (smuHw.WujieSmuApu
+                || smuHw.SmuCustomApu
+                || smuHw.UsesBaolongda
+                || (L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
+                    && !smuHw.IsNucUmiFamily
+                    && L_Mechrevo.WpfP0.Services.WpfBackend.IsXingyaoPlatform));
+        if (!vendorPowerChannel
             && L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig()
             && L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram?.IsGcuConnected != true)
         {
