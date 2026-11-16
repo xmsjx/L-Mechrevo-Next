@@ -92,13 +92,30 @@ internal static class LightingCatalog
         return 0;
     }
 
+    /// <summary>
+    /// 当前机型的 Logo 效果表：按**灯光形态**选，不再按 GPU 代际。
+    /// <para>字母形（USB lettering）⇒ 6 项（单色/彩虹/呼吸/波浪/冲击/星雨）；
+    /// 图标形 ⇒ 原有的 3 项（单色/呼吸/混合）。</para>
+    /// <para>形态判不出来（没有 7001 设备）时回退到旧判据，行为与改前一致。</para>
+    /// </summary>
     internal static (string Effect, string Name)[] CurrentLogoEffects()
     {
         MechrevoHw? hw = WpfBackend.Hw;
+        MechrevoLite.Hardware.LogoLightKind kind = MechrevoLite.Hardware.LogoLightDetector.Detect(hw);
+        if (kind == MechrevoLite.Hardware.LogoLightKind.Lettering)
+        {
+            return LogoEffectsGen40;
+        }
+        if (kind == MechrevoLite.Hardware.LogoLightKind.Icon)
+        {
+            return LogoEffects;
+        }
+        // 旧判据（仅形态未知时使用）：40 系与 30 系同方机型曾按官方控制台给 6 项。
         bool gen40;
         if (hw != null)
         {
-            gen40 = !hw.UsesBaolongda && hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40;
+            gen40 = !hw.UsesBaolongda && (hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40
+                || hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen30);
         }
         else
         {

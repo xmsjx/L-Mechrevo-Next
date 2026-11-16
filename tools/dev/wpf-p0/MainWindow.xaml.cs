@@ -3001,10 +3001,7 @@ public partial class MainWindow : Window
             ("HidLightbar/Ctrl", WpfStrings.LightingStrip, hw?.IsIntelNucMachine == true
                 ? new[] { ("Single", MechrevoLite.Properties.Strings.EffectSingle), ("Rainbow", MechrevoLite.Properties.Strings.EffectRainbow) }
                 : LightingCatalog.LightbarEffects),
-            ("HidLightbar_Logo/Ctrl", WpfStrings.LightingLogo,
-                hw is not null && (hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40
-                    || hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen30)
-                    ? LightingCatalog.LogoEffectsGen40 : LightingCatalog.CurrentLogoEffects()),
+            ("HidLightbar_Logo/Ctrl", WpfStrings.LightingLogo, LightingCatalog.CurrentLogoEffects()),
             ("HidLightbar_Hinge/Ctrl", WpfStrings.LightingHinge, LightingCatalog.HingeEffects),
             ("HidLightbar_Sync/Ctrl", WpfStrings.LightingSync, LightingCatalog.SyncEffects)
         };

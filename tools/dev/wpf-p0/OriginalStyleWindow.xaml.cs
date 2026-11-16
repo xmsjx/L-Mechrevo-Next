@@ -9518,13 +9518,7 @@ public partial class OriginalStyleWindow : Window
 
     private static (string Effect, string Name)[] CurrentLogoEffectsForBackend()
     {
-        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
-        if (hw != null && !hw.UsesBaolongda
-            && (hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen30
-                || hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40))
-        {
-            return EffectsForCurrentBackend(LightingCatalog.LogoEffectsGen40);
-        }
+        // 形态判定（字母形/图标形）在 LightingCatalog 里统一做，这里不再按 GPU 代际判断。
         return EffectsForCurrentBackend(LightingCatalog.CurrentLogoEffects());
     }
 
