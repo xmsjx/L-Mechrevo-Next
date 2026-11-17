@@ -72,6 +72,7 @@ internal static class WujieFanCurveAutoApply
 			{
 				return;
 			}
+			MechrevoLite.Hardware.WmiEcProbe.LogAvailableInterfaces();
 			Program.hw.ModeChanged -= OnModeChanged;
 			Program.hw.ModeChanged += OnModeChanged;
 			Logger.WriteLine("[fan] 无界曲线接管：已订阅档位变化（仅自定义档接管）");
