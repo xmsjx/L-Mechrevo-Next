@@ -1746,6 +1746,7 @@ public static class HardwareControl
 			// 走阶梯退避，退避期内直接跳过这一路读取（成功一次即复位）。
 			// 家族分派收在 FanChannel 里：这里只问"这条路是否由 GCU/EC 直读负责"。
 			// 无界有自己的本地表通道、宝龙达走 WMI，都不进这一支。
+			Logger.WriteLineIfChanged("fan-ec-branch", "[fan] EC 兜底判据：Family=" + MechrevoLite.Hardware.FanChannel.FamilyOf(hw) + " · FanInfo新鲜=" + !fanInfoStale + " · CPU=" + cpuFanRPM + "rpm/GPU=" + gpuFanRPM + "rpm · duty=" + hw.CpuFanDuty + "%/" + hw.GpuFanDuty + "% · 退避跳过=" + MechrevoLite.Hardware.ReadFailureBackoff.ShouldSkip("acpi-ec-fan"));
 			if (MechrevoLite.Hardware.FanChannel.FamilyOf(hw) is MechrevoLite.Hardware.FanChannel.Family.Gcu
 					or MechrevoLite.Hardware.FanChannel.Family.TongfangEc
 					or MechrevoLite.Hardware.FanChannel.Family.NucUmiLocal
