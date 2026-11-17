@@ -335,7 +335,7 @@ internal sealed class WujieFanEcController : IDisposable
 			Logger.WriteError("[fan] 无界 EC：table 初始化失败，自动回退 direct ⇒ " + isolateDetail);
 			return;
 		}
-		latchBase = latch & ~0x40;
+		latchBase = latch & ~WujieFanEc.TableLatchBit;
 		isolateBase = isolate & ~0x80;
 		backend = ControlBackend.Table;
 		backendDetail = "table 后端（0x0F20/0x0F50 前 8 字节 + 0x0727 bit6 锁存 + 0x07C5 bit7 隔离；latch_base=0x"
@@ -363,11 +363,11 @@ internal sealed class WujieFanEcController : IDisposable
 			{
 				return;
 			}
-			if ((latch & 0x40) == 0 && (isolate & 0x80) == 0)
+			if ((latch & WujieFanEc.TableLatchBit) == 0 && (isolate & 0x80) == 0)
 			{
 				return;
 			}
-			int latchBase = latch & ~0x40;
+			int latchBase = latch & ~WujieFanEc.TableLatchBit;
 			int isolateBase = isolate & ~0x80;
 			List<I2ecInpOut.I2ecWriteStep> steps = new()
 			{
@@ -756,14 +756,14 @@ internal sealed class WujieFanEcController : IDisposable
 		}
 		// 锁存前先摆好隔离位（0→1 跳变时 EC 就看到最终状态），再清锁存 → 50ms → 置锁存。
 		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanIsolate, isolateWant, 20));
-		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableLatch, latchBase & ~0x40));
-		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableLatch, latchBase | 0x40, WujieFanEc.TableLatchPulseMs));
+		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableLatch, latchBase & ~WujieFanEc.TableLatchBit));
+		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableLatch, latchBase | WujieFanEc.TableLatchBit, WujieFanEc.TableLatchPulseMs));
 		// 不补写 0x1804/0x1809：fanctl 的 table 语义是让 EC 自己沿软着陆斜坡走到表目标；
 		// 直接写目标寄存器会和 EC 的斜坡/表状态互相争用，且回读可能永远不相等（导致误判写表失败）。
 		verify = new List<I2ecInpOut.I2ecVerifyStep>
 		{
 			new(WujieFanEc.RegisterFanIsolate, isolateWant),
-			new(WujieFanEc.RegisterFanTableLatch, latchBase | 0x40)
+			new(WujieFanEc.RegisterFanTableLatch, latchBase | WujieFanEc.TableLatchBit)
 		};
 	}
 
@@ -815,7 +815,7 @@ internal sealed class WujieFanEcController : IDisposable
 				return false;
 			}
 			if (steps[17].Address != WujieFanEc.RegisterFanTableLatch || steps[17].Value != 0x00
-				|| steps[18].Address != WujieFanEc.RegisterFanTableLatch || steps[18].Value != 0x40
+				|| steps[18].Address != WujieFanEc.RegisterFanTableLatch || steps[18].Value != WujieFanEc.TableLatchBit
 				|| steps[18].DelayAfterMs != WujieFanEc.TableLatchPulseMs)
 			{
 				detail = "锁存脉冲计划不对（应先 &~0x40 → 50ms → |0x40）";
@@ -888,7 +888,7 @@ internal sealed class WujieFanEcController : IDisposable
 		{
 			return true;
 		}
-		int latchWant = _tableLatchBase & ~0x40;
+		int latchWant = _tableLatchBase & ~WujieFanEc.TableLatchBit;
 		int isolateWant = _tableIsolateBase & ~0x80;
 		List<I2ecInpOut.I2ecWriteStep> steps = new()
 		{

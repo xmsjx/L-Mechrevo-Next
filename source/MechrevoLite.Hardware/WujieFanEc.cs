@@ -35,7 +35,10 @@ internal static class WujieFanEc
 
 	internal const int RegisterFanTableFan2 = 0x0F50;
 
-	internal const int RegisterFanTableLatch = 0x0727;
+	internal const int RegisterFanTableLatch = 0x07C6;
+
+	/// <summary>表提交值：写 0x07C6 = 0x04 即提交并锁存（不是位索引）。</summary>
+	internal const int TableLatchBit = 0x04;
 
 	internal const int RegisterFanIsolate = 0x07C5;
 
