@@ -388,7 +388,7 @@ internal static class I2ecInpOut
 	{
 		get
 		{
-			return EnsureInitialized(out _);
+			return EnsureInitialized(out _) || AcpiDriverAvailable();
 		}
 	}
 
@@ -396,7 +396,7 @@ internal static class I2ecInpOut
 	internal static bool TryReadEcByte(int address, out int value, out string detail)
 	{
 		value = -1;
-		if (!EnsureInitialized(out detail))
+		if (!EnsureInitialized(out detail) && !AcpiDriverAvailable())
 		{
 			return false;
 		}
@@ -429,7 +429,7 @@ internal static class I2ecInpOut
 	internal static bool TryWriteEcByte(int address, int value, out string detail)
 	{
 		detail = "";
-		if (!EnsureInitialized(out detail))
+		if (!EnsureInitialized(out detail) && !AcpiDriverAvailable())
 		{
 			return false;
 		}
@@ -481,7 +481,7 @@ internal static class I2ecInpOut
 			detail = "空写序列";
 			return false;
 		}
-		if (!EnsureInitialized(out detail))
+		if (!EnsureInitialized(out detail) && !AcpiDriverAvailable())
 		{
 			return false;
 		}
