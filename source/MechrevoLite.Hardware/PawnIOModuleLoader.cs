@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using MechrevoLite;
 
@@ -15,16 +15,21 @@ internal static class PawnIOModuleLoader
         try
         {
             string baseDir = AppContext.BaseDirectory;
-            string path = Path.Combine(baseDir, "PawnIO", fileName);
-            if (File.Exists(path))
+            string[] candidates =
             {
-                return File.OpenRead(path);
-            }
-            string alt = Path.Combine(baseDir, fileName);
-            if (File.Exists(alt))
+                Path.Combine(baseDir, "PawnIO", fileName),
+                Path.Combine(baseDir, fileName),
+                Path.Combine(baseDir, "Modules", fileName),
+                Path.Combine(baseDir, "..", "PawnIO", fileName)
+            };
+            foreach (string path in candidates)
             {
-                return File.OpenRead(alt);
+                if (File.Exists(path))
+                {
+                    return File.OpenRead(path);
+                }
             }
+            Logger.WriteLine("[pawnio] 模块文件未找到：" + fileName + "（已找：" + string.Join(" | ", candidates) + "）");
         }
         catch (Exception ex)
         {
