@@ -6773,7 +6773,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			}
 			// ⭐⭐ 决策器（回差 3℃）：升温立刻写、降温要过回差、**目标没变就不写** ✅
 			//   ⚠️ 温度来源的配对沿用改动前：gpuTemp↔ch0 · cpuTemp↔ch1 ✅
-			int? decided0 = _baolongdaCurveDecider0.Decide(channel0Points, gpuTempSmooth, settings.MinRpm, settings.MaxRpm, settings.HysteresisC);
+			int? decided0 = _baolongdaCurveDecider0.Decide(channel0Points, gpuTempSmooth, settings.EffectiveMinRpm, settings.MaxRpm, settings.HysteresisC);
 			int? decided1 = _baolongdaCurveDecider1.Decide(channel1Points, cpuTempSmooth, settings.MinRpm, settings.MaxRpm, settings.HysteresisC);
 			long nowTick = Environment.TickCount64;
 			bool reassertDue = (nowTick - _baolongdaCurveLastWriteTick) >= BaolongdaCurveReassertMs;

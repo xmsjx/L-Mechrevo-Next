@@ -37,7 +37,13 @@ internal static class InpOutDriverInstaller
 				return false;
 			}
 			string sysTarget = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "drivers", "inpoutx64.sys");
-			File.Copy(sysSource, sysTarget, overwrite: true);
+			// 已有服务就别覆盖/重建：可能是用户机上别的软件装的可用驱动，动它等于破坏别人的安装。
+			RunSc("query " + ServiceName, out string queryDetail);
+			bool serviceExisted = queryDetail.IndexOf("1060", StringComparison.Ordinal) < 0;
+			if (!serviceExisted)
+			{
+				File.Copy(sysSource, sysTarget, overwrite: true);
+			}
 			string createArgs = "create " + ServiceName + " type= kernel start= demand binPath= " + sysTarget;
 			if (!RunSc(createArgs, out string createDetail) || createDetail.IndexOf("1056", StringComparison.Ordinal) >= 0 || createDetail.IndexOf("already exists", StringComparison.OrdinalIgnoreCase) >= 0)
 			{
@@ -48,9 +54,9 @@ internal static class InpOutDriverInstaller
 			Thread.Sleep(400);
 			I2ecInpOut.ResetInitialization();
 			bool ok = I2ecInpOut.IsAvailable;
-			if (!ok)
+			if (!ok && !serviceExisted)
 			{
-				// 装不上就回滚：别留下"驱动文件在、服务起不来"的残留状态。
+				// 只回滚本次自己装的东西：既有的驱动/服务不能删。
 				RunSc("stop " + ServiceName, out _);
 				RunSc("delete " + ServiceName, out _);
 				try

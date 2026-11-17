@@ -106,6 +106,9 @@ internal sealed class BaolongdaFanCurveSettings
 	/// <summary>⭐ 转速下界（RPM ✅）—— ⭐ 决策器用它夹紧 ✅。</summary>
 	internal int MinRpm { get; init; } = DefaultMinRpm;
 
+	/// <summary>下发用的最低转速：配成 0 时按固件怠速下限兜底，避免下发 0 档。</summary>
+	internal int EffectiveMinRpm => MinRpm < 800 ? DefaultMinRpm : MinRpm;
+
 	/// <summary>⭐ 转速上界（RPM ✅）—— ⭐ 决策器用它夹紧 ✅。</summary>
 	internal int MaxRpm { get; init; } = DefaultMaxRpm;
 

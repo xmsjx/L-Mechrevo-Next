@@ -223,6 +223,12 @@ namespace MechrevoLite.Hardware
                     {
                         owned = true;
                     }
+                    if (!owned)
+                    {
+                        // 没拿到跨进程 EC 锁就不能动端口：宁可失败，也不要和别人的事务交错。
+                        Logger.WriteLineIfChanged("vendor-ec-busy", "[fan] 厂商EC 通道忙（未取到 EC 事务锁），本次跳过");
+                        return false;
+                    }
                     return body();
                 }
                 catch (Exception ex)
