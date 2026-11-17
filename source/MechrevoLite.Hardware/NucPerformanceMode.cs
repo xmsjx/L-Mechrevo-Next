@@ -184,7 +184,7 @@ public static class NucPerformanceMode
             + " · TCC=0x" + tccRaw.ToString("X2") + "(" + (tcc.HasValue ? "开" : "关") + ") 写入=" + tccOk
             + " 回读=0x" + tccBack.ToString("X2"));
         detail = "CPU 功耗 " + p1 + "/" + p2 + "/" + p4 + " W · 温度墙 " + (tcc.HasValue ? "开启" : "关闭")
-            + " · " + (allOk ? "已生效" : "写入未全部确认");
+            + " · " + (allOk ? "已生效" : ((w1 && w2 && w3 && tccOk) ? "已应用（未验证）" : "未生效"));
         return allOk;
     }
 

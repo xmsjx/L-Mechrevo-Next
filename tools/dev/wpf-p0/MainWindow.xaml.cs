@@ -3087,7 +3087,7 @@ public partial class MainWindow : Window
         int start = (int)Math.Round(_liquidPumpStartSlider?.Value ?? 55);
         int turbo = (int)Math.Round(_liquidPumpTurboSlider?.Value ?? 90);
         bool ok = await _owner.WideSetLiquidCurveAsync(_liquidCurveCanvas.Points, start, turbo);
-        StatusText.Text = ok ? "水冷曲线已应用" : "水冷曲线应用失败：请确认 BLE 水冷已连接";
+        StatusText.Text = ok ? "水冷曲线已应用（未验证）" : "水冷曲线应用失败：请确认 BLE 水冷已连接";
     }
 
     private static void SelectLiquidCombo(ComboBox? combo, int value)

@@ -375,7 +375,8 @@ internal static class GcuEcExperimental
                 + $"trigger 0x{currentTrigger:X2}->0x{trigger:X2}/0x{readTrigger:X2} "
                 + $"clamp->0x{clamp:X2}/0x{readClamp:X2} turbo={visualMode == 2} custom={visualMode == 3} "
                 + $"write={modeWrite}/{triggerWrite}/{turboWrite}/{clampWrite}/{customWrite}/{rampWrite}";
-            detail = modeOk && triggerOk && clampOk ? "档位已切换" : "档位未确认";
+            bool wroteMode = modeWrite && triggerWrite && turboWrite && clampWrite && customWrite;
+            detail = modeOk && triggerOk && clampOk ? "档位已切换" : (wroteMode ? "档位已切换（未验证）" : "档位未切换");
             if (modeOk && triggerOk && clampOk)
             {
                 System.Threading.Interlocked.Exchange(ref _lastSelfWriteTicks, Environment.TickCount64);

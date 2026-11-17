@@ -55,7 +55,7 @@ public partial class WaterCoolerCurveWindow : Window
             bool ok = await _routing.SetCurveAsync(points,
                 (int)Math.Round(PumpStartSlider.Value),
                 (int)Math.Round(PumpTurboSlider.Value));
-            StatusText.Text = ok ? "已应用：曲线控制中" : "应用失败：当前水冷不是 BLE 直连或未连接";
+            StatusText.Text = ok ? "已应用（未验证）：曲线控制中" : "应用失败：当前水冷不是 BLE 直连或未连接";
         }
         catch (Exception ex)
         {

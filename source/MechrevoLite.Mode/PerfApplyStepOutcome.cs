@@ -22,6 +22,11 @@ public sealed record PerfApplyStepOutcome(PerfApplyStep Step, PerfApplyResult Re
 		cleaned = Regex.Replace(cleaned, @"\bEC\s*(RAM|寄存器|地址)\b", "EC");
 		cleaned = Regex.Replace(cleaned, @"\s{2,}", " ").Trim();
 		cleaned = cleaned.Replace("->", "⇒");
+		// 结果词统一成用户口径：能回读验证的才算"已应用"，只发出、无法回读的标"未验证"。
+		cleaned = cleaned.Replace("Confirmed", "已应用")
+			.Replace("Sent", "已应用（未验证）")
+			.Replace("Failed", "未应用")
+			.Replace("Stale", "已应用（未验证）");
 		return cleaned;
 	}
 }
