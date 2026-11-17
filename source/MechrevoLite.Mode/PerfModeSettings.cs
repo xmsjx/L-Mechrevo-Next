@@ -23,6 +23,12 @@ public sealed record PerfModeSettings
 
 	public int[]? GpuFanDuty { get; init; }
 
+	/// <summary>CPU 曲线温度轴（16 点；未设置 = 沿用固件/默认轴）。曲线真值随档位保存，不再依赖外部配置键。</summary>
+	public byte[]? CpuCurveTemps { get; init; }
+
+	/// <summary>GPU 曲线温度轴（16 点；未设置 = 沿用固件/默认轴）。</summary>
+	public byte[]? GpuCurveTemps { get; init; }
+
 	public bool? TccOn { get; init; }
 
 	public int? TccTarget { get; init; }

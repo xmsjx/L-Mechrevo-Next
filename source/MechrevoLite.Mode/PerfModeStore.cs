@@ -141,6 +141,54 @@ public static class PerfModeStore
 		}
 	}
 
+	/// <summary>曲线温度轴：新键优先；缺失时回退到旧的外部配置键（老版本存过的曲线不会丢）。</summary>
+	private static byte[]? GetCurveTemps(string id, string field, string legacyKey)
+	{
+		int[]? values = GetCurve(id, field);
+		if (values == null || values.Length == 0)
+		{
+			string text = AppConfig.GetString(legacyKey);
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				return null;
+			}
+			string[] parts = text.Split(',', StringSplitOptions.RemoveEmptyEntries);
+			List<int> parsed = new List<int>(parts.Length);
+			foreach (string part in parts)
+			{
+				if (int.TryParse(part.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int value) && value >= 0 && value <= 255)
+				{
+					parsed.Add(value);
+				}
+			}
+			values = parsed.Count > 0 ? parsed.ToArray() : null;
+		}
+		if (values == null || values.Length == 0)
+		{
+			return null;
+		}
+		byte[] temps = new byte[values.Length];
+		for (int i = 0; i < values.Length; i++)
+		{
+			temps[i] = (byte)Math.Clamp(values[i], 0, 255);
+		}
+		return temps;
+	}
+
+	private static void PutCurveTemps(string id, string field, byte[]? value)
+	{
+		if (value == null || value.Length == 0)
+		{
+			PutCurve(id, field, null);
+			return;
+		}
+		int[] values = new int[value.Length];
+		for (int i = 0; i < value.Length; i++)
+		{
+			values[i] = value[i];
+		}
+		PutCurve(id, field, values);
+	}
 	private static void PutCurve(string id, string field, int[]? value)
 	{
 		string name = FieldKey(id, field);
@@ -169,6 +217,8 @@ public static class PerfModeStore
 			CpuFanDuty = GetCurve(id, "fancpu"),
 			FanCurveOn = GetBool(id, "fanon"),
 			GpuFanDuty = GetCurve(id, "fangpu"),
+			CpuCurveTemps = GetCurveTemps(id, "fancputemps", "ec_fan_cputemps_" + id),
+			GpuCurveTemps = GetCurveTemps(id, "fangputemps", "ec_fan_gputemps_" + id),
 			TccOn = GetBool(id, "tccon"),
 			TccTarget = GetInt(id, "tcc"),
 			// （30 系 · SMU 功耗时间窗）：mode_tune_* 新键（秒）；缺失 = null（不显示该行）。
@@ -202,6 +252,8 @@ public static class PerfModeStore
 		PutCurve(id, "fancpu", settings.CpuFanDuty);
 		PutBool(id, "fanon", settings.FanCurveOn);
 		PutCurve(id, "fangpu", settings.GpuFanDuty);
+		PutCurveTemps(id, "fancputemps", settings.CpuCurveTemps);
+		PutCurveTemps(id, "fangputemps", settings.GpuCurveTemps);
 		PutBool(id, "tccon", settings.TccOn);
 		PutInt(id, "tcc", settings.TccTarget);
 		// （30 系 · SMU 功耗时间窗）：按档保存（秒）；null ⇒ 删除该键（旧配置自然保持兼容）。
