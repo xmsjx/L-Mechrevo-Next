@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace MechrevoLite.Hardware
 {
@@ -33,6 +34,7 @@ namespace MechrevoLite.Hardware
         private const int EcWindowAccess = 0x12;
 
         private static readonly object Gate = new object();
+        private const string EcMutexName = "Global\\Access_EC";
 
         /// <summary>允许访问的 EC RAM 地址（只在风扇接管需要的这几个上开口，避免误写别处）。</summary>
         private static readonly int[] AllowedAddresses = { 0xB20, 0xC83C, 0xC83D };
@@ -157,7 +159,8 @@ namespace MechrevoLite.Hardware
             {
                 return false;
             }
-            lock (Gate)
+            byte result = 0;
+            bool ok = WithEcTransaction(() =>
             {
                 if (!SelectWindow(address))
                 {
@@ -168,14 +171,15 @@ namespace MechrevoLite.Hardware
                 {
                     return false;
                 }
-                byte data = 0;
-                if (!ReadPort(EcIndexLowPort, out data))
+                if (!ReadPort(EcIndexLowPort, out byte data))
                 {
                     return false;
                 }
-                value = data;
+                result = data;
                 return true;
-            }
+            });
+            value = result;
+            return ok;
         }
 
         /// <summary>写一个 EC RAM 字节（16 位索引，走 0x2E/0x2F 窗口）。</summary>
@@ -185,7 +189,7 @@ namespace MechrevoLite.Hardware
             {
                 return false;
             }
-            lock (Gate)
+            return WithEcTransaction(() =>
             {
                 if (!SelectWindow(address))
                 {
@@ -196,6 +200,50 @@ namespace MechrevoLite.Hardware
                     return false;
                 }
                 return WritePort(EcIndexLowPort, value);
+            });
+        }
+
+        /// <summary>
+        /// 与其它 EC 通道共用同一把跨进程互斥体，避免和 ACPI/LPC 事务在同一窗口上交错。
+        /// </summary>
+        private static bool WithEcTransaction(Func<bool> body)
+        {
+            lock (Gate)
+            {
+                Mutex? mutex = null;
+                bool owned = false;
+                try
+                {
+                    mutex = new Mutex(false, EcMutexName);
+                    try
+                    {
+                        owned = mutex.WaitOne(500);
+                    }
+                    catch (AbandonedMutexException)
+                    {
+                        owned = true;
+                    }
+                    return body();
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteLineIfChanged("vendor-ec-mutex", "[fan] 厂商EC 事务失败：" + ex.GetType().Name + " " + ex.Message);
+                    return false;
+                }
+                finally
+                {
+                    if (owned && mutex != null)
+                    {
+                        try
+                        {
+                            mutex.ReleaseMutex();
+                        }
+                        catch
+                        {
+                        }
+                    }
+                    mutex?.Dispose();
+                }
             }
         }
 

@@ -38,7 +38,7 @@ internal static class InpOutDriverInstaller
 			}
 			string sysTarget = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "drivers", "inpoutx64.sys");
 			File.Copy(sysSource, sysTarget, overwrite: true);
-			string createArgs = "create " + ServiceName + " type= kernel start= auto binPath= " + sysTarget;
+			string createArgs = "create " + ServiceName + " type= kernel start= demand binPath= " + sysTarget;
 			if (!RunSc(createArgs, out string createDetail) || createDetail.IndexOf("1056", StringComparison.Ordinal) >= 0 || createDetail.IndexOf("already exists", StringComparison.OrdinalIgnoreCase) >= 0)
 			{
 				// 服务已存在（1056）或创建失败但可能已存在 ⇒ 尝试修正 binPath 后再启动。
@@ -48,6 +48,22 @@ internal static class InpOutDriverInstaller
 			Thread.Sleep(400);
 			I2ecInpOut.ResetInitialization();
 			bool ok = I2ecInpOut.IsAvailable;
+			if (!ok)
+			{
+				// 装不上就回滚：别留下"驱动文件在、服务起不来"的残留状态。
+				RunSc("stop " + ServiceName, out _);
+				RunSc("delete " + ServiceName, out _);
+				try
+				{
+					if (File.Exists(sysTarget))
+					{
+						File.Delete(sysTarget);
+					}
+				}
+				catch
+				{
+				}
+			}
 			detail = (ok ? "驱动已安装并可用" : "驱动安装后仍不可用（start: " + startDetail.Trim() + "）");
 			Logger.WriteLine("[inpout] 自动安装驱动：" + detail + " · sys=" + sysSource);
 			return ok;

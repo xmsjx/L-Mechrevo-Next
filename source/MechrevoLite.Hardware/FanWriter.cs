@@ -307,8 +307,10 @@ internal static class FanWriter
 		}
 		waitedSeconds = (Environment.TickCount64 - start) / 1000.0;
 		bool rpmSafe = !rpmReadOk || minRpm >= 800;
+		// 13 读不到 ⇒ 转速无法确认：按"已接受风险"放行，但结果里写明，避免被当成已确认。
 		verifyDetail = "掩码位已清=" + maskClear + " · 目标0=" + targetsZero
-			+ " · 13可读=" + rpmReadOk + " · 转速安全=" + rpmSafe;
+			+ " · 13可读=" + rpmReadOk + " · 转速安全=" + rpmSafe
+			+ (rpmReadOk ? "" : "（13 读不到 ⇒ 转速未确认，按已接受风险放行）");
 		return maskClear && targetsZero && rpmSafe;
 	}
 

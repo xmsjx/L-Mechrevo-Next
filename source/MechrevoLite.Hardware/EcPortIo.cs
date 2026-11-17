@@ -816,9 +816,13 @@ internal static class EcPortIo
 	internal static bool TryWriteByteInpOutAcpi(int address, byte value, out int readBack, bool verifyReadback = true)
 	{
 		readBack = -1;
+		if (_poisoned)
+		{
+			return false;
+		}
 		if (!I2ecInpOut.CanUsePortIo(out string detail))
 		{
-			Logger.WriteLine("[ec-inpout] 不可用：" + detail);
+			Logger.WriteLineIfChanged("ec-inpout-unavailable", "[ec-inpout] 不可用：" + detail);
 			return false;
 		}
 		if (!WaitIbfClearInpOut() || !I2ecInpOut.TryWritePort(0x66, 0x93)
@@ -826,7 +830,7 @@ internal static class EcPortIo
 			|| !WaitIbfClearInpOut() || !I2ecInpOut.TryWritePort(0x62, (byte)(address & 0xFF))
 			|| !WaitIbfClearInpOut() || !I2ecInpOut.TryWritePort(0x62, value))
 		{
-			Logger.WriteLine("[ec-inpout] 写 0x" + address.ToString("X4") + "=0x" + value.ToString("X2") + " 失败");
+			Logger.WriteLineIfChanged("ec-inpout-writefail", "[ec-inpout] 写 0x" + address.ToString("X4") + "=0x" + value.ToString("X2") + " 失败");
 			return false;
 		}
 		if (!verifyReadback)
@@ -870,7 +874,12 @@ internal static class EcPortIo
 	{
 		after = -1;
 		int before = 0;
-		if (TryReadByteInpOutAcpi(AcpiEcUnlockAddress, out before) && (before & AcpiUnlockBit) != 0)
+		// 读不到就别写：按 0 写会把解锁寄存器改成"未知原值 | bit7"，风险不可控。
+		if (!TryReadByteInpOutAcpi(AcpiEcUnlockAddress, out before))
+		{
+			return false;
+		}
+		if ((before & AcpiUnlockBit) != 0)
 		{
 			after = before;
 			return true;
