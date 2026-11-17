@@ -5501,6 +5501,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		{
 			return false;
 		}
+		// 宝龙达：允许 FanWriter 优先走厂商驱动 EC 通道（内嵌驱动，0x2E/0x2F 间接窗口）。
+		MechrevoLite.Hardware.FanWriter.EnableVendorChannel();
 		// 重复开强冷：保留第一次的快照，避免用“已停用曲线”覆盖快照。
 		if (on && _fanBoostActive)
 		{

@@ -35,6 +35,7 @@ namespace MechrevoLite.Hardware
         private static readonly object Gate = new object();
         private static IntPtr _dll;
         private static string _loadedService = string.Empty;
+        private static bool _serviceCreated;
         private static bool _ready;
         private static bool _unavailable;
         private static bool _logged;
@@ -157,7 +158,8 @@ namespace MechrevoLite.Hardware
                 {
                     return false;
                 }
-                if (!WritePort(EcIndexLowPort, EcWindowAccess))
+                // 0x2E 是命令/索引口，0x2F 是数据口：先向 0x2E 选"数据寄存器"，再从 0x2F 读。
+                if (!WritePort(EcIndexHighPort, EcWindowAccess))
                 {
                     return false;
                 }
@@ -184,7 +186,7 @@ namespace MechrevoLite.Hardware
                 {
                     return false;
                 }
-                if (!WritePort(EcIndexLowPort, EcWindowAccess))
+                if (!WritePort(EcIndexHighPort, EcWindowAccess))
                 {
                     return false;
                 }
@@ -315,12 +317,32 @@ namespace MechrevoLite.Hardware
             {
                 return false;
             }
-            if (File.Exists(targetPath) && new FileInfo(targetPath).Length == source.Length)
+            // 先算内嵌副本的指纹，再和磁盘文件比对：只比长度会被"同长度不同内容"的文件骗过。
+            byte[] expected = System.Security.Cryptography.SHA256.HashData(source);
+            source.Position = 0;
+            if (File.Exists(targetPath))
             {
-                return true;
+                try
+                {
+                    using FileStream existing = File.OpenRead(targetPath);
+                    byte[] actual = System.Security.Cryptography.SHA256.HashData(existing);
+                    if (System.Linq.Enumerable.SequenceEqual(expected, actual))
+                    {
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteLine("[fan] 驱动指纹校验失败（将重新释放）：" + ex.GetType().Name);
+                }
             }
-            using FileStream target = File.Create(targetPath);
-            source.CopyTo(target);
+            // 不一致或缺失 ⇒ 无条件原子覆盖（临时文件 + 替换）。
+            string temp = targetPath + ".tmp";
+            using (FileStream writer = File.Create(temp))
+            {
+                source.CopyTo(writer);
+            }
+            File.Move(temp, targetPath, overwrite: true);
             return true;
         }
 
@@ -370,12 +392,13 @@ namespace MechrevoLite.Hardware
             }
 
             string service = dllName == DllName ? ServiceName : LegacyServiceName;
-            if (!LoadService(service, sysPath, out string serviceDetail))
+            if (!LoadService(service, sysPath, out string serviceDetail, out bool serviceCreated))
             {
                 detail = "驱动服务启动失败：" + serviceDetail;
                 return false;
             }
             _loadedService = service;
+            _serviceCreated = serviceCreated;
 
             _dll = LoadLibrary(dllPath);
             if (_dll == IntPtr.Zero)
@@ -419,9 +442,10 @@ namespace MechrevoLite.Hardware
         [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Ansi)]
         private static extern IntPtr GetProcAddress(IntPtr module, string name);
 
-        private static bool LoadService(string serviceName, string sysPath, out string detail)
+        private static bool LoadService(string serviceName, string sysPath, out string detail, out bool created)
         {
             detail = string.Empty;
+            created = false;
             IntPtr scm = OpenSCManager(null, null, ScManagerAllAccess);
             if (scm == IntPtr.Zero)
             {
