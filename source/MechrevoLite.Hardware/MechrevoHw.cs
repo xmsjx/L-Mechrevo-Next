@@ -5998,10 +5998,12 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 				if (cpuDuty == 0xFF || gpuDuty == 0xFF)
 				{
 					// 读失败/未映射时保留上一次的有效值，不要退回 0%，避免界面"时有时无"。
+					Logger.WriteLineIfChanged("gcu-ec-duty-bad", "[fan] 主界面占空比不可用：0x75B=0x" + cpuDuty.ToString("X2") + " · 0x75C=0x" + gpuDuty.ToString("X2") + "（保留上次值）");
 					return false;
 				}
 				CpuFanDuty = Math.Clamp(cpuDuty / 2, 0, 100);
 				GpuFanDuty = Math.Clamp(gpuDuty / 2, 0, 100);
+				Logger.WriteLineIfChanged("gcu-ec-duty-raw", "[fan] 主界面占空比来源=EC 0x75B/0x75C：" + cpuDuty + "/" + gpuDuty + " ⇒ " + CpuFanDuty + "%/" + GpuFanDuty + "%");
 				return true;
 			}
 		}
