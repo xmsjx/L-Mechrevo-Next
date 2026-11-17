@@ -4,25 +4,25 @@
 
 [Setup]
 AppName=L-Mechrevo
-AppVerName=L-Mechrevo beta23.8.1
+AppVerName=L-Mechrevo beta23.8.2
 AppId={{8F4E2C71-9B3A-4D6E-A1C2-7E5B9D0F3A64}
-AppVersion=beta23.8.1
+AppVersion=beta23.8.2
 AppPublisher=L-Mechrevo contributors
 AppCopyright=Copyright (C) 2026 L-Mechrevo contributors. GPL-3.0-only.
 DefaultDirName={autopf}\L-Mechrevo
 DefaultGroupName=L-Mechrevo
 #ifdef NOGCU
-OutputBaseFilename=LM-beta23.8.1-baolongda-setup
+OutputBaseFilename=LM-beta23.8.2-baolongda-setup
 #else
 #ifdef NOGCU_PAYLOAD
-OutputBaseFilename=LM-beta23.8.1-nopayload-setup
+OutputBaseFilename=LM-beta23.8.2-nopayload-setup
 #else
-OutputBaseFilename=LM-beta23.8.1-full-setup
+OutputBaseFilename=LM-beta23.8.2-full-setup
 #endif
 #endif
 UninstallDisplayIcon={app}\L-Mechrevo.exe
 SetupIconFile=files\favicon.ico
-VersionInfoVersion=23.8.1.0
+VersionInfoVersion=23.8.2.0
 VersionInfoProductVersion=23.8.1.0
 UninstallDisplayName=L-Mechrevo beta23.8.1
 Compression=lzma2
@@ -263,7 +263,7 @@ Source: "files\GCU\payload\30.7z"; DestDir: "{tmp}"; Flags: dontcopy; Check: Sho
 Source: "files\GCU\payload\50.7z"; DestDir: "{tmp}"; Flags: dontcopy; Check: ShouldInstallGcu
 #endif
 #ifndef NOGCU_PAYLOAD
-Source: "files\GCU\payload\WJ.7z"; DestDir: "{tmp}"; Flags: dontcopy; Check: ShouldInstallGcu
+Source: "files\GCU\payload\WJXY.7z"; DestDir: "{tmp}"; Flags: dontcopy; Check: ShouldInstallGcu
 #endif
 Source: "files\7za.exe"; DestDir: "{app}"; Flags: ignoreversion; Check: ShouldInstallGcu
 Source: "files\7za.exe"; DestDir: "{tmp}"; Flags: dontcopy; Check: ShouldInstallGcu
@@ -484,7 +484,7 @@ Type: files; Name: "{app}\GCU\1020.7z";
 Type: files; Name: "{app}\GCU\30.7z";
 Type: files; Name: "{app}\GCU\40.7z";
 Type: files; Name: "{app}\GCU\50.7z";
-Type: files; Name: "{app}\GCU\WJ.7z";
+Type: files; Name: "{app}\GCU\WJXY.7z";
 Type: files; Name: "{app}\GCU\安装GCU.cmd";
 Type: files; Name: "{app}\GCU\手动安装说明.txt";
 ; ⭐ 2026-10-15：手工兜底那次运行会把日志写到 {app}\GCU\logs（`安装GCU.cmd` 传的 -LogDir），卸载时一并清掉。
@@ -2304,7 +2304,7 @@ end;
 // 所以安装阶段先探一次设备，打不开就导入驱动包，再让 PnP 重新枚举一次把设备节点找回来。
 const
   ACPI_DEVICE_PATH   = '\\.\ACPIDriver';
-  LM_INVALID_HANDLE  = THandle($FFFFFFFF);
+  LM_INVALID_HANDLE  = -1;
   LM_GENERIC_RW      = $C0000000;
   LM_FILE_SHARE_RW   = 3;
   LM_OPEN_EXISTING   = 3;
@@ -2323,7 +2323,7 @@ var
 begin
   H := LmCreateFileW(ACPI_DEVICE_PATH, LM_GENERIC_RW, LM_FILE_SHARE_RW, 0,
                      LM_OPEN_EXISTING, 0, 0);
-  Result := H <> LM_INVALID_HANDLE;
+  Result := (H <> 0) and (Integer(H) <> LM_INVALID_HANDLE);
   if Result then
     LmCloseHandle(H);
 end;
@@ -2726,7 +2726,7 @@ begin
     1: Result := '30.7z';
     2: Result := '40.7z';
     3: Result := '50.7z';
-    4: Result := 'WJ.7z';
+    4: Result := 'WJXY.7z';
   else
     Result := '';
   end;
@@ -2859,7 +2859,7 @@ begin
   GcuStagingFiles[0] := '1020.7z';
   GcuStagingFiles[1] := '30.7z';
   GcuStagingFiles[2] := '50.7z';
-  GcuStagingFiles[3] := 'WJ.7z';
+  GcuStagingFiles[3] := 'WJXY.7z';
   GcuStagingFiles[4] := '7za.exe';
   // 先解出 7za.exe（外置 GCU.7z 解压需要）
   try
