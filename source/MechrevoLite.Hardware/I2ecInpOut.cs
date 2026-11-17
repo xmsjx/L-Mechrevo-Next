@@ -161,11 +161,6 @@ internal static class I2ecInpOut
 	/// <summary>给 ACPI EC 通道（0x62/0x66）做后备：只检查 inpoutx64 是否可用。</summary>
 	internal static bool CanUsePortIo(out string detail)
 	{
-		if (AcpiDriverAvailable())
-		{
-			detail = "厂商 ACPI 驱动可用（16 位 EC RAM 访问）";
-			return true;
-		}
 		return EnsureInitialized(out detail);
 	}
 
@@ -187,10 +182,6 @@ internal static class I2ecInpOut
 	internal static bool TryReadPort(short port, out byte value)
 	{
 		value = 0;
-		if (AcpiDriverAvailable() && AcpiDriverEc.TryReadByte(port, out value))
-		{
-			return true;
-		}
 		try
 		{
 			if (!EnsureInitialized(out _))
@@ -209,10 +200,6 @@ internal static class I2ecInpOut
 	/// <summary>通用端口写：优先走厂商 ACPI 驱动（16 位地址），不可用时才回退 inpoutx64。</summary>
 	internal static bool TryWritePort(short port, byte value)
 	{
-		if (AcpiDriverAvailable() && AcpiDriverEc.TryWriteByte(port, value))
-		{
-			return true;
-		}
 		try
 		{
 			if (!EnsureInitialized(out _))
@@ -396,6 +383,17 @@ internal static class I2ecInpOut
 	internal static bool TryReadEcByte(int address, out int value, out string detail)
 	{
 		value = -1;
+		if (AcpiDriverAvailable())
+		{
+			if (AcpiDriverEc.TryReadByte(address, out byte directValue))
+			{
+				value = directValue;
+				detail = "ACPI 驱动直读（EC RAM 地址）";
+				return true;
+			}
+			detail = "ACPI 驱动读失败（EC RAM 地址 0x" + address.ToString("X") + "）";
+			return false;
+		}
 		if (!EnsureInitialized(out detail) && !AcpiDriverAvailable())
 		{
 			return false;
@@ -429,6 +427,16 @@ internal static class I2ecInpOut
 	internal static bool TryWriteEcByte(int address, int value, out string detail)
 	{
 		detail = "";
+		if (AcpiDriverAvailable())
+		{
+			if (AcpiDriverEc.TryWriteByte(address, value))
+			{
+				detail = "ACPI 驱动直写（EC RAM 地址）";
+				return true;
+			}
+			detail = "ACPI 驱动写失败（EC RAM 地址 0x" + address.ToString("X") + "）";
+			return false;
+		}
 		if (!EnsureInitialized(out detail) && !AcpiDriverAvailable())
 		{
 			return false;
