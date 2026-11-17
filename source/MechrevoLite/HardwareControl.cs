@@ -1760,6 +1760,16 @@ public static class HardwareControl
 					if (gcuCpuFanRpm > 0) cpuFanRPM = gcuCpuFanRpm;
 					if (gcuGpuFanRpm > 0) gpuFanRPM = gcuGpuFanRpm;
 					hw.ApplyGcuEcFanSpeeds(gcuCpuFanRpm, gcuGpuFanRpm);
+					// EC-only 机型（GCU 离线 ⇒ IsConnected=false）主界面读的是本地快照，
+					// 占空比也要回写，否则宽屏/原版界面都恒显示 0%。
+					cpuFan = hw.CpuFanDuty;
+					gpuFan = hw.GpuFanDuty;
+					// 默认日志级别是「仅错误」⇒ 占空比这条证据必须用错误级、只在 0 与有值之间翻转时落一行。
+					string dutyState = (hw.CpuFanDuty > 0 || hw.GpuFanDuty > 0) ? "有值" : "为 0";
+					if (Logger.TryMarkChanged("gcu-ec-duty-state", dutyState))
+					{
+						Logger.WriteError("[fan] 主界面占空比状态=" + dutyState + " · CPU=" + hw.CpuFanDuty + "%/GPU=" + hw.GpuFanDuty + "%（来源=EC 0x75B/0x75C）");
+					}
 					Logger.WriteLineIfChanged("gcu-ec-fan",
 						"[fan] GCU FanInfo 缺失 ⇒ EC 只读兜底：CPU=" + gcuCpuFanRpm + "rpm/" + hw.CpuFanDuty + "% · GPU=" + gcuGpuFanRpm + "rpm/" + hw.GpuFanDuty + "%");
 				}

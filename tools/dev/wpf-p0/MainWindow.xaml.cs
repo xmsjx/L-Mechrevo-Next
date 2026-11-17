@@ -1735,7 +1735,7 @@ public partial class MainWindow : Window
         {
             if (!_owner.SupportsLcdOverdrive)
             {
-            overdriveLabel.Visibility = Visibility.Collapsed;
+                overdrive.IsChecked = _owner.LcdOverdrive;
                 return;
             }
             bool target = overdrive.IsChecked == true;
@@ -1764,15 +1764,27 @@ public partial class MainWindow : Window
             Margin = new Thickness(10, 0, 0, 0)
         };
         miniledRow.Children.Add(overdriveHint);
-        if (!_owner.SupportsLcdOverdrive)
-        {
-            overdrive.Visibility = Visibility.Collapsed;
-            overdriveHint.Visibility = Visibility.Collapsed;
-        }
+        // 分区控光与 Overdrive 各自独立判断：无通道就把整项（标签+开关+提示）一起收起来，
+        // 只藏开关会留下一条孤立文字。
+        bool miniledRowSupported = _owner.SupportsMiniled;
+        bool overdriveRowSupported = _owner.SupportsLcdOverdrive;
+        miniledLabel.Visibility = miniledRowSupported ? Visibility.Visible : Visibility.Collapsed;
+        miniled.Visibility = miniledRowSupported ? Visibility.Visible : Visibility.Collapsed;
+        miniledHint.Visibility = Visibility.Collapsed;
+        overdriveLabel.Visibility = overdriveRowSupported ? Visibility.Visible : Visibility.Collapsed;
+        overdrive.Visibility = overdriveRowSupported ? Visibility.Visible : Visibility.Collapsed;
+        overdriveHint.Visibility = Visibility.Collapsed;
+        // 分区控光收起后 Overdrive 左移，不留固定 22px 空位。
+        overdriveLabel.Margin = miniledRowSupported ? new Thickness(22, 0, 10, 0) : new Thickness(0, 0, 10, 0);
+        miniledRow.Visibility = (miniledRowSupported || overdriveRowSupported) ? Visibility.Visible : Visibility.Collapsed;
         DisplayDetailsPanel.Children.Add(miniledRow);
         _miniledSwitch = miniled;
         _overdriveSwitch = overdrive;
         _miniledRowAdded = true;
+        // 刷新时（RefreshHomeExtras）靠这三个字段隐藏；此前从未赋值，隐藏逻辑等于死代码。
+        _displayToggleRow = miniledRow;
+        _miniledLabel = miniledLabel;
+        _overdriveLabel = overdriveLabel;
     }
 
     private void BuildRefreshRateButtons(int[] rates, int currentHz)
@@ -2439,6 +2451,11 @@ public partial class MainWindow : Window
         {
             _displayToggleRow.Visibility = (miniledSupported || overdriveSupported) ? Visibility.Visible : Visibility.Collapsed;
         }
+        // 只在这两项的可用性发生变化时落一行（默认日志级别可见），便于核对开关行为什么出现或消失。
+        Logger.WriteErrorIfChanged("display-toggle-row",
+            "[display] 分区控光可用=" + (miniledSupported ? "是" : "否")
+            + " · Overdrive 可用=" + (overdriveSupported ? "是" : "否")
+            + " ⇒ 显示卡片开关行=" + ((miniledSupported || overdriveSupported) ? "显示" : "整行隐藏（标签/开关/提示都不显示）"));
         if (_miniledLabel != null)
         {
             _miniledLabel.Visibility = miniledSupported ? Visibility.Visible : Visibility.Collapsed;
@@ -2452,6 +2469,8 @@ public partial class MainWindow : Window
         if (_overdriveLabel != null)
         {
             _overdriveLabel.Visibility = overdriveSupported ? Visibility.Visible : Visibility.Collapsed;
+            // 分区控光收起后 Overdrive 左移，不留固定 22px 空位。
+            _overdriveLabel.Margin = miniledSupported ? new Thickness(22, 0, 10, 0) : new Thickness(0, 0, 10, 0);
         }
         if (_overdriveSwitch != null)
         {
