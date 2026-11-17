@@ -792,26 +792,29 @@ internal sealed class WujieFanEcController : IDisposable
 		out List<I2ecInpOut.I2ecWriteStep> steps, out List<I2ecInpOut.I2ecVerifyStep> verify, out bool needIsolate)
 	{
 		needIsolate = raw1 != raw2;
+		// 表里的 Duty 槽是 0..255 原始量程，而 raw 是 0..200（0x75B 口径），必须换算，否则最高只到 78%。
+		int table1 = (int)Math.Round(raw1 * 255.0 / 200.0);
+		int table2 = (int)Math.Round(raw2 * 255.0 / 200.0);
 		int isolateWant = needIsolate ? (isolateBase | 0x80) : (isolateBase & ~0x80);
 		steps = new List<I2ecInpOut.I2ecWriteStep>(WujieFanEc.FanTableActiveLength * 2 + 5);
 		for (int i = 0; i < WujieFanEc.FanTableActiveLength; i++)
 		{
-			steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableFan1 + i, raw1));
+			steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableFan1 + i, table1));
 		}
 		for (int i = 0; i < WujieFanEc.FanTableActiveLength; i++)
 		{
-			steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableFan2 + i, raw2));
+			steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableFan2 + i, table2));
 		}
 		// 锁存前先摆好隔离位（0→1 跳变时 EC 就看到最终状态），再清锁存 → 50ms → 置锁存。
 		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanIsolate, isolateWant, 20));
-		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableLatch, latchBase & ~WujieFanEc.TableLatchBit));
-		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableLatch, latchBase | WujieFanEc.TableLatchBit, WujieFanEc.TableLatchPulseMs));
+		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableLatch, 0x00));
+		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableLatch, WujieFanEc.TableLatchBit, WujieFanEc.TableLatchPulseMs));
 		// 不补写 0x1804/0x1809：fanctl 的 table 语义是让 EC 自己沿软着陆斜坡走到表目标；
 		// 直接写目标寄存器会和 EC 的斜坡/表状态互相争用，且回读可能永远不相等（导致误判写表失败）。
 		verify = new List<I2ecInpOut.I2ecVerifyStep>
 		{
 			new(WujieFanEc.RegisterFanIsolate, isolateWant),
-			new(WujieFanEc.RegisterFanTableLatch, latchBase | WujieFanEc.TableLatchBit)
+			new(WujieFanEc.RegisterFanTableLatch, WujieFanEc.TableLatchBit)
 		};
 	}
 
@@ -845,7 +848,7 @@ internal sealed class WujieFanEcController : IDisposable
 				detail = "计划形状不对：steps=" + steps.Count + " verify=" + verify.Count + " isolate=" + needIsolate;
 				return false;
 			}
-			if (steps[0].Address != WujieFanEc.RegisterFanTableFan1 || steps[0].Value != 60
+			if (steps[0].Address != WujieFanEc.RegisterFanTableFan1 || steps[0].Value != 77
 				|| steps[15].Address != WujieFanEc.RegisterFanTableFan1 + 15 || steps[7].Value != 60)
 			{
 				detail = "表1 前 8 字节计划不对";
