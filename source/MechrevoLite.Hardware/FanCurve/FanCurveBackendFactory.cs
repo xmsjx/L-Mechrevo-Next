@@ -34,7 +34,9 @@ internal static class FanCurveBackendFactory
 			case FanChannel.Family.NucUmiLocal:
 				return FanCurveBackendKind.NucUmi;
 			case FanChannel.Family.TongfangEc:
-				return GcuEcExperimental.Enabled ? FanCurveBackendKind.Ec : FanCurveBackendKind.None;
+				// 家族已经判定"没有 GCU、走本机 EC" ⇒ 曲线就该写 EC 整表；
+				// ⛔ 不能再拿实验开关当门槛，否则正常 EC 直连机型曲线会整条不下发。
+				return FanCurveBackendKind.Ec;
 			default:
 				return GcuEcExperimental.LocalFanCurve ? FanCurveBackendKind.Ec : FanCurveBackendKind.Gcu;
 		}
