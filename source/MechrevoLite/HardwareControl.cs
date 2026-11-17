@@ -3072,6 +3072,7 @@ public static class HardwareControl
 		NvmlHelper.Reset();
 		// 手动恢复也清掉各通道的读取失败退避（含"本进程停用"）：这是唯一的人工自愈入口。
 		MechrevoLite.Hardware.ReadFailureBackoff.ResetAll();
+		MechrevoLite.Hardware.BaolongdaVendorEc.ResetAvailability();
 		Logger.WriteLine("本地功耗采样：手动重置（恢复尝试）");
 	}
 

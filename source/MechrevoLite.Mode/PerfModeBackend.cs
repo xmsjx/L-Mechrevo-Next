@@ -287,6 +287,8 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 
 	private bool ApplyBaolongdaFanCurve(bool cpu, int[] dutyPercent)
 	{
+		// 宝龙达曲线也允许走厂商驱动 EC 通道（与强冷同一出口），避免"点过强冷才启用"的副作用。
+		MechrevoLite.Hardware.FanWriter.EnableVendorChannel();
 		if (dutyPercent == null || dutyPercent.Length != 16)
 		{
 			return false;

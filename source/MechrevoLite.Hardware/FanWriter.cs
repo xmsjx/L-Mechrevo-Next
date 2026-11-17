@@ -59,6 +59,16 @@ internal static class FanWriter
 		detail = "";
 		int f1 = Math.Clamp(fan1Units, 0, 68);
 		int f2 = Math.Clamp(fan2Units, 0, 68);
+		// 目标写 0 而接管位仍置位 ⇒ EC 可能把风扇拉到 0 转：直接拒绝，必须先交回固件。
+		if (f1 == 0 || f2 == 0)
+		{
+			if (TryReadMask(out int maskNow) && (maskNow & 0x0A) != 0)
+			{
+				detail = "拒绝写 0 目标：接管掩码仍为 0x" + maskNow.ToString("X2") + "（先交回固件再写）";
+				Logger.WriteError("[fan] " + detail);
+				return false;
+			}
+		}
 		foreach (FanWriteChannel channel in Candidates())
 		{
 			if (TryWriteTargetsOn(channel, f1, f2, out string channelDetail))
@@ -71,7 +81,17 @@ internal static class FanWriter
 			// ⭐ 该通道失败：尝试把自己写过的部分恢复（best-effort，不抛）
 			try
 			{
-				if (channel == FanWriteChannel.AcpiEc)
+				if (channel == FanWriteChannel.VendorEc)
+				{
+					// 厂商通道：先清掩码位再清目标（与交回固件同序），⛔ 不能拿 LPC 的恢复函数来收拾。
+					if (BaolongdaVendorEc.TryReadByte(0xB20, out byte vm))
+					{
+						BaolongdaVendorEc.TryWriteByte(0xB20, (byte)(vm & ~0x0A));
+						BaolongdaVendorEc.TryWriteByte(0xC83C, 0);
+						BaolongdaVendorEc.TryWriteByte(0xC83D, 0);
+					}
+				}
+				else if (channel == FanWriteChannel.AcpiEc)
 				{
 					EcPortIo.TryRestoreFanFirmwareAcpi(out _);
 				}
@@ -83,6 +103,28 @@ internal static class FanWriter
 			catch
 			{
 			}
+		}
+		return false;
+	}
+
+	/// <summary>读接管掩码（按当前可用通道；读不到返回 false）。</summary>
+	private static bool TryReadMask(out int mask)
+	{
+		mask = -1;
+		if (_vendorEnabled && BaolongdaVendorEc.IsReady && BaolongdaVendorEc.TryReadByte(0xB20, out byte vm))
+		{
+			mask = vm;
+			return true;
+		}
+		if (EcPortIo.TryReadByteStable(0xB20, out int acpiMask, out _))
+		{
+			mask = acpiMask;
+			return true;
+		}
+		if (EcLpcIo.TryReadByteStable(0xB20, out int lpcMask, out _))
+		{
+			mask = lpcMask;
+			return true;
 		}
 		return false;
 	}

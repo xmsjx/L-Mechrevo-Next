@@ -33,6 +33,11 @@ namespace MechrevoLite.Hardware
         private const int EcWindowAccess = 0x12;
 
         private static readonly object Gate = new object();
+
+        /// <summary>允许访问的 EC RAM 地址（只在风扇接管需要的这几个上开口，避免误写别处）。</summary>
+        private static readonly int[] AllowedAddresses = { 0xB20, 0xC83C, 0xC83D };
+
+        private static bool IsAllowed(int address) => Array.IndexOf(AllowedAddresses, address) >= 0;
         private static IntPtr _dll;
         private static string _loadedService = string.Empty;
         private static bool _serviceCreated;
@@ -148,7 +153,7 @@ namespace MechrevoLite.Hardware
         internal static bool TryReadByte(int address, out byte value)
         {
             value = 0;
-            if (!EnsureReady())
+            if (!IsAllowed(address) || !EnsureReady())
             {
                 return false;
             }
@@ -176,7 +181,7 @@ namespace MechrevoLite.Hardware
         /// <summary>写一个 EC RAM 字节（16 位索引，走 0x2E/0x2F 窗口）。</summary>
         internal static bool TryWriteByte(int address, byte value)
         {
-            if (!EnsureReady())
+            if (!IsAllowed(address) || !EnsureReady())
             {
                 return false;
             }
@@ -191,6 +196,15 @@ namespace MechrevoLite.Hardware
                     return false;
                 }
                 return WritePort(EcIndexLowPort, value);
+            }
+        }
+
+        /// <summary>清掉"不可用"粘滞状态，允许下次重新尝试加载驱动（手动恢复入口调用）。</summary>
+        internal static void ResetAvailability()
+        {
+            lock (Gate)
+            {
+                _unavailable = false;
             }
         }
 
@@ -484,6 +498,21 @@ namespace MechrevoLite.Hardware
                     if (err == 1275)
                     {
                         detail = "驱动签名被拦截（Windows 内存完整性/驱动签名策略），需先关闭该项或改用其它通道";
+                        return false;
+                    }
+                    if (err == 577)
+                    {
+                        detail = "驱动签名无效或已被系统撤销（关闭内存完整性后再试，或改用 PawnIO）";
+                        return false;
+                    }
+                    if (err == 5)
+                    {
+                        detail = "启动驱动服务被拒绝访问（需要管理员权限）";
+                        return false;
+                    }
+                    if (err == 1073)
+                    {
+                        detail = "驱动服务已存在但无法启动（可能被其它程序占用）";
                         return false;
                     }
                     if (err == 1058)

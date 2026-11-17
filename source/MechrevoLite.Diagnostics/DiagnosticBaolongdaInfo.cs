@@ -361,7 +361,7 @@ internal static class DiagnosticBaolongdaInfo
 				sb.AppendLine("   ⇒ ⭐ 因此本通道**无法回答「EC 版本是多少」**；要拿到真值需要：");
 				sb.AppendLine("      ① ⭐ 在**蛟龙（宝龙达）真机**上跑本节（那才是该地址的目标机型 ✅）；");
 				sb.AppendLine("      ② ⭐ 或改用**端口 I/O** 通道（0x62/0x66 · 需 PawnIO 自建模块）⚠️");
-				sb.AppendLine("         ⛔ 不要为此引入 WinRing0 / inpoutx64（合规不允许）⚠️");
+				sb.AppendLine("         ⛔ 不要为此引入 WinRing0 / inpoutx64（合规不允许）· 宝龙达用内嵌厂商驱动 ⚠️");
 			}
 			else if (okCount > 0)
 			{
@@ -467,7 +467,7 @@ internal static class DiagnosticBaolongdaInfo
 		sb.AppendLine("   ⇒ 本节走**第二条通路**：PawnIO `LpcACPIEC` 模块的 **ACPI EC 端口 I/O**");
 		sb.AppendLine("     （0x62 数据 · 0x66 状态/命令 · 命令 0x92 读）—— ⭐ 开源限充项目与厂商控制台用的就是这类通道 ✅");
 		sb.AppendLine("⚠️ 合规：PawnIO 模块 LGPL-2.1-or-later（**可分发** · 已内嵌 ＋ NOTICE ＋ LICENSES\\LGPL-2.1.txt）");
-		sb.AppendLine("   ⛔ 不引入 WinRing0（签名已过期 ＋ 微软易受攻击驱动列表）· ⛔ 不引入 inpoutx64（非商业许可）✅");
+		sb.AppendLine("   ⛔ 不引入 WinRing0（签名已过期 ＋ 微软易受攻击驱动列表）· ⛔ 不引入 inpoutx64（不属于宝龙达通道）✅");
 		sb.AppendLine("   ⭐ 模块本身**只放行端口 0x62/0x66**，超出即拒绝 ✅");
 		sb.AppendLine("⛔ 全程只读：只发 0x92 读命令 · ⛔ 绝不发 0x93 写 · ⛔ 不改任何寄存器 ✅");
 		sb.AppendLine();
@@ -738,7 +738,7 @@ internal static class DiagnosticBaolongdaInfo
 		sb.AppendLine("   ⭐ 与厂商控制台 7.3 的关系：厂商走 **slot 0（0x2E/0x2F）**、**同一套子寄存器语义** ✅");
 		sb.AppendLine("     ⇒ ⭐ 两条只是**端口基址不同**，协议同一套（已逐字对照确认）✅");
 		sb.AppendLine("⚠️ 合规：PawnIO `LpcIO` 模块 LGPL-2.1-or-later（**可分发** · 已内嵌 ＋ NOTICE ＋ LICENSES\\LGPL-2.1.txt）");
-		sb.AppendLine("   ⛔ 不引入 JiaoLongDriver64（蛟龙控制台自带的内核驱动）· ⛔ 不引入 WinRing0 / inpoutx64 ✅");
+		sb.AppendLine("   ✅ 宝龙达厂商驱动（Bitland 签名）已内嵌：运行时释放到 ProgramData 再加载，走 0x2E/0x2F 间接窗口 · ⛔ 仍不引入 WinRing0 / inpoutx64");
 		sb.AppendLine("⛔ 全程只读：⛔ 不写 EC 数据（不写子寄存器 0x12）· ⛔ 不发 0x93/0x81 · ⛔ 不改任何寄存器 ✅");
 		sb.AppendLine("⚠️ 诚实边界：本节为**寻址**而写子寄存器 0x11/0x10（窗口寄存器，**不是** EC 数据）✅");
 		sb.AppendLine();
@@ -1188,6 +1188,7 @@ internal static class DiagnosticBaolongdaInfo
 					sb.AppendLine("曲线状态：读不到（" + ex.GetType().Name + "）");
 				}
 			}
+			sb.AppendLine("厂商 EC 通道：" + (MechrevoLite.Hardware.BaolongdaVendorEc.IsReady ? "已就绪（0x2E/0x2F）" : "未加载（只读，不在此处创建服务）"));
 			sb.AppendLine("强冷状态：FanBoostActive = " + MechrevoHw.FanBoostActive
 				+ "（⚠️ 上次确认结果未持久化 ⇒ 本节只报 Active）");
 
