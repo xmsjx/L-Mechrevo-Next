@@ -5595,6 +5595,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			{
 				FanWriter.TryReleaseToFirmware(out string releaseDetail);
 				_fanBoostActive = false;
+				FanBoost = false;
+				QuickSwitches["fanboost"] = false;
 				confirmed = false;
 				Logger.WriteError("[fan] ⚠️ 强冷：EC 写入失败 ⇒ 已回滚（交回固件）· " + releaseDetail);
 				// 开强冷前若临时关掉了软件曲线，这里必须恢复快照；否则一次失败会把用户的曲线永久停用。
@@ -5609,10 +5611,16 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 						+ $"（enabled={rollbackCurve.Enabled} · 联动={rollbackCurve.SyncEnabled}）ok={curveRestored}");
 				}
 			}
+			// 状态回读口径统一：宝龙达本地通道不经过 WMI 状态包，这里补写一份，
+			// 否则快捷开关/功能自检读到的永远是"未开启"。
+			FanBoost = targetsOk && maskOk;
+			QuickSwitches["fanboost"] = FanBoost;
 			return targetsOk && maskOk;
 		}
 		// 关闭：恢复快照（含 Enabled 状态）
 		bool released = FanWriter.TryReleaseToFirmware(out string releaseOnOff);
+		FanBoost = false;
+		QuickSwitches["fanboost"] = false;
 		// 0.293.5.1 关闭路径只交回固件，不再写 WMI 20/21；
 		// 这两条 WMI 写在部分宝龙达机型会卡住，导致“强冷关不掉”。
 		_fanBoostActive = false;
