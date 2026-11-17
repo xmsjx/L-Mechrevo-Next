@@ -12,7 +12,7 @@ AppCopyright=Copyright (C) 2026 L-Mechrevo contributors. GPL-3.0-only.
 DefaultDirName={autopf}\L-Mechrevo
 DefaultGroupName=L-Mechrevo
 #ifdef NOGCU
-OutputBaseFilename=LM-beta23.8.2-baolongda-setup
+OutputBaseFilename=LM-beta23.8.2-setup
 #else
 #ifdef NOGCU_PAYLOAD
 OutputBaseFilename=LM-beta23.8.2-nopayload-setup
