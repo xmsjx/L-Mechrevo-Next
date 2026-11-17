@@ -97,6 +97,17 @@ internal sealed class WujieFanEcController : IDisposable
 
 	private static WujieFanEcController _active;
 
+	/// <summary>当前接管会话的参数指纹（用于判断"同参数重复启动"）。</summary>
+	private static string? _activeSignature;
+
+	private static string BuildSignature(byte[] cpuTemps, int[] cpuDuties, bool independent, byte[]? gpuTemps, int[]? gpuDuties)
+	{
+		return string.Join(",", cpuTemps) + "|" + string.Join(",", cpuDuties)
+			+ "|" + (independent ? "1" : "0")
+			+ "|" + (gpuTemps == null ? "" : string.Join(",", gpuTemps))
+			+ "|" + (gpuDuties == null ? "" : string.Join(",", gpuDuties));
+	}
+
 	private byte[] _cpuTemps = Array.Empty<byte>();
 
 	private int[] _cpuDuties = Array.Empty<int>();
@@ -168,6 +179,14 @@ internal sealed class WujieFanEcController : IDisposable
 			detail = "独立控制需要 GPU 曲线，但 GPU 曲线为空";
 			return false;
 		}
+		// 同一套参数重复启动时复用现有会话，避免"交还 EC / 再接管"来回抖动。
+		string signature = BuildSignature(cpuTemps, cpuDuties, independent, gpuTemps, gpuDuties);
+		if (_active != null && _activeSignature == signature)
+		{
+			detail = "已接管（复用现有会话）";
+			return true;
+		}
+		_activeSignature = signature;
 		// 2026-10-22（无界集成）：随包 DLL/sys 在，但驱动没装时先尝试自动安装一次，再验通道。
 		if (!I2ecInpOut.IsAvailable)
 		{

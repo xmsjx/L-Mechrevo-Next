@@ -82,12 +82,23 @@ internal static class WujieFanCurveAutoApply
 		}
 	}
 
+	private static int _lastMode = int.MinValue;
+	private static long _lastModeTick;
+
 	private static void OnModeChanged(int mode)
 	{
 		if (Program.hw?.WujieSmuApu != true)
 		{
 			return;
 		}
+		// 同一档位重复上报（界面刷新会多次触发）只处理一次，避免控制器被反复重建。
+		long now = Environment.TickCount64;
+		if (mode == _lastMode && now - _lastModeTick < 2000)
+		{
+			return;
+		}
+		_lastMode = mode;
+		_lastModeTick = now;
 		if (mode == 3)
 		{
 			_ = Task.Run(async delegate
