@@ -370,16 +370,18 @@ internal static class GcuEcExperimental
             bool modeOk = modeRead && (readMode & 0x1E) == (mode & 0x1E);
             bool triggerOk = triggerReadBack && readTrigger == trigger;
             bool clampOk = clampRead && readClamp == clamp;
-            detail = $"mode 0x{currentMode:X2}->0x{mode:X2}/0x{readMode:X2} "
+            // 技术明细只进日志；返回给调用方（界面）的只说结论。
+            string technical = $"mode 0x{currentMode:X2}->0x{mode:X2}/0x{readMode:X2} "
                 + $"trigger 0x{currentTrigger:X2}->0x{trigger:X2}/0x{readTrigger:X2} "
                 + $"clamp->0x{clamp:X2}/0x{readClamp:X2} turbo={visualMode == 2} custom={visualMode == 3} "
                 + $"write={modeWrite}/{triggerWrite}/{turboWrite}/{clampWrite}/{customWrite}/{rampWrite}";
+            detail = modeOk && triggerOk && clampOk ? "档位已切换" : "档位未确认";
             if (modeOk && triggerOk && clampOk)
             {
                 System.Threading.Interlocked.Exchange(ref _lastSelfWriteTicks, Environment.TickCount64);
                 System.Threading.Volatile.Write(ref _selfCustomMode, visualMode == 3 ? 1 : 0);
             }
-            Logger.WriteError("[gcu-ec] 实验模式切换 " + detail + " ⇒ " + (modeOk && triggerOk && clampOk ? "OK" : "FAIL"));
+            Logger.WriteError("[gcu-ec] 实验模式切换 " + technical + " ⇒ " + (modeOk && triggerOk && clampOk ? "OK" : "FAIL"));
             return modeWrite && triggerWrite && turboWrite && clampWrite && customWrite && modeOk && triggerOk && clampOk;
         }
         catch (Exception ex)
