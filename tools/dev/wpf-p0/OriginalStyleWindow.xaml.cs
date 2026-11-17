@@ -2158,7 +2158,8 @@ public partial class OriginalStyleWindow : Window
         }
         bool miniledSupported = SupportsMiniled;
         bool overdriveSupported = SupportsLcdOverdrive;
-        MiniledRow.Visibility = (miniledSupported || overdriveSupported) ? Visibility.Visible : Visibility.Collapsed;
+            // 分区控光与 Overdrive 互不绑定：各自按自己的能力决定显示与否。
+            MiniledRow.Visibility = miniledSupported ? Visibility.Visible : Visibility.Collapsed;
         if (MiniledLabel != null)
         {
             MiniledLabel.Visibility = miniledSupported ? Visibility.Visible : Visibility.Collapsed;
