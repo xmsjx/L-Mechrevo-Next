@@ -1827,10 +1827,11 @@ public partial class CustomModeWindow : Window
             _settings = edited;
             _dirty = false;
             ApplyButton.Content = WpfStrings.CpuTuningWindow_xaml_Content;
-            StatusText.Text = (cpuOk && gpuOk && gpuPowerOk && fanOk ? "EC 自定义功耗墙已应用：" : "EC 自定义功耗墙部分失败：")
-                + detail + " · GPU超频=" + gpuOk
-                + " · GPU TGP/DB=" + gpuPowerDetail
-                + " · 风扇曲线=" + fanDetail;
+            StatusText.Text = (cpuOk && gpuOk && gpuPowerOk && fanOk ? "已应用：" : "部分未应用：")
+                + detail
+                + (gpuPowerOk ? "" : " · 显卡功耗未下发")
+                + (fanOk ? "" : " · 风扇曲线未写入");
+            // 技术明细只进日志（界面只留结论，避免一堆地址/回读值糊在脸上）。
             Logger.WriteError("[gcu-ec] 自定义应用 cpu=" + cpuOk + " gpu=" + gpuOk + " fan=" + fanOk + " gpuPower=" + gpuPowerOk + " " + detail + " · " + gpuPowerDetail + " · " + fanDetail);
             await Task.CompletedTask;
         }

@@ -177,8 +177,15 @@ public static class NucPerformanceMode
         bool tccRead = TryRead(1926, out int tccBack);
         // 官方只要求写入成功；EC 对 TCC 的回读可能是掩码后的值，不能因此判整个自定义档失败。
         tccOk = tccOk && tccRead;
-        detail = $"自定义 PL1={p1} PL2={p2} PL4={p4} 写入={w1 && w2 && w3} 回读={rb1}/{rb2}/{rb3} · TCC=0x{tccRaw:X2}({(tcc.HasValue ? "开" : "关")}) 写入={tccOk} 回读=0x{tccBack:X2}";
-        return w1 && w2 && w3 && r1 && r2 && r3 && tccOk && rb1 == p1 && rb2 == p2 && rb3 == p4;
+        bool allOk = w1 && w2 && w3 && r1 && r2 && r3 && tccOk && rb1 == p1 && rb2 == p2 && rb3 == p4;
+        // 技术明细只进日志；返回给界面的只说明"设了多少、成没成"。
+        Logger.WriteLine("[ec-power] 自定义 PL1=" + p1 + " PL2=" + p2 + " PL4=" + p4
+            + " 写入=" + (w1 && w2 && w3) + " 回读=" + rb1 + "/" + rb2 + "/" + rb3
+            + " · TCC=0x" + tccRaw.ToString("X2") + "(" + (tcc.HasValue ? "开" : "关") + ") 写入=" + tccOk
+            + " 回读=0x" + tccBack.ToString("X2"));
+        detail = "CPU 功耗 " + p1 + "/" + p2 + "/" + p4 + " W · 温度墙 " + (tcc.HasValue ? "开启" : "关闭")
+            + " · " + (allOk ? "已生效" : "写入未全部确认");
+        return allOk;
     }
 
     private static bool TryApplyModeLed(int visualMode, out string detail)
