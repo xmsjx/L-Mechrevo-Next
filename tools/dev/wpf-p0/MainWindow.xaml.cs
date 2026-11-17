@@ -1735,7 +1735,7 @@ public partial class MainWindow : Window
         {
             if (!_owner.SupportsLcdOverdrive)
             {
-                overdrive.IsChecked = _owner.LcdOverdrive;
+            overdriveLabel.Visibility = Visibility.Collapsed;
                 return;
             }
             bool target = overdrive.IsChecked == true;
