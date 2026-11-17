@@ -60,6 +60,18 @@ internal static class WujieFanEc
 	/// <summary>转速爬升速率。</summary>
 	internal const int RegisterRampRate = 0x0787;
 
+	/// <summary>主扇软启动占空比槽（停转重启握手用）。</summary>
+	internal const int RegisterFanSoftStart1 = 0x0F21;
+
+	/// <summary>副扇软启动占空比槽。</summary>
+	internal const int RegisterFanSoftStart2 = 0x0F51;
+
+	/// <summary>主机→EC 风扇重启握手寄存器。</summary>
+	internal const int RegisterRestartHandshake = 0x07A3;
+
+	/// <summary>握手位（bit6）。</summary>
+	internal const int RestartHandshakeBit = 0x40;
+
 	/// <summary>表后端只写每张表前 8 字节（EC 取前 8 字节最大值；同时避开 0x38/0x3A 电源寄存器地址低字节）。</summary>
 	internal const int FanTableActiveLength = 16;
 

@@ -135,6 +135,9 @@ internal sealed class WujieFanEcController : IDisposable
 	/// <summary>本次接管是否已置自定义模式标志。</summary>
 	private bool _customModeSet;
 
+	/// <summary>上次停转握手时间（限流）。</summary>
+	private long _lastHandshakeTick;
+
 	private int _lastTempC = -1;
 
 	private int _lastRaw = -1;
@@ -583,6 +586,11 @@ internal sealed class WujieFanEcController : IDisposable
 				if (TryReadFan2Rpm(out int fan2Rpm) && fan2Rpm <= 0)
 				{
 					_fan2ZeroCount++;
+					// 副扇目标>0 但转速为 0 ⇒ 走停转重启握手（限 5 秒一次）。
+					if (rawSecondary > 0)
+					{
+						TryWakeFan(raw, rawSecondary);
+					}
 					if (_fan2ZeroCount >= Fan2ZeroSamples)
 					{
 						Stop("副扇连续 0 RPM（疑似被 EC 判堵转），交还 EC");
@@ -753,6 +761,24 @@ internal sealed class WujieFanEcController : IDisposable
 	/// 温度轮廓写入计划：CPU/GPU 各写升档温度表与降档温度表（各前 8 点，与占空比表同样只取前 8 字节）。
 	/// 降档温度 = 升档温度 - 2℃（不低于 0），给 EC 留回差。
 	/// </summary>
+	/// <summary>停转重启握手：写软启动占空比 → 置 0x07A3 bit6（EC 消费后不自清，回执看转速）。</summary>
+	private void TryWakeFan(int raw1, int raw2)
+	{
+		if (Environment.TickCount64 - _lastHandshakeTick < 5000)
+		{
+			return;
+		}
+		_lastHandshakeTick = Environment.TickCount64;
+		if (!I2ecInpOut.TryWriteEcByte(WujieFanEc.RegisterFanSoftStart1, (byte)Math.Clamp(raw1, 0, 255), out _)
+			|| !I2ecInpOut.TryWriteEcByte(WujieFanEc.RegisterFanSoftStart2, (byte)Math.Clamp(raw2, 0, 255), out _))
+		{
+			return;
+		}
+		int current = I2ecInpOut.TryReadEcByte(WujieFanEc.RegisterRestartHandshake, out int cur, out _) ? cur : 0;
+		I2ecInpOut.TryWriteEcByte(WujieFanEc.RegisterRestartHandshake, (byte)(current | WujieFanEc.RestartHandshakeBit), out _);
+		Logger.WriteLine("[fan] 无界 EC 停转握手：软启动 " + raw1 + "/" + raw2 + " → 置 0x07A3 bit6（等转速起转确认）");
+	}
+
 	private static List<I2ecInpOut.I2ecWriteStep> BuildThresholdPlan(byte[] cpuTemps, byte[] gpuTemps)
 	{
 		List<I2ecInpOut.I2ecWriteStep> list = new(WujieFanEc.FanTableActiveLength * 4);
