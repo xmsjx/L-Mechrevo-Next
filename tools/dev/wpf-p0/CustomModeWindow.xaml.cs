@@ -495,7 +495,17 @@ public partial class CustomModeWindow : Window
                 return true;
             }
             MechrevoLite.Mode.PerfApplyOutcome? outcome = await perf.ActivateAsync(id, "wpf-editor", forceParameters: true);
-            return outcome?.ModeSwitched == true;
+            // 固件档位没切成功但本机已把该配置标为活动 ⇒ 也算切换完成（参数已下发）。
+            if (outcome?.ModeSwitched == true)
+            {
+                return true;
+            }
+            bool active = string.Equals(MechrevoLite.Mode.PerfModeStore.ActiveModeId, id, StringComparison.Ordinal);
+            if (!active)
+            {
+                Logger.WriteLine("[perfmode] 配置切换未完成：id=" + id + " ModeSwitched=" + (outcome?.ModeSwitched));
+            }
+            return active;
         }
         catch
         {
