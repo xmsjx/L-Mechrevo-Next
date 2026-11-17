@@ -143,4 +143,9 @@
     <None Include="LMechrevo.LpcACPIEC.bin" Link="PawnIO\LMechrevo.LpcACPIEC.bin" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="LMechrevo.LpcIO.bin" Link="PawnIO\LMechrevo.LpcIO.bin" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- 宝龙达厂商驱动（EC RAM 访问用）：随程序内嵌，运行时释放到 ProgramData 再加载 -->
+    <EmbeddedResource Include="MechrevoLite.Hardware\Drivers\Blding\bldring64.sys" LogicalName="Drivers.bldring64.sys" />
+    <EmbeddedResource Include="MechrevoLite.Hardware\Drivers\Blding\Bldring64.dll" LogicalName="Drivers.Bldring64.dll" />
+  </ItemGroup>
 </Project>

@@ -281,12 +281,57 @@ namespace MechrevoLite.Hardware
             return _setPort != null && _setPort((ushort)port, value, 1);
         }
 
+        /// <summary>
+        /// 驱动随程序内嵌：首次使用时释放到公共程序数据目录，再从那里加载。
+        /// <para>这样安装包只需要主程序与硬件层两个文件，不需要额外分发驱动文件。</para>
+        /// </summary>
+        private static string? ExtractEmbeddedDriver()
+        {
+            try
+            {
+                string target = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    "MechrevoLite", "driver", "bld");
+                Directory.CreateDirectory(target);
+                string sysPath = Path.Combine(target, "bldring64.sys");
+                string dllPath = Path.Combine(target, "Bldring64.dll");
+                if (!ExtractResource("Drivers.bldring64.sys", sysPath) || !ExtractResource("Drivers.Bldring64.dll", dllPath))
+                {
+                    return null;
+                }
+                return target;
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("[fan] 驱动释放失败：" + ex.GetType().Name + " " + ex.Message);
+                return null;
+            }
+        }
+
+        private static bool ExtractResource(string resourceName, string targetPath)
+        {
+            using Stream? source = typeof(BaolongdaVendorEc).Assembly.GetManifestResourceStream(resourceName);
+            if (source == null)
+            {
+                return false;
+            }
+            if (File.Exists(targetPath) && new FileInfo(targetPath).Length == source.Length)
+            {
+                return true;
+            }
+            using FileStream target = File.Create(targetPath);
+            source.CopyTo(target);
+            return true;
+        }
+
         private static bool TryLoadDriver(out string detail)
         {
             detail = string.Empty;
             string baseDir = AppContext.BaseDirectory;
+            string? extracted = ExtractEmbeddedDriver();
             string[] candidates =
             {
+                extracted ?? string.Empty,
                 Path.Combine(baseDir, "Drivers", "Blding"),
                 baseDir,
                 Path.Combine(baseDir, "GCU", "payload", "1020", "UniwillService", "MyControlCenter")
@@ -296,6 +341,10 @@ namespace MechrevoLite.Hardware
             string dllName = DllName;
             foreach (string dir in candidates)
             {
+                if (string.IsNullOrEmpty(dir))
+                {
+                    continue;
+                }
                 string tryDll = Path.Combine(dir, DllName);
                 string trySys = Path.Combine(dir, "JiaoLongDriver64.sys");
                 if (File.Exists(tryDll) && File.Exists(trySys))
