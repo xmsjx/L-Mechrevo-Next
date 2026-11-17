@@ -201,7 +201,24 @@ public partial class MainWindow
         {
             if (CustomModeHost.Content == null)
             {
-                _customModeInlineWindow = new CustomModeWindow();
+                    /// <summary>自定义配置切换后，把宽屏内联曲线窗口切到该配置并重绘。</summary>
+    void RefreshInlineFanCurveMode(string modeId)
+    {
+        try
+        {
+            (_cpuFanInlineWindow as FanCurveWindow)?.SetModeId(modeId);
+            (_gpuFanInlineWindow as FanCurveWindow)?.SetModeId(modeId);
+        }
+        catch
+        {
+        }
+    }
+
+_customModeInlineWindow = new CustomModeWindow();
+        if (_customModeInlineWindow is CustomModeWindow customInline)
+        {
+            customInline.ActiveConfigChanged += RefreshInlineFanCurveMode;
+        }
                 if (_customModeInlineWindow is CustomModeWindow customEditor)
                 {
                     customEditor.PrepareWideInline();

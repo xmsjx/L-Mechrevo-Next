@@ -742,8 +742,12 @@ public partial class CustomModeWindow : Window
         }
     }
 
+    /// <summary>当前自定义配置切换后通知外部（宽屏内联曲线窗口需要跟着换成该配置的曲线）。</summary>
+    internal event Action<string>? ActiveConfigChanged;
+
     private void ApplyMode(string id)
     {
+        ActiveConfigChanged?.Invoke(id);
         if (_firmwareMode)
         {
             return;
