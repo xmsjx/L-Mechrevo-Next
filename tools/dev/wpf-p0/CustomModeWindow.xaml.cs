@@ -593,9 +593,10 @@ public partial class CustomModeWindow : Window
         QueueModeComboSync();
         if (_current != null)
         {
-            StatusText.Text = switched
-                ? WpfStrings.L("已自动切换配置：", "Auto-switched configuration: ") + ModeName(_current)
-                : WpfStrings.L("配置已加载，自动切换未完成，请点“应用”重试", "Configuration loaded; auto-switch incomplete. Click Apply to retry");
+            // 配置本身已经加载（ApplyMode 已执行）⇒ 不再提示"切换未完成"，避免误导；
+            // 固件档位是否切换只在日志里体现。
+            StatusText.Text = WpfStrings.L("已加载配置：", "Configuration loaded: ") + ModeName(_current)
+                + (switched ? "" : WpfStrings.L("（本机接管，未改固件档位）", " (local takeover; firmware slot unchanged)"));
         }
     }
 
