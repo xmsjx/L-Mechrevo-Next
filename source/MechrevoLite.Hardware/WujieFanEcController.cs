@@ -559,9 +559,15 @@ internal sealed class WujieFanEcController : IDisposable
 					_readbackMismatchSamples++;
 					if (_readbackMismatchSamples >= MaxReadbackMismatchSamples)
 					{
-						Stop("占空比回读持续不一致（主扇写 " + raw + "·副扇写 " + rawSecondary + "），交还 EC");
-						LastDetail = "回读不一致已停止";
-						return;
+						if (_backend == ControlBackend.Direct)
+						{
+							Stop("占空比回读持续不一致（主扇写 " + raw + "·副扇写 " + rawSecondary + "），交还 EC");
+							LastDetail = "回读不一致已停止";
+							return;
+						}
+						// 表后端：0x75B/0x75C 是 EC 按表算出的实际占空比，与目标不等属正常，不据此停止。
+						_readbackMismatchSamples = 0;
+						Logger.WriteLineIfChanged("wujie-fan-readback", "[fan] 无界 EC 表后端：占空比回读与目标不同属正常（EC 自算），不据此停止");
 					}
 				}
 				else
