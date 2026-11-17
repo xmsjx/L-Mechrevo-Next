@@ -1827,8 +1827,19 @@ public partial class CustomModeWindow : Window
             _settings = edited;
             _dirty = false;
             ApplyButton.Content = WpfStrings.CpuTuningWindow_xaml_Content;
+            // 显卡这一组单独给一行结论：动态加速 / 超频偏移写得进去，但没有可信回读，统一标"未验证"。
+            string gpuBits = "";
+            if (edited.GpuDynamicBoostOn == true)
+            {
+                gpuBits += "动态加速 " + (edited.GpuDynamicBoost ?? 0) + " W · ";
+            }
+            gpuBits += edited.GpuOverclockOn == true
+                ? "核心 +" + (edited.GpuCoreOffset ?? 0) + " MHz · 显存 +" + (edited.GpuMemoryOffset ?? 0) + " MHz"
+                : "超频关闭";
+            string gpuSummary = "显卡 " + gpuBits + " · " + (gpuOk ? "已应用（未验证）" : "未应用");
             StatusText.Text = (cpuOk && gpuOk && gpuPowerOk && fanOk ? "已应用：" : "部分未应用：")
                 + detail
+                + " · " + gpuSummary
                 + (gpuPowerOk ? "" : " · 显卡功耗未下发")
                 + (fanOk ? "" : " · 风扇曲线未写入");
             // 技术明细只进日志（界面只留结论，避免一堆地址/回读值糊在脸上）。
