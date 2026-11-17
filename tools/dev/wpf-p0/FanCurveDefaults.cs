@@ -14,7 +14,7 @@ internal static class FanCurveDefaults
 
     internal static readonly int[] CpuDuties =
     {
-        0, 30, 35, 40, 45, 55, 65, 75, 85, 95, 95, 95, 95, 95, 95, 95
+        0, 13, 17, 19, 39, 42, 42, 66, 75, 93, 95, 95, 95, 95, 95, 95
     };
 
     internal static readonly byte[] GpuTemperatures =
@@ -24,7 +24,7 @@ internal static class FanCurveDefaults
 
     internal static readonly int[] GpuDuties =
     {
-        0, 0, 30, 35, 45, 55, 65, 75, 85, 95, 95, 95, 95, 95, 95, 95
+        0, 0, 16, 19, 36, 36, 51, 57, 70, 76, 95, 95, 95, 95, 95, 95
     };
 
     internal static byte[] CpuDutyBytes => CpuDuties.Select(v => (byte)Math.Clamp(v, 0, 100)).ToArray();
