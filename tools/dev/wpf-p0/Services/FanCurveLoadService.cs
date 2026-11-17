@@ -63,8 +63,10 @@ internal static class FanCurveLoadService
 					savedGpu.Select(v => (byte)Math.Clamp(v, 0, 100)).ToArray(),
 					null, null, false, null, null);
 			}
-			return new FanCurveLoadOutcome(wujieAxis, hw.CpuCurveDuty,
-				wujieAxis, hw.GpuCurveDuty, null, null, false, null, null);
+			// 无界的曲线由本程序保存并下发，EC 里不放"我们的曲线"，
+			// 所以没有存档时用默认曲线，而不要去读 EC 的实际占空比。
+			return new FanCurveLoadOutcome(wujieAxis, FanCurveDefaults.CpuDutyBytes,
+				wujieAxis, FanCurveDefaults.GpuDutyBytes, null, null, false, null, null);
 		}
 		// 每个档位自己的已保存曲线优先：切配置/点应用后窗口要跟着变（EC 直连没有 GCU 回读，只能靠存档）。
 		// 温度轴用保存时记下的那一条，避免重画时轴变了、看起来"曲线被改掉了"。
