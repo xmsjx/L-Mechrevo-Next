@@ -897,27 +897,28 @@ internal sealed class PerfModeService
 		if (ecLocalOnly)
 		{
 			List<PerfApplyStep> kept = new List<PerfApplyStep>();
+			// 自定义档：先按同一条 EC 写入口把档位配置里的参数下发，再决定字段步标记。
+			bool ecApplied = false;
+			if (mode.IsCustom && hw != null)
+			{
+				int? tccTarget = mode.Settings.TccOn == true ? mode.Settings.TccTarget : null;
+				ecApplied = MechrevoLite.Hardware.NucPerformanceMode.TryApplyCustom(
+					mode.Settings.Pl1, mode.Settings.Pl2, mode.Settings.Pl4, tccTarget, out string ecDetail);
+				Logger.WriteLineIfChanged("ec-direct-custom-power",
+					"[perfmode] EC 直连自定义功耗墙：" + (ecApplied ? "已应用" : "未应用") + " · " + ecDetail);
+			}
 			foreach (PerfApplyStep step in readOnlyList)
 			{
 				if (step.Kind == PerfApplyStepKind.WriteFirmwareField)
 				{
-					ecSkippedSteps.Add(new PerfApplyStepOutcome(step, PerfApplyResult.Stale,
-						"EC 直连：GCU 固件字段通道不可用，本项未下发"));
+					ecSkippedSteps.Add(new PerfApplyStepOutcome(step,
+						ecApplied ? PerfApplyResult.Confirmed : PerfApplyResult.Stale,
+						ecApplied ? "已按本机配置写入" : "本机未提供该参数的写入通道"));
 					continue;
 				}
 				kept.Add(step);
 			}
 			readOnlyList = kept;
-			// EC 直连机型的自定义档：参数就在档位配置里，这里补一次 EC 功耗墙写入
-			// （与自定义窗口同一条写入口），避免切档/开机恢复时只切档不写参数。
-			if (mode.IsCustom && hw != null)
-			{
-				int? tccTarget = mode.Settings.TccOn == true ? mode.Settings.TccTarget : null;
-				bool ecApplied = MechrevoLite.Hardware.NucPerformanceMode.TryApplyCustom(
-					mode.Settings.Pl1, mode.Settings.Pl2, mode.Settings.Pl4, tccTarget, out string ecDetail);
-				Logger.WriteLineIfChanged("ec-direct-custom-power",
-					"[perfmode] EC 直连自定义功耗墙：" + (ecApplied ? "已应用" : "未应用") + " · " + ecDetail);
-			}
 			Logger.WriteLine("[perfmode] EC 直连应用：" + mode.Id + " ⇒ 档位走本地 EC，跳过固件字段 " + ecSkippedSteps.Count + " 项");
 		}
 		// （机主：「显卡超频设置了但频率没变化」· 可观测性①）
