@@ -18,6 +18,22 @@ internal static class DiagnosticSystemInfo
 	{
 		StringBuilder stringBuilder = new StringBuilder();
 		stringBuilder.AppendLine("L-Mechrevo 诊断包 · 系统信息");
+        // 进程内存口径：工作集/私有字节是"系统看到多少"，GC 堆是"托管占多少"，
+        // 两者差距大说明是原生模块（硬件监控驱动等）占的，不是托管泄漏。
+        try
+        {
+            using System.Diagnostics.Process self = System.Diagnostics.Process.GetCurrentProcess();
+            GCMemoryInfo gcInfo = GC.GetGCMemoryInfo();
+            stringBuilder.AppendLine("进程内存：工作集=" + (self.WorkingSet64 / 1048576)
+                + " MB · 私有=" + (self.PrivateMemorySize64 / 1048576)
+                + " MB · 托管堆=" + (GC.GetTotalMemory(false) / 1048576)
+                + " MB · GC 堆=" + (gcInfo.HeapSizeBytes / 1048576)
+                + " MB · 碎片=" + (gcInfo.FragmentedBytes / 1048576)
+                + " MB · GC 次数=" + GC.CollectionCount(0) + "/" + GC.CollectionCount(1) + "/" + GC.CollectionCount(2));
+        }
+        catch
+        {
+        }
 		StringBuilder stringBuilder2 = stringBuilder;
 		StringBuilder.AppendInterpolatedStringHandler handler = new StringBuilder.AppendInterpolatedStringHandler(13, 1, stringBuilder2);
 		handler.AppendLiteral("生成时间: ");

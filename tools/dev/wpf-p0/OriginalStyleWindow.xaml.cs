@@ -490,6 +490,7 @@ public partial class OriginalStyleWindow : Window
             if (WindowState == WindowState.Minimized)
             {
                 ReleaseAllMouseCapture();
+                ScheduleIdleMemoryTrim();
             }
         };
         // 悬浮窗改为按需创建：启动期不再预加载，降低常驻内存。
@@ -576,6 +577,23 @@ public partial class OriginalStyleWindow : Window
     private void TitleClose_Click(object sender, RoutedEventArgs e)
     {
         Hide();
+        ScheduleIdleMemoryTrim();
+    }
+
+    private long _lastIdleMemoryTrimMs;
+
+    /// <summary>
+    /// 窗口收起来（关闭到托盘/最小化）后，若确实没有任何可见的传感器窗口，
+    /// 空闲一会儿把工作集还给系统。托盘常驻程序靠这一步把常驻内存降下来。
+    /// </summary>
+    private void ScheduleIdleMemoryTrim()
+    {
+        if (Environment.TickCount64 - _lastIdleMemoryTrimMs < 300000)
+        {
+            return;
+        }
+        _lastIdleMemoryTrimMs = Environment.TickCount64;
+        MechrevoLite.Helpers.MemoryHelper.TrimLater(TimeSpan.FromSeconds(60), () => !HasVisibleSensorConsumer());
     }
 
     private bool _customModeCycleBusy;
