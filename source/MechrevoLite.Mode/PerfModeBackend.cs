@@ -77,7 +77,7 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			SupportsPl1 = intelXingyaoMsr || smuCustomApu || hw.Pl1Adjustable,
 			SupportsPl2 = intelXingyaoMsr || smuCustomApu || hw.Pl2Adjustable,
 			SupportsPl4 = hw.Pl4Adjustable,
-			SupportsTcc = intelXingyaoMsr || smuCustomApu || hw.TccAdjustable,
+			SupportsTcc = intelXingyaoMsr || smuCustomApu || hw.TccAdjustable || hw.UsesBaolongda,
 			SupportsTgp = hw.GpuTgpAdjustable,
 			SupportsDynamicBoost = hw.GpuDynamicBoostAdjustable,
 			SupportsGpuOverclock = hw.SupportsGpuOverclock,

@@ -4939,8 +4939,10 @@ public partial class OriginalStyleWindow : Window
     {
         // 实验通道且 GCU 已让出控制权时，直接读 EC，不依赖 GCU 状态包。
         // 这里判断 EC 模式，不是 EC 本地路由：GCU 未连接时优先读 EC。
+        // SMU 机型（自定义档不落固件）不能走 EC 回读：GCU 掉线转 EC-only 时会把自定义档亮成内置档。
         if (GcuEcExperimental.Enabled
             && probe.Hw?.IsGcuConnected != true
+            && probe.Hw?.SmuCustomApu != true
             && GcuEcExperimental.TryReadVisualMode(out int experimentalEcMode))
         {
             return experimentalEcMode;
