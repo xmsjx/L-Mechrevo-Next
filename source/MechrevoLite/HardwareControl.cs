@@ -1740,7 +1740,11 @@ public static class HardwareControl
 			bool fanInfoStale = !hw.IsFanInfoFresh(TimeSpan.FromSeconds(5));
 			// 反复读失败（设备缺失/驱动未就绪）时每拍重试会让一次失败付几百毫秒代价：
 			// 走阶梯退避，退避期内直接跳过这一路读取（成功一次即复位）。
-			if (!hw.WujieSmuApu && !hw.UsesBaolongda
+			// 家族分派收在 FanChannel 里：这里只问"这条路是否由 GCU/EC 直读负责"。
+			// 无界有自己的本地表通道、宝龙达走 WMI，都不进这一支。
+			if (MechrevoLite.Hardware.FanChannel.FamilyOf(hw) is MechrevoLite.Hardware.FanChannel.Family.Gcu
+					or MechrevoLite.Hardware.FanChannel.Family.TongfangEc
+					or MechrevoLite.Hardware.FanChannel.Family.NucUmiLocal
 				&& (fanInfoStale || cpuFanRPM <= 0 || gpuFanRPM <= 0)
 				&& !MechrevoLite.Hardware.ReadFailureBackoff.ShouldSkip("acpi-ec-fan"))
 			{
@@ -1758,7 +1762,8 @@ public static class HardwareControl
 					MechrevoLite.Hardware.ReadFailureBackoff.NoteFailure("acpi-ec-fan");
 				}
 			}
-			if (hw.WujieSmuApu && !MechrevoLite.Hardware.ReadFailureBackoff.ShouldSkip("wujie-ec-fan"))
+			if (MechrevoLite.Hardware.FanChannel.FamilyOf(hw) == MechrevoLite.Hardware.FanChannel.Family.WujieTable
+				&& !MechrevoLite.Hardware.ReadFailureBackoff.ShouldSkip("wujie-ec-fan"))
 			{
 				bool wujieFanOk = hw.TryReadWujieEcFanSpeeds(out int mainFanRpm, out int secondaryFanRpm);
 				if (wujieFanOk)
