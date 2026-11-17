@@ -7220,7 +7220,7 @@ public partial class OriginalStyleWindow : Window
         using (UiTrace.Phase("mini-camera")) { probe.SyncCameraQuickState(); }
         using (UiTrace.Phase("mini-brightness")) { try { RefreshBrightness(); } catch { } }
         using (UiTrace.Phase("mini-miniled")) { try { RefreshMiniledSwitch(); RefreshOverdriveSwitch(); } catch { } }
-        BackendLine.Text = probe.Snapshot();
+        SetTextIfChanged(BackendLine, probe.Snapshot());
         using (UiTrace.Phase("mini-tooltip")) { UpdateTraySensorTooltip(probe); }
         using (UiTrace.Phase("mini-hook-hw")) { HookHardwareState(); }
         if (probe.Hw.IsNucUmiFamily)
@@ -7266,8 +7266,8 @@ public partial class OriginalStyleWindow : Window
         // 核显模式下独显会从总线上消失（此时也是 NoDgpu），但机型仍有独显 ⇒ 不能当核显本处理。
         GpuStat.Visibility = (noDgpu && !hw.DgpuEverPresent && !igpuSensorPresent) ? Visibility.Collapsed : Visibility.Visible;
         // 状态行的文本必须每次心跳都刷（之前这两行被改漏了，界面就一直停在默认的 "CPU —"/"GPU —"）。
-        CpuStat.Text = SensorLine(cpu: true);
-        GpuStat.Text = SensorLine(cpu: false);
+        SetTextIfChanged(CpuStat, SensorLine(cpu: true));
+        SetTextIfChanged(GpuStat, SensorLine(cpu: false));
         using (UiTrace.Phase("mini-igpu"))
         {
             // 显卡模式/核显省电状态的读取走 ACPI/WMI，单次 0.2~0.3 秒：
@@ -7447,7 +7447,7 @@ public partial class OriginalStyleWindow : Window
                 string limitText = resolvedLimit + "%";
                 if (!string.Equals(BatteryLimitSliderText.Text, limitText, StringComparison.Ordinal))
                 {
-                    BatteryLimitSliderText.Text = limitText;
+                    SetTextIfChanged(BatteryLimitSliderText, limitText);
                 }
             }
         }
@@ -7478,7 +7478,7 @@ public partial class OriginalStyleWindow : Window
         if (ChargeLimitStatus != null && batteryMode >= 0)
         {
             string modeName = batteryMode switch { 0 => "长效模式", 1 => "平衡模式", 2 => "工作站模式", _ => "未知" };
-            ChargeLimitStatus.Text = "电池档位：" + modeName;
+            SetTextIfChanged(ChargeLimitStatus, "电池档位：" + modeName);
         }
         UpdateQuickTileStates();
         if (MoreGroupsPanel != null)
@@ -7495,6 +7495,18 @@ public partial class OriginalStyleWindow : Window
     }
 
     /// <summary>CPU / GPU 那行读数：温度 + 风扇转速 + 风扇百分比。</summary>
+    /// <summary>
+    /// 只在文本真的变化时才写控件：心跳每 2 秒都会走到这些赋值点，
+    /// 相同内容反复赋值虽不会触发重绘，但每次都要新建字符串并走一遍依赖属性通路。
+    /// </summary>
+    private static void SetTextIfChanged(System.Windows.Controls.TextBlock target, string? text)
+    {
+        string value = text ?? string.Empty;
+        if (!string.Equals(target.Text, value, StringComparison.Ordinal))
+        {
+            target.Text = value;
+        }
+    }
     private string SensorLine(bool cpu)
     {
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
@@ -7516,12 +7528,50 @@ public partial class OriginalStyleWindow : Window
         // 界面心跳只读缓存：转速由后台采样泵回填（EC 直读在界面线程上每次约几十毫秒，
         // 叠在心跳里就是可感知的卡顿）。这里不再直读 EC。
         // 读不到时后端会给 -1：⛔ 不能把它当数值显示（会出现 "-1rpm"），按"未知"显示破折号。
+        string duty = FanDutyText(cpu);
+        // 温度/转速/占空比都没变 ⇒ 直接返回上一条，不再拼字符串（心跳每 2 秒一次，稳态下这里几乎零分配）。
+        if (cpu)
+        {
+            if (temp == _lastCpuSensorTemp && rpm == _lastCpuSensorRpm
+                && string.Equals(duty, _lastCpuSensorDuty, StringComparison.Ordinal))
+            {
+                return _lastCpuSensorText;
+            }
+        }
+        else if (temp == _lastGpuSensorTemp && rpm == _lastGpuSensorRpm
+            && string.Equals(duty, _lastGpuSensorDuty, StringComparison.Ordinal))
+        {
+            return _lastGpuSensorText;
+        }
         string tempText = temp > 0 ? temp + "℃" : "—";
         string rpmText = rpm > 0 ? rpm + "rpm" : (rpm == 0 ? "0rpm" : "—");
         string line = (cpu ? "CPU " : "GPU ") + tempText + "   " + rpmText;
-        string duty = FanDutyText(cpu);
-        return duty.Length == 0 ? line : line + " " + duty;
+        string text = duty.Length == 0 ? line : line + " " + duty;
+        if (cpu)
+        {
+            _lastCpuSensorTemp = temp;
+            _lastCpuSensorRpm = rpm;
+            _lastCpuSensorDuty = duty;
+            _lastCpuSensorText = text;
+        }
+        else
+        {
+            _lastGpuSensorTemp = temp;
+            _lastGpuSensorRpm = rpm;
+            _lastGpuSensorDuty = duty;
+            _lastGpuSensorText = text;
+        }
+        return text;
     }
+
+    private int _lastCpuSensorTemp = int.MinValue;
+    private int _lastCpuSensorRpm = int.MinValue;
+    private string _lastCpuSensorDuty = "";
+    private string _lastCpuSensorText = "";
+    private int _lastGpuSensorTemp = int.MinValue;
+    private int _lastGpuSensorRpm = int.MinValue;
+    private string _lastGpuSensorDuty = "";
+    private string _lastGpuSensorText = "";
 
     /// <summary>
     /// 风扇百分比（占空比）。读不到风扇信息、或该后端给不出百分比（只报转速）时不显示。
@@ -7944,7 +7994,7 @@ public partial class OriginalStyleWindow : Window
             _backendRoute = BackendRoute.Gcu;
             _gcuConnectFailures = 0;
             UpdateBackendStatus();
-            BackendLine.Text = probe.Snapshot();
+            SetTextIfChanged(BackendLine, probe.Snapshot());
             _services = new AppServices(probe);
             try
             {
