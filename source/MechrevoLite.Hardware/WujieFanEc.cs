@@ -254,7 +254,7 @@ internal static class WujieFanEc
 			sb.AppendLine($"模式 0x200D=0x{mode:X2}（bit0/1={(((mode & 0x03) == 0x03) ? "读写模式" : "非读写模式")}）");
 			sb.AppendLine($"占空比：主扇={duty1}/200 · 副扇={duty2}/200 · CPU={tempC}℃ · 主扇={fan1Rpm}rpm · 副扇={fan2Rpm}rpm");
 			sb.AppendLine("参考语义：占空比 0..200 → 0..100%；低于 20% 副扇可能被判堵转闭锁；"
-				+ "table 后端默认优先（0x0F20/0x0F50 前 8 字节 + 0x0727 bit6 锁存 + 0x07C5 bit7 隔离），失败/显式配置时回退 25Hz direct 直写。");
+				+ "table 后端默认优先（0x0F20/0x0F50 前 8 字节 + 0x07C6 写 0x04 锁存 + 0x07C5 bit7 隔离），失败/显式配置时回退 25Hz direct 直写。");
 			sb.AppendLine("边界：本段只读；写曲线尚未接入 UI（下一步：25Hz 控制器 + FanCurveForm 无界分支）。");
 			// 2026-10-22（机主：无界能不能走宝龙达那条 PawnIO 路子）：只读探测 LPC EC-RAM 通道是否能摸到无界的
 			// 温度/转速/占空比地址。若能读到合理值，就可以把写入也挪到 PawnIO（不再依赖 inpoutx64）。
