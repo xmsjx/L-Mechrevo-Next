@@ -1758,12 +1758,17 @@ public partial class MainWindow : Window
         {
             Text = _owner.SupportsLcdOverdrive
                 ? string.Empty
-                : WpfStrings.L("未检测到 Overdrive 通道（此行常显，仅用于核对）", "LCD Overdrive channel not detected (row shown for review)"),
+                : string.Empty,
             Style = (Style)FindResource("MutedText"),
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(10, 0, 0, 0)
         };
         miniledRow.Children.Add(overdriveHint);
+        if (!_owner.SupportsLcdOverdrive)
+        {
+            overdrive.Visibility = Visibility.Collapsed;
+            overdriveHint.Visibility = Visibility.Collapsed;
+        }
         DisplayDetailsPanel.Children.Add(miniledRow);
         _miniledSwitch = miniled;
         _overdriveSwitch = overdrive;
