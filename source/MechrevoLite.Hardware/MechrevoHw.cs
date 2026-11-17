@@ -5429,6 +5429,14 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// <summary>⭐ SMU 自定义后端合并判据：无界 APU 或 星耀 AMD（仅 SMU 链路使用）。</summary>
 	internal bool SmuCustomApu => WujieSmuApu || XingyaoAmdSmuApu;
 
+	/// <summary>
+	/// 自定义档是否只存在本机（固件没有独立的自定义档位）：
+	/// 宝龙达全系、无界全系（含走 GCU 后端的 LNL）、星耀全系。
+	/// <para>这些机型的自定义档由本机配置承担：不写固件自定义门控/档位，参数走本机通道。</para>
+	/// </summary>
+	internal bool CustomModeIsLocalOnly =>
+		UsesBaolongda || SmuCustomApu || UsesWjGcuPayload || XingyaoLocalReady;
+
 	/// <summary>同方 GCU 体系：无界、星耀，以及已连接 GCU 的同方机型（不含 NUC/UMI/宝龙达）。</summary>
 	internal bool IsTongfangGcuMachine =>
 		!UsesBaolongda
