@@ -6124,30 +6124,20 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 	{
 		try
 		{
-			// 宝龙达没有 GCU 强冷能力位，走本机 EC 目标/掩码路径。
-			if (_hw.UsesBaolongda)
+			// 本地通道能做的机型在这里一次分派掉（宝龙达本机 / NUC·UMI 本机 / 无界与同方 EC 的 clamp 位），
+			// 需要走厂商话题的机型返回 NotHandled，继续往下走 GCU Fan/Control。
+			FanChannel.BoostOutcome boost = await Task.Run(() => FanChannel.ApplyBoost(_hw, enable))
+				.ConfigureAwait(continueOnCapturedContext: false);
+			if (boost.Route == FanChannel.BoostRoute.Handled)
 			{
-				(bool handled, bool confirmed) = await Task.Run(() =>
-				{
-					bool ok = _hw.TrySetFanBoostViaBackend(enable, out bool confirmedLocal);
-					return (ok, confirmedLocal);
-				}).ConfigureAwait(continueOnCapturedContext: false);
-				Logger.WriteLine($"SwitchFanBoost({enable}) 宝龙达本机通道 ⇒ handled={handled} confirmed={confirmed}");
-				// 写入成功即算已下发；RPM 确认只作诊断，不把整档判成失败。
-				return handled;
-			}
-			// NUC/UMI 的强冷是本地 EC 0x751 bit6，不走 GCU。
-			if (_hw.IsNucUmiFamily)
-			{
-				bool ok = NucQuickSwitches.TrySetFanBoost(enable, out bool confirmed);
-				Logger.WriteLine($"SwitchFanBoost({enable}) NUC/UMI EC ⇒ ok={ok} confirmed={confirmed}");
-				return ok;
-			}
-			// 同方 EC-only（无 GCU 连接）同样只有本地 EC 0x751，没有 Fan/Control 话题可用。
-			if (!_hw.IsGcuConnected && _hw.TrySetEcFanBoost(enable, out bool ecConfirmed))
-			{
-				Logger.WriteLine($"SwitchFanBoost({enable}) 同方 EC ⇒ ok=True confirmed={ecConfirmed}");
+				Logger.WriteLine($"SwitchFanBoost({enable}) {boost.ChannelName} ⇒ handled=True confirmed={boost.Confirmed}");
+				// 写入成功即算已下发；转速确认只作诊断，不把整档判成失败。
 				return true;
+			}
+			if (boost.Route == FanChannel.BoostRoute.Failed)
+			{
+				Logger.WriteLine($"SwitchFanBoost({enable}) {boost.ChannelName} ⇒ handled=False");
+				return false;
 			}
 			// ⭐⭐ 无界（GCU 后端）恢复强冷入口：能力位刷新前也允许走 GCU 话题；GCU 未连接则如实失败 ✅
 			if (!_hw.SupportsFanBoost && !_hw.WujieSmuApu)
