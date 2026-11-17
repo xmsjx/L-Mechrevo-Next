@@ -92,12 +92,13 @@ namespace MechrevoLite.Hardware
                         }
                         if (cpuTemps is not { Length: 16 } || gpuTemps is not { Length: 16 })
                         {
-                            return new FanCurveOutcome(false, "EC 整表", "温度轴缺失（既没保存也读不到当前表）");
+                            return new FanCurveOutcome(false, "同方 EC 表", "温度轴缺失（既没保存也读不到当前表）");
                         }
                         bool ok = NucFanTable.TryApply(cpuTemps, cpuDuty, gpuTemps, gpuDuty, out string detail);
                         bool isolated = NucFanTable.TrySetFanIsolated(true, out _);
                         bool ramp = NucFanTable.TrySetFanRamp(request.RampEnabled, request.RampMs, out _);
-                        string writer = kind == FanCurveBackendKind.NucUmi ? "NUC/UMI EC 整表" : "同方 EC 整表";
+                        // NUC/UMI 与同方 EC 直连写的是同一张同方 EC 表（同一份实现），这里不按家族分名。
+                        string writer = "同方 EC 表";
                         return new FanCurveOutcome(ok && isolated, writer,
                             detail + (ramp ? "" : " · 切换速度未写入"));
                     }
@@ -133,8 +134,8 @@ namespace MechrevoLite.Hardware
             {
                 FanCurveBackendKind.Baolongda => "宝龙达本机闭环",
                 FanCurveBackendKind.Wujie => "无界 EC 表",
-                FanCurveBackendKind.NucUmi => "NUC/UMI EC 整表",
-                FanCurveBackendKind.Ec => "同方 EC 整表",
+                FanCurveBackendKind.NucUmi => "同方 EC 表（UMI/NUC）",
+                FanCurveBackendKind.Ec => "同方 EC 表（EC 直连）",
                 FanCurveBackendKind.Gcu => "同方 GCU",
                 _ => "无"
             };

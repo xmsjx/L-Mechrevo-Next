@@ -22,26 +22,21 @@ internal static class FanCurveBackendFactory
 		{
 			return FanCurveBackendKind.None;
 		}
-		if (hw.UsesBaolongda)
+		// 家族判定只有一处（FanChannel.FamilyOf），这里只做"家族 → 曲线后端"的映射：
+		// 无界与 NUC/UMI 是**不同家族、不同写手**（无界 EC 表只收占空比；NUC/UMI 写整表），
+		// 不能让两处各排一套 if，否则顺序一变就会把无界误落进整表写手。
+		switch (FanChannel.FamilyOf(hw))
 		{
-			return FanCurveBackendKind.Baolongda;
+			case FanChannel.Family.BaolongdaLocal:
+				return FanCurveBackendKind.Baolongda;
+			case FanChannel.Family.WujieTable:
+				return FanCurveBackendKind.Wujie;
+			case FanChannel.Family.NucUmiLocal:
+				return FanCurveBackendKind.NucUmi;
+			case FanChannel.Family.TongfangEc:
+				return GcuEcExperimental.Enabled ? FanCurveBackendKind.Ec : FanCurveBackendKind.None;
+			default:
+				return GcuEcExperimental.LocalFanCurve ? FanCurveBackendKind.Ec : FanCurveBackendKind.Gcu;
 		}
-		if (hw.IsNucUmiFamily)
-		{
-			return FanCurveBackendKind.NucUmi;
-		}
-		if (hw.WujieSmuApu)
-		{
-			return FanCurveBackendKind.Wujie;
-		}
-		if (GcuEcExperimental.LocalFanCurve)
-		{
-			return FanCurveBackendKind.Ec;
-		}
-		if (hw.IsGcuConnected)
-		{
-			return FanCurveBackendKind.Gcu;
-		}
-		return GcuEcExperimental.Enabled ? FanCurveBackendKind.Ec : FanCurveBackendKind.None;
 	}
 }
