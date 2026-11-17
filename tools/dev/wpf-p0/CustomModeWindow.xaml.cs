@@ -315,11 +315,44 @@ public partial class CustomModeWindow : Window
         }
         if (_dirty)
         {
+            // 已经是脏状态：仍要刷新"哪些项没应用"，否则改第二项时提示还停在第一次。
+            StatusText.Text = DirtySummaryText();
             return;
         }
         _dirty = true;
         ApplyButton.Content = WpfStrings.CustomModeWindow_xaml_Content;
-        StatusText.Text = WpfStrings.CustomModeWindow_xaml_Text;
+        StatusText.Text = DirtySummaryText();
+    }
+
+    /// <summary>与各项控件一一对应的用户可读名称（顺序必须与 BuildUiSignature 一致）。</summary>
+    private static readonly string[] SignatureLabels =
+    {
+        "CPU 功耗 SPL", "CPU 功耗 sPPT", "CPU 功耗 fPPT", "CPU 温度墙", "GPU 动态加速",
+        "GPU 功耗上限", "风扇灵敏度", "GPU 核心偏移", "GPU 显存偏移", "STAPM 时间",
+        "SMU 慢速功率", "SMU 慢速时间", "SMU 快速时间", "GPU 功耗限制", "CPU 温度墙开关",
+        "GPU 动态加速开关", "风扇灵敏度开关", "GPU 超频开关", "Windows 电源模式", "电源计划",
+        "CPU 睿频模式", "风扇档", "屏幕刷新率"
+    };
+
+    /// <summary>列出与"已应用配置"不一致的项；没有可比的快照时退回通用文案。</summary>
+    private string DirtySummaryText()
+    {
+        string generic = WpfStrings.CustomModeWindow_xaml_Text;
+        if (string.IsNullOrEmpty(_cleanUiSignature))
+        {
+            return generic;
+        }
+        string[] now = BuildUiSignature().Split('|');
+        string[] clean = _cleanUiSignature.Split('|');
+        List<string> changed = new List<string>();
+        for (int i = 0; i < now.Length && i < clean.Length; i++)
+        {
+            if (!string.Equals(now[i], clean[i], StringComparison.Ordinal) && i < SignatureLabels.Length)
+            {
+                changed.Add(SignatureLabels[i]);
+            }
+        }
+        return changed.Count == 0 ? generic : "有未应用修改：" + string.Join("、", changed);
     }
 
     /// <summary>
