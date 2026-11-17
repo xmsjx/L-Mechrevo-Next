@@ -1749,7 +1749,8 @@ public static class HardwareControl
 			if (MechrevoLite.Hardware.FanChannel.FamilyOf(hw) is MechrevoLite.Hardware.FanChannel.Family.Gcu
 					or MechrevoLite.Hardware.FanChannel.Family.TongfangEc
 					or MechrevoLite.Hardware.FanChannel.Family.NucUmiLocal
-				&& (fanInfoStale || cpuFanRPM <= 0 || gpuFanRPM <= 0)
+				// 占空比为 0 时也要补读一次：FanInfo 新鲜但没有占空比，否则界面会一直是 0%。
+				&& (fanInfoStale || cpuFanRPM <= 0 || gpuFanRPM <= 0 || hw.CpuFanDuty <= 0 || hw.GpuFanDuty <= 0)
 				&& !MechrevoLite.Hardware.ReadFailureBackoff.ShouldSkip("acpi-ec-fan"))
 			{
 				if (hw.TryReadGcuEcFanSpeeds(out int gcuCpuFanRpm, out int gcuGpuFanRpm))
