@@ -50,6 +50,19 @@ internal static class FanCurveLoadService
 		{
 			// 无界用的是自己那张 16 点表的温度轴，不能套同方那套 46..80。
 			byte[] wujieAxis = WpfBackend.WujieFanDefaultTemperatures();
+			// 该档已保存过曲线 ⇒ 优先显示保存值：EC 回读是"按温度算出来的实际值"，
+			// 用它重绘会让刚拖好的点位看起来被改回去了。
+			PerfModeSettings savedWujie = PerfModeStore.LoadSettings(modeId);
+			if (savedWujie.CpuFanDuty is { Length: >= 2 } savedCpu && savedWujie.GpuFanDuty is { Length: >= 2 } savedGpu)
+			{
+				byte[] savedCpuTemps = ReadRememberedTemps("ec_fan_cputemps_", modeId) ?? wujieAxis;
+				byte[] savedGpuTemps = ReadRememberedTemps("ec_fan_gputemps_", modeId) ?? wujieAxis;
+				return new FanCurveLoadOutcome(savedCpuTemps,
+					savedCpu.Select(v => (byte)Math.Clamp(v, 0, 100)).ToArray(),
+					savedGpuTemps,
+					savedGpu.Select(v => (byte)Math.Clamp(v, 0, 100)).ToArray(),
+					null, null, false, null, null);
+			}
 			return new FanCurveLoadOutcome(wujieAxis, hw.CpuCurveDuty,
 				wujieAxis, hw.GpuCurveDuty, null, null, false, null, null);
 		}
