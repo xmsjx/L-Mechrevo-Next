@@ -5988,12 +5988,15 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		try
 		{
-			if (AcpiDriverEc.TryReadByte(1883, out byte cpuDuty)
-				&& AcpiDriverEc.TryReadByte(1884, out byte gpuDuty))
+			// 同一句柄一次读两个字节：避免两次独立打开之间被固件改写，减少"时有时无"。
+			if (AcpiDriverEc.TryReadMany(new[] { 1883, 1884 }, out byte[] dutyPair))
 			{
+				byte cpuDuty = dutyPair[0];
+				byte gpuDuty = dutyPair[1];
 				// 0xFF 是未映射/停转填充值，不能换算成 100%。
 				if (cpuDuty == 0xFF || gpuDuty == 0xFF)
 				{
+					// 读失败/未映射时保留上一次的有效值，不要退回 0%，避免界面"时有时无"。
 					return false;
 				}
 				CpuFanDuty = Math.Clamp(cpuDuty / 2, 0, 100);
