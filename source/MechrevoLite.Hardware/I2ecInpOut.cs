@@ -161,13 +161,36 @@ internal static class I2ecInpOut
 	/// <summary>给 ACPI EC 通道（0x62/0x66）做后备：只检查 inpoutx64 是否可用。</summary>
 	internal static bool CanUsePortIo(out string detail)
 	{
+		if (AcpiDriverAvailable())
+		{
+			detail = "厂商 ACPI 驱动可用（16 位 EC RAM 访问）";
+			return true;
+		}
 		return EnsureInitialized(out detail);
 	}
 
-	/// <summary>通用端口读（仅限 ACPI EC 白名单 0x62/0x66 的调用方使用）。</summary>
+	/// <summary>厂商 ACPI 驱动是否可用（只探测一次，代价是一次 CreateFile）。</summary>
+	private static bool? _acpiAvailable;
+
+	internal static bool AcpiDriverAvailable()
+	{
+		if (_acpiAvailable is bool cached)
+		{
+			return cached;
+		}
+		bool ok = AcpiDriverEc.TryReadByte(0x0683, out _) || AcpiDriverEc.TryReadByte(0x0F20, out _);
+		_acpiAvailable = ok;
+		return ok;
+	}
+
+	/// <summary>通用端口读：优先走厂商 ACPI 驱动（16 位地址），不可用时才回退 inpoutx64。</summary>
 	internal static bool TryReadPort(short port, out byte value)
 	{
 		value = 0;
+		if (AcpiDriverAvailable() && AcpiDriverEc.TryReadByte(port, out value))
+		{
+			return true;
+		}
 		try
 		{
 			if (!EnsureInitialized(out _))
@@ -183,9 +206,13 @@ internal static class I2ecInpOut
 		}
 	}
 
-	/// <summary>通用端口写（仅限 ACPI EC 白名单 0x62/0x66 的调用方使用）。</summary>
+	/// <summary>通用端口写：优先走厂商 ACPI 驱动（16 位地址），不可用时才回退 inpoutx64。</summary>
 	internal static bool TryWritePort(short port, byte value)
 	{
+		if (AcpiDriverAvailable() && AcpiDriverEc.TryWriteByte(port, value))
+		{
+			return true;
+		}
 		try
 		{
 			if (!EnsureInitialized(out _))

@@ -171,7 +171,10 @@ internal sealed class WujieFanEcController : IDisposable
 		// 2026-10-22（无界集成）：随包 DLL/sys 在，但驱动没装时先尝试自动安装一次，再验通道。
 		if (!I2ecInpOut.IsAvailable)
 		{
-			InpOutDriverInstaller.TryEnsureInstalled(out string installDetail);
+			// 厂商 ACPI 驱动可用时不需要装 inpout；两者都没有才尝试安装。
+			string installDetail = I2ecInpOut.AcpiDriverAvailable()
+				? "ACPI 驱动可用，跳过 inpout"
+				: (InpOutDriverInstaller.TryEnsureInstalled(out string installResult) ? "已安装" : installResult);
 			Logger.WriteLine("[fan] 无界 EC 曲线：驱动自动安装结果=" + installDetail);
 		}
 		// 启动前先验通道：I2EC（inpoutx64）优先；没有驱动时回退 ACPI-EC 0x93（实验路径）。
