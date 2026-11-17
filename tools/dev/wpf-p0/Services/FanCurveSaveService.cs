@@ -120,6 +120,13 @@ internal static class FanCurveSaveService
 				MechrevoLite.AppConfig.Set("ec_fan_gputemps_" + key, string.Join(",", gpuTemps));
 			}
 			MechrevoLite.AppConfig.Flush();
+			// 温度轴同时写进档位配置（曲线真值归档位所有；旧键保留一份做兼容）。
+			MechrevoLite.Mode.PerfModeSettings settings = MechrevoLite.Mode.PerfModeStore.LoadSettings(key);
+			MechrevoLite.Mode.PerfModeStore.SaveSettings(key, settings with
+			{
+				CpuCurveTemps = cpuTemps != null && cpuTemps.Length > 0 ? cpuTemps : settings.CpuCurveTemps,
+				GpuCurveTemps = gpuTemps != null && gpuTemps.Length > 0 ? gpuTemps : settings.GpuCurveTemps
+			});
 		}
 		catch (Exception ex)
 		{

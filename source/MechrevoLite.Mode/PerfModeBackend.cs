@@ -246,8 +246,23 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			{
 				return ApplyBaolongdaFanCurve(cpu, duty);
 			}
-			await _hw.SetFanCurve((!cpu) ? 1 : 0, duty).ConfigureAwait(continueOnCapturedContext: false);
-			return true;
+			// 曲线统一下发：由 FanCurveChannel 按后端分类选通道
+			//（无界 EC 表 / NUC·UMI 与同方 EC 整表 / 同方 GCU），这里不再判断机型。
+			string? storedModeId = FanCurveTargetModeId;
+			PerfModeSettings? stored = string.IsNullOrWhiteSpace(storedModeId) ? null : PerfModeStore.LoadSettings(storedModeId);
+			FanCurveRequest request = new FanCurveRequest(
+				cpu ? duty : null,
+				cpu ? null : duty,
+				cpu ? stored?.CpuCurveTemps : null,
+				cpu ? null : stored?.GpuCurveTemps,
+				Independent: AppConfig.Is("wujie_fan_independent"),
+				RampEnabled: stored?.FanSwitchSpeedOn == true,
+				RampMs: stored?.FanSwitchSpeedMs ?? 300);
+			FanCurveOutcome outcome = await MechrevoLite.Hardware.FanCurveChannel.ApplyAsync(_hw, request, ct)
+				.ConfigureAwait(continueOnCapturedContext: false);
+			Logger.WriteLine("[fan] 曲线下发（" + (cpu ? "CPU" : "GPU") + " · " + outcome.Writer + "）⇒ "
+				+ (outcome.Applied ? "已应用" : "未应用") + " · " + outcome.Detail);
+			return outcome.Applied;
 		}
 		catch (Exception ex)
 		{
