@@ -2838,7 +2838,9 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			bool oldPredicate = SupportsFanBoost || UsesBaolongda;
 			// NUC/UMI 与同方 EC-only 的强冷都走本地 EC 0x751 bit6，不依赖 GCU 能力位。
 			// EC-only 由门控（TongfangEc 声明 FanBoost=Supported/Local）决定，旧判据只在 Unknown 时兜底。
-			bool legacyVisible = oldPredicate || WujieSmuApu || IsNucUmiFamily;
+			// 本机 EC clamp（0x751）可读 ⇒ 强冷可用，不依赖 GCU 是否在线。
+			bool ecClampReady = AcpiDriverEc.TryReadByte(0x751, out _);
+			bool legacyVisible = oldPredicate || WujieSmuApu || IsNucUmiFamily || ecClampReady;
 			bool visible = legacyVisible;
 			string declared = "n/a";
 			try
@@ -2854,7 +2856,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 				Logger.WriteLine("[fan] 强冷可见性：门控取值失败，按旧判据处理：" + ex.Message);
 			}
 			string message = "[fan] 强冷可见性：backend=" + ActiveBackend + " · caps.FanBoost=" + Capabilities.FanBoost
-				+ " · 旧判据=" + oldPredicate + " · 声明=" + declared + " ⇒ visible=" + visible;
+				+ " · 旧判据=" + oldPredicate + " · EC clamp 可读=" + ecClampReady + " · 声明=" + declared + " ⇒ visible=" + visible;
 			if (Logger.TryMarkChanged("fan-boost-visible", message))
 			{
 				Logger.WriteError(message);
