@@ -5982,7 +5982,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		return acpiOk || cpuOk || gpuOk || dutyOk;
 	}
 
-	private static bool IsPlausibleFanRpm(int rpm) => rpm is > 0 and < 12000;
+	// 255（0xFF）是脏值/未映射，不能当有效转速。
+	private static bool IsPlausibleFanRpm(int rpm) => rpm is > 0 and < 12000 && rpm != 255;
 
 	internal bool TryReadGcuEcFanDuties()
 	{

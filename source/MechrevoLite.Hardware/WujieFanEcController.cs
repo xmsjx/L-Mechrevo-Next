@@ -157,11 +157,8 @@ internal sealed class WujieFanEcController : IDisposable
 	/// <summary>2026-10-22：无界保存的只有占空比点位（官方表可能读失败/无温度轴）⇒ 开机自启用固定温度阶梯 45..90℃（16 点）。</summary>
 	internal static byte[] DefaultTemperatures()
 	{
-		byte[] temps = new byte[16];
-		for (int i = 0; i < temps.Length; i++)
-		{
-			temps[i] = (byte)(45 + i * 3);
-		}
+			// 温度轴不读 EC（该表常是脏值）：前 10 点与同方一致，最后 100℃，其余 4℃ 步进。
+			byte[] temps = { 46, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 100 };
 		return temps;
 	}
 
