@@ -824,7 +824,7 @@ internal sealed class WujieFanEcController : IDisposable
 		try
 		{
 			// 用局部变量比较，避免编译器把“常量相等”折叠成恒假条件（CS0162 不可达代码）。
-			int expectedTableLength = 8;
+			int expectedTableLength = 16;
 			int expectedHeartbeatMs = 10000;
 			int expectedDriftRaw = 8;
 			int expectedPulseMs = 50;
@@ -840,37 +840,37 @@ internal sealed class WujieFanEcController : IDisposable
 			}
 			BuildTableWritePlan(60, 120, 0x00, 0x00, out List<I2ecInpOut.I2ecWriteStep> steps,
 				out List<I2ecInpOut.I2ecVerifyStep> verify, out bool needIsolate);
-			if (!needIsolate || steps.Count != 19 || verify.Count != 2)
+			if (!needIsolate || steps.Count != 35 || verify.Count != 2)
 			{
 				detail = "计划形状不对：steps=" + steps.Count + " verify=" + verify.Count + " isolate=" + needIsolate;
 				return false;
 			}
 			if (steps[0].Address != WujieFanEc.RegisterFanTableFan1 || steps[0].Value != 60
-				|| steps[7].Address != WujieFanEc.RegisterFanTableFan1 + 7 || steps[7].Value != 60)
+				|| steps[15].Address != WujieFanEc.RegisterFanTableFan1 + 15 || steps[7].Value != 60)
 			{
 				detail = "表1 前 8 字节计划不对";
 				return false;
 			}
-			if (steps[8].Address != WujieFanEc.RegisterFanTableFan2 || steps[8].Value != 120
-				|| steps[15].Address != WujieFanEc.RegisterFanTableFan2 + 7 || steps[15].Value != 120)
+			if (steps[16].Address != WujieFanEc.RegisterFanTableFan2 || steps[8].Value != 120
+				|| steps[31].Address != WujieFanEc.RegisterFanTableFan2 + 15 || steps[15].Value != 120)
 			{
 				detail = "表2 前 8 字节计划不对";
 				return false;
 			}
-			if (steps[16].Address != WujieFanEc.RegisterFanIsolate || steps[16].Value != 0x80)
+			if (steps[32].Address != WujieFanEc.RegisterFanIsolate || steps[16].Value != 0x80)
 			{
 				detail = "副扇隔离位置位计划不对";
 				return false;
 			}
-			if (steps[17].Address != WujieFanEc.RegisterFanTableLatch || steps[17].Value != 0x00
-				|| steps[18].Address != WujieFanEc.RegisterFanTableLatch || steps[18].Value != WujieFanEc.TableLatchBit
-				|| steps[18].DelayAfterMs != WujieFanEc.TableLatchPulseMs)
+			if (steps[33].Address != WujieFanEc.RegisterFanTableLatch || steps[17].Value != 0x00
+				|| steps[34].Address != WujieFanEc.RegisterFanTableLatch || steps[34].Value != WujieFanEc.TableLatchBit
+				|| steps[34].DelayAfterMs != WujieFanEc.TableLatchPulseMs)
 			{
 				detail = "锁存脉冲计划不对（应先 &~0x40 → 50ms → |0x40）";
 				return false;
 			}
 			BuildTableWritePlan(80, 80, 0x02, 0x10, out steps, out _, out bool sameTargetIsolate);
-			if (sameTargetIsolate || steps[16].Value != 0x10)
+			if (sameTargetIsolate || steps[32].Value != 0x10)
 			{
 				detail = "主副扇目标相同时应清 0x07C5 bit7（并保留基线其它位）";
 				return false;

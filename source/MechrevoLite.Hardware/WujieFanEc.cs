@@ -61,7 +61,7 @@ internal static class WujieFanEc
 	internal const int RegisterRampRate = 0x0787;
 
 	/// <summary>表后端只写每张表前 8 字节（EC 取前 8 字节最大值；同时避开 0x38/0x3A 电源寄存器地址低字节）。</summary>
-	internal const int FanTableActiveLength = 8;
+	internal const int FanTableActiveLength = 16;
 
 	/// <summary>表后端心跳周期（ms）：先读目标，只有 EC 真的偏离（&gt; <see cref="TableDriftToleranceRaw" />）才重锁。</summary>
 	internal const int TableHeartbeatMs = 10000;
