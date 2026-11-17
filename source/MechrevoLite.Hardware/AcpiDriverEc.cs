@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
@@ -95,6 +95,28 @@ internal static class AcpiDriverEc
         }
         value = (byte)BitConverter.ToUInt32(output, 0);
         return true;
+    }
+
+    /// <summary>同一个句柄内一次读出多个地址（批量读，减少两次读之间被固件改写）。</summary>
+    internal static bool TryReadMany(int[] addresses, out byte[] values)
+    {
+        values = new byte[addresses.Length];
+        lock (Gate)
+        {
+            using SafeFileHandle handle = CreateFileW(DevicePath, GenericRead | GenericWrite, FileShareReadWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+            if (handle.IsInvalid)
+            {
+                return false;
+            }
+            for (int i = 0; i < addresses.Length; i++)
+            {
+                if (!TryReadByteCore(handle, addresses[i], out values[i]))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 
     internal static bool TryWriteByte(int address, int value)

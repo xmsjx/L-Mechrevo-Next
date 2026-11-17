@@ -552,7 +552,11 @@ public static class HardwareControl
 		}
 		try
 		{
-			if (AcpiDriverEc.TryReadByte(0x75B, out byte rawCpu) && AcpiDriverEc.TryReadByte(0x75C, out byte rawGpu))
+			// 同一句柄内一次读两个地址，避免两次独立打开之间被固件改写（撕裂）。
+			bool dutyRead = AcpiDriverEc.TryReadMany(new[] { 0x75B, 0x75C }, out byte[] dutyPair);
+			byte rawCpu = dutyRead ? dutyPair[0] : (byte)0xFF;
+			byte rawGpu = dutyRead ? dutyPair[1] : (byte)0xFF;
+			if (dutyRead)
 			{
 				if (rawCpu != 0xFF && rawGpu != 0xFF && rawCpu <= 200 && rawGpu <= 200)
 				{
