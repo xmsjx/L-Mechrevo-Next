@@ -665,6 +665,9 @@ internal static class WpfBackend
     internal static bool NucFanTableTryApply(byte[] cpuTemps, int[] cpuDuties, byte[] gpuTemps, int[] gpuDuties, out string detail) =>
         NucFanTable.TryApply(cpuTemps, cpuDuties, gpuTemps, gpuDuties, out detail);
 
+    /// <summary>无界 EC 表自己的温度轴（不是同方那套 46..80）。</summary>
+    internal static byte[] WujieFanDefaultTemperatures() => WujieFanEcController.DefaultTemperatures();
+
     internal static bool NucFanTableTrySetFanIsolated(bool enabled, out string detail) =>
         NucFanTable.TrySetFanIsolated(enabled, out detail);
 

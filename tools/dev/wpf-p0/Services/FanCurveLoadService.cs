@@ -48,8 +48,10 @@ internal static class FanCurveLoadService
 		if (hw.WujieSmuApu && FanTableLooksSane(hw.CpuCurveUpT, hw.CpuCurveDuty)
 			&& FanTableLooksSane(hw.GpuCurveUpT, hw.GpuCurveDuty))
 		{
-			return new FanCurveLoadOutcome(FanCurveDefaults.CpuTemperatures, hw.CpuCurveDuty,
-				FanCurveDefaults.GpuTemperatures, hw.GpuCurveDuty, null, null, false, null, null);
+			// 无界用的是自己那张 16 点表的温度轴，不能套同方那套 46..80。
+			byte[] wujieAxis = WpfBackend.WujieFanDefaultTemperatures();
+			return new FanCurveLoadOutcome(wujieAxis, hw.CpuCurveDuty,
+				wujieAxis, hw.GpuCurveDuty, null, null, false, null, null);
 		}
 		// 每个档位自己的已保存曲线优先：切配置/点应用后窗口要跟着变（EC 直连没有 GCU 回读，只能靠存档）。
 		// 温度轴用保存时记下的那一条，避免重画时轴变了、看起来"曲线被改掉了"。
