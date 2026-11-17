@@ -132,6 +132,9 @@ internal sealed class WujieFanEcController : IDisposable
 
 	private int _readbackMismatchSamples;
 
+	/// <summary>本次接管是否已置自定义模式标志。</summary>
+	private bool _customModeSet;
+
 	private int _lastTempC = -1;
 
 	private int _lastRaw = -1;
@@ -399,6 +402,12 @@ internal sealed class WujieFanEcController : IDisposable
 	/// <summary>停止写入，交还 EC（EC 会在 6~8 秒内接管；不做渐进降速）。</summary>
 	internal void Stop(string reason)
 	{
+		if (_customModeSet)
+		{
+			// 交还时清自定义模式标志（0x40），让固件按自己的策略接管风扇。
+			I2ecInpOut.TryWriteEcByte(WujieFanEc.RegisterCustomMode, 0x40, out _);
+			_customModeSet = false;
+		}
 		bool wasRunning;
 		bool releaseTable;
 		lock (_gate)
@@ -744,6 +753,39 @@ internal sealed class WujieFanEcController : IDisposable
 	}
 
 	/// <summary>
+	/// 温度轮廓写入计划：CPU/GPU 各写升档温度表与降档温度表（各前 8 点，与占空比表同样只取前 8 字节）。
+	/// 降档温度 = 升档温度 - 2℃（不低于 0），给 EC 留回差。
+	/// </summary>
+	private static List<I2ecInpOut.I2ecWriteStep> BuildThresholdPlan(byte[] cpuTemps, byte[] gpuTemps)
+	{
+		List<I2ecInpOut.I2ecWriteStep> list = new(WujieFanEc.FanTableActiveLength * 4);
+		AppendThreshold(list, WujieFanEc.RegisterCpuUpT, WujieFanEc.RegisterCpuDownT, cpuTemps);
+		AppendThreshold(list, WujieFanEc.RegisterGpuUpT, WujieFanEc.RegisterGpuDownT, gpuTemps);
+		return list;
+	}
+
+	private static void AppendThreshold(List<I2ecInpOut.I2ecWriteStep> list, int upBase, int downBase, byte[] temps)
+	{
+		if (temps == null || temps.Length < WujieFanEc.FanTableActiveLength)
+		{
+			return;
+		}
+		for (int i = 0; i < WujieFanEc.FanTableActiveLength; i++)
+		{
+			list.Add(new I2ecInpOut.I2ecWriteStep(upBase + i, temps[i]));
+		}
+		for (int i = 0; i < WujieFanEc.FanTableActiveLength; i++)
+		{
+			int down = temps[i] - 2;
+			if (down < 0)
+			{
+				down = 0;
+			}
+			list.Add(new I2ecInpOut.I2ecWriteStep(downBase + i, down));
+		}
+	}
+
+	/// <summary>
 	/// ⭐ task-43：构造 table 写入计划（纯函数，便于离线自检）；顺序 = 表1 前 8 → 表2 前 8 → 隔离 → 清锁存 → 置锁存(50ms) → 补写占空比。
 	/// </summary>
 	private static void BuildTableWritePlan(int raw1, int raw2, int latchBase, int isolateBase,
@@ -861,6 +903,14 @@ internal sealed class WujieFanEcController : IDisposable
 		bool needIsolate = raw1 != raw2;
 		BuildTableWritePlan(raw1, raw2, _tableLatchBase, _tableIsolateBase, out List<I2ecInpOut.I2ecWriteStep> steps,
 			out List<I2ecInpOut.I2ecVerifyStep> verify, out _);
+		// 温度轮廓先于占空比写入：升档温度表 + 降档温度表（降档 = 升档 -2℃，避免阈值附近反复横跳）。
+		steps.InsertRange(0, BuildThresholdPlan(_cpuTemps, _gpuTemps));
+		if (!_customModeSet)
+		{
+			// 自定义模式标志（开机值 0x41；退出时写 0x40 交还）。
+			_customModeSet = I2ecInpOut.TryWriteEcByte(WujieFanEc.RegisterCustomMode, 0x41, out string customDetail);
+			Logger.WriteLine("[fan] 无界 EC 自定义模式：" + (_customModeSet ? "已置位（0x41）" : "置位失败：" + customDetail));
+		}
 		bool ok = I2ecInpOut.TryWriteEcSequence(steps, verify, out string detail);
 		if (!ok)
 		{

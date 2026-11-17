@@ -42,6 +42,24 @@ internal static class WujieFanEc
 
 	internal const int RegisterFanIsolate = 0x07C5;
 
+	/// <summary>CPU 升档温度表基址（16 点）。</summary>
+	internal const int RegisterCpuUpT = 0x0F00;
+
+	/// <summary>CPU 降档温度表基址。</summary>
+	internal const int RegisterCpuDownT = 0x0F10;
+
+	/// <summary>GPU 升档温度表基址。</summary>
+	internal const int RegisterGpuUpT = 0x0F30;
+
+	/// <summary>GPU 降档温度表基址。</summary>
+	internal const int RegisterGpuDownT = 0x0F40;
+
+	/// <summary>自定义模式标志。</summary>
+	internal const int RegisterCustomMode = 0x0706;
+
+	/// <summary>转速爬升速率。</summary>
+	internal const int RegisterRampRate = 0x0787;
+
 	/// <summary>表后端只写每张表前 8 字节（EC 取前 8 字节最大值；同时避开 0x38/0x3A 电源寄存器地址低字节）。</summary>
 	internal const int FanTableActiveLength = 8;
 
