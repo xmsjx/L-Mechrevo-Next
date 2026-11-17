@@ -13,7 +13,7 @@ using System.Security.Permissions;
 [assembly: AssemblyCompany("L-Mechrevo")]
 [assembly: AssemblyConfiguration("Release")]
 [assembly: AssemblyFileVersion("23.8.2.0")]
-[assembly: AssemblyInformationalVersion("beta23.8.2r2")]
+[assembly: AssemblyInformationalVersion("beta23.8.2r3")]
 [assembly: AssemblyProduct("L-Mechrevo")]
 [assembly: AssemblyTitle("L-Mechrevo")]
 [assembly: TargetPlatform("Windows10.0.19041.0")]

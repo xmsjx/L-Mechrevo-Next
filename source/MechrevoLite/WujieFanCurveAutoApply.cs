@@ -63,6 +63,50 @@ internal static class WujieFanCurveAutoApply
 		return temps;
 	}
 
+	/// <summary>订阅档位变化：只有自定义档接管风扇曲线，其它档（含 GCU/EC 模式的静音/平衡/狂暴）一律交还固件。</summary>
+	internal static void Hook()
+	{
+		try
+		{
+			if (Program.hw == null)
+			{
+				return;
+			}
+			Program.hw.ModeChanged -= OnModeChanged;
+			Program.hw.ModeChanged += OnModeChanged;
+			Logger.WriteLine("[fan] 无界曲线接管：已订阅档位变化（仅自定义档接管）");
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[fan] 无界曲线接管：订阅失败（已吞掉）" + ex.GetType().Name + " " + ex.Message);
+		}
+	}
+
+	private static void OnModeChanged(int mode)
+	{
+		if (Program.hw?.WujieSmuApu != true)
+		{
+			return;
+		}
+		if (mode == 3)
+		{
+			_ = Task.Run(async delegate
+			{
+				try
+				{
+					await Task.Delay(TimeSpan.FromMilliseconds(700)).ConfigureAwait(continueOnCapturedContext: false);
+					ApplyIfCustomMode();
+				}
+				catch (Exception ex)
+				{
+					Logger.WriteLine("[fan] 无界曲线接管：切回自定义后启动失败（已吞掉）" + ex.Message);
+				}
+			});
+			return;
+		}
+		WujieFanEcController.StopActive("切到非自定义档（mode=" + mode + "），风扇交还固件");
+		Logger.WriteLine("[fan] 无界曲线接管：已交还固件（mode=" + mode + "）");
+	}
 	private static void ApplyIfCustomMode()
 	{
 		PerfModeService perf = PerfModeService.Instance;

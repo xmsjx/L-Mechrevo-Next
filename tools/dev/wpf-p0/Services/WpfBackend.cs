@@ -29,6 +29,7 @@ internal static class WpfBackend
         {
             _hw = value;
             MechrevoLite.Program.hw = value;
+        MechrevoLite.WujieFanCurveAutoApply.Hook();
         }
     }
 
