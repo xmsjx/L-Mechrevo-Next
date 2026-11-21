@@ -30,7 +30,7 @@ namespace MechrevoLite
             USBC
         }
 
-        internal static AsusACPI? acpi;
+        internal static bool HwReady;
         internal static MechrevoHw? hw;
         internal static MechrevoService? service;
         internal static KeyboardRgb? rgb;
@@ -133,8 +133,6 @@ namespace MechrevoLite
         internal void VisualiseBattery(int limit) { }
         internal void VisualiseBatteryUnknown() { }
         internal void VisualiseBatteryFull() { }
-        internal void VisualiseScreen(bool screenEnabled, bool screenAuto, int frequency, int maxFrequency,
-            int overdrive, bool overdriveSetting, bool hdr, bool acm, int fhd, int hdrControl) { }
     }
 
     /// <summary>旧 LightForm 的纯业务静态表：灯效颜色数（与旧实现逐字一致）。</summary>

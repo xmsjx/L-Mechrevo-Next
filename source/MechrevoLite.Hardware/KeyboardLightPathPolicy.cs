@@ -1,4 +1,7 @@
-namespace MechrevoLite.Hardware;
+using MechrevoLite.Hardware;
+using MechrevoLite.Hardware.Architecture;
+
+namespace MechrevoLite.Contracts;
 
 internal static class KeyboardLightPathPolicy
 {

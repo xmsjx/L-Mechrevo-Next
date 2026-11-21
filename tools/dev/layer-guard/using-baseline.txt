@@ -1,0 +1,2 @@
+# 界面层 using MechrevoLite.Hardware（棘轮）：<相对路径>	<允许行数上限>
+# 生成命令：dotnet run --project tools/dev/layer-guard -c Release -- --update

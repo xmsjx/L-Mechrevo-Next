@@ -668,6 +668,15 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			bool matchField = _hw.DriverGpuOverclockFieldMatches(step.WireKey, step.Number);
 			return matchField ? new bool?(true) : ((bool?)null);
 		case PerfApplyVerify.CpuPackagePower:
+			// 无界 / 星耀 APU：功耗墙走本机 SMU，回读只作诊断、不参与判定（同本机 SMU 应用口径）。
+			// 否则 GCU 模式下每次开机重放都被判「设下去了，但读回来对不上」⇒ 整单"未切换成功"、
+			// 风扇曲线存档被回滚，看起来就是"GCU 模式没有重放"。
+			if (_hw.SmuCustomApu)
+			{
+				Logger.WriteLine("[perfmode] 本机 SMU 功耗墙回读仅诊断（"
+					+ (step.WireKey ?? step.Kind.ToString()) + "=" + step.Number + "）⇒ 记已下发");
+				return null;
+			}
 			return VerifyCpuPowerLimit(step.Number);
 		case PerfApplyVerify.GpuPowerLimit:
 		case PerfApplyVerify.FanDuty:

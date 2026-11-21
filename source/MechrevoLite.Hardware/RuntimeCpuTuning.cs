@@ -227,10 +227,8 @@ internal sealed class RuntimeCpuTuning : IDisposable
 						//     （逐核不一致时 Current=null，UI 显示范围，数值框回退到 0）
 						// ======================================================================
 						List<int>? coreMargins = null;
-						string? readbackNoteKey;
 						if (!RyzenSmuService.SupportsCurveRead(_smu.CpuCodeName))
 						{
-							readbackNoteKey = "CpuTuneNoReadCmd";
 							text2 += "; CO readback: no read command for this codename";
 						}
 						else
@@ -250,13 +248,8 @@ internal sealed class RuntimeCpuTuning : IDisposable
 								}
 								values.Add(margin.Value);
 							}
-							if (readFailed || values.Count == 0)
+							if (!readFailed && values.Count > 0)
 							{
-								readbackNoteKey = "CpuTuneReadFailed";
-							}
-							else
-							{
-								readbackNoteKey = null;
 								coreMargins = values;
 								text2 += $"; CO readback per core [{string.Join(", ", values)}] (SMU current state, this boot only)";
 							}
@@ -744,10 +737,34 @@ internal sealed class RuntimeCpuTuning : IDisposable
 				return new CpuTuningResult(Success: false, Verified: false, "Intel CPU tuning is disabled (XTU owns MSR 0x150); no command sent.");
 			}
 			CpuTuningOption? cpuTuningOption = _probe?.Options.FirstOrDefault((CpuTuningOption o) => o.Id == id);
-			if (cpuTuningOption == null || !cpuTuningOption.CanWrite || value < cpuTuningOption.Minimum || value > cpuTuningOption.Maximum || value != decimal.Truncate(value))
+			// 失败原因分开说：以前四类情况共用一句英文，用户只看到「超出范围」，不知道是哪一条不满足。
+			if (cpuTuningOption == null)
 			{
-				return new CpuTuningResult(Success: false, Verified: false, "Setting unavailable or outside the permitted range.");
+				return new CpuTuningResult(Success: false, Verified: false, "本机没有这一项（未探测到 SMU 能力，或当前代号不支持）。");
 			}
+			if (!cpuTuningOption.CanWrite)
+			{
+				return new CpuTuningResult(Success: false, Verified: false, $"本机不支持写入这一项（{id}）：该 SKU 被锁或没有可用的写入命令。");
+			}
+			// 超范围不拒绝：按本机可写上限/下限压回去再写（SMU 本来也会自己夹，明确压回并告知更好）。
+			decimal requested = value;
+			decimal effective = decimal.Truncate(value);
+			if (effective < cpuTuningOption.Minimum)
+			{
+				effective = cpuTuningOption.Minimum;
+			}
+			if (effective > cpuTuningOption.Maximum)
+			{
+				effective = cpuTuningOption.Maximum;
+			}
+			string clampNote = (effective == requested)
+				? string.Empty
+				: $"取值 {requested} 超出本机可写范围（{cpuTuningOption.Minimum} ~ {cpuTuningOption.Maximum}）⇒ 已压回 {effective}";
+			if (clampNote.Length != 0)
+			{
+				Logger.WriteLine("[cpu-tune] " + id + " " + clampNote);
+			}
+			value = effective;
 			bool flag = _changed.Contains(id);
 			try
 			{
@@ -786,7 +803,8 @@ internal sealed class RuntimeCpuTuning : IDisposable
 					OwnsCurve = true;
 				}
 				SmuStatus smuStatus = ((id == "amd-co") ? _smu.SetCoAll((int)value) : _smu.SetOcClock((int)value));
-				return new CpuTuningResult(smuStatus == SmuStatus.OK, Verified: false, $"SMU: {smuStatus} (0x{(uint)smuStatus:X2})");
+				return new CpuTuningResult(smuStatus == SmuStatus.OK, Verified: false,
+					$"SMU: {smuStatus} (0x{(uint)smuStatus:X2})" + (clampNote.Length == 0 ? string.Empty : " · " + clampNote));
 			}
 			catch (Exception ex)
 			{
@@ -1116,13 +1134,25 @@ internal sealed class RuntimeCpuTuning : IDisposable
 			{
 				return new CpuTuningResult(Success: false, Verified: false, $"per-core count out of range (1..{MaximumSavedCores}).");
 			}
+			// 每核超范围同样压回本机上下限，而不是整批拒绝（SMU 自己也会夹，明确压回更好）。
+			int perCoreMin = Math.Max((int)option.Minimum, MinimumPerCoreMargin);
+			int perCoreMax = Math.Min((int)option.Maximum, MaximumPerCoreMargin);
+			List<int> clampedMargins = new List<int>(margins.Count);
+			int adjustedCores = 0;
 			foreach (int margin in margins)
 			{
-				if (margin < option.Minimum || margin > option.Maximum || margin < MinimumPerCoreMargin || margin > MaximumPerCoreMargin)
+				int clamped = Math.Clamp(margin, perCoreMin, perCoreMax);
+				if (clamped != margin)
 				{
-					return new CpuTuningResult(Success: false, Verified: false, $"CO value {margin} is outside the permitted range.");
+					adjustedCores++;
 				}
+				clampedMargins.Add(clamped);
 			}
+			if (adjustedCores != 0)
+			{
+				Logger.WriteLine($"[cpu-co] {adjustedCores} 个核超出可写范围 ⇒ 已压回（{perCoreMin} ~ {perCoreMax}）");
+			}
+			margins = clampedMargins;
 			int coreCount = margins.Count;
 			// ① 写前基线（同锁、只读、每核一条）。null 元素 = 该核读不到（没有读命令 / 读失败）。
 			List<int?> baseline = ReadPerCore(coreCount);
@@ -1514,6 +1544,90 @@ internal sealed class RuntimeCpuTuning : IDisposable
 	// 2026-10-05 uifix（用户要求④）：真正动 SMU 之前先过 `CpuCoAutoApplyGuard`（上次是否正常关机）。
 	// 判定为"上次非正常关机"时直接跳过（一条命令都不发）并提示；首次运行/正常关机照常往下走。
 	// ------------------------------------------------------------------------------------------
+	// ------------------------------------------------------------------------------------------
+	// 2026-11-18 resume-reapply：休眠 / 睡眠唤醒后，SMU 侧的每核 CO 与 FMax 会被固件重新初始化。
+	// 以前只有"开机"重放一次（ApplySavedOnStartup 在进程内只跑一次），唤醒后不补 ⇒ 现象就是
+	// "睡一觉起来负压 / FMax 自己没了"。这里补一条唤醒后的重放，判据与开机那条同级：
+	//   * 开关 cpu_co_auto_apply 关着 ⇒ 一条命令都不发（用户主动关掉的，唤醒时也不偷偷写）；
+	//   * 没保存过任何值 ⇒ 一条命令都不发；
+	//   * 能力检查不过（Intel / 无可写路径）⇒ 一条命令都不发，只记日志；
+	//   * FMax 段复用 AutoApplyFMax：回读值与保存值相同时它自己就不写；
+	//   * 只重放用户保存过的值，不做任何推算。
+	// ⚠️ 关机守卫（上次非正常关机）不参与：唤醒不是重启，不会形成"不稳定值→重启"的循环。
+	// ------------------------------------------------------------------------------------------
+	internal static CpuTuningResult ReapplyAfterResume()
+	{
+		return Instance.ReapplySavedAfterResume();
+	}
+
+	private CpuTuningResult ReapplySavedAfterResume()
+	{
+		lock (SyncRoot)
+		{
+			if (!AppConfig.Is(PerCoreAutoApplyKey))
+			{
+				Logger.WriteLine("[cpu-co] 唤醒重放：cpu_co_auto_apply=关 ⇒ 不下发（尊重用户关闭）");
+				return new CpuTuningResult(Success: false, Verified: false, "resume re-apply is off (cpu_co_auto_apply).");
+			}
+			if (CpuVendor.IsIntel)
+			{
+				Logger.WriteLine("[cpu-co] 唤醒重放：Intel 机型无对应项 ⇒ 跳过");
+				return new CpuTuningResult(Success: false, Verified: false, "Intel CPU: resume re-apply not applicable.");
+			}
+			Stopwatch stopwatch = Stopwatch.StartNew();
+			try
+			{
+				Probe();
+				int coreCount = PerCoreCapacity;
+				IReadOnlyList<int?> saved = LoadSavedPerCore(coreCount);
+				List<int> values = new List<int>(coreCount);
+				bool anySavedCore = false;
+				foreach (int? margin in saved)
+				{
+					values.Add(margin ?? 0);
+					anySavedCore |= margin.HasValue;
+				}
+				string detail = "";
+				bool success = false;
+				bool verified = false;
+				if (!anySavedCore)
+				{
+					Logger.WriteLine("[cpu-co] 唤醒重放：没有保存过每核值 ⇒ 不下发");
+				}
+				else if (!EnsurePerCoreWrite(out _, out string reason))
+				{
+					Logger.WriteLine("[cpu-co] 唤醒重放跳过每核 CO：" + reason);
+					detail = "per-core CO skipped: " + reason;
+				}
+				else
+				{
+					Logger.WriteLine($"[cpu-co] 唤醒重放：写回每核 CO [{string.Join(", ", values)}]");
+					CpuTuningResult coResult = ApplyPerCore(values);
+					Logger.WriteLine($"[cpu-co] 唤醒重放：每核 CO -> success={coResult.Success} verified={coResult.Verified} detail={coResult.Detail}");
+					success |= coResult.Success;
+					verified |= coResult.Verified;
+					detail = coResult.Detail;
+				}
+				int? savedFMax = LoadSavedFMax();
+				if (savedFMax.HasValue)
+				{
+					CpuTuningResult fmaxResult = AutoApplyFMax(savedFMax.Value, simulate: false, stopwatch, out string fmaxSummary, out bool fmaxAttempted, "唤醒重放");
+					success |= fmaxResult.Success;
+					verified |= fmaxResult.Verified;
+					detail = (detail.Length == 0 ? "" : detail + " || ") + fmaxSummary + (fmaxAttempted ? "" : " (未下发)");
+				}
+				stopwatch.Stop();
+				Logger.WriteLine($"[cpu-co] 唤醒重放完成：success={success} verified={verified} elapsed={stopwatch.ElapsedMilliseconds} ms detail={detail}");
+				return new CpuTuningResult(success, verified, detail.Length == 0 ? "resume re-apply: nothing to write." : detail);
+			}
+			catch (Exception ex)
+			{
+				Logger.WriteLine("[cpu-co] 唤醒重放失败：" + ex.Message);
+				return new CpuTuningResult(Success: false, Verified: false, "resume re-apply failed: " + ex.Message);
+			}
+		}
+	}
+
 	internal static CpuTuningResult ApplySavedOnStartup(bool simulate = false)
 	{
 		if (Interlocked.CompareExchange(ref _autoApplyRan, 1, 0) != 0)
@@ -1673,26 +1787,26 @@ internal sealed class RuntimeCpuTuning : IDisposable
 	//   * 回读值与保存值**已经相同**时也不写（没有需要改变的 SMU 状态）。
 	//   * fmaxAttempted —— 真的打算写（能力通过 + 非 simulate + 回读值不同）。
 	// ------------------------------------------------------------------------------------------
-	private CpuTuningResult AutoApplyFMax(int savedFMax, bool simulate, Stopwatch stopwatch, out string summary, out bool fmaxAttempted)
+	private CpuTuningResult AutoApplyFMax(int savedFMax, bool simulate, Stopwatch stopwatch, out string summary, out bool fmaxAttempted, string phase = "startup auto-apply")
 	{
 		fmaxAttempted = false;
 		CpuFMaxProbe? fmax = _fmax;
 		if (fmax == null)
 		{
 			summary = "FMax skipped: no FMax capability result (probe did not reach the SMU)";
-			Logger.WriteLine("[cpu-fmax] startup auto-apply skipped: no FMax capability result; no command sent");
+			Logger.WriteLine($"[cpu-fmax] {phase} skipped: no FMax capability result; no command sent");
 			return new CpuTuningResult(Success: false, Verified: false, "FMax auto-apply skipped: no capability result.");
 		}
 		if (!IsFMaxWritable(fmax.Capability))
 		{
 			summary = $"FMax skipped: capability {fmax.Capability} has no write path (read-only or unsupported)";
-			Logger.WriteLine($"[cpu-fmax] startup auto-apply skipped: capability {fmax.Capability} on this codename; no write command sent");
+			Logger.WriteLine($"[cpu-fmax] {phase} skipped: capability {fmax.Capability} on this codename; no write command sent");
 			return new CpuTuningResult(Success: false, Verified: false, $"FMax auto-apply skipped: capability {fmax.Capability}.");
 		}
 		if (fmax.Current.HasValue && (int)fmax.Current.Value == savedFMax)
 		{
 			summary = $"FMax already at the saved value {savedFMax} MHz; no command sent";
-			Logger.WriteLine($"[cpu-fmax] startup auto-apply: saved FMax {savedFMax} MHz already matches the read-back; no command sent");
+			Logger.WriteLine($"[cpu-fmax] {phase}: saved FMax {savedFMax} MHz already matches the read-back; no command sent");
 			return new CpuTuningResult(Success: false, Verified: false, summary);
 		}
 		if (simulate)
@@ -1701,11 +1815,11 @@ internal sealed class RuntimeCpuTuning : IDisposable
 			Logger.WriteLine($"[cpu-fmax] auto-apply SIMULATE: capability {fmax.Capability} OK; would write FMax {savedFMax} MHz; nothing written ({stopwatch.ElapsedMilliseconds} ms)");
 			return new CpuTuningResult(Success: false, Verified: false, summary);
 		}
-		Logger.WriteLine($"[cpu-fmax] startup auto-apply writing FMax {savedFMax} MHz (saved value, cpu_fmax_saved)");
+		Logger.WriteLine($"[cpu-fmax] {phase} writing FMax {savedFMax} MHz (saved value, cpu_fmax_saved)");
 		fmaxAttempted = true;
 		CpuTuningResult result = ApplyFMax(savedFMax);
 		summary = $"applied FMax {savedFMax} MHz: success={result.Success} verified={result.Verified}";
-		Logger.WriteLine($"[cpu-fmax] startup auto-apply: FMax -> success={result.Success} verified={result.Verified} detail={result.Detail}");
+		Logger.WriteLine($"[cpu-fmax] {phase}: FMax -> success={result.Success} verified={result.Verified} detail={result.Detail}");
 		return result;
 	}
 

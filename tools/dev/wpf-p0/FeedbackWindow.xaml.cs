@@ -33,9 +33,9 @@ public partial class FeedbackWindow : Window
         try
         {
             info += string.Format(WpfStrings.FeedbackGcuLineFormat,
-                L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.IsGcuConnected == true ? WpfStrings.FeedbackConnected : WpfStrings.FeedbackDisconnected,
-                L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.UsesBaolongda == true ? WpfStrings.FeedbackYes : WpfStrings.FeedbackNo,
-                L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.WujieSmuApu == true ? WpfStrings.FeedbackYes : WpfStrings.FeedbackNo);
+                L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected ? WpfStrings.FeedbackConnected : WpfStrings.FeedbackDisconnected,
+                L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda ? WpfStrings.FeedbackYes : WpfStrings.FeedbackNo,
+                L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu ? WpfStrings.FeedbackYes : WpfStrings.FeedbackNo);
         }
         catch
         {

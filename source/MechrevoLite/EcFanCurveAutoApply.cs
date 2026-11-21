@@ -90,7 +90,7 @@ internal static class EcFanCurveAutoApply
 			Logger.WriteLine("[fan] EC 开机自动曲线：拿不到温度轴（既未保存也读不到当前表），跳过");
 			return;
 		}
-		bool ok = NucFanTable.TryApply(cpuTemps, cpuDuty, gpuTemps, gpuDuty, out string detail);
+		bool ok = NucFanTable.TryApply(cpuTemps, cpuDuty, gpuTemps, gpuDuty, "开机重放", out string detail);
 		bool isolated = NucFanTable.TrySetFanIsolated(true, out string isoDetail);
 		bool ramp = NucFanTable.TrySetFanRamp(settings.FanSwitchSpeedOn == true,
 			settings.FanSwitchSpeedMs ?? 300, out string rampDetail);

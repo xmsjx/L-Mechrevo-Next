@@ -5,12 +5,11 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using MechrevoLite.Hardware;
 using MechrevoLite.Properties;
 using PawnIO;
 
-using L_Mechrevo.WpfP0.Resources;
-namespace L_Mechrevo.WpfP0;
+using L_Mechrevo.WpfP0.Resources;namespace L_Mechrevo.WpfP0;
+using L_Mechrevo.WpfP0.Services;
 
 public partial class CpuTuningWindow : Window
 {
@@ -23,7 +22,7 @@ public partial class CpuTuningWindow : Window
     public CpuTuningWindow()
     {
         InitializeComponent();
-        AutoApplyCheck.IsChecked = RuntimeCpuTuning.PerCoreAutoApplyEnabled;
+        AutoApplyCheck.IsChecked = CpuTuningService.PerCoreAutoApplyEnabled;
         // 非 AMD 机型没有 Curve Optimizer / FMax，这些入口不显示（Intel 只保留比例类选项）。
         if (!PawnIO.CpuInfo.IsAMD)
         {
@@ -64,7 +63,7 @@ public partial class CpuTuningWindow : Window
     {
         try
         {
-            CpuTuningProbe probe = RuntimeCpuTuning.Instance.Probe();
+            CpuTuningProbe probe = CpuTuningService.Probe();
             // 只显示一句摘要；完整探针细节放进 ToolTip，不再铺满窗口。
             CpuText.Text = probe.Cpu + " · " + ShortStatus(probe.StatusKey);
             CpuText.ToolTip = string.IsNullOrWhiteSpace(probe.Detail) ? null : probe.Detail;
@@ -174,14 +173,14 @@ public partial class CpuTuningWindow : Window
         {
             return;
         }
-        int coreCount = Math.Max(RuntimeCpuTuning.PerCoreCapacity,
+        int coreCount = Math.Max(CpuTuningService.PerCoreCapacity,
             option.CoreReadback?.Count ?? 0);
         if (coreCount <= 0)
         {
             return;
         }
         bool editable = option.CanWrite && option.PerCoreWrite;
-        (int coMin, int coMax) = RuntimeCpuTuning.CoRange();
+        (int coMin, int coMax) = CpuTuningService.CoRange();
         OptionsPanel.Children.Add(new TextBlock
         {
             Text = WpfStrings.CpuTuningWindow_xaml_Text_3,
@@ -197,7 +196,7 @@ public partial class CpuTuningWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 6)
         });
-        IReadOnlyList<int?> saved = RuntimeCpuTuning.LoadSavedPerCore(coreCount);
+        IReadOnlyList<int?> saved = CpuTuningService.LoadSavedPerCore(coreCount);
         List<TextBox> boxes = _perCoreInputs;
         Grid grid = new();
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
@@ -289,12 +288,12 @@ public partial class CpuTuningWindow : Window
             int[] values = boxes.Select(b => int.TryParse(b.Text, out int v) ? v : 0).ToArray();
             try
             {
-                CpuTuningResult result = await Task.Run(() => RuntimeCpuTuning.Instance.ApplyPerCore(values));
+                CpuTuningResult result = await Task.Run(() => CpuTuningService.ApplyPerCore(values));
                 StatusText.Text = result.Detail;
                 if (result.Success)
                 {
-                    int allCore = RuntimeCpuTuning.LoadSavedAllCore() ?? values.FirstOrDefault();
-                    RuntimeCpuTuning.SaveSettings(values, allCore);
+                    int allCore = CpuTuningService.LoadSavedAllCore() ?? values.FirstOrDefault();
+                    CpuTuningService.SaveSettings(values, allCore);
                 }
             }
             catch (Exception ex)
@@ -344,8 +343,8 @@ public partial class CpuTuningWindow : Window
             Text = "FMax (MHz)",
             VerticalAlignment = VerticalAlignment.Center
         });
-        decimal start = fmax.Current ?? RuntimeCpuTuning.LoadSavedFMax() ?? 0m;
-        TextBox box = CreateValueBox(((int)start).ToString(), RuntimeCpuTuning.Instance.FMaxWritableCapability);
+        decimal start = fmax.Current ?? CpuTuningService.LoadSavedFMax() ?? 0m;
+        TextBox box = CreateValueBox(((int)start).ToString(), CpuTuningService.FMaxWritableCapability);
         box.Width = 110;
         box.Margin = new Thickness(8, 0, 8, 0);
         Grid.SetColumn(box, 1);
@@ -354,7 +353,7 @@ public partial class CpuTuningWindow : Window
         Button apply = new()
         {
             Content = WpfStrings.CpuTuningWindow_xaml_Content,
-            IsEnabled = RuntimeCpuTuning.Instance.FMaxWritableCapability,
+            IsEnabled = CpuTuningService.FMaxWritableCapability,
             Margin = new Thickness(8, 0, 0, 0),
             Style = (Style)FindResource("FlatButton")
         };
@@ -366,11 +365,11 @@ public partial class CpuTuningWindow : Window
                 StatusText.Text = WpfStrings.L("FMax 必须是整数 MHz", "FMax must be an integer MHz");
                 return;
             }
-            mhz = Math.Clamp(mhz, (int)RuntimeCpuTuning.FMaxMinimum, (int)RuntimeCpuTuning.FMaxMaximum);
+            mhz = Math.Clamp(mhz, (int)CpuTuningService.FMaxMinimum, (int)CpuTuningService.FMaxMaximum);
             box.Text = mhz.ToString();
             try
             {
-                CpuTuningResult result = await Task.Run(() => RuntimeCpuTuning.Instance.ApplyFMax(mhz));
+                CpuTuningResult result = await Task.Run(() => CpuTuningService.ApplyFMax(mhz));
                 StatusText.Text = result.Detail;
             }
             catch (Exception ex)
@@ -387,7 +386,7 @@ public partial class CpuTuningWindow : Window
         try
         {
             decimal value = (decimal)slider.Value;
-            CpuTuningResult result = await Task.Run(() => RuntimeCpuTuning.Instance.Apply(option.Id, value));
+            CpuTuningResult result = await Task.Run(() => CpuTuningService.Apply(option.Id, value));
             StatusText.Text = result.Detail;
             if (!result.Success)
             {
@@ -408,7 +407,7 @@ public partial class CpuTuningWindow : Window
         }
         try
         {
-            CpuTuningResult result = await Task.Run(() => RuntimeCpuTuning.Instance.ResetAll());
+            CpuTuningResult result = await Task.Run(() => CpuTuningService.ResetAll());
             StatusText.Text = result.Detail;
             LoadProbe();
         }
@@ -425,13 +424,13 @@ public partial class CpuTuningWindow : Window
             if (_perCoreInputs.Count > 0)
             {
                 int[] values = _perCoreInputs.Select(b => int.TryParse(b.Text, out int v) ? v : 0).ToArray();
-                int allCore = RuntimeCpuTuning.LoadSavedAllCore() ?? values.FirstOrDefault();
-                RuntimeCpuTuning.SaveSettings(values, allCore);
+                int allCore = CpuTuningService.LoadSavedAllCore() ?? values.FirstOrDefault();
+                CpuTuningService.SaveSettings(values, allCore);
             }
-            if (_fmaxBox != null && RuntimeCpuTuning.Instance.FMaxWritableCapability
+            if (_fmaxBox != null && CpuTuningService.FMaxWritableCapability
                 && int.TryParse(_fmaxBox.Text, out int fmaxValue))
             {
-                RuntimeCpuTuning.SaveFMax(fmaxValue);
+                CpuTuningService.SaveFMax(fmaxValue);
             }
             StatusText.Text = WpfStrings.CpuTuningWindow_xaml_Text_8;
         }
@@ -446,20 +445,20 @@ public partial class CpuTuningWindow : Window
     {
         try
         {
-            int coreCount = RuntimeCpuTuning.PerCoreCapacity;
-            IReadOnlyList<int?> saved = RuntimeCpuTuning.LoadSavedPerCore(coreCount);
+            int coreCount = CpuTuningService.PerCoreCapacity;
+            IReadOnlyList<int?> saved = CpuTuningService.LoadSavedPerCore(coreCount);
             if (saved.Count == 0 || saved.All(v => !v.HasValue))
             {
                 StatusText.Text = WpfStrings.CpuTuningWindow_xaml_Text_10;
                 return;
             }
             int[] values = saved.Select((v, i) => v ?? 0).ToArray();
-            CpuTuningResult co = await Task.Run(() => RuntimeCpuTuning.Instance.ApplyPerCore(values));
+            CpuTuningResult co = await Task.Run(() => CpuTuningService.ApplyPerCore(values));
             string detail = co.Detail;
-            int? fmax = RuntimeCpuTuning.LoadSavedFMax();
-            if (fmax.HasValue && RuntimeCpuTuning.Instance.FMaxWritableCapability)
+            int? fmax = CpuTuningService.LoadSavedFMax();
+            if (fmax.HasValue && CpuTuningService.FMaxWritableCapability)
             {
-                CpuTuningResult fr = await Task.Run(() => RuntimeCpuTuning.Instance.ApplyFMax(fmax.Value));
+                CpuTuningResult fr = await Task.Run(() => CpuTuningService.ApplyFMax(fmax.Value));
                 detail += WpfStrings.CpuFmaxPrefix + fr.Detail;
             }
             StatusText.Text = detail;
@@ -481,7 +480,7 @@ public partial class CpuTuningWindow : Window
             AutoApplyCheck.IsChecked = false;
             return;
         }
-        RuntimeCpuTuning.SetAutoApply(enabled);
+        CpuTuningService.SetAutoApply(enabled);
         StatusText.Text = enabled ? WpfStrings.CpuAutoApplyOn : WpfStrings.CpuAutoApplyOff;
     }
 

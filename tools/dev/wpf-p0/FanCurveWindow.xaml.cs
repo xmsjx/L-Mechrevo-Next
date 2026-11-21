@@ -6,8 +6,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using MechrevoLite;
-using MechrevoLite.Hardware;
-using MechrevoLite.Hardware.FanCurve;
 using MechrevoLite.Mode;
 
 using L_Mechrevo.WpfP0.Resources;
@@ -17,10 +15,8 @@ namespace L_Mechrevo.WpfP0;
 public partial class FanCurveWindow : Window
 {
     private string _modeId;
-    private readonly MechrevoHw? _hw;
-    private FanCurveBackendKind BackendKind => FanCurveBackendFactory.Resolve(_hw);
+    private static FanCurveMold Mold => FanCurveTarget.Mold;
     private bool _dirty;
-    private WujieFanEcController? _wujieController;
     private readonly DispatcherTimer _activeModeRefreshTimer = new() { Interval = TimeSpan.FromMilliseconds(450) };
 
     private static readonly List<WeakReference<FanCurveWindow>> OpenEditors = new();
@@ -45,7 +41,7 @@ public partial class FanCurveWindow : Window
         }
         try
         {
-        MechrevoLite.Mode.PerfModeSettings saved = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId);
+        MechrevoLite.Mode.PerfModeSettings saved = MechrevoLite.Mode.ModeSettings.Load(_modeId);
             if (SameDuties(CpuCurve.Duties, saved.CpuFanDuty)
                 && SameDuties(GpuCurve.Duties, saved.GpuFanDuty))
             {
@@ -93,25 +89,37 @@ public partial class FanCurveWindow : Window
         _modeId = modeId;
         try
         {
-            PushFanCurveCheck.IsChecked = MechrevoLite.Mode.PerfModeStore.LoadSettings(modeId).FanCurveOn ?? true;
-            bool wujie = L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.WujieSmuApu == true;
-            WujieIndependentCheck.Visibility = wujie ? Visibility.Visible : Visibility.Collapsed;
-            WujieIndependentCheck.IsChecked = MechrevoLite.AppConfig.Is("wujie_fan_independent");
+            PushFanCurveCheck.IsChecked = MechrevoLite.Mode.ModeSettings.Load(modeId).FanCurveOn ?? true;
+            // 风扇独立控制由固件开关决定（回读确认），与曲线内容无关。
+            // 宽屏把 CPU/GPU 拆成两份实例，开关只在 CPU 那份里出现。
+            MechrevoLite.Hardware.MechrevoHw? gcu = FanCurveTarget.Hw;
+            bool gcuPath = FanCurveTarget.Kind == MechrevoLite.Hardware.FanCurve.FanCurveBackendKind.Gcu;
+            _hasRespectiveSwitch = gcuPath && gcu != null && gcu.IsGcuConnected;
+            _respectiveAvailable = _hasRespectiveSwitch && showCpu;
+            GcuRespectiveCheck.Visibility = _respectiveAvailable ? Visibility.Visible : Visibility.Collapsed;
+            GcuRespectiveCheck.IsChecked = gcu != null && gcu.FanRespective;
+            Logger.WriteLine("[fan] 独立控制勾选框：后端=" + FanCurveTarget.Kind + " · GCU连接=" + (gcu?.IsGcuConnected == true)
+                + " · 固件上报该字段=" + (gcu?.SupportsFanRespective == true) + " · 当前值=" + (gcu?.FanRespective == true)
+                + " ⇒ 显示=" + _respectiveAvailable);
         }
         catch
         {
         }
         CpuSection.Visibility = showCpu ? Visibility.Visible : Visibility.Collapsed;
         GpuSection.Visibility = showGpu ? Visibility.Visible : Visibility.Collapsed;
-        _hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw ?? MechrevoLite.Program.hw;
-        if (BackendKind == FanCurveBackendKind.Baolongda)
+        // 无界只有一路温度输入：GPU 表不再展示，也不再作为独立曲线使用。
+        if (FanCurveTarget.IsWujieSmuApu)
+        {
+            GpuSection.Visibility = Visibility.Collapsed;
+        }
+        ApplyRespectiveVisual(GcuRespectiveCheck.IsChecked == true);
+        RespectiveStateChanged += OnRespectiveStateChanged;
+        if (Mold == FanCurveMold.Baolongda)
         {
             BaolongdaLoopCheck.Visibility = Visibility.Visible;
             BaolongdaSyncCheck.Visibility = Visibility.Visible;
         }
-        bool legacyFanCurve = _hw != null && (_hw.IsGcuConnected || _hw.UsesBaolongda || _hw.WujieSmuApu
-            || _hw.IsNucUmiFamily
-            || L_Mechrevo.WpfP0.Services.WpfBackend.LocalFanCurve());
+        bool legacyFanCurve = FanCurveTarget.LegacyFanCurve;
         bool supported = L_Mechrevo.WpfP0.Services.WpfBackend.ResolveFanCurveSupport(legacyFanCurve);
         if (!supported)
         {
@@ -130,6 +138,7 @@ public partial class FanCurveWindow : Window
         MechrevoLite.Mode.PerfModeService.Instance?.Applied += OnAppliedMode;
         LoadFromHardware();
         // 首次打开时后端/布局可能还没完成；等消息队列空闲后再读一次，避免第一次显示旧/默认温度轴。
+        Loaded += async (_, _) => await TryEnableRespectiveOnOpenAsync();
         Loaded += (_, _) => Dispatcher.BeginInvoke(new Action(() =>
         {
             if (!_dirty && !CpuCurve.IsDragging && !GpuCurve.IsDragging)
@@ -150,6 +159,8 @@ public partial class FanCurveWindow : Window
             perf.Applied -= OnAppliedMode;
         }
         _activeModeRefreshTimer.Stop();
+        RespectiveStateChanged -= OnRespectiveStateChanged;
+        L_Mechrevo.WpfP0.Services.FanCurveSaveService.StopWujie(this, "窗口关闭");
     }
 
     private void OnAppliedMode(MechrevoLite.Mode.PerfApplyOutcome outcome)
@@ -228,7 +239,7 @@ public partial class FanCurveWindow : Window
 
     private void LoadFromHardware()
     {
-        if (_hw == null)
+        if (!FanCurveTarget.Available)
         {
             return;
         }
@@ -242,7 +253,7 @@ public partial class FanCurveWindow : Window
         {
             return;
         }
-        FanCurveLoadOutcome outcome = FanCurveLoadService.Load(BackendKind, _hw, _modeId);
+        FanCurveLoadOutcome outcome = FanCurveLoadService.Load(_modeId);
         if (outcome.BaolongdaLoop.HasValue)
         {
             BaolongdaLoopCheck.IsChecked = outcome.BaolongdaLoop.Value;
@@ -259,14 +270,115 @@ public partial class FanCurveWindow : Window
         }
     }
 
+    private bool _syncingRespective;
+    private bool _hasRespectiveSwitch;
+    private bool _respectiveAvailable;
+    private bool _respectiveAutoTried;
+
+    /// <summary>宽屏下 CPU/GPU 是两份实例，开关状态变化要同步到另一份。</summary>
+    internal static event Action<bool>? RespectiveStateChanged;
+
+    private void OnRespectiveStateChanged(bool on)
+    {
+        if (!IsLoaded)
+        {
+            return;
+        }
+        Dispatcher.BeginInvoke(new Action(() => ApplyRespectiveVisual(on)));
+    }
+
+    /// <summary>独立控制关闭时 GPU 曲线不参与输出，置灰只读。</summary>
+    private void ApplyRespectiveVisual(bool on)
+    {
+        bool editable = !_hasRespectiveSwitch || on;
+        GpuCurve.IsEnabled = editable;
+        GpuCurve.Opacity = editable ? 1.0 : 0.45;
+    }
+
+    private async Task TryEnableRespectiveOnOpenAsync()
+    {
+        if (_respectiveAutoTried || !_respectiveAvailable)
+        {
+            return;
+        }
+        _respectiveAutoTried = true;
+        MechrevoLite.Hardware.MechrevoHw? hw = FanCurveTarget.Hw;
+        MechrevoLite.Hardware.MechrevoService? service = WpfBackend.Service;
+        if (hw == null || service == null || hw.FanRespective)
+        {
+            return;
+        }
+        _syncingRespective = true;
+        GcuRespectiveCheck.IsChecked = true;
+        _syncingRespective = false;
+        ApplyRespectiveVisual(true);
+        bool ok = await service.SwitchFanRespective(true);
+        if (!ok)
+        {
+            _syncingRespective = true;
+            GcuRespectiveCheck.IsChecked = hw.FanRespective;
+            _syncingRespective = false;
+            ApplyRespectiveVisual(hw.FanRespective);
+            StatusText.Text = "开启独立控制未生效（回读与请求不符）";
+            return;
+        }
+        StatusText.Text = "已自动开启 CPU/GPU 独立控制";
+        RespectiveStateChanged?.Invoke(true);
+    }
+
+    private async void GcuRespective_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_syncingRespective || !IsLoaded)
+        {
+            return;
+        }
+        MechrevoLite.Hardware.MechrevoHw? hw = FanCurveTarget.Hw;
+        MechrevoLite.Hardware.MechrevoService? service = WpfBackend.Service;
+        if (hw == null || service == null)
+        {
+            return;
+        }
+        bool requested = GcuRespectiveCheck.IsChecked == true;
+        GcuRespectiveCheck.IsEnabled = false;
+        try
+        {
+            bool ok = await service.SwitchFanRespective(requested);
+            if (!ok)
+            {
+                _syncingRespective = true;
+                GcuRespectiveCheck.IsChecked = hw.FanRespective;
+                _syncingRespective = false;
+            }
+            StatusText.Text = ok
+                ? (requested ? "已开启 CPU/GPU 独立控制" : "已关闭 CPU/GPU 独立控制")
+                : "切换独立控制未生效（回读与请求不符）";
+            if (ok)
+            {
+                ApplyRespectiveVisual(requested);
+                RespectiveStateChanged?.Invoke(requested);
+            }
+        }
+        catch (Exception ex)
+        {
+            _syncingRespective = true;
+            GcuRespectiveCheck.IsChecked = hw.FanRespective;
+            _syncingRespective = false;
+            StatusText.Text = "切换独立控制失败：" + ex.Message;
+        }
+        finally
+        {
+            GcuRespectiveCheck.IsEnabled = true;
+        }
+    }
+
     private async void Apply_Click(object sender, RoutedEventArgs e)
     {
-        if (_hw == null)
+        if (!FanCurveTarget.Available)
         {
             StatusText.Text = WpfStrings.FanCurveWindow_xaml_Text_3;
             return;
         }
-        if (BackendKind == FanCurveBackendKind.NucUmi)
+        if (Mold == FanCurveMold.NucUmi)
         {
             try
             {
@@ -285,11 +397,11 @@ public partial class FanCurveWindow : Window
             }
             return;
         }
-        if (BackendKind == FanCurveBackendKind.Baolongda)
+        if (Mold == FanCurveMold.Baolongda)
         {
             try
             {
-                FanCurveSaveResult result = FanCurveSaveService.SaveBaolongda(_hw, _modeId,
+                FanCurveSaveResult result = FanCurveSaveService.SaveBaolongda(_modeId,
                     CpuCurve.Duties, GpuCurve.Duties, TempsToInts(CpuCurve.Temperatures),
                     TempsToInts(GpuCurve.Temperatures), PushFanCurveCheck?.IsChecked != false,
                     BaolongdaLoopCheck.IsChecked == true, BaolongdaSyncCheck.IsChecked == true);
@@ -305,14 +417,13 @@ public partial class FanCurveWindow : Window
             }
             return;
         }
-        if (_hw.WujieSmuApu)
+        if (FanCurveTarget.IsWujieSmuApu)
         {
             try
             {
-                _wujieController ??= new WujieFanEcController();
-                FanCurveSaveResult result = FanCurveSaveService.SaveWujie(_wujieController, _modeId,
+                FanCurveSaveResult result = FanCurveSaveService.SaveWujie(this, _modeId,
                     CpuCurve.Duties, GpuCurve.Duties, CpuCurve.Temperatures, GpuCurve.Temperatures,
-                    WujieIndependentCheck?.IsChecked == true);
+                    false);
                 if (!result.PreserveDirty)
                 {
                     _dirty = result.Dirty;
@@ -325,7 +436,7 @@ public partial class FanCurveWindow : Window
             }
             return;
         }
-        if (L_Mechrevo.WpfP0.Services.WpfBackend.LocalFanCurve())
+        if (Mold == FanCurveMold.Ec)
         {
             try
             {
@@ -344,15 +455,16 @@ public partial class FanCurveWindow : Window
             }
             return;
         }
-        if (!_hw.IsGcuConnected)
+        if (!FanCurveTarget.IsGcuConnected)
         {
             StatusText.Text = WpfStrings.FanCurveWindow_xaml_Text_3;
             return;
         }
         try
         {
-            FanCurveSaveResult result = await FanCurveSaveService.SaveGcuAsync(_hw, _modeId,
-                CpuCurve.Duties, GpuCurve.Duties, PushFanCurveCheck?.IsChecked != false);
+            FanCurveSaveResult result = await FanCurveSaveService.SaveGcuAsync(_modeId,
+                CpuCurve.Duties, GpuCurve.Duties, PushFanCurveCheck?.IsChecked != false,
+                CpuCurve.Temperatures, GpuCurve.Temperatures);
             _dirty = result.Dirty;
             StatusText.Text = result.Detail;
         }
@@ -364,28 +476,30 @@ public partial class FanCurveWindow : Window
 
     private void PersistHardwareCurveIfMissing(int[]? cpuSaved, int[]? gpuSaved)
     {
-        if (_hw == null || (!_modeId.StartsWith("custom", StringComparison.Ordinal)
-            && !_modeId.StartsWith("fw", StringComparison.Ordinal)))
+        if (!FanCurveTarget.Available)
         {
             return;
         }
-        if (cpuSaved is { Length: >= 2 } && gpuSaved is { Length: >= 2 })
-        {
-            return;
-        }
-        int[] cpu = CpuCurve.Duties.ToArray();
-        int[] gpu = GpuCurve.Duties.ToArray();
-        MechrevoLite.Mode.PerfModeSettings settings = MechrevoLite.Mode.PerfModeStore.LoadSettings(_modeId) with
-        {
-            CpuFanDuty = cpu,
-            GpuFanDuty = gpu
-        };
-        MechrevoLite.Mode.PerfModeStore.SaveSettings(_modeId, settings);
+        FanCurveSaveService.PersistDutiesIfMissing(_modeId, cpuSaved, gpuSaved, CpuCurve.Duties, GpuCurve.Duties);
     }
 
     private async void RestoreDefault_Click(object sender, RoutedEventArgs e)
     {
-        if (_hw == null) return;
+        if (!FanCurveTarget.Available) return;
+        // EC 直连/无界：只把编辑器换成内置默认曲线，不擅自改写 EC 表；下发由「应用」执行。
+        // 无界与同方同一套 16 点表，默认曲线同样是本机的表，交还固件等于丢掉曲线。
+        if (Mold == FanCurveMold.Ec || Mold == FanCurveMold.NucUmi || Mold == FanCurveMold.Wujie)
+        {
+            // 无界的默认轴从 45℃ 起（控制器 45℃ 以下是交还区间），其余后端用同一套 16 点表。
+            bool wujie = Mold == FanCurveMold.Wujie;
+            CpuCurve.Load(wujie ? FanCurveDefaultView.WujieCpuTemperatures : FanCurveDefaultView.CpuTemperatures,
+                wujie ? FanCurveDefaultView.WujieCpuDutyBytes : FanCurveDefaultView.CpuDutyBytes);
+            GpuCurve.Load(wujie ? FanCurveDefaultView.WujieGpuTemperatures : FanCurveDefaultView.GpuTemperatures,
+                wujie ? FanCurveDefaultView.WujieGpuDutyBytes : FanCurveDefaultView.GpuDutyBytes);
+            _dirty = true;
+            StatusText.Text = WpfStrings.L("已载入默认曲线（未下发，点「应用」写入 EC）", "Default curve loaded (not sent; press Apply to write to EC)");
+            return;
+        }
         MessageBoxResult confirm = MessageBox.Show(this,
             WpfStrings.L("将停止自定义风扇曲线、交还固件/EC 自动控制，并清除该档已保存的曲线点位。继续？", "This stops the custom fan curve, returns control to firmware/EC, and clears saved curve points for this mode. Continue?"),
             WpfStrings.L("恢复默认风扇曲线", "Restore default fan curve"), MessageBoxButton.YesNo, MessageBoxImage.Question);
@@ -393,7 +507,7 @@ public partial class FanCurveWindow : Window
         try
         {
             FanCurveRestoreOutcome outcome = await L_Mechrevo.WpfP0.Services.FanCurveRestoreService
-                .RestoreAsync(BackendKind, _hw);
+                .RestoreAsync();
             if (!outcome.Handled)
             {
                 StatusText.Text = WpfStrings.L("本机不支持恢复默认曲线", "Restoring the default curve is not supported on this machine");
@@ -427,14 +541,7 @@ public partial class FanCurveWindow : Window
 
     private void ClearSavedFanCurve()
     {
-        try
-        {
-            PerfModeSettings settings = PerfModeStore.LoadSettings(_modeId);
-            PerfModeStore.SaveSettings(_modeId, settings with { CpuFanDuty = null, GpuFanDuty = null });
-        }
-        catch
-        {
-        }
+        FanCurveSaveService.ClearSavedDuties(_modeId);
     }
 
 
@@ -450,9 +557,6 @@ public partial class FanCurveWindow : Window
 
     private void Close_Click(object sender, RoutedEventArgs e)
     {
-        _wujieController?.Stop("窗口关闭");
-        _wujieController?.Dispose();
-        _wujieController = null;
         Close();
     }
 }

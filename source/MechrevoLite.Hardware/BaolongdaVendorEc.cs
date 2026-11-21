@@ -33,19 +33,36 @@ namespace MechrevoLite.Hardware
         private const int EcWindowSelectLow = 0x10;
         private const int EcWindowAccess = 0x12;
 
+        /// <summary>EC 身份寄存器：只有读到 0x55 才认为解锁寄存器有效。</summary>
+        private const int EcChipIdAddress = 0x2000;
+
+        /// <summary>解锁寄存器：写风扇寄存器前把 bit7 置 1。</summary>
+        private const int EcUnlockAddress = 0x1060;
+
+        /// <summary>解锁前要求 EC 身份等于该值。</summary>
+        private const byte EcChipIdExpected = 0x55;
+
         private static readonly object Gate = new object();
         private const string EcMutexName = "Global\\Access_EC";
 
-        /// <summary>允许访问的 EC RAM 地址（只在风扇接管需要的这几个上开口，避免误写别处）。</summary>
+        /// <summary>允许写入的 EC RAM 地址（只在风扇接管需要的这几个上开口，避免误写别处）。</summary>
         private static readonly int[] AllowedAddresses = { 0xB20, 0xC83C, 0xC83D };
 
+        /// <summary>额外允许只读的地址：EC 身份与解锁寄存器（这两处⛔不走通用写路径）。</summary>
+        private static readonly int[] AllowedReadOnlyAddresses = { EcChipIdAddress, EcUnlockAddress };
+
         private static bool IsAllowed(int address) => Array.IndexOf(AllowedAddresses, address) >= 0;
+
+        private static bool IsReadAllowed(int address)
+            => IsAllowed(address) || Array.IndexOf(AllowedReadOnlyAddresses, address) >= 0;
         private static IntPtr _dll;
         private static string _loadedService = string.Empty;
         private static bool _serviceCreated;
         private static bool _ready;
         private static bool _unavailable;
         private static bool _logged;
+        private static bool _unlockDone;
+        private static string _unlockNote = "未尝试";
 
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Auto)]
         private static extern IntPtr OpenSCManager(string? machineName, string? databaseName, int access);
@@ -155,7 +172,7 @@ namespace MechrevoLite.Hardware
         internal static bool TryReadByte(int address, out byte value)
         {
             value = 0;
-            if (!IsAllowed(address) || !EnsureReady())
+            if (!IsReadAllowed(address) || !EnsureReady())
             {
                 return false;
             }
@@ -201,6 +218,54 @@ namespace MechrevoLite.Hardware
                 }
                 return WritePort(EcIndexLowPort, value);
             });
+        }
+
+        /// <summary>
+        /// 写风扇寄存器前的解锁：确认 EC 身份后把解锁寄存器 bit7 置 1，并回读校验。
+        /// <para>只做这一件事：写入值恒为「当前值 | 0x80」，其它位不动；身份不符直接放弃。</para>
+        /// </summary>
+        internal static bool TryUnlockEcRam(out string note)
+        {
+            if (_unlockDone)
+            {
+                note = _unlockNote;
+                return true;
+            }
+            if (!TryReadByte(EcChipIdAddress, out byte chipId))
+            {
+                note = _unlockNote = "读 0x" + EcChipIdAddress.ToString("X4") + " 失败";
+                return false;
+            }
+            if (chipId != EcChipIdExpected)
+            {
+                note = _unlockNote = "EC 身份=0x" + chipId.ToString("X2") + "（≠0x55）⇒ 不解锁";
+                return false;
+            }
+            if (!TryReadByte(EcUnlockAddress, out byte cur))
+            {
+                note = _unlockNote = "读 0x" + EcUnlockAddress.ToString("X4") + " 失败";
+                return false;
+            }
+            if ((cur & 0x80) != 0)
+            {
+                _unlockDone = true;
+                note = _unlockNote = "0x1060=0x" + cur.ToString("X2") + " ⇒ 已解锁，无需写";
+                return true;
+            }
+            byte want = (byte)(cur | 0x80);
+            bool wrote = WithEcTransaction(() =>
+            {
+                if (!SelectWindow(EcUnlockAddress))
+                {
+                    return false;
+                }
+                return WritePort(EcIndexHighPort, EcWindowAccess) && WritePort(EcIndexLowPort, want);
+            });
+            bool ok = wrote && TryReadByte(EcUnlockAddress, out byte after) && (after & 0x80) != 0;
+            _unlockDone = ok;
+            note = _unlockNote = "0x1060 0x" + cur.ToString("X2") + " → 0x" + want.ToString("X2")
+                + "（写=" + (wrote ? "ok" : "失败") + " · 回读bit7=" + (ok ? "1" : "0") + "）";
+            return ok;
         }
 
         /// <summary>

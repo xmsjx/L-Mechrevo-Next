@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace MechrevoLite.Hardware;
+namespace MechrevoLite.Contracts;
 
 // 2026-10-10 fmax: 新增一个**可选**尾参（默认 null = 与旧行为完全一致，位置参数调用不受影响）：
 //   * FMax —— FMax（PBO 最大频率）能力 + **只读**回读结果（见 CpuFMaxProbe）。

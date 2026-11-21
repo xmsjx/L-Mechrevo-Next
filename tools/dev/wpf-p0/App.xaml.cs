@@ -35,6 +35,8 @@ public partial class App : Application
             {
                 if (L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive)
                 {
+                    // 开机就是 EC 模式：挂上"GCU 又起来了就再停一次"的守护（GCU 是手动服务，会被按需拉起）。
+                    L_Mechrevo.WpfP0.Services.WpfBackend.EcMarkActive();
                     (bool ok, string detail) = MechrevoLite.Helpers.OfficialConsoleIsolation.EnsureEcModeIsolation();
                     Logger.WriteLine("[official-console] 启动对齐(EC) ⇒ " + (ok ? "完成" : "未完全生效") + " · " + detail);
                 }

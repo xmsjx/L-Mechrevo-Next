@@ -6,7 +6,7 @@
 #
 # 用法：
 #   pwsh -File installer-src\make_update_zip.ps1 -SourceDir D:\openLM\rebuild\lm_fix_build `
-#        -Output D:\openLM\dist\update\LM-beta23.8.1-update.zip `
+#        -Output D:\openLM\dist\update\LM-beta23.8.3-update.zip `
 #        -Files L-Mechrevo.dll,MechrevoLite.Core.dll -ExtraFiles D:\openLM\dist\update\更新说明.txt
 param(
     [Parameter(Mandatory = $true)][string]$SourceDir,

@@ -7,29 +7,12 @@ public sealed record PerfModeDefinition(string Id, PerfModeKind Kind, string? Us
 {
 	public bool IsCustom => Kind == PerfModeKind.Custom;
 
-	public PerfModeRoute Route
-	{
-		get
-		{
-			if (!IsCustom && !Settings.NeedsFirmwareSlot)
-			{
-				return PerfModeRoute.BuiltIn;
-			}
-			return PerfModeRoute.FirmwareSlot;
-		}
-	}
+	// 内置档（静音/平衡/狂暴）一律由固件自己处理：不再因为该档存过参数就搬进固件自定义槽，
+	// 否则视觉档会变成自定义档（真机上表现为「选了静音，重启后停在自定义」）。
+	public PerfModeRoute Route => IsCustom ? PerfModeRoute.FirmwareSlot : PerfModeRoute.BuiltIn;
 
-	public bool IsEmulatedBuiltIn
-	{
-		get
-		{
-			if (!IsCustom)
-			{
-				return Settings.NeedsFirmwareSlot;
-			}
-			return false;
-		}
-	}
+	// 内置档不再用固件槽模拟（Route 恒 BuiltIn）⇒ 本判据恒 false。
+	public bool IsEmulatedBuiltIn => false;
 
 	public static string BuiltInId(PerfModeKind kind)
 	{

@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using Microsoft.Win32;
+using MechrevoLite.Hardware;
 
-namespace MechrevoLite.Hardware;
+namespace MechrevoLite.Contracts;
 
 public sealed class MechrevoDeviceCapabilities
 {

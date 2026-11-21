@@ -17,6 +17,11 @@
 
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
 
+  <ItemGroup>
+    <!-- 跨层数据契约：界面层可以引用，硬件实现命名空间仍然禁止 -->
+    <Using Include="MechrevoLite.Contracts" />
+  </ItemGroup>
+
   <PropertyGroup>
     <AssemblyName>MechrevoLite.Core</AssemblyName>
     <RootNamespace>MechrevoLite</RootNamespace>
@@ -61,7 +66,6 @@
 
   <!-- ===== 业务根文件（旧工程 source\ 根目录下、非窗体的业务基础设施） ===== -->
   <ItemGroup Label="Business root files">
-    <Compile Include="AmdDisplay.cs" />
     <Compile Include="CrashRingBuffer.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="NativeDriverGuard.cs" />
@@ -80,12 +84,11 @@
     <Compile Include="MechrevoLite\ScreenGateProbe.cs" />
     <Compile Include="MechrevoLite\SettingsBackup.cs" />
     <Compile Include="MechrevoLite\GcuPackageImport.cs" />
+    <Compile Include="MechrevoLite\GcuPackageRemoval.cs" />
     <Compile Include="MechrevoLite\KeyboardLightingDecision.cs" />
     <Compile Include="MechrevoLite\WujieFanCurveAutoApply.cs" />
     <Compile Include="MechrevoLite\EcFanCurveAutoApply.cs" />
     <Compile Include="Startup.cs" />
-    <!-- 旧入口的 ACPI 门面（纯 Win32/业务类型，非窗体；Program shim 需要它的类型） -->
-    <Compile Include="MechrevoLite\AsusACPI.cs" />
     <!-- ⭐ task-12：旧 WinForms UI 的兼容 shim（在 source 外，显式 Link 编入 Core） -->
     <Compile Include="..\tools\core-shims\CoreUiShims.cs" Link="CoreUiShims.cs" />
   </ItemGroup>
@@ -100,8 +103,6 @@
     <EmbeddedResource Include="MechrevoLite.Diagnostics\LMechrevo.gcu-payload-baseline.txt" LogicalName="LMechrevo.gcu-payload-baseline.txt" />
     <!-- 旧根目录里的配置存储（业务基础设施，实测可编入 Core） -->
     <Compile Include="MechrevoLite\AppConfig.cs" />
-    <!-- 被 AppConfig 死代码引用的小枚举（3 行；不是窗体） -->
-    <Compile Include="MechrevoLite\AsusFan.cs" />
   </ItemGroup>
 
   <!-- ===== 与旧工程相同的 8 个第三方程序集（HintPath 复用 lm_pkg_files\{app}） ===== -->

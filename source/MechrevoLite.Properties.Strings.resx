@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:element name="root" msdata:IsDataSet="true">
@@ -5722,7 +5722,16 @@ Restart L-Mechrevo now to apply them (until then the running instance may overwr
     <value>Import GCU</value>
   </data>
   <data name="GcuImportAsk" xml:space="preserve">
-    <value>GCU is not installed/connected on this machine. Import and install an external GCU package now?\n\nSupported: GCU.7z or a GCU folder next to L-Mechrevo (you can also pick a file manually).</value>
+    <value>GCU is not installed or cannot be connected on this machine.\n\nChoose Yes to import an external GCU package (a GCU.7z or a GCU folder next to L-Mechrevo, or pick one manually).\nChoose No to use local EC control now - fan, power and lighting run on the built-in controller without GCU - and the mode can be changed later in Settings.</value>
+  </data>
+  <data name="GcuConnectFailedTitle" xml:space="preserve">
+    <value>GCU connection failed</value>
+  </data>
+  <data name="GcuConnectFailedAsk" xml:space="preserve">
+    <value>Cannot connect to GCU (no GCU service on this machine, service not started, or the port is closed).
+
+Choose Yes to use local EC control now and remember it (fan, power and lighting run without GCU; the mode can be switched back in Settings).
+Choose No to stay in GCU mode showing "GCU not connected"; connection will not be retried until L-Mechrevo is restarted.</value>
   </data>
   <data name="GcuImportNoPackage" xml:space="preserve">
     <value>No usable GCU variant package (.7z) found at the selected location.</value>

@@ -66,15 +66,48 @@ internal static class AcpiDisplaySwitch
         return fallback;
     }
 
-    internal static bool TrySetLocalDimming(bool on)
-        => TryInvoke(on ? LocalDimmingOn : LocalDimmingOff, "LocalDimming=" + on);
+    /// <summary>
+    /// 分区控光下发（本地 EC/ACPI 通道）。成功即把选择记在本机 —— 这类开关没有回读通道，
+    /// 固件开机回默认值，只能靠本机记忆 + 开机重放（<c>DisplayToggleRestore</c>）。
+    /// </summary>
+    internal static bool TrySetLocalDimming(bool on, bool rememberIntent = true)
+    {
+        bool ok = TryInvoke(on ? LocalDimmingOn : LocalDimmingOff, "LocalDimming=" + on);
+        if (ok && rememberIntent)
+        {
+            MechrevoService.SaveDisplayToggleIntent(MechrevoService.LocalDimmingSavedKey, on);
+        }
+        return ok;
+    }
 
-    internal static bool TrySetLcdOverdrive(bool on)
-        => TryInvoke(on ? LcdOverdriveOn : LcdOverdriveOff, "LcdOverdrive=" + on);
+    /// <summary>LCD Overdrive 下发（同分区控光：成功即记本机意图，供开机重放）。</summary>
+    internal static bool TrySetLcdOverdrive(bool on, bool rememberIntent = true)
+    {
+        bool ok = TryInvoke(on ? LcdOverdriveOn : LcdOverdriveOff, "LcdOverdrive=" + on);
+        if (ok && rememberIntent)
+        {
+            MechrevoService.SaveDisplayToggleIntent(MechrevoService.LcdOverdriveSavedKey, on);
+        }
+        return ok;
+    }
 
+    /// <summary>查询一路 ULong：失败计数与暂停交给共享阶梯退避（ReadFailureBackoff），本类不再自己算。</summary>
     private static bool TryRead(ulong data, out ulong value)
     {
-        value = 0;
+        ulong? result = null;
+        bool ok = ReadFailureBackoff.TryRun("acpi-mulong", "查询 0x" + data.ToString("X") + " 失败",
+            () =>
+            {
+                result = QueryMulong(data);
+                return result.HasValue;
+            });
+        value = result ?? 0;
+        return ok;
+    }
+
+    /// <summary>真正的 WMI 查询；失败返回 null，异常交给退避层记账（不在这里逐次打日志）。</summary>
+    private static ulong? QueryMulong(ulong data)
+    {
         try
         {
             using ManagementObjectSearcher searcher = new("root\\WMI", "SELECT * FROM AcpiTest_MULong");
@@ -83,26 +116,30 @@ internal static class AcpiDisplaySwitch
                 using ManagementBaseObject inParams = item.GetMethodParameters("GetSetULong");
                 inParams["Data"] = data;
                 using ManagementBaseObject outParams = item.InvokeMethod("GetSetULong", inParams, null);
-                object? result = outParams?["Return"];
-                if (result == null)
+                object? ret = outParams?["Return"];
+                if (ret == null)
                 {
-                    return false;
+                    return null;
                 }
-                string text = result.ToString() ?? "";
-                value = text.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                string text = ret.ToString() ?? "";
+                return text.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
                     ? Convert.ToUInt64(text.Substring(2), 16)
-                    : Convert.ToUInt64(result);
-                return true;
+                    : Convert.ToUInt64(ret);
             }
+            return null;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Logger.WriteLine("[acpi-display] 查询 0x" + data.ToString("X") + " 失败：" + ex.GetType().Name + " " + ex.Message);
+            return null;
         }
-        return false;
     }
 
+    /// <summary>下发一路 ULong：同样走共享阶梯退避。</summary>
     private static bool TryInvoke(ulong data, string what)
+        => ReadFailureBackoff.TryRun("acpi-mulong", what + " 失败", () => InvokeMulong(data, what));
+
+    /// <summary>真正的 WMI 下发；异常交给退避层记账。</summary>
+    private static bool InvokeMulong(ulong data, string what)
     {
         try
         {
@@ -116,11 +153,11 @@ internal static class AcpiDisplaySwitch
                 Logger.WriteLine("[acpi-display] " + what + " data=0x" + data.ToString("X") + " ⇒ " + ok);
                 return ok;
             }
+            return false;
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Logger.WriteLine("[acpi-display] " + what + " 失败：" + ex.GetType().Name + " " + ex.Message);
+            return false;
         }
-        return false;
     }
 }

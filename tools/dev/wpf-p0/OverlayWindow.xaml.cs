@@ -121,8 +121,8 @@ public partial class OverlayWindow : Window
             _acOnline = s.AcOnline;
             var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
             // 无界 APU 没有独显（NoDgpu），但仍有 AMD 核显温度/频率/功耗，GPU 行必须显示。
-            bool showGpu = hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu
-                || hw?.WujieSmuApu == true;
+            bool showGpu = L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu
+                || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu == true;
             GpuRow.Visibility = showGpu ? Visibility.Visible : Visibility.Collapsed;
             GpuTempText.Text = FormatTemp(s.GpuTemp);
             GpuFreqText.Text = FormatFreq(s.GpuCoreFreq);
@@ -149,7 +149,7 @@ public partial class OverlayWindow : Window
             BatteryText.Text = s.BatteryPercent >= 0 ? WpfStrings.OverlayBatteryLabel + s.BatteryPercent + "%" : WpfStrings.OverlayBatteryDash;
             string detail = s.BatteryPercent >= 0 ? source + " · " + state : "";
             if (s.BatteryPercent >= 0
-                && hw?.UsesBaolongda != true
+                && L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda != true
                 && s.Charging
                 && s.BatteryRateWatts is decimal chargeWatts
                 && chargeWatts > 0)
@@ -198,7 +198,7 @@ public partial class OverlayWindow : Window
         }
         try
         {
-            if (L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.UsesBaolongda == true)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda)
             {
                 return WpfStrings.OverlayAcPower;
             }

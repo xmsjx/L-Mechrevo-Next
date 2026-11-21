@@ -112,10 +112,25 @@ internal static class StartupRecoveryService
             EcFanCurveAutoApply.Schedule();
         });
 
-        Try("DisplayToggleRestore.RunOnce", () =>
+        Try("DisplayToggleRestore.RunOnceAsync", () =>
         {
-            // 分区控光 / LCD Overdrive 在 EC 模式下没有回读通道，按上次保存的选择重放一次。
-            DisplayToggleRestore.RunOnce();
+            // 分区控光 / LCD Overdrive 没有回读通道（苍龙 GCU 连该字段都不回），
+            // 按硬件层记住的选择重放一次；等后端/显示器就绪再发，避免开机瞬间下发失败。
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(2500).ConfigureAwait(false);
+                await DisplayToggleRestore.RunOnceAsync().ConfigureAwait(false);
+            });
+        });
+
+        Try("LightingStartupRestore.RunOnce", () =>
+        {
+            // 固件开机态与本机保存态不一致时补下发一次（等键盘灯固件初始化完再比对）。
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(3000).ConfigureAwait(false);
+                await LightingStartupRestore.RunOnceAsync(hw).ConfigureAwait(false);
+            });
         });
 
         Try("PowerWallRestore.RunOnce", () =>
@@ -222,6 +237,13 @@ internal static class StartupRecoveryService
         {
             MechrevoHw? hw = WpfBackend.Hw;
             if (hw != null && hw.IsConnected)
+            {
+                return hw;
+            }
+            // ⭐ 同方 EC 直连（GCU 服务没起来）机型 hw.IsConnected 恒为 false，
+            //   但 EC 通道可用 ⇒ 这里判死会把整段启动恢复（屏幕开关 / 键盘灯 / 限充 / 负压 / 风扇）全部跳过。
+            //   实测苍龙 EC 直连就是这样：只有一行“后端 60s 内未连接 ⇒ 跳过启动恢复”。
+            if (hw != null && WpfBackend.EcModeActive)
             {
                 return hw;
             }

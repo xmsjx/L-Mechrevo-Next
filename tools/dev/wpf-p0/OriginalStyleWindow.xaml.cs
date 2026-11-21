@@ -15,13 +15,11 @@ using MechrevoLite.Diagnostics;
 using MechrevoLite.Display;
 using MechrevoLite.Gpu;
 using MechrevoLite.Gpu.NVidia;
-using MechrevoLite.Hardware;
 using L_Mechrevo.WpfP0.Services;
 using System.Windows.Interop;
 using System.Windows.Threading;
 
-using L_Mechrevo.WpfP0.Resources;
-namespace L_Mechrevo.WpfP0;
+using L_Mechrevo.WpfP0.Resources;namespace L_Mechrevo.WpfP0;
 
 /// <summary>核显省电行的渲染快照：硬件读取在后台完成，界面只按快照刷。</summary>
 internal readonly record struct IgpuVisualSnapshot(int GpuMode, bool HotSwap, bool PendingRestart, int SaveMode, bool SwitchSupported);
@@ -75,10 +73,18 @@ public partial class OriginalStyleWindow : Window
     internal event Action? BackendReady;
     internal BackendProbe? CurrentBackend => _backendProbe;
 
-    /// <summary>同方家族（含无 GCU 的本地 EC 接管机型）才提供 GCU/EC 控制模式切换。</summary>
-    internal bool IsTongfangFamilyForSettings => _backendProbe?.Hw?.IsTongfangFamily == true
-        || _backendProbe?.Hw?.WujieSmuApu == true // 无界 X 系也显示 GCU/EC 控制模式
-        || L_Mechrevo.WpfP0.Services.WpfBackend.IsTongfangFamily;
+    /// <summary>是否提供「GCU 模式 / EC 模式」切换：门控在后端求值，界面只读结论。</summary>
+    /// <summary>设置里是否显示「控制模式」卡片：非同方模具（宝龙达等）不显示。</summary>
+    /// <para>GCU 未连接时后端能力位可能给不出结论，这里再按机器事实兜一层，避免卡片整块消失。</para>
+    internal bool IsTongfangFamilyForSettings =>
+        L_Mechrevo.WpfP0.Services.WpfBackend.ControlModeSwitchSupported
+        || (!L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+            && (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily
+                || L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram?.WujieSmuApu == true
+                || MechrevoLite.Hardware.MachineIdentity.Collect().TongfangFamily));
+
+    /// <summary>控制模式卡片的判定依据，仅用于诊断日志。</summary>
+    internal string ControlModeCardReason => L_Mechrevo.WpfP0.Services.WpfBackend.ControlModeSwitchReason;
     private bool _overlayPreloaded;
     private bool _appClosing;
     private bool _gpuBootChecksStarted;
@@ -130,6 +136,20 @@ public partial class OriginalStyleWindow : Window
     private int _lastNucEcMode = -2;
     private int _lastObservedGcuMode = -2;
     private int _lastObservedGcuRawMode = -2;
+
+    /// <summary>进入自定义档那一刻固件报的档位字节（-2=不在自定义）：用来区分"回读噪声"与"真的外部切档"。</summary>
+    private static int _customEnterRawMode = -2;
+
+    /// <summary>
+    /// 自定义档在固件里没有槽位的机型（高亮只能听软件记忆，固件回读永远只有平衡/性能/静音）：
+    /// 硬件层能力位 + Intel 星耀的静态身份（XingyaoLocalReady 要等后端就绪才置位，启动早期会漏）。
+    /// 判据只在这里定义一次，别在各分支里再手写一遍。
+    /// </summary>
+    private static bool LocalOnlyCustomMachine =>
+        L_Mechrevo.WpfP0.Services.WpfBackend.MachineCustomModeIsLocalOnly
+        || (L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily
+            && L_Mechrevo.WpfP0.Services.WpfBackend.IsXingyaoPlatform);
     private long _lastPerfKeyOsdTick;
     private long _lastSwitchModeOsdTick;
     private int _lastKeyboardBrightnessOsd = -2;
@@ -224,7 +244,7 @@ public partial class OriginalStyleWindow : Window
     private BackendRoute _backendRoute = BackendRoute.None;
 
     /// <summary>EC 模式已开启（不代表路由已经落到 EC）。</summary>
-    private bool IsEcModeActive => GcuEcExperimental.Enabled;
+    private bool IsEcModeActive => L_Mechrevo.WpfP0.Services.WpfBackend.GcuActive;
 
     /// <summary>当前是否处于 EC-only 本地路由（EC 模式已接管且路由落在 EC）。</summary>
     private bool IsEcLocalRoute =>
@@ -235,7 +255,7 @@ public partial class OriginalStyleWindow : Window
     /// 「声明是 GCU、但 GCU 实际连不上 ⇒ 已落到 EC-only 首页」这种情况。
     /// </summary>
     private bool EcLocalControl =>
-        IsEcLocalRoute || (IsEcModeActive && _backendProbe?.Hw?.IsGcuConnected != true);
+        IsEcLocalRoute || (IsEcModeActive && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected);
     private int _lastEcOnlyVisual = -1;
     private int _gcuConnectFailures;
     private const string QuickTilesConfigKey = "perf_quick_tiles";
@@ -278,7 +298,7 @@ public partial class OriginalStyleWindow : Window
         AutoRefreshSwitch.Visibility = SupportsAutoRefresh ? Visibility.Visible : Visibility.Collapsed;
         Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         Closed += (_, _) => Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
-        _ = Task.Run(MachineProbeReadOnly.LogOnce);
+        _ = Task.Run(WpfBackend.LogMachineProbeOnce);
         Closed += (_, _) => L_Mechrevo.WpfP0.Services.KeyboardKeyProbe.Stop();
         MainScroll.PreviewMouseWheel += MainScroll_PreviewMouseWheel;
         L_Mechrevo.WpfP0.Services.WindowWorkAreaPolicy.ClampOnLoaded(this);
@@ -350,6 +370,8 @@ public partial class OriginalStyleWindow : Window
             {
                 return;
             }
+            // 离电档位灰态：纯属性赋值，2s 一次代价可忽略（窗口不可见时也要保持正确）。
+            ApplyPerfBatteryLock();
             bool consumer = HasVisibleSensorConsumer();
             ApplySensorDemandState(consumer);
             if (!consumer)
@@ -367,6 +389,11 @@ public partial class OriginalStyleWindow : Window
         _lightingIdleTimer.Start();
         _backendRetryTimer.Tick += async (_, _) =>
         {
+            if (MechrevoLite.Hardware.GcuEcMode.ConnectRetrySuppressed)
+            {
+                _backendRetryTimer.Stop();
+                return;
+            }
             if (_backendProbe == null)
             {
                 await ConnectBackendAsync();
@@ -676,11 +703,11 @@ public partial class OriginalStyleWindow : Window
     {
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         if (UiQaShowAll.Enabled) return true;
-        if (GcuEcExperimental.Enabled
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.GcuActive
             && hw != null
-            && hw.WujieSmuApu != true
-            && hw.SmuCustomApu != true
-            && hw.UsesBaolongda != true
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
             && !XingyaoPerfApplicable())
         {
             // EC 直连/接管时性能档由本地 EC 实现（clamp 0x10 = 狂暴），GCU 的 TurboMode 能力位在这里不适用。
@@ -699,7 +726,7 @@ public partial class OriginalStyleWindow : Window
         if (!L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerformanceProfile", "ProfileAvailable")) return true;
         if (L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("TurboMode", "TurboMode")) return true;
         // 宝龙达/特殊机型仍按已有能力位处理
-        return hw?.UsesBaolongda == true;
+        return L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda;
     }
 
     /// <summary>
@@ -710,7 +737,7 @@ public partial class OriginalStyleWindow : Window
     {
         try
         {
-            if (!GcuEcExperimental.TryReadVisualMode(out _))
+            if (!L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out _))
             {
                 return false;
             }
@@ -725,13 +752,13 @@ public partial class OriginalStyleWindow : Window
     {
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         if (UiQaShowAll.Enabled) return true;
-        if (GcuEcExperimental.Enabled
-            && hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.GcuActive
+            && L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
         {
             return true;
         }
-        if (caps == null) return hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
-        bool gen50 = hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
+        if (caps == null) return L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
+        bool gen50 = L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
         bool silentDeclared = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("SilentTurbo", "SilentTurboAvailability");
         return L_Mechrevo.WpfP0.Services.WpfBackend.SilentTurboState switch
         {
@@ -741,7 +768,7 @@ public partial class OriginalStyleWindow : Window
         };
     }
 
-    internal int WideCurrentMode => _backendProbe != null ? ResolveDisplayMode(_backendProbe) : VisualModeForId(MechrevoLite.Mode.PerfModeStore.ActiveModeId);
+    internal int WideCurrentMode => _backendProbe != null ? ResolveDisplayMode(_backendProbe) : VisualModeForId(MechrevoLite.Mode.ModeSettings.ActiveModeId);
 
     internal bool WideSilentTurboActive => WideCurrentMode == 1 && WideSilentTurboVisible
         && ReadRememberedTurboSubMode();
@@ -959,7 +986,7 @@ public partial class OriginalStyleWindow : Window
             int highlight = readback > 0 && Math.Abs(readback - hertz) <= 2 ? readback : hertz;
             SelectMiniRefreshButton(highlight);
         }
-        if (_backendProbe.Hw?.IsGcuConnected == true)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected)
         {
             _ = _backendProbe.SwitchRefreshRateAsync(hertz);
         }
@@ -1060,11 +1087,11 @@ public partial class OriginalStyleWindow : Window
             {
                 return EcKeyboardWhite;
             }
-            if (hw == null || !hw.SupportsKeyboard || hw.UsesBaolongda || IsHidKeyboard())
+            if (hw == null || !hw.SupportsKeyboard || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda || IsHidKeyboard())
             {
                 return false;
             }
-            if (hw.WujieSmuApu)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu)
             {
                 return true;
             }
@@ -1082,8 +1109,8 @@ public partial class OriginalStyleWindow : Window
         return (string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
                 || string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
             && hw != null
-            && !hw.UsesBaolongda
-            && hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40;
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+            && L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40;
     }
 
     internal static string LightChannelTitle(string topic)
@@ -1122,7 +1149,8 @@ public partial class OriginalStyleWindow : Window
         if (string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal)
             || IsGradeLightTopicForOsd(topic))
         {
-            return Math.Clamp(light, 0, 4) + "/4";
+            // HID 单键键盘亮度是连续的 ⇒ 大于 4 的一律按百分比显示，⛔ 不出现「87/4」。
+            return light > 4 ? Math.Clamp(light, 0, 100) + "%" : Math.Clamp(light, 0, 4) + "/4";
         }
         return Math.Clamp(light * 25, 0, 100) + "%";
     }
@@ -1404,11 +1432,11 @@ public partial class OriginalStyleWindow : Window
 
     internal event Action? WideUiVisibilityChanged;
 
-    internal bool WideIgpuSavingSupported => _backendProbe?.Hw?.SupportsGpuHotSwap == true
+    internal bool WideIgpuSavingSupported => L_Mechrevo.WpfP0.Services.WpfBackend.SupportsGpuHotSwap
         && (_backendProbe?.CurrentGpuMode ?? -1) == 1
         && _backendProbe?.HasPendingGpuRestart != true;
 
-    internal int WideIgpuSavingMode => _backendProbe?.Hw?.IgpuOnlySaveMode ?? -1;
+    internal int WideIgpuSavingMode => L_Mechrevo.WpfP0.Services.WpfBackend.IgpuOnlySaveMode;
 
     internal async Task WideSetIgpuSavingAsync(string mode)
     {
@@ -1426,7 +1454,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     return true;
                 }
-                bool legacy = _backendProbe?.Hw?.IsNucUmiFamily == true
+                bool legacy = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily
                     || _backendProbe?.Hw?.DisplayEffectProfiles.Count > 0
                     || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("ColorCalibration")
                     || (IsEcModeActive
@@ -1489,7 +1517,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     return false;
                 }
-                if (_backendProbe?.Hw?.WujieSmuApu == true && !IsWujie8040Series())
+                if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu && !IsWujie8040Series())
                 {
                     return false;
                 }
@@ -1781,9 +1809,9 @@ public partial class OriginalStyleWindow : Window
                 // GCU 的 BatteryProtection 回包可能滞后/不刷新；
                 // 三档高亮以用户最后选中的记忆档为准，避免点完立刻被旧回包弹回去。
                 bool gcuMode = hw != null
-                    && hw.IsGcuConnected
-                    && !hw.UsesBaolongda
-                    && !hw.IsNucUmiFamily
+                    && L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
+                    && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+                    && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily
                     && !IsXingyaoPlatform;
                 if (gcuMode)
                 {
@@ -1952,7 +1980,7 @@ public partial class OriginalStyleWindow : Window
             }
             if (current < 0)
             {
-                current = _backendProbe?.Hw?.CurrentHz ?? -1;
+                current = L_Mechrevo.WpfP0.Services.WpfBackend.CurrentHz;
             }
             string info = bounds.Width + " × " + bounds.Height + " · " + Math.Max(0, current) + " Hz";
             return (info, current, _refreshHighHz, AutoRefreshSwitch.IsChecked == true, (int)Math.Round(BrightnessSlider.Value));
@@ -2039,7 +2067,7 @@ public partial class OriginalStyleWindow : Window
         {
             var hw = _backendProbe?.Hw;
             return hw != null && !ChargeLimitUsesWmiMailbox
-                && (hw.IsNucUmiFamily
+                && (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily
                     || L_Mechrevo.WpfP0.Services.WpfBackend.RuntimeModelSupported
                     || MechrevoLite.BatteryLimitPanel.IsSupportedBoard(hw)
                     || L_Mechrevo.WpfP0.Services.WpfBackend.EcChargeProbeChannelAvailable);
@@ -2070,7 +2098,7 @@ public partial class OriginalStyleWindow : Window
             {
                 return false;
             }
-            bool legacy = _backendProbe?.Hw?.SupportsLocalDimming == true
+            bool legacy = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsLocalDimming
                 || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("LocalDimming");
             return _services?.Display.ResolveMiniLedSupport(legacy) ?? legacy;
         }
@@ -2099,9 +2127,13 @@ public partial class OriginalStyleWindow : Window
         SyncRefreshRateState();
     }
 
-    internal bool MiniledOn => _backendProbe?.Hw?.LocalDimming == true;
+    internal bool MiniledOn => L_Mechrevo.WpfP0.Services.WpfBackend.LocalDimmingOn;
 
-    /// <summary>切换分区控光（本地 EC/ACPI 通道）；成功即写进配置，重启后按配置恢复。</summary>
+    /// <summary>
+    /// 切换分区控光（界面只下发意图）。
+    /// <para>⭐ 记忆归硬件层（<c>MechrevoService.SwitchLocalDimming</c> 写 <c>miniled_on</c>），
+    /// 开机由 <c>DisplayToggleRestore</c> 重放；⛔ 界面不再直接写配置。</para>
+    /// </summary>
     internal async Task<bool> SetMiniledAsync(bool on)
     {
         BackendProbe? probe = _backendProbe;
@@ -2109,13 +2141,7 @@ public partial class OriginalStyleWindow : Window
         {
             return false;
         }
-        bool ok = await probe.SwitchLocalDimmingAsync(on);
-        if (ok)
-        {
-            MechrevoLite.AppConfig.Set("miniled_on", on ? 1 : 0);
-            MechrevoLite.AppConfig.Flush();
-        }
-        return ok;
+        return await probe.SwitchLocalDimmingAsync(on);
     }
 
     private bool _syncingMiniled;
@@ -2126,7 +2152,11 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        bool target = MiniledSwitch.IsChecked == true;
+        // ⭐ 记忆里是"开"但这一轮没成功下发过（开机重放失败/固件吞了这一下）⇒ 这一下应当补发"开"，
+        //   而不是按勾选状态反着关（用户看到的就是"显示开着但没生效，关了再开才行"）。
+        bool intentOn = L_Mechrevo.WpfP0.Services.WpfBackend.LocalDimmingOn;
+        bool applied = L_Mechrevo.WpfP0.Services.WpfBackend.LocalDimmingAppliedOn;
+        bool target = !(intentOn && applied);
         if (!SupportsMiniled)
         {
             // 通道没探到就不下发，避免在不适用的机型上盲写。
@@ -2177,25 +2207,26 @@ public partial class OriginalStyleWindow : Window
         }
         if (MiniledHint != null)
         {
-            MiniledHint.Text = string.Empty;
-            MiniledHint.Visibility = Visibility.Collapsed;
+            // 记忆是开、开机重放也跑过了却没下发成功 ⇒ 说明这一下没生效，提示用户点一下重发（点一下就会生效）。
+            bool needRetry = MiniledOn
+                && !L_Mechrevo.WpfP0.Services.WpfBackend.LocalDimmingAppliedOn
+                && L_Mechrevo.WpfP0.Services.WpfBackend.DisplayToggleReplayDone;
+            MiniledHint.Text = needRetry
+                ? WpfStrings.L("开机没生效，点一下重新下发", "Not applied at startup; toggle once")
+                : string.Empty;
+            MiniledHint.Visibility = needRetry ? Visibility.Visible : Visibility.Collapsed;
         }
         RefreshOverdriveSwitch();
     }
 
     private bool _syncingOverdrive;
 
-    /// <summary>切换 LCD Overdrive（本地 ACPI 通道）；成功即写进配置，重启后按配置恢复。</summary>
-    internal async Task<bool> SetOverdriveAsync(bool on)
-    {
-        bool ok = await SetLcdOverdriveAsync(on);
-        if (ok)
-        {
-            MechrevoLite.AppConfig.Set("lcd_overdrive_on", on ? 1 : 0);
-            MechrevoLite.AppConfig.Flush();
-        }
-        return ok;
-    }
+    /// <summary>
+    /// 切换 LCD Overdrive（界面只下发意图）。
+    /// <para>⭐ 记忆归硬件层（GCU 走 <c>MechrevoService.SwitchLcdOverdrive</c>，EC 走 <c>AcpiDisplaySwitch</c>），
+    /// 开机由 <c>DisplayToggleRestore</c> 重放；⛔ 界面不再直接写配置。</para>
+    /// </summary>
+    internal Task<bool> SetOverdriveAsync(bool on) => SetLcdOverdriveAsync(on);
 
     private async void Overdrive_Click(object sender, RoutedEventArgs e)
     {
@@ -2203,7 +2234,10 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        bool target = OverdriveSwitch.IsChecked == true;
+        // 同分区控光：记忆为开但没下发成功 ⇒ 这一下补发"开"。
+        bool odIntentOn = L_Mechrevo.WpfP0.Services.WpfBackend.LcdOverdriveOn;
+        bool odApplied = L_Mechrevo.WpfP0.Services.WpfBackend.LcdOverdriveAppliedOn;
+        bool target = !(odIntentOn && odApplied);
         if (!SupportsLcdOverdrive)
         {
             StatusText.Text = WpfStrings.L("未检测到 Overdrive 通道，本次未下发", "LCD Overdrive channel not detected; nothing sent");
@@ -2250,8 +2284,13 @@ public partial class OriginalStyleWindow : Window
         }
         if (OverdriveHint != null)
         {
-            OverdriveHint.Text = string.Empty;
-            OverdriveHint.Visibility = Visibility.Collapsed;
+            bool odRetry = LcdOverdrive
+                && !L_Mechrevo.WpfP0.Services.WpfBackend.LcdOverdriveAppliedOn
+                && L_Mechrevo.WpfP0.Services.WpfBackend.DisplayToggleReplayDone;
+            OverdriveHint.Text = odRetry
+                ? WpfStrings.L("开机没生效，点一下重新下发", "Not applied at startup; toggle once")
+                : string.Empty;
+            OverdriveHint.Visibility = odRetry ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 
@@ -2269,11 +2308,11 @@ public partial class OriginalStyleWindow : Window
         try
         {
             BackendProbe? probe = _backendProbe;
-            if (probe?.Hw == null || !probe.Hw.SupportsLocalDimming)
+            if (probe?.Hw == null || !L_Mechrevo.WpfP0.Services.WpfBackend.SupportsLocalDimming)
             {
                 return;
             }
-            bool target = !probe.Hw.LocalDimming;
+            bool target = !L_Mechrevo.WpfP0.Services.WpfBackend.LocalDimmingOn;
             bool ok = await SetMiniledAsync(target);
             StatusText.Text = ok
                 ? (target ? WpfStrings.OriginalStyleWindow_xaml_Text_2 : WpfStrings.OriginalStyleWindow_xaml_Text_2)
@@ -2413,7 +2452,7 @@ public partial class OriginalStyleWindow : Window
     private TrayMenuState BuildTrayMenuState()
     {
         BackendProbe? probe = _backendProbe;
-        int mode = probe != null ? ResolveDisplayMode(probe) : VisualModeForId(MechrevoLite.Mode.PerfModeStore.ActiveModeId);
+        int mode = probe != null ? ResolveDisplayMode(probe) : VisualModeForId(MechrevoLite.Mode.ModeSettings.ActiveModeId);
         MechrevoLite.Mode.PerfModeService? perf = MechrevoLite.Mode.PerfModeService.Instance;
         List<TrayCustomItem> customs = new();
         string customRoot = WpfStrings.TrayCustom;
@@ -2451,8 +2490,8 @@ public partial class OriginalStyleWindow : Window
             WideSilentTurboVisible,
             L_Mechrevo.WpfP0.Services.WpfBackend.SilentTurboActive,
             WideTurboVisible,
-            probe?.Hw?.SupportsDgpuDirect ?? L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag(probe?.Capabilities, "DgpuDirect"),
-            probe?.Hw?.CanOfferIgpuOnly ?? L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag(probe?.Capabilities, "IgpuOnly"),
+            L_Mechrevo.WpfP0.Services.WpfBackend.SupportsDgpuDirectIfKnown ?? L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag(probe?.Capabilities, "DgpuDirect"),
+            L_Mechrevo.WpfP0.Services.WpfBackend.CanOfferIgpuOnlyIfKnown ?? L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag(probe?.Capabilities, "IgpuOnly"),
             _overlayWindow?.IsLocked ?? OverlayWindow.ReadSavedLocked());
     }
 
@@ -2621,13 +2660,13 @@ public partial class OriginalStyleWindow : Window
     private IntPtr PowerBroadcastHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         // ⛔ 消息号与 wParam 的判定都在 Core 的策略里：先判消息再取 wParam，避免溢出。
-        if (!PowerBroadcastPolicy.IsResume(msg, msg == PowerBroadcastPolicy.WmPowerBroadcast ? wParam.ToInt64() : 0))
+        if (!WpfBackend.IsResumeMessage(msg, msg == WpfBackend.WmPowerBroadcast ? wParam.ToInt64() : 0))
         {
             return IntPtr.Zero;
         }
         // 与 SystemEvents.PowerModeChanged 双通道触发：5 秒内只处理一次。
         long now = Environment.TickCount64;
-        if (!PowerBroadcastPolicy.ShouldHandle(now, _lastWakeRestoreTick, 5000))
+        if (!WpfBackend.ShouldHandleResume(now, _lastWakeRestoreTick, 5000))
         {
             return IntPtr.Zero;
         }
@@ -2821,7 +2860,7 @@ public partial class OriginalStyleWindow : Window
         if (e.Mode == Microsoft.Win32.PowerModes.Suspend)
         {
             _sleepKeyboardLightWasOn = KeyboardLightSwitch.IsChecked == true;
-            try { _backendProbe?.Hw?.ResetDirectGpuOverclockForSleep(); } catch { }
+            try { L_Mechrevo.WpfP0.Services.WpfBackend.ResetDgpuOverclockForSleep(); } catch { }
             try { MechrevoLite.HardwareControl.SuspendLocalSamplingForDisplayOff(); } catch { }
             Logger.WriteLine("[power] Suspend：记录键盘灯=" + (_sleepKeyboardLightWasOn ? WpfStrings.IgpuSavingOnPreview_Content : WpfStrings.OriginalStyleWindow_Content_5) + " · 已释放NVAPI/暂停采样");
             return;
@@ -2848,9 +2887,18 @@ public partial class OriginalStyleWindow : Window
                 Dispatcher.BeginInvoke(new Action(async () =>
                 {
                     try { MechrevoLite.HardwareControl.ResumeLocalSamplingAfterDisplayOn(); } catch { }
+                    // 分区控光/OD 的固件状态是易失的：唤醒后按记忆重放一次（与开机同一条路径）。
                     try
                     {
-                        if (_backendProbe != null && AppConfig.Is("gpu_oc")
+                        await L_Mechrevo.WpfP0.Services.DisplayToggleRestore.RunOnceAsync().ConfigureAwait(true);
+                        Logger.WriteLine("[display-restore] 唤醒后按记忆重放完成");
+                    }
+                    catch
+                    {
+                    }
+                    try
+                    {
+                        if (_backendProbe != null && L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockIntentOn
                             && ResolveDisplayMode(_backendProbe) == 1)
                         {
                             bool ok = await ApplyGpuOverclockSettingAsync(true);
@@ -2859,6 +2907,16 @@ public partial class OriginalStyleWindow : Window
                     }
                     catch
                     {
+                    }
+                    // 唤醒后 SMU 侧的每核负压 / FMax 已被固件重置过，按用户保存值补一次（开关关着就不下发）。
+                    try
+                    {
+                        var cpuResult = await Task.Run(() => L_Mechrevo.WpfP0.Services.CpuTuningService.ReapplyAfterResume());
+                        Logger.WriteLine("[cpu-co] 唤醒后重放 ⇒ success=" + cpuResult.Success + " · " + cpuResult.Detail);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.WriteLine("[cpu-co] 唤醒后重放异常：" + ex.Message);
                     }
                 }));
             });
@@ -2967,6 +3025,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         _lastPowerLineOnline = online;
+        ApplyPerfBatteryLock();
         Logger.WriteLine("[power] 电源来源变化 ⇒ " + (online ? WpfStrings.OverlayExternalPower : "电池"));
         try
         {
@@ -2989,6 +3048,8 @@ public partial class OriginalStyleWindow : Window
         {
             Logger.WriteLine("[power] 自动性能模式失败（已吞掉）：" + ex.Message);
         }
+        // ⭐ 离电档位收口（仅 EC 直连）：设置里禁止离电用狂暴/自定义 ⇒ 从狂暴/自定义切回静音。
+        await EnforceEcBatteryModeLockAsync(WpfStrings.PowerSourceChangedReason);
         try
         {
             await ReconcileLightingPowerAsync();
@@ -3028,8 +3089,8 @@ public partial class OriginalStyleWindow : Window
         }
         try
         {
-            CpuCoAutoApplyGuard.MarkCleanExit(reason);
-            GpuOcShutdownGuard.MarkCleanExit(reason);
+            WpfBackend.MarkCpuCoCleanExit(reason);
+            WpfBackend.MarkGpuOcCleanExit(reason);
             Logger.WriteLine("[power] 已写 clean-exit marker（" + reason + WpfStrings.ClosingParen);
         }
         catch (Exception ex)
@@ -3200,7 +3261,7 @@ public partial class OriginalStyleWindow : Window
         ChargeGatePinToggle.Visibility = sliderVisible ? Visibility.Visible : Visibility.Collapsed;
         try
         {
-            ChargeGatePinToggle.IsChecked = ChargeGatePin.Enabled;
+            ChargeGatePinToggle.IsChecked = WpfBackend.ChargeGateEnabled;
         }
         catch
         {
@@ -3211,14 +3272,14 @@ public partial class OriginalStyleWindow : Window
     private void ChargeGatePinToggle_Click(object sender, RoutedEventArgs e)
     {
         bool on = ChargeGatePinToggle.IsChecked == true;
-        AppConfig.Set(ChargeGatePin.ConfigKey, on ? 1 : 0);
+        AppConfig.Set(WpfBackend.ChargeGateConfigKey, on ? 1 : 0);
         AppConfig.Flush();
         Logger.WriteError(on
             ? "[charge-gate] 界面开关打开：写完不再还原门控（0x7C3 保持 4）"
             : "[charge-gate] 界面开关关闭：门控改回临时模式，并立刻还原原值");
         if (!on)
         {
-            ChargeGatePin.TryReleaseNow();
+            WpfBackend.ChargeGateReleaseNow();
         }
     }
 
@@ -3240,7 +3301,7 @@ public partial class OriginalStyleWindow : Window
             var hw = _backendProbe?.Hw;
             supported = hw != null
                 && (BatteryLimitPanel.IsSupportedBoard(hw)
-                    || hw.IsNucUmiFamily
+                    || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily
                     || EcTransportHardwareAvailable());
         }
         catch
@@ -3385,11 +3446,11 @@ public partial class OriginalStyleWindow : Window
                 ChargeLimitHighBox.Text = Math.Clamp(high, 2, 100).ToString();
                 ChargeLimitSwitch.IsChecked = state.Enabled;
                 string verdictText = "";
-                if (mode == BatteryLimitWriter.ModeActive)
+                if (mode == WpfBackend.BatteryLimitModeActive)
                 {
                     verdictText = L_Mechrevo.WpfP0.Services.WpfBackend.ChargeLimitVerdictSuffix;
                 }
-                ChargeLimitStatus.Text = (mode == BatteryLimitWriter.ModeActive
+                ChargeLimitStatus.Text = (mode == WpfBackend.BatteryLimitModeActive
                     ? WpfStrings.ChargeAppliedPrefix + high + WpfStrings.ChargeStartSeparator + low + "%" + WpfStrings.ClosingParen
                     : WpfStrings.ChargeNotEnabled) + verdictText;
             }
@@ -3452,12 +3513,12 @@ public partial class OriginalStyleWindow : Window
             {
                 if (enable)
                 {
-                    BatteryLimitRestore.SaveConfig(true, low, high);
+                    WpfBackend.SaveBatteryLimitRestore(true, low, high);
                     ChargeLimitStatus.Text = WpfStrings.OriginalStyleWindow_xaml_Text_18 + high + WpfStrings.ChargeStartSeparator + low + "%" + WpfStrings.ClosingParen;
                 }
                 else
                 {
-                    BatteryLimitRestore.SaveConfig(false, 0, 0);
+                    WpfBackend.SaveBatteryLimitRestore(false, 0, 0);
                     ChargeLimitStatus.Text = WpfStrings.OriginalStyleWindow_xaml_Text_20;
                 }
             }
@@ -3497,7 +3558,7 @@ public partial class OriginalStyleWindow : Window
             string detail = chargeApply.Detail;
             if (ok)
             {
-                BatteryLimitRestore.SaveConfig(true, low, high);
+                WpfBackend.SaveBatteryLimitRestore(true, low, high);
                 ChargeLimitSwitch.IsChecked = true;
                 ChargeLimitStatus.Text = WpfStrings.OriginalStyleWindow_xaml_Text_23 + high + WpfStrings.ChargeStartSeparator + low + "%" + WpfStrings.ClosingParen;
             }
@@ -3530,7 +3591,7 @@ public partial class OriginalStyleWindow : Window
             ChargeLimitStatus.Text = result.Ok ? WpfStrings.OriginalStyleWindow_xaml_Text_20 : WpfStrings.OriginalStyleWindow_xaml_Text_21 + result.Detail;
             if (result.Ok)
             {
-                BatteryLimitRestore.SaveConfig(false, 0, 0);
+                WpfBackend.SaveBatteryLimitRestore(false, 0, 0);
             }
         }
         catch (Exception ex)
@@ -3836,7 +3897,7 @@ public partial class OriginalStyleWindow : Window
 
     private async void ModeButton_Click(object sender, RoutedEventArgs e)
     {
-        bool nucDirect = _backendProbe?.Hw?.IsNucUmiFamily == true;
+        bool nucDirect = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily;
         if (nucDirect)
         {
             // 控制台以 CurrentProfile 事件/回读为准，不在点击瞬间改按钮。
@@ -3985,9 +4046,9 @@ public partial class OriginalStyleWindow : Window
             if (!L_Mechrevo.WpfP0.Services.WpfBackend.GpuDbAvailable)
             {
                 Logger.WriteLineIfChanged("db-skip",
-                    "[db] 跳过：gen=" + (_backendProbe?.Hw?.DgpuGeneration.ToString() ?? "?")
+                    "[db] 跳过：gen=" + (L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration?.ToString() ?? "?")
                     + " · gcuVariant=" + L_Mechrevo.WpfP0.Services.WpfBackend.GcuVariant
-                    + " · gcu=" + (_backendProbe?.Hw?.IsGcuConnected == true));
+                    + " · gcu=" + (L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected));
                 return;
             }
             if (mode == _lastDbVisualMode)
@@ -4008,9 +4069,21 @@ public partial class OriginalStyleWindow : Window
         _pendingMode = mode;
         _pendingModeTick = Environment.TickCount64;
         _modeSwitchInFlight = true;
+        // 用户点档位就是意图：先记下来，下发成不成功都按这个意图走，
+        // 免得切换失败后重启又按上一次的旧意图（例如自定义）重放。
+        if (mode is 0 or 1 or 2)
+        {
+            MechrevoLite.Mode.PerfModeKind intentKind = mode switch
+            {
+                2 => MechrevoLite.Mode.PerfModeKind.Silent,
+                1 => silentTurbo == true ? MechrevoLite.Mode.PerfModeKind.SilentTurbo : MechrevoLite.Mode.PerfModeKind.Turbo,
+                _ => MechrevoLite.Mode.PerfModeKind.Balanced
+            };
+            MechrevoLite.Mode.PerfModeService.Instance?.RememberIntent(MechrevoLite.Mode.PerfModeDefinition.BuiltInId(intentKind));
+        }
         bool turboSubModeSupported = L_Mechrevo.WpfP0.Services.WpfBackend.SilentTurboStateOf(_backendProbe?.Capabilities) == 1
             || (IsEcModeActive
-                && _backendProbe?.Hw?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50);
+                && L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen50);
         string osdMode = mode switch
         {
             2 => WpfStrings.ModeSilent,
@@ -4023,7 +4096,7 @@ public partial class OriginalStyleWindow : Window
         };
         // 无界自动曲线控制器会在启动后常驻；切到非自定义档必须停掉它，
         // 否则已经交还 EC 的档位仍会被 25Hz 定时器/EC 写入覆盖。
-        if (mode != 3 && L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.WujieSmuApu == true)
+        if (mode != 3 && L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu)
         {
             L_Mechrevo.WpfP0.Services.WpfBackend.StopWujieFanActive("切换到非自定义档");
         }
@@ -4076,7 +4149,7 @@ public partial class OriginalStyleWindow : Window
             else
             {
                 bool smuLocalCustomMode = mode == 3
-                    && (_backendProbe?.Hw?.WujieSmuApu == true || _backendProbe?.Hw?.SmuCustomApu == true);
+                    && (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu);
                 if (smuLocalCustomMode)
                 {
                     // SMU 机型没有独立的 EC 自定义档：不写 mode/trigger/自定义门控，只按本地 SMU 参数生效。
@@ -4085,11 +4158,11 @@ public partial class OriginalStyleWindow : Window
                 }
                 else if (EcLocalControl
                     && _backendProbe?.Hw != null
-                    && _backendProbe.Hw.UsesBaolongda == false
-                    && _backendProbe.Hw.IsNucUmiFamily == false
-                    && GcuEcExperimental.TryApplyMode(mode, out string ecDetail))
+                    && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+                    && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily
+                    && L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryApplyMode(mode, out string ecDetail))
                 {
-                    // GCU 内置档由固件表接管：不要套用 NUC/UMI 的 NucPerformanceMode 默认表，
+                    // GCU 内置档由固件表接管：不要套用 NUC/UMI 那套默认功耗表，
                     // 那套会写 1963 低 4 位风扇模式，把 GCU 的模式字节写坏。
                     Logger.WriteError("[gcu-ec] 实验通道接管模式 " + mode + "：" + ecDetail);
                     result = L_Mechrevo.WpfP0.Services.WpfBackend.ModeResultOk;
@@ -4117,7 +4190,7 @@ public partial class OriginalStyleWindow : Window
             {
                 if (EcLocalControl)
                 {
-                    ok = GcuEcExperimental.TrySetSilentTurbo(silentTurbo.Value, out string silentDetail);
+                    ok = L_Mechrevo.WpfP0.Services.WpfBackend.GcuTrySetSilentTurbo(silentTurbo.Value, out string silentDetail);
                     Logger.WriteErrorIfChanged("silent-turbo-ec-path", "[silent-turbo] EC 本地路 · WMI ULong 可用=" + L_Mechrevo.WpfP0.Services.WpfBackend.TurboSubModeSupported() + " · 只写 1832 bit0");
                     if (!ok)
                     {
@@ -4168,8 +4241,9 @@ public partial class OriginalStyleWindow : Window
                 if (kind.HasValue)
                 {
                     string activeId = MechrevoLite.Mode.PerfModeDefinition.BuiltInId(kind.Value);
-                    MechrevoLite.Mode.PerfModeStore.ActiveModeId = activeId;
                     MechrevoLite.Mode.PerfModeService.Instance?.NotifyExternalSwitch(activeId);
+                    // 这次是用户自己点的档位 ⇒ 连开机意图一起记，避免重启后被上一次的自定义意图盖回去。
+                    MechrevoLite.Mode.PerfModeService.Instance?.RememberIntent(activeId);
                     // 先更新 ActiveModeId，再按当前档位完整配置应用 Windows 电源模式；
                     // 自定义配置里的 WindowsPowerMode 会覆盖高性能电源的默认映射。
                     MechrevoLite.Mode.PerfModeService.Instance?.ApplyWindowsPowerOverlayForActiveMode();
@@ -4184,20 +4258,21 @@ public partial class OriginalStyleWindow : Window
                 {
                     SyncGpuDbForMode(mode, "WPF 切档");
                 }
-                // EC 模式已开启即允许本机 GPU OC，不要求路由已落到 EC。
-                if (ok && IsEcModeActive
-                    && MechrevoLite.AppConfig.Is("gpu_oc"))
+                // 超频只在狂暴档生效：进狂暴按记忆开启；离开狂暴只关硬件、保留 gpu_oc 记忆。
+                // 自定义档（mode=3）的 OC 归档位参数自己管，这里不动。
+                if (ok
+                    && (IsEcModeActive || L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected)
+                    && L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockIntentOn)
                 {
                     if (mode == 1)
                     {
                         await ApplyGpuOverclockSettingAsync(true);
                     }
-                    else
+                    else if (mode != 3)
                     {
-                        // 非狂暴档只关闭当前硬件超频，保留 gpu_oc 记忆供下次狂暴恢复。
                         L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled = false;
-                        bool off = await _backendProbe!.ApplyGpuOverclockAsync(false);
-                        Logger.WriteError("[gpu-oc] 非狂暴档关闭显卡超频 ⇒ " + off);
+                        bool off = await _backendProbe!.ApplyGpuOverclockAsync(false, rememberIntent: false);
+                        Logger.WriteError("[gpu-oc] 非狂暴档关闭显卡超频（记忆保留）⇒ " + off);
                     }
                 }
                 SyncCustomWindowMode(mode);
@@ -4246,7 +4321,7 @@ public partial class OriginalStyleWindow : Window
     private static bool IsNucLike()
     {
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
-        return hw != null && (hw.IsNucUmiFamily);
+        return hw != null && (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily);
     }
 
     /// <summary>外部性能键切到内置档时，清掉仍残留的自定义显示态。</summary>
@@ -4260,6 +4335,11 @@ public partial class OriginalStyleWindow : Window
                 return;
             }
             int raw = probe.CurrentMode;
+            if (_customEnterRawMode >= 0 && raw == _customEnterRawMode)
+            {
+                // 固件档位字节自进入自定义起没变 ⇒ 只是"自定义档在固件里没槽位"的回读噪声，⛔ 不动软件记忆。
+                return;
+            }
             string id = raw switch
             {
                 0 => "balanced",
@@ -4271,7 +4351,6 @@ public partial class OriginalStyleWindow : Window
             {
                 return;
             }
-            MechrevoLite.Mode.PerfModeStore.ActiveModeId = id;
             MechrevoLite.Mode.PerfModeService.Instance?.NotifyExternalSwitch(id);
             Logger.WriteError("[perfkey] 外部切换退出自定义 ⇒ " + id + "（" + reason + "）");
         }
@@ -4296,14 +4375,28 @@ public partial class OriginalStyleWindow : Window
             }
             bool nucPerf = _services?.Gpu.SupportsNucGpuMode == true;
             bool gcuPerf = hw != null
-                && hw.IsGcuConnected
-                && !hw.UsesBaolongda
-                && !hw.IsNucUmiFamily;
+                && L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
+                && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+                && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily;
             if (probe == null || hw == null || (!gcuPerf && !nucPerf))
             {
                 return;
             }
             int rawMode = probe.CurrentMode;
+            bool customDisplayedNow = (MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) ?? false)
+                || (MechrevoLite.Mode.ModeSettings.ActiveModeId?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) ?? false);
+            if (customDisplayedNow)
+            {
+                // 基线只在"进入自定义/本机正在下发"时采样：下发过程中固件字节本来就会跳。
+                if (_customEnterRawMode == -2 || _modeSwitchInFlight || _pendingMode >= 0)
+                {
+                    _customEnterRawMode = rawMode;
+                }
+            }
+            else
+            {
+                _customEnterRawMode = -2;
+            }
             if (_lastObservedGcuRawMode != -2 && rawMode >= 0 && rawMode != _lastObservedGcuRawMode)
             {
                 ClearStaleCustomDisplay(probe, "GCU 档位 " + _lastObservedGcuRawMode + "->" + rawMode);
@@ -4496,10 +4589,7 @@ public partial class OriginalStyleWindow : Window
             bool target = !MechrevoLite.Helpers.AudioEndpointMic.IsMuted;
             if (MechrevoLite.Helpers.AudioEndpointMic.TrySetMute(target, out string note))
             {
-                if (_backendProbe?.Hw?.QuickSwitches != null)
-                {
-                    _backendProbe.Hw.QuickSwitches["micmute"] = target;
-                }
+                L_Mechrevo.WpfP0.Services.WpfBackend.TrySetQuickSwitch("micmute", target);
                 _lastMicOsd = target ? 1 : 0;
                 OsdService.Show(QuickGlyph("micmute"), QuickSwitchService.DisplayLabel("micmute"),
             target ? WpfStrings.StateOff : WpfStrings.StateOn);
@@ -4631,10 +4721,7 @@ public partial class OriginalStyleWindow : Window
                 return;
             }
             _lastTouchpadOsd = on ? 1 : 0;
-            if (hw.QuickSwitches != null)
-            {
-                hw.QuickSwitches["touchpad"] = on;
-            }
+            L_Mechrevo.WpfP0.Services.WpfBackend.TrySetQuickSwitch("touchpad", on);
             OsdService.ShowTouchpad(QuickSwitchService.DisplayLabel("touchpad"),
                 on ? WpfStrings.StateOn : WpfStrings.StateOff);
             UpdateQuickTileStates();
@@ -4653,13 +4740,13 @@ public partial class OriginalStyleWindow : Window
         {
             bool fnKnown;
             bool fnOn = false;
-            if (hw.IsNucUmiFamily)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily)
             {
                 fnKnown = L_Mechrevo.WpfP0.Services.WpfBackend.NucReadFnLock(out fnOn);
             }
             else
             {
-                fnKnown = hw.QuickSwitches != null && hw.QuickSwitches.TryGetValue("fnkey", out fnOn);
+                fnKnown = L_Mechrevo.WpfP0.Services.WpfBackend.TryGetQuickSwitch("fnkey", out fnOn);
             }
             if (fnKnown)
             {
@@ -4705,10 +4792,7 @@ public partial class OriginalStyleWindow : Window
                 return;
             }
             _lastMicOsd = muted ? 1 : 0;
-            if (hw.QuickSwitches != null)
-            {
-                hw.QuickSwitches["micmute"] = muted;
-            }
+            L_Mechrevo.WpfP0.Services.WpfBackend.TrySetQuickSwitch("micmute", muted);
             OsdService.Show(QuickGlyph("micmute"), QuickSwitchService.DisplayLabel("micmute"),
             muted ? WpfStrings.StateOff : WpfStrings.StateOn);
             UpdateQuickTileStates();
@@ -4845,17 +4929,16 @@ public partial class OriginalStyleWindow : Window
             }
             // SMU 机型（无界/星耀 APU）没有独立固件档位：当前档由本机配置决定，
             // ⛔ 不能因为固件回读是平衡/狂暴就把界面上的自定义弹回内置档。
-            if (_backendProbe?.Hw?.SmuCustomApu == true)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu)
             {
                 return;
             }
-            string? active = MechrevoLite.Mode.PerfModeStore.ActiveModeId;
+            string? active = MechrevoLite.Mode.ModeSettings.ActiveModeId;
             bool customActive = active?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) == true;
             bool builtInMismatch = !customActive && !string.Equals(active, id, StringComparison.Ordinal);
             if (customActive || builtInMismatch)
             {
                 Logger.WriteLine("[nuc-mode] 外部按键/EC 模式=" + ecMode + " ⇒ 同步活动档 " + active + " -> " + id);
-                MechrevoLite.Mode.PerfModeStore.ActiveModeId = id;
                 MechrevoLite.Mode.PerfModeService.Instance?.NotifyExternalSwitch(id);
                 MechrevoLite.Mode.PerfModeService.Instance?.ApplyWindowsPowerOverlayForActiveMode();
                 int uiMode = ecMode == 1 ? 1 : (ecMode == 2 ? 2 : 0);
@@ -4874,13 +4957,13 @@ public partial class OriginalStyleWindow : Window
         try
         {
             // EC-only 路由同样要跟随外部改档：之前把 IsEcLocalRoute 排除掉，固件自己切档时界面不会动。
-            if (!IsEcModeActive || probe.Hw?.IsGcuConnected == true)
+            if (!IsEcModeActive || L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected)
             {
                 _lastEcOnlyVisual = -1;
                 return;
             }
             // 本程序刚写过 EC 的 3 秒内不回读判定，避免自己切换过程中的中间态被当成外部改档。
-            if (GcuEcExperimental.SelfWroteRecently(3000))
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.GcuSelfWroteRecently(3000))
             {
                 return;
             }
@@ -4888,7 +4971,7 @@ public partial class OriginalStyleWindow : Window
             {
                 return;
             }
-            if (!GcuEcExperimental.TryReadVisualMode(out int ecVisual))
+            if (!L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out int ecVisual))
             {
                 return;
             }
@@ -4913,18 +4996,17 @@ public partial class OriginalStyleWindow : Window
             {
                 return;
             }
-            string? active = MechrevoLite.Mode.PerfModeStore.ActiveModeId;
+            string? active = MechrevoLite.Mode.ModeSettings.ActiveModeId;
             if (string.Equals(active, id, StringComparison.Ordinal))
             {
                 return;
             }
-            if (_backendProbe?.Hw?.SmuCustomApu == true)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu)
             {
                 // SMU 机型没有独立固件档位：自定义档是本机配置，⛔ 不被固件回读覆盖。
                 return;
             }
             Logger.WriteError("[ec-only] 固件档位变化 ⇒ 同步活动档 " + active + " -> " + id + "（EC 视觉档=" + ecVisual + "）");
-            MechrevoLite.Mode.PerfModeStore.ActiveModeId = id;
             MechrevoLite.Mode.PerfModeService.Instance?.NotifyExternalSwitch(id);
             MechrevoLite.Mode.PerfModeService.Instance?.ApplyWindowsPowerOverlayForActiveMode();
             // 按键由固件自己处理时也要给用户反馈：档位一变化就弹 OSD。
@@ -4936,24 +5018,85 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    /// <summary>显示用档位：先按各分支取原始回读，再用档位记忆压掉「自定义门控残留锁存」。</summary>
     private static int ResolveDisplayMode(BackendProbe probe)
+    {
+        return MaskStaleCustomLatch(ResolveDisplayModeRaw(probe));
+    }
+
+    /// <summary>
+    /// 固件在退出自定义后会把自定义门控（0x0706）重新锁存成自定义槽位，回读常停在 0x41：
+    /// 这时模式/温度档位字节都还是内置档，直接按回读显示会让高亮自己跳到自定义。
+    /// 记忆里是内置档就按记忆显示；记忆里本来就是自定义则原样返回。
+    /// </summary>
+    private static int MaskStaleCustomLatch(int visualMode)
+    {
+        if (visualMode != 3)
+        {
+            return visualMode;
+        }
+        // 只在 EC 直连时兜底：GCU 在线时档位归 GCU 管，回读是什么就显示什么。
+        if (!MechrevoLite.Hardware.GcuEcMode.IsEcMode
+            || L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected)
+        {
+            return visualMode;
+        }
+        string? memorized = MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId
+            ?? MechrevoLite.Mode.ModeSettings.ActiveModeId;
+        if (memorized == null || memorized.StartsWith("custom", StringComparison.OrdinalIgnoreCase))
+        {
+            return visualMode;
+        }
+        int memorizedVisual = VisualModeForId(memorized);
+        if (memorizedVisual < 0)
+        {
+            return visualMode;
+        }
+        Logger.WriteErrorIfChanged("ec-mode-latch-masked-" + memorized, "[ec-only] 回读=自定义但记忆=" + memorized + " ⇒ 按记忆显示" + memorizedVisual + "（自定义门控残留锁存，不改固件）");
+        return memorizedVisual;
+    }
+
+    private static int ResolveDisplayModeRaw(BackendProbe probe)
     {
         // 实验通道且 GCU 已让出控制权时，直接读 EC，不依赖 GCU 状态包。
         // 这里判断 EC 模式，不是 EC 本地路由：GCU 未连接时优先读 EC。
         // SMU 机型（自定义档不落固件）不能走 EC 回读：GCU 掉线转 EC-only 时会把自定义档亮成内置档。
-        if (GcuEcExperimental.Enabled
-            && probe.Hw?.IsGcuConnected != true
-            && probe.Hw?.SmuCustomApu != true
-            && GcuEcExperimental.TryReadVisualMode(out int experimentalEcMode))
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.GcuActive
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu
+            && L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out int experimentalEcMode))
         {
+            // 固件在退出自定义后会把自定义门控重新锁存，回读常停在 0x41：
+            // 记忆里是内置档时按记忆显示，别让高亮自己跳到自定义。
+            if (experimentalEcMode == 3)
+            {
+                string? memorized = MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId
+                    ?? MechrevoLite.Mode.ModeSettings.ActiveModeId;
+                if (memorized != null && !memorized.StartsWith("custom", StringComparison.OrdinalIgnoreCase))
+                {
+                    int memorizedVisual = VisualModeForId(memorized);
+                    if (memorizedVisual >= 0)
+                    {
+                        return memorizedVisual;
+                    }
+                }
+            }
             return experimentalEcMode;
         }
         // 自定义档在大多数 GCU 上不会回读成一个独立视觉档；以 PerfModeService
         // 的当前显示档为准，避免切到自定义后主界面又回落到内置档高亮。
         string displayedId = MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId
-            ?? MechrevoLite.Mode.PerfModeStore.ActiveModeId;
+            ?? MechrevoLite.Mode.ModeSettings.ActiveModeId;
         bool customDisplayed = displayedId?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) == true;
         var hw = probe.Hw;
+        // ⭐ 没有固件自定义槽位的机器（无界 / 星耀 APU / 宝龙达）：只要软件记忆里是自定义档，
+        // 高亮就停在自定义 —— 固件回读永远只有平衡/性能/静音，不能把高亮掰回去。
+        // 切到别的档时 ActiveModeId 已是那个档，会照常走下面的固件逻辑。
+        if (LocalOnlyCustomMachine
+            && (MechrevoLite.Mode.ModeSettings.ActiveModeId?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) ?? false))
+        {
+            return 3;
+        }
         // 极致狂暴没有独立 EC 字节（Benchmark 与性能风扇同为 1），只能靠本进程标志；
         // 自定义编辑态优先显示自定义，避免打开自定义时误亮极致狂暴。
         if (!customDisplayed
@@ -4966,18 +5109,13 @@ public partial class OriginalStyleWindow : Window
         }
         if (customDisplayed)
         {
-            // 自定义档不落在固件里的后端：本机配置（PerfModeStore.ActiveModeId）才是权威，
+            // 自定义档不落在固件里的后端：本机配置（ModeSettings.ActiveModeId）才是权威，
             // ⛔ 不能用固件回读（那永远是 平衡/静音/狂暴）去覆盖高亮。
             //   · 无界 APU / 星耀 APU：本机 SMU
             //   · Intel 星耀：本机 MSR
             //   · 宝龙达（含 30 系蛟龙）：WMI 功能号 23
             //   · 同方 EC 直连：EC 里有独立自定义档位，仍按固件回读（下面那支不变）
-            bool customIsLocalOnly = hw?.UsesBaolongda == true
-                || hw?.SmuCustomApu == true
-                || hw?.WujieSmuApu == true
-                || (L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
-                    && hw?.IsNucUmiFamily != true
-                    && L_Mechrevo.WpfP0.Services.WpfBackend.IsXingyaoPlatform);
+            bool customIsLocalOnly = LocalOnlyCustomMachine;
             if (customIsLocalOnly)
             {
                 return 3;
@@ -4990,15 +5128,6 @@ public partial class OriginalStyleWindow : Window
                 return rawCustom;
             }
             return 3;
-        }
-        // 宝龙达 / 无界没有原生自定义固件档：ActiveModeId 才是权威。
-        if (hw?.UsesBaolongda == true || hw?.SmuCustomApu == true)
-        {
-            if (string.Equals(MechrevoLite.Mode.PerfModeStore.ActiveModeId, "custom", StringComparison.OrdinalIgnoreCase)
-                || (MechrevoLite.Mode.PerfModeStore.ActiveModeId?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) ?? false))
-            {
-                return 3;
-            }
         }
         if (XingyaoPerfApplicable()
             && L_Mechrevo.WpfP0.Services.WpfBackend.XingyaoReadVisualMode(out int xingyaoMode, out _))
@@ -5022,7 +5151,7 @@ public partial class OriginalStyleWindow : Window
                 return ecMode;
             }
             // 读不到时退回本地 ActiveModeId。
-            string? localId = MechrevoLite.Mode.PerfModeStore.ActiveModeId;
+            string? localId = MechrevoLite.Mode.ModeSettings.ActiveModeId;
             if (string.IsNullOrWhiteSpace(localId))
             {
                 localId = MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId;
@@ -5039,8 +5168,66 @@ public partial class OriginalStyleWindow : Window
             return mode;
         }
         int stored = VisualModeForId(MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId
-            ?? MechrevoLite.Mode.PerfModeStore.ActiveModeId);
+            ?? MechrevoLite.Mode.ModeSettings.ActiveModeId);
         return stored;
+    }
+
+    /// <summary>
+    /// 启动时「GCU 装没装」的一次性提问：装了就什么都不做；没装就弹一次 ——
+    /// 「是」= 走导入 GCU 包流程；「否」= 改用本机 EC 直控。
+    /// <para>启动时只问一次；用户自己把控制模式切到 GCU 但本机没有 GCU 服务时也会问。</para>
+    /// </summary>
+    /// <param name="askOnce">启动时传 true：问过一次就不再问；用户手动切档时传 false：每次都问。</param>
+    private bool _gcuChoiceAskedThisRun;
+    private bool _gcuOfflineAsked;
+
+    internal async Task AskGcuOrEcOnStartupAsync(bool askOnce)
+    {
+        try
+        {
+            if (askOnce && AppConfig.Get("gcu_startup_choice_v1", 0) == 1)
+            {
+                return;
+            }
+            MechrevoLite.Hardware.MechrevoHw? hw = _backendProbe?.Hw ?? L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
+            // 宝龙达 / 老接口 / 无界 / NUC-UMI 都不用 GCU，不问导入。
+            if (hw == null
+                || hw.ActiveBackend == MechrevoLite.Hardware.MechrevoBackendKind.Baolongda
+                || hw.ActiveBackend == MechrevoLite.Hardware.MechrevoBackendKind.LegacyMifs
+                || hw.SmuCustomApu
+                || hw.IsNucUmiFamily)
+            {
+                return;
+            }
+            if (MechrevoLite.Hardware.MechrevoHw.IsGcuServiceInstalled)
+            {
+                return;
+            }
+            _gcuChoiceAskedThisRun = true;
+            using GcuOwnerWindow owner = new(this);
+            System.Windows.Forms.DialogResult answer = System.Windows.Forms.MessageBox.Show(owner,
+                MechrevoLite.Properties.Strings.GcuImportAsk,
+                MechrevoLite.Properties.Strings.GcuImportTitle,
+                System.Windows.Forms.MessageBoxButtons.YesNo, System.Windows.Forms.MessageBoxIcon.Question);
+            if (askOnce)
+            {
+                AppConfig.Set("gcu_startup_choice_v1", 1);
+                AppConfig.Flush();
+            }
+            if (answer == System.Windows.Forms.DialogResult.Yes)
+            {
+                // 用户已经明确要导入：直接进选包流程，不再重复问一遍。
+                await GcuPackageImport.OfferAsync(owner, askConfirm: false);
+                return;
+            }
+            // 选择 EC：切到本地后端并记住选择（设置里可再切回 GCU）。
+            MechrevoLite.Hardware.GcuEcMode.AutoEnterEcModeWhenGcuMissing("用户选择改用 EC 直控");
+            Logger.WriteLine("[gcu-svc] 询问结果：用户选择改用 EC 直控（gcu_ec_direct=1）");
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[gcu-svc] 询问导入 GCU / 改用 EC 失败：" + ex.Message);
+        }
     }
 
     private void Normalize30BuiltInProfiles()
@@ -5048,7 +5235,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             var hw = _backendProbe?.Hw;
-            if (hw == null || !hw.IsIntelNucMachine || hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen30)
+            if (hw == null || !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsIntelNuc || L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen30)
             {
                 return;
             }
@@ -5058,14 +5245,14 @@ public partial class OriginalStyleWindow : Window
             }
             foreach (string id in new[] { "silent", "balanced", "turbo" })
             {
-                MechrevoLite.Mode.PerfModeSettings settings = MechrevoLite.Mode.PerfModeStore.LoadSettings(id);
+                MechrevoLite.Mode.PerfModeSettings settings = MechrevoLite.Mode.ModeSettings.Load(id);
                 if (settings.NeedsFirmwareSlot)
                 {
-                    MechrevoLite.Mode.PerfModeStore.ResetSettings(id);
+                    MechrevoLite.Mode.ModeSettings.Reset(id);
                     Logger.WriteLine("[perfmode] 30 系内置档被配置编辑器改写成固件槽：恢复内置默认 " + id);
                 }
             }
-            MechrevoLite.Mode.PerfModeStore.SaveSlots(Array.Empty<MechrevoLite.Mode.FirmwareSlotState>());
+            MechrevoLite.Mode.ModeSettings.SaveSlots(Array.Empty<MechrevoLite.Mode.FirmwareSlotState>());
             AppConfig.Set("perf_30_builtin_reset_v1", 1);
             AppConfig.Flush();
         }
@@ -5119,7 +5306,7 @@ public partial class OriginalStyleWindow : Window
 
             if (EcLocalControl)
             {
-                int before = GcuEcExperimental.TryReadVisualMode(out int ecMode) ? ecMode : ResolveDisplayMode(probe);
+                int before = L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out int ecMode) ? ecMode : ResolveDisplayMode(probe);
                 // 先给固件/其它控制台一点时间落地：真的已经切了档就只跟随，避免同一次按键被切两档。
                 await Task.Delay(400);
                 probe = _backendProbe;
@@ -5127,7 +5314,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     return;
                 }
-                int already = GcuEcExperimental.TryReadVisualMode(out int fwMode) ? fwMode : ResolveDisplayMode(probe);
+                int already = L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out int fwMode) ? fwMode : ResolveDisplayMode(probe);
                 if (already >= 0 && before >= 0 && already != before)
                 {
                     Logger.WriteError("[perfkey] 档位已被外部切好 " + before + " -> " + already + " ⇒ 只同步界面");
@@ -5276,14 +5463,26 @@ public partial class OriginalStyleWindow : Window
                     : WpfStrings.L("EC 通道不可用：ACPIDriver 未安装或未加载；安装目录已带驱动，程序会尝试自动安装",
                         "EC channel unavailable: ACPIDriver missing; the app will retry installation"));
             BackendReady?.Invoke();
+            // EC 直连（GCU 没连上）这条路原来只恢复显卡超频、不跑档位恢复 ⇒ 档位永远停在上次固件默认档。
+            try
+            {
+                if (MechrevoLite.Mode.PerfModeService.Instance == null)
+                {
+                    L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerfModeService();
+                }
+            }
+            catch
+            {
+            }
+            _ = RestorePerfModeOnStartupAsync();
             _ = RestoreGpuOverclockOnStartupAsync();
             _backendRetryTimer.Stop();
             _backendTimer.Start();
             Logger.WriteError("[gcu-ec] GCU 不可用 ⇒ 启动 EC-only 实验首页"
                 + "（来源=" + L_Mechrevo.WpfP0.Services.WpfBackend.EcModeReason + "）");
-            try { Logger.WriteLine("[hotkey] EC-only 启动 ⇒ 按键上报=" + GcuEcExperimental.TryEnableHotkeyNotify()); } catch { }
+            try { Logger.WriteLine("[hotkey] EC-only 启动 ⇒ 按键上报=" + L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryEnableHotkeyNotify()); } catch { }
             L_Mechrevo.WpfP0.Services.KeyboardKeyProbe.Start();
-            if (GcuEcExperimental.GcuServiceProcessRunning())
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.GcuServiceProcessRunning())
             {
                 Logger.WriteError("[gcu-ec] 注意：GCU 服务进程仍在运行（GCUService/GCUBridge）⇒ 性能键/EC 寄存器可能与本程序抢；建议启用隔离");
             }
@@ -5304,43 +5503,129 @@ public partial class OriginalStyleWindow : Window
             var hw = probe?.Hw;
             if (probe == null || hw == null
                 // 没有 GCU 且 EC 模式未开启时没有可恢复的后端。
-                || (!hw.IsGcuConnected && !IsEcModeActive)
-                || hw.UsesBaolongda
-                || hw.IsNucUmiFamily)
+                || (!L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected && !IsEcModeActive)
+                || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+                || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily)
             {
                 return;
             }
             // 自定义档的 OC 不写固件，必须在每次启动/重启后按保存的档位重新应用。
-            string activeId = MechrevoLite.Mode.PerfModeStore.ActiveModeId ?? "";
+            string activeId = MechrevoLite.Mode.ModeSettings.ActiveModeId ?? "";
             if (activeId.StartsWith("custom", StringComparison.OrdinalIgnoreCase))
             {
-                MechrevoLite.Mode.PerfModeSettings custom = MechrevoLite.Mode.PerfModeStore.LoadSettings(activeId);
+                MechrevoLite.Mode.PerfModeSettings custom = MechrevoLite.Mode.ModeSettings.Load(activeId);
                 if (custom.GpuOverclockOn == true
                     && (custom.GpuCoreOffset.HasValue || custom.GpuMemoryOffset.HasValue))
                 {
                     int core = custom.GpuCoreOffset ?? 105;
                     int mem = custom.GpuMemoryOffset ?? 500;
+                    if (probe.IsGpuOcAlreadyApplied(core, mem))
+                    {
+                        Logger.WriteError("[gpu-oc] 启动恢复自定义档超频：当前已一致（core=" + core + " mem=" + mem + "）⇒ 跳过");
+                        return;
+                    }
                     bool customOk = await probe.ApplyGpuOverclockValuesAsync(true, core, mem).ConfigureAwait(true);
                     Logger.WriteError("[gpu-oc] 启动恢复自定义档超频 core=" + core + " mem=" + mem + " ⇒ " + customOk);
                     return;
                 }
             }
-            if (!probe.GpuOcSupported || MechrevoLite.AppConfig.Get("gpu_oc", 0) == 0)
-            {
-                return;
-            }
-            bool turbo = probe.CurrentMode == 1 || (hw.IsGcuConnected && hw.OperatingMode == 1);
-            if (!turbo)
-            {
-                Logger.WriteError("[gpu-oc] 启动恢复跳过：当前不是狂暴档");
-                return;
-            }
-            bool ok = await ApplyGpuOverclockSettingAsync(true).ConfigureAwait(true);
-            Logger.WriteError("[gpu-oc] 启动恢复狂暴显卡超频 ⇒ ok=" + ok);
+            // 全局超频开关的记忆/重放归服务层：只在狂暴档补发一次，非狂暴档不生效（记忆保留）。
+            await probe.ReplayGpuOcOnStartupAsync().ConfigureAwait(true);
         }
         catch (Exception ex)
         {
             Logger.WriteLine("[gpu-oc] 启动恢复失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 同方 EC 直连：固件里本来就有自定义档位，但重启后固件可能回落到内置档。
+    /// 按软件记忆（perf_active）把固件切回自定义档 —— 界面只下发"要自定义"这个意图，
+    /// 真正写 EC 由 SwitchModeAsync 走服务层/硬件层。
+    /// </summary>
+    private async Task RestoreEcLocalCustomOnStartupAsync()
+    {
+        if (!EcLocalControl)
+        {
+            return;
+        }
+        try
+        {
+            // 前提：关机之前就在自定义档（软件记忆 perf_active 就是关机前的档位）。
+            // 关机前不是自定义（平衡/性能/静音）⇒ 一律不切。
+            string? memorized = MechrevoLite.Mode.ModeSettings.ActiveModeId;
+            if (memorized == null || !memorized.StartsWith("custom", StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.WriteLine("[perfmode] EC 直连启动：关机前档位=" + (memorized ?? "(无记忆)") + "（非自定义）⇒ 不切档");
+                return;
+            }
+            if (!L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out int fwVisual) || fwVisual == 3)
+            {
+                return;
+            }
+            Logger.WriteError("[perfmode] EC 直连启动：固件当前档=" + fwVisual + " · 软件记忆=" + memorized + " ⇒ 按记忆切回自定义");
+            await SwitchModeAsync(3).ConfigureAwait(true);
+            Logger.WriteError("[perfmode] EC 直连启动：已按记忆切回自定义");
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[perfmode] EC 直连启动切回自定义失败（已吞掉）：" + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// EC 直连（GCU 离线）启动：档位的实际下发只能走 EC 通道，服务层重放在这种机型上可能拿到 false，
+    /// 这里按档位意图再补发一次；固件回读已经一致就不下发。
+    /// </summary>
+    private async Task RestoreEcBootModeOnStartupAsync()
+    {
+        try
+        {
+            if (!EcLocalControl || _backendProbe?.Hw == null
+                || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+                || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily)
+            {
+                return;
+            }
+            string? intent = L_Mechrevo.WpfP0.Services.WpfBackend.PerfBootIntentModeId;
+            MechrevoLite.Mode.PerfModeDefinition? mode = intent == null
+                ? null
+                : L_Mechrevo.WpfP0.Services.WpfBackend.PerfFindMode(intent);
+            if (mode == null || mode.IsCustom)
+            {
+                return;
+            }
+            int visual = mode.Kind switch
+            {
+                MechrevoLite.Mode.PerfModeKind.Turbo => 1,
+                MechrevoLite.Mode.PerfModeKind.Silent => 2,
+                _ => 0
+            };
+            bool readOk = L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out int firmwareMode);
+            if (readOk && firmwareMode == visual)
+            {
+                Logger.WriteLine("[perfmode] EC 直连启动：档位已一致（visual=" + visual + "）⇒ 不重发");
+                return;
+            }
+            Logger.WriteError("[perfmode] EC 直连启动：按记忆补发档位 visual=" + visual
+                + "（固件回读=" + (readOk ? firmwareMode.ToString() : "读不到") + "）");
+            // 走完整切档路径（不是只写 EC 档位字节）：电源方案/参数/超频跟随一起到位。
+            await SwitchModeAsync(visual).ConfigureAwait(true);
+            await Task.Delay(600).ConfigureAwait(true);
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out int after))
+            {
+                Logger.WriteError("[perfmode] EC 直连启动：补发后固件回读=" + after
+                    + (after == visual ? "（一致）" : "（仍不一致）"));
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[perfmode] EC 直连启动补发档位失败（已吞掉）：" + ex.Message);
+        }
+        finally
+        {
+            // ⭐ 开机就是电池 + 设置里禁止离电用狂暴/自定义 ⇒ 收口到静音（GCU 模式内部会自己跳过）。
+            await EnforceEcBatteryModeLockAsync("EC 直连启动");
         }
     }
 
@@ -5353,10 +5638,34 @@ public partial class OriginalStyleWindow : Window
         _perfRestoreStarted = true;
         try
         {
+            if (MechrevoLite.Mode.PerfModeService.Instance == null)
+            {
+                // 服务没建就先建：档位重放/自定义档还原都依赖它。
+                try
+                {
+                    L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerfModeService();
+                }
+                catch
+                {
+                }
+            }
             MechrevoLite.Mode.PerfModeService? perf = MechrevoLite.Mode.PerfModeService.Instance;
             if (perf != null)
             {
+                // ⭐ 抢在 Reconcile 之前：此刻 perf_active 还是关机前的那份软件记忆，
+                //    EC 直连「关机前在自定义就帮忙切回去」直接读它即可，不需要另存快照。
+                // GCU 装没装先在界面上问一次（导入 GCU 或改用 EC），结果会写进配置，下面的重放按它走。
+                await AskGcuOrEcOnStartupAsync(askOnce: true).ConfigureAwait(true);
+                // 先把历史上被写成固件槽的内置档清回内置默认，再按记忆重放：顺序反过来会把刚重放的参数清掉。
                 Normalize30BuiltInProfiles();
+                // 内置档在 40 系及以后不走固件槽：清掉旧配置里残留的功耗 / 温度墙字段（风扇曲线保留）。
+                MechrevoLite.Mode.ModeSettings.StripBuiltInSlotFieldsOnce();
+                await RestoreEcLocalCustomOnStartupAsync().ConfigureAwait(true);
+                // ⭐ 也要抢在 Reconcile 之前：对账会按固件回读改写 perf_active，
+                //    档位意图单独存在 perf_boot_intent，固件回默认档时按它补发一次。
+                await perf.ReplayBootIntentOnStartupAsync().ConfigureAwait(true);
+                // GCU 离线时档位命令走不了服务层，用 EC 通道按同一份意图补一次（一致则跳过）。
+                await RestoreEcBootModeOnStartupAsync().ConfigureAwait(true);
                 await perf.ReconcileForStartupAsync().ConfigureAwait(true);
                 await perf.ReplayLocalProfileOnStartupAsync().ConfigureAwait(true);
                 try
@@ -5373,7 +5682,7 @@ public partial class OriginalStyleWindow : Window
                 Logger.WriteError("[acpi-igpu] " + gpuRecoveryDetail);
             }
             await RestoreGpuOverclockOnStartupAsync().ConfigureAwait(true);
-            GcuEcExperimental.LogCurrentState("启动");
+            L_Mechrevo.WpfP0.Services.WpfBackend.GcuLogCurrentState("启动");
         }
         catch
         {
@@ -5428,6 +5737,97 @@ public partial class OriginalStyleWindow : Window
             }
         }
         ClearSegmentBorders(ModeGrid);
+    }
+
+    /// <summary>
+    /// 离电档位收口条件：设置里「允许离电使用狂暴/自定义模式」关闭 + EC 直连 + 当前吃电池。
+    /// <para>⛔ 与 GCU 支持无关 —— 机主要求「GCU 没置灰也置灰」；但 GCU 模式本身不参与离电切档。</para>
+    /// </summary>
+    private bool PerfBatteryLockActive
+    {
+        get
+        {
+            try
+            {
+                return !AppConfig.Is("perf_allow_on_battery") && IsEcModeActive && !PowerLineOnlineNow;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    private static bool PowerLineOnlineNow
+    {
+        get
+        {
+            try
+            {
+                return System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
+                    == System.Windows.Forms.PowerLineStatus.Online;
+            }
+            catch
+            {
+                // 读不到电源状态就按插电处理：⛔ 不要因为一次读取失败把狂暴/自定义锁死。
+                return true;
+            }
+        }
+    }
+
+    /// <summary>按收口条件刷新狂暴/自定义（含 50 系静音狂暴）的灰态；⛔ 纯界面状态，不下发任何硬件命令。</summary>
+    private void ApplyPerfBatteryLock()
+    {
+        bool locked = PerfBatteryLockActive;
+        ApplyModeButtonLock(TurboModeButton, locked);
+        ApplyModeButtonLock(CustomModeButton, locked);
+        ApplyModeButtonLock(SilentTurboModeButton, locked);
+    }
+
+    private static void ApplyModeButtonLock(ToggleButton? button, bool locked)
+    {
+        if (button == null)
+        {
+            return;
+        }
+        button.IsEnabled = !locked;
+        button.Opacity = locked ? 0.45 : 1.0;
+        button.ToolTip = locked
+            ? WpfStrings.L("已关闭：设置里「允许离电使用狂暴/自定义模式」", "Disabled: allow Turbo/Custom on battery is off")
+            : null;
+    }
+
+    /// <summary>
+    /// 离电档位收口：设置禁止离电用狂暴/自定义时，电池下不允许停在狂暴/自定义，一律切静音。
+    /// <para>⛔ GCU 模式不干预（那边有自己的档位来源），只在 EC 直连时收口；切档不写「电源来源档位记忆」，
+    /// 插电后仍能按记忆回到狂暴/自定义。</para>
+    /// </summary>
+    private async Task EnforceEcBatteryModeLockAsync(string reason)
+    {
+        try
+        {
+            if (!PerfBatteryLockActive)
+            {
+                return;
+            }
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected)
+            {
+                Logger.WriteLine("[perf-battery] GCU 模式 ⇒ 不干预离电切档（" + reason + "）");
+                return;
+            }
+            int current = L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out int visual) ? visual : -1;
+            if (current != 1 && current != 3)
+            {
+                return;
+            }
+            Logger.WriteError("[perf-battery] 离电且设置禁止狂暴/自定义（当前档=" + current + " · " + reason + "）⇒ 切静音");
+            ApplyPerfBatteryLock();
+            await SwitchModeAsync(2);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[perf-battery] 离电档位收口失败（已吞掉）：" + ex.GetType().Name);
+        }
     }
 
     private int _refreshHighHz;
@@ -5617,9 +6017,9 @@ public partial class OriginalStyleWindow : Window
         }
         ApplyIgpuVisual(new IgpuVisualSnapshot(
             _backendProbe?.CurrentGpuMode ?? hardware.GpuMode,
-            hardware.SupportsGpuHotSwap,
+            L_Mechrevo.WpfP0.Services.WpfBackend.SupportsGpuHotSwap,
             _backendProbe?.HasPendingGpuRestart == true,
-            MechrevoLite.AppConfig.Get("acpi_igpu_auto", 0) != 0 ? 3 : hardware.IgpuOnlySaveMode,
+            MechrevoLite.AppConfig.Get("acpi_igpu_auto", 0) != 0 ? 3 : L_Mechrevo.WpfP0.Services.WpfBackend.IgpuOnlySaveMode,
             L_Mechrevo.WpfP0.Services.WpfBackend.IgpuSwitchSupported));
     }
 
@@ -5676,9 +6076,9 @@ public partial class OriginalStyleWindow : Window
                 {
                     snapshot = new IgpuVisualSnapshot(
                         probe?.CurrentGpuMode ?? hardware.GpuMode,
-                        hardware.SupportsGpuHotSwap,
+                        L_Mechrevo.WpfP0.Services.WpfBackend.SupportsGpuHotSwap,
                         probe?.HasPendingGpuRestart == true,
-                        MechrevoLite.AppConfig.Get("acpi_igpu_auto", 0) != 0 ? 3 : hardware.IgpuOnlySaveMode,
+                        MechrevoLite.AppConfig.Get("acpi_igpu_auto", 0) != 0 ? 3 : L_Mechrevo.WpfP0.Services.WpfBackend.IgpuOnlySaveMode,
                         L_Mechrevo.WpfP0.Services.WpfBackend.IgpuSwitchSupported);
                 }
             }
@@ -5845,7 +6245,7 @@ public partial class OriginalStyleWindow : Window
                 L_Mechrevo.WpfP0.Services.WpfBackend.IgpuTrySetOnly(on, stopDisplayContainer: true, out detail));
             if (ok)
             {
-                _backendProbe?.Hw?.SetAcpiIgpuOnlyState(on);
+                L_Mechrevo.WpfP0.Services.WpfBackend.SetAcpiIgpuOnlyState(on);
                 MechrevoLite.AppConfig.Set("acpi_igpu_auto", autoMode ? 1 : 0);
                 MechrevoLite.AppConfig.Flush();
                 if (on && forcedSilence) L_Mechrevo.WpfP0.Services.WpfBackend.IgpuMarkForcedSilence();
@@ -5882,13 +6282,13 @@ public partial class OriginalStyleWindow : Window
             && (service == null
                 // EC 模式可在 GCU 未连接时走本地静音/GPU 切换。
                 || (IsEcModeActive && !hardware.IsGcuConnected)
-                || hardware.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
+                || L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen50)
             && L_Mechrevo.WpfP0.Services.WpfBackend.IgpuLocalSilenceAvailable)
         {
             await SwitchAcpiIgpuSavingAsync(mode);
             return;
         }
-        if (service == null || hardware == null || !hardware.IsConnected || !hardware.SupportsGpuHotSwap)
+        if (service == null || hardware == null || !L_Mechrevo.WpfP0.Services.WpfBackend.MachineConnected || !L_Mechrevo.WpfP0.Services.WpfBackend.SupportsGpuHotSwap)
         {
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_31;
             return;
@@ -5898,14 +6298,14 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        if (hardware.IgpuOnlySaveMode == target)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.IgpuOnlySaveMode == target)
         {
             VisualiseIgpuSaving();
             return;
         }
         _igpuSavingBusy = true;
         VisualiseIgpuSaving();
-        int previous = hardware.IgpuOnlySaveMode;
+        int previous = L_Mechrevo.WpfP0.Services.WpfBackend.IgpuOnlySaveMode;
         bool occupancyConfirmed = false;
         try
         {
@@ -5972,9 +6372,9 @@ public partial class OriginalStyleWindow : Window
         int mode = int.Parse(text);
         bool gcuEcGpuExperiment = IsEcLocalRoute
             && _backendProbe.Hw != null
-            && _backendProbe.Hw.UsesBaolongda == false
-            && _backendProbe.Hw.IsNucUmiFamily == false;
-        bool localColdGpu = _backendProbe.Hw?.IsGcuConnected != true
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily;
+        bool localColdGpu = !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
             && L_Mechrevo.WpfP0.Services.WpfBackend.UefiMuxVariablePresent;
         if (!gcuEcGpuExperiment && !localColdGpu
             && !(_services?.Gpu.CanSwitch(mode) ?? _backendProbe.CanSwitchGpuMode(mode)))
@@ -5993,7 +6393,7 @@ public partial class OriginalStyleWindow : Window
             RefreshFromBackend();
             return;
         }
-        if (_backendProbe.Hw?.IsUmiMachine == true || gcuEcGpuExperiment || localColdGpu)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsUmi || gcuEcGpuExperiment || localColdGpu)
         {
             await SwitchUmiGpuColdAsync(mode, button);
             return;
@@ -6101,7 +6501,7 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        if (mode == 0 && _backendProbe.Hw?.CanOfferIgpuOnly != true)
+        if (mode == 0 && L_Mechrevo.WpfP0.Services.WpfBackend.CanOfferIgpuOnlyIfKnown != true)
         {
             StatusText.Text = "本机不支持纯核显模式";
             RefreshFromBackend();
@@ -6203,11 +6603,11 @@ public partial class OriginalStyleWindow : Window
             {
                 if (enable)
                 {
-                    BatteryLimitRestore.SaveConfig(true, low, high);
+                    WpfBackend.SaveBatteryLimitRestore(true, low, high);
                 }
                 else
                 {
-                    BatteryLimitRestore.SaveConfig(false, 0, 0);
+                    WpfBackend.SaveBatteryLimitRestore(false, 0, 0);
                 }
                 ApplyBatteryModeHighlight(mode);
                 StatusText.Text = mode switch
@@ -6277,7 +6677,7 @@ public partial class OriginalStyleWindow : Window
         if (ChargeSliderToggle.IsChecked == true)
         {
             bool sliderOk;
-            if (_backendProbe.Hw?.IsNucUmiFamily == true)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily)
             {
                 sliderOk = L_Mechrevo.WpfP0.Services.WpfBackend.NucSetBatteryPercent(percentForMode, out string nucDetail);
                 Logger.WriteLine("[nuc-battery] 三档→EC 0x07B9 " + (sliderOk ? "OK" : "FAIL") + "：" + nucDetail);
@@ -6909,6 +7309,10 @@ public partial class OriginalStyleWindow : Window
         bool ac = string.Equals(selected.Tag as string, "ac", StringComparison.OrdinalIgnoreCase);
         AppConfig.Set("sleep_scope_ac", ac ? 1 : 0);
         AppConfig.Flush();
+        // ⭐ 插电/离电是两套独立的电源设置（PowerReadACValueIndex / PowerReadDCValueIndex），
+        //   切范围后必须让快捷开关缓存立刻失效，否则这里会读到「上一套」的缓存值（插电的值显示在离电上）。
+        _backendProbe?.InvalidateQuickState();
+        Logger.WriteLine("[sleep-scope] 范围=" + (ac ? "插电" : "离电") + " ⇒ 立即重读 6 项睡眠开关状态");
         if (MoreGroupsPanel != null)
         {
             foreach (CheckBox box in EnumerateCheckBoxes(MoreGroupsPanel))
@@ -6984,7 +7388,7 @@ public partial class OriginalStyleWindow : Window
         }
         try
         {
-            if (L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.UsesBaolongda == true)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda)
             {
                 // 宝龙达没有适配器功率表，保持原版「外接电源」，不显示“未识别”。
                 return WpfStrings.OverlayExternalPower;
@@ -7021,7 +7425,7 @@ public partial class OriginalStyleWindow : Window
         try
         {
             var hw = _backendProbe?.Hw;
-            if (hw == null || !hw.IsGcuConnected || hw.UsesBaolongda)
+            if (hw == null || !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda)
             {
                 return;
             }
@@ -7190,16 +7594,16 @@ public partial class OriginalStyleWindow : Window
             L_Mechrevo.WpfP0.Services.PowerStatusSnapshot power = L_Mechrevo.WpfP0.Services.PowerStatusService.Read();
             L_Mechrevo.WpfP0.Services.SensorSnapshot sensor = _services?.Sensors.Read() ?? L_Mechrevo.WpfP0.Services.SensorSnapshot.Empty;
             int battery = power.Percent;
-            string cpuFan = hw.CpuFanRpm > 0
-                ? " " + hw.CpuFanRpm + "rpm"
+            string cpuFan = L_Mechrevo.WpfP0.Services.WpfBackend.CpuFanRpm > 0
+                ? " " + L_Mechrevo.WpfP0.Services.WpfBackend.CpuFanRpm + "rpm"
                 : " " + hw.CpuFanDuty + "%";
-            string gpuFan = hw.GpuFanRpm > 0
-                ? " " + hw.GpuFanRpm + "rpm"
+            string gpuFan = L_Mechrevo.WpfP0.Services.WpfBackend.GpuFanRpm > 0
+                ? " " + L_Mechrevo.WpfP0.Services.WpfBackend.GpuFanRpm + "rpm"
                 : " " + hw.GpuFanDuty + "%";
             string cpuPower = sensor.CpuPowerWatts.HasValue ? " " + sensor.CpuPowerWatts.Value.ToString("0") + "W" : "";
             string gpuPower = sensor.GpuPowerWatts.HasValue ? " " + sensor.GpuPowerWatts.Value.ToString("0") + "W" : "";
-            string text = "CPU" + hw.CpuTemp + "°" + cpuFan + cpuPower
-                + " | GPU" + hw.GpuTemp + "°" + gpuFan + gpuPower
+            string text = "CPU" + L_Mechrevo.WpfP0.Services.WpfBackend.CpuTemp + "°" + cpuFan + cpuPower
+                + " | GPU" + L_Mechrevo.WpfP0.Services.WpfBackend.GpuTemp + "°" + gpuFan + gpuPower
                 + (battery > 0 ? " | " + battery + "%" : "");
             _trayIcon.SetTooltip(text);
         }
@@ -7263,9 +7667,9 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         // 星耀风扇转速已由后端的 2.5 秒常驻采样泵统一回填，界面心跳不再直读硬件。
-        bool noDgpu = hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
+        bool noDgpu = L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
         // 核显机型（无界/星耀这类 APU 本）也要显示显卡行：温度/占用/风扇都来自核显，
-        bool igpuSensorPresent = hw.WujieSmuApu || hw.SmuCustomApu;
+        bool igpuSensorPresent = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu;
         // 核显模式下独显会从总线上消失（此时也是 NoDgpu），但机型仍有独显 ⇒ 不能当核显本处理。
         GpuStat.Visibility = (noDgpu && !hw.DgpuEverPresent && !igpuSensorPresent) ? Visibility.Collapsed : Visibility.Visible;
         // 状态行的文本必须每次心跳都刷（之前这两行被改漏了，界面就一直停在默认的 "CPU —"/"GPU —"）。
@@ -7277,8 +7681,8 @@ public partial class OriginalStyleWindow : Window
             // ① 核显机型（没有显卡模式可切）根本不读 —— 那行本来就不会显示，读了纯属白花时间；
             // ② 能切的机器也不必频繁读：模式只会因为用户/其它程序切档而变化，按 30 秒兜底轮询，
             //    真正的切换动作发生在 LM 自己手里，那些路径会直接调 VisualiseIgpuSaving() 立即刷新。
-            bool igpuOnlyMachine = hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu && !hw.DgpuEverPresent;
-            bool gpuModeSwitchable = !igpuOnlyMachine && (hw.SupportsGpuHotSwap || hw.CanOfferGpuModeSwitch);
+            bool igpuOnlyMachine = L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu && !hw.DgpuEverPresent;
+            bool gpuModeSwitchable = !igpuOnlyMachine && (L_Mechrevo.WpfP0.Services.WpfBackend.SupportsGpuHotSwap || hw.CanOfferGpuModeSwitch);
             if ((gpuModeSwitchable || UiQaShowAll.Enabled)
                 && Environment.TickCount64 - _lastIgpuVisualMs >= 30000)
             {
@@ -7307,7 +7711,7 @@ public partial class OriginalStyleWindow : Window
         int batteryPercent = WindowsBattery.ReadPercent();
         if (batteryPercent < 0)
         {
-            batteryPercent = hw.BatteryPercent;
+            batteryPercent = L_Mechrevo.WpfP0.Services.WpfBackend.BatteryPercent;
         }
         if (batteryPercent < 0)
         {
@@ -7319,22 +7723,19 @@ public partial class OriginalStyleWindow : Window
             System.Windows.Forms.PowerStatus power = System.Windows.Forms.SystemInformation.PowerStatus;
             bool charging = power.BatteryChargeStatus.HasFlag(System.Windows.Forms.BatteryChargeStatus.Charging);
             string source = FormatPowerSource(power.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Online);
+            decimal? chargeWatts = L_Mechrevo.WpfP0.Services.PowerStatusService.Read().BatteryRateWatts;
+            // 充电段只有一段：认得到功率就是「充电中 30.4W」，认不到（宝龙达等没有这条通道）就是「充电中」。
+            string chargeWattText = !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+                && chargeWatts is decimal watts
+                && watts > 0
+                ? " " + watts.ToString("0.#") + "W"
+                : "";
             string state = charging
-                ? WpfStrings.BatteryCharging
+                ? (WpfStrings.BatteryCharging + chargeWattText)
                 : (power.PowerLineStatus == System.Windows.Forms.PowerLineStatus.Online
                     ? (batteryPercent >= 95 ? WpfStrings.BatteryFull : WpfStrings.BatteryNotCharging)
-                    : WpfStrings.BatteryDischarging);
-            decimal? chargeWatts = L_Mechrevo.WpfP0.Services.PowerStatusService.Read().BatteryRateWatts;
-            string chargeText = "";
-            // 同方/GCU 机型先显示实际充电功率；宝龙达保持原样。
-            if (hw?.UsesBaolongda != true
-                && charging
-                && chargeWatts is decimal watts
-                && watts > 0)
-            {
-                chargeText = " · 充电 " + watts.ToString("0.#") + "W";
-            }
-            powerState = " · " + source + " · " + state + chargeText;
+                    : (WpfStrings.BatteryDischarging + chargeWattText));
+            powerState = " · " + source + " · " + state;
         }
         catch
         {
@@ -7344,15 +7745,15 @@ public partial class OriginalStyleWindow : Window
         SyncNucExternalMode(probe);
         int mode = ResolveDisplayMode(probe);
         if (_backendRoute == BackendRoute.Ec
-            && GcuEcExperimental.TryReadVisualMode(out int ecCurrentMode))
+            && L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out int ecCurrentMode))
         {
             mode = ecCurrentMode;
         }
         bool ecExperimentRoute = _backendRoute == BackendRoute.Ec;
         GpuOverclockSwitch.Visibility = (mode == 1 && (probe.GpuOcSupported || ecExperimentRoute)
-    && (probe.Hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu || ecExperimentRoute))
+    && (L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu || ecExperimentRoute))
     ? Visibility.Visible : Visibility.Collapsed;
-        GpuOverclockSwitch.IsChecked = L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled || AppConfig.Is("gpu_oc");
+        GpuOverclockSwitch.IsChecked = L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled || L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockIntentOn;
         int currentGpu = probe.CurrentGpuMode;
         int pendingGpu = probe.PendingGpuTarget;
         bool pending = probe.HasPendingGpuRestart && pendingGpu >= 0;
@@ -7408,7 +7809,7 @@ public partial class OriginalStyleWindow : Window
         RefreshPerfConfigVisibility(mode);
         RefreshPerfConfigSelections();
         // 能力位是异步到达的；每次刷新都重新确认 NUC 第三档可见，避免只显示静音/平衡。
-        if (hw.IsIntelNucMachine)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsIntelNuc)
         {
             if (!_modeSwitchInFlight && TurboModeButton.Visibility != Visibility.Visible)
             {
@@ -7460,9 +7861,9 @@ public partial class OriginalStyleWindow : Window
         // 无 GCU 的本地 EC 档位：固件可能在刷新间隙把 0x7A6 清掉，后台刷新
         // 不能再用瞬时回读覆盖用户刚选中的档位，否则按钮会来回弹。
         if (ChargeSliderToggle.IsChecked != true
-            && probe.Hw?.IsGcuConnected != true
-            && probe.Hw?.UsesBaolongda != true
-            && probe.Hw?.IsNucUmiFamily != true)
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily)
         {
             batteryMode = ModeForPercent(MechrevoLite.Battery.BatteryControl.SelectedModePercent());
         }
@@ -7521,12 +7922,12 @@ public partial class OriginalStyleWindow : Window
         }
         if (temp <= 0)
         {
-            temp = cpu ? hw.CpuTemp : hw.GpuTemp;
+            temp = cpu ? L_Mechrevo.WpfP0.Services.WpfBackend.CpuTemp : L_Mechrevo.WpfP0.Services.WpfBackend.GpuTemp;
         }
         int rpm = cpu ? (snapshot?.CpuFanRpm ?? 0) : (snapshot?.GpuFanRpm ?? 0);
         if (rpm <= 0)
         {
-            rpm = cpu ? hw.CpuFanRpm : hw.GpuFanRpm;
+            rpm = cpu ? L_Mechrevo.WpfP0.Services.WpfBackend.CpuFanRpm : L_Mechrevo.WpfP0.Services.WpfBackend.GpuFanRpm;
         }
         // 界面心跳只读缓存：转速由后台采样泵回填（EC 直读在界面线程上每次约几十毫秒，
         // 叠在心跳里就是可感知的卡顿）。这里不再直读 EC。
@@ -7590,7 +7991,7 @@ public partial class OriginalStyleWindow : Window
         int rpmFullPercent = hw.FanRpmMaxForPercent;
         if (rpmFullPercent > 0)
         {
-            int rpm = cpu ? hw.CpuFanRpm : hw.GpuFanRpm;
+            int rpm = cpu ? L_Mechrevo.WpfP0.Services.WpfBackend.CpuFanRpm : L_Mechrevo.WpfP0.Services.WpfBackend.GpuFanRpm;
             duty = rpm > 0 ? (int)Math.Round(rpm * 100.0 / rpmFullPercent) : null;
         }
         else
@@ -7750,7 +8151,8 @@ public partial class OriginalStyleWindow : Window
             if (!L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive && GcuPackageImport.ShouldOffer())
             {
                 using GcuOwnerWindow owner = new(this);
-                await GcuPackageImport.OfferAsync(owner);
+                // 用户点的就是导入入口，不再重复问「是否导入」。
+                await GcuPackageImport.OfferAsync(owner, askConfirm: false);
             }
             if (_backendProbe == null)
             {
@@ -7827,7 +8229,7 @@ public partial class OriginalStyleWindow : Window
             if (AppConfig.Get("onboarding_version", 0) < 1)
             {
                 var hw = _backendProbe?.Hw;
-                if (!(hw?.UsesBaolongda ?? false))
+                if (!L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda)
                 {
                     AppConfig.Set("igpu_only_asked", 1);
                     AppConfig.Flush();
@@ -7846,8 +8248,8 @@ public partial class OriginalStyleWindow : Window
             if (AppConfig.Get("igpu_only_asked", 0) != 1)
             {
                 var hw = _backendProbe?.Hw;
-                bool baolongda = hw?.UsesBaolongda ?? false;
-                bool needAsk = !baolongda && (hw == null || (hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen30 && !hw.HasReliableIgpuOnlyCapability));
+                bool baolongda = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda;
+                bool needAsk = !baolongda && (hw == null || (L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.Gen30 && !hw.HasReliableIgpuOnlyCapability));
                 if (needAsk)
                 {
                     AppConfig.Set("igpu_only_asked", 1);
@@ -7935,7 +8337,7 @@ public partial class OriginalStyleWindow : Window
         _connectAttempting = true;
         // 用户明确选择 EC 时才跳过 GCU 连接，直接启动 EC-only。
         if (IsEcModeActive
-            && GcuEcExperimental.DirectMode
+            && L_Mechrevo.WpfP0.Services.WpfBackend.GcuDirectMode
             && TryStartExperimentalOfflineBackend("直接 EC 实验模式"))
         {
             _connectAttempting = false;
@@ -7983,8 +8385,34 @@ public partial class OriginalStyleWindow : Window
                 _backendProbe = null;
                 _gcuConnectFailures++;
                 Logger.WriteError("[backend] GCU 连接失败 " + _gcuConnectFailures + "/5：" + reason);
+                // 连不上先问用户：改用 EC（记住）还是保持 GCU 未连接、本次不再重试。
+                if (!_gcuOfflineAsked)
+                {
+                    _gcuOfflineAsked = true;
+                    using GcuOwnerWindow askOwner = new(this);
+                    System.Windows.Forms.DialogResult answer = System.Windows.Forms.MessageBox.Show(askOwner,
+                        MechrevoLite.Properties.Strings.GcuConnectFailedAsk,
+                        MechrevoLite.Properties.Strings.GcuConnectFailedTitle,
+                        System.Windows.Forms.MessageBoxButtons.YesNo, System.Windows.Forms.MessageBoxIcon.Question);
+                    if (answer == System.Windows.Forms.DialogResult.Yes)
+                    {
+                        MechrevoLite.Hardware.GcuEcMode.AutoEnterEcModeWhenGcuMissing("用户在连接失败提示里选择改用 EC 直控");
+                        Logger.WriteLine("[gcu-svc] 连接失败提示：用户选择改用 EC 直控（gcu_ec_direct=1）");
+                        if (TryStartExperimentalOfflineBackend(reason))
+                        {
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        MechrevoLite.Hardware.GcuEcMode.SuppressConnectRetryForRun("用户选择保持 GCU 模式");
+                        _backendRetryTimer.Stop();
+                        Logger.WriteLine("[gcu-svc] 连接失败提示：保持 GCU 模式，本次运行不再重试连接");
+                        return;
+                    }
+                }
                 if (_gcuConnectFailures >= 5
-                    && (GcuEcMode.IsEcMode
+                    && (L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive
                         || L_Mechrevo.WpfP0.Services.WpfBackend.IsTongfangFamily)
                     && TryStartExperimentalOfflineBackend(reason))
                 {
@@ -8051,7 +8479,7 @@ public partial class OriginalStyleWindow : Window
         }
         // NUC/UMI 的多数功能走本地 ACPI/EC，不依赖 GCU；GCU 未连接也按“已就绪”显示。
         if (!probe.IsGcuConnected
-            && (probe.Hw?.IsNucUmiFamily == true))
+            && (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily))
         {
             SetBackendStatus(WpfStrings.BackendNonGcuReady, "#4ADE80", WpfStrings.L("NUC/UMI 直接 ACPI/EC 模式已就绪（无需 GCU）", "NUC/UMI direct ACPI/EC mode ready (GCU not required)"));
             return;
@@ -8311,23 +8739,24 @@ public partial class OriginalStyleWindow : Window
         try
         {
             var hw = _backendProbe?.Hw;
-            bool umiGpuMode = hw?.IsUmiMachine == true;
-            bool nucNoGpuSwitch = hw?.IsIntelNucMachine == true;
+            bool umiGpuMode = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsUmi;
+            bool nucNoGpuSwitch = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsIntelNuc;
             bool gpuRowHidden = hw?.GpuRowHiddenByGcuReports == true;
-        bool directSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", hw?.SupportsDgpuDirect ?? false);
-        bool gpuSwitchSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("DgpuDirect") || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly") || L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap"))));
+        bool gpuHotSwapCap = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap"));
+        bool directSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", L_Mechrevo.WpfP0.Services.WpfBackend.SupportsDgpuDirectIfKnown ?? false);
+        bool gpuSwitchSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("DgpuDirect") || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly") || gpuHotSwapCap));
             GpuDirectButton.Visibility = directSupported ? Visibility.Visible : Visibility.Collapsed;
-            bool dgpuPresent = hw != null && (hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu || hw.DgpuEverPresent);
+            bool dgpuPresent = hw != null && (L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu || hw.DgpuEverPresent);
             bool noSwitchButHasDgpu = !gpuSwitchSupported && dgpuPresent;
             // 核显机型（无界/星耀 APU）：没有显卡模式可切，但显卡传感器（温度/占用/副扇转速）就在这一行，
             // 所以这一行照样显示，只把三档切换按钮藏起来（标题退化成「显卡」）。
-            bool igpuSensorPresent = hw?.WujieSmuApu == true || hw?.SmuCustomApu == true;
+            bool igpuSensorPresent = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu;
             bool gpuModeSwitchable = gpuSwitchSupported || directSupported
-                || L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap"))
+                || gpuHotSwapCap
                 || umiGpuMode || noSwitchButHasDgpu;
             // 本机没有独显（核显机型）：这一段只保留「显卡」标题行与右侧传感器（温度/占用/副扇转速），
             // 三档显卡模式按钮一律不显示 —— 没有可切的目标。
-            bool igpuOnlyMachine = hw != null && hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu && !hw.DgpuEverPresent;
+            bool igpuOnlyMachine = hw != null && L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu && !hw.DgpuEverPresent;
             bool gpuModeRowVisible = gpuSwitchSupported && !igpuOnlyMachine;
             GpuSection.Visibility = (!nucNoGpuSwitch
                 && (igpuOnlyMachine || (!gpuRowHidden && (gpuModeSwitchable || igpuSensorPresent || dgpuPresent))))
@@ -8347,18 +8776,21 @@ public partial class OriginalStyleWindow : Window
             bool hasKeyboard = EcKeyboardActive
                 ? EcKeyboardControllable
                 : L_Mechrevo.WpfP0.Services.WpfBackend.FeatureState("KeyboardLight") == 1
-                    || hw?.IsNucUmiFamily == true;
-        bool hasLightbar = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("Lightbar", (hw?.SupportsLightbar ?? false)
-                || _services?.Lighting.LocalLightbarSupported == true
-            || hw?.IsNucUmiFamily == true);
-        bool hasLogo = L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("LogoLight", (hw?.SupportsLogoLight ?? false)
-            || _services?.Lighting.LocalLogoSupported == true);
+                    || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily;
+        // 旧判据只算硬件事实，门控与 shadow 统一交给 ResolveLightChannel（同一功能不判两次）
+        bool legacyLightbar = (hw?.SupportsLightbar ?? false)
+            || _services?.Lighting.LocalLightbarSupported == true
+            || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily;
+        bool hasLightbar = ResolveLightChannel(LightingTopics.Lightbar, legacyLightbar);
+        bool legacyLogo = (hw?.SupportsLogoLight ?? false)
+            || _services?.Lighting.LocalLogoSupported == true;
+        bool hasLogo = ResolveLightChannel(LightingTopics.Logo, legacyLogo);
             bool hasHinge = _backendProbe?.SupportsHingeLight == true;
             bool hasSync = _backendProbe?.SupportsSyncLight == true;
             bool xingyaoLightIdle = XingyaoQuickApplicable();
             LightingSection.Visibility = (hasKeyboard || hasLightbar || hasLogo || hasHinge || hasSync || xingyaoLightIdle) ? Visibility.Visible : Visibility.Collapsed;
             KeyboardLightRow.Visibility = hasKeyboard ? Visibility.Visible : Visibility.Collapsed;
-            LogoLightRow.Visibility = ResolveLightChannel(LightingTopics.Logo, hasLogo) ? Visibility.Visible : Visibility.Collapsed;
+            LogoLightRow.Visibility = hasLogo ? Visibility.Visible : Visibility.Collapsed;
             LightHingeRow.Visibility = hasHinge ? Visibility.Visible : Visibility.Collapsed;
             LightSyncRow.Visibility = hasSync ? Visibility.Visible : Visibility.Collapsed;
             FillKeyboardEffects();
@@ -8366,29 +8798,29 @@ public partial class OriginalStyleWindow : Window
   FillLightIdleOptions();
   _services?.Lighting.ApplyHardwareLightIdleTimer();
   SyncLightSwitchesFromHardware();
-  bool nucUmiModeUi = _backendProbe?.Hw?.IsNucUmiFamily == true;
+  bool nucUmiModeUi = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily;
             // Intel 星耀暂时屏蔽自定义模式；AMD 星耀/无界走本机 SMU 自定义。
-            bool smuCustom = hw?.SmuCustomApu == true;
+            bool smuCustom = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu;
             // EC 实验模式/无 GCU 的同方独显机：本地 EC 也能跑自定义档，
             // 不能因为 ItemSupport 能力位缺失就把自定义入口藏掉。
             bool ecLocalCustom = IsEcModeActive
-                && hw?.IsGcuConnected != true
-                && hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
+                && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
+                && L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
             bool allowPerfOnBattery = AppConfig.Is("perf_allow_on_battery")
                 && System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
                     != System.Windows.Forms.PowerLineStatus.Online;
             bool customAllowed = nucUmiModeUi || smuCustom || ecLocalCustom || allowPerfOnBattery
             || ((L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "FanSettings"))
-                    && !(_backendProbe?.Hw?.SupportsModeProfileConfig ?? false));
+                    && !L_Mechrevo.WpfP0.Services.WpfBackend.ModeProfileBindingSupported);
             CustomModeButton.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
-            ExtremeModeButton.Visibility = hw?.IsIntelNucMachine == true ? Visibility.Visible : Visibility.Collapsed;
+            ExtremeModeButton.Visibility = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsIntelNuc ? Visibility.Visible : Visibility.Collapsed;
             ApplyModeSegmentDensity();
             // 原版只保证静音/平衡；部分 30 系机型没有狂暴档 ⇒ 隐藏狂暴按钮，30 系配置行随之隐藏。
             // 仅 Intel NUC/UMI 控制台在 TurboModeSupport=0 时仍提供三档；
         // LNL 无界/星耀等办公本如果上报不支持狂暴，必须继续隐藏，不能强制显示。
-        bool vendorNucModes = hw?.IsIntelNucMachine == true
-            && hw.WujieSmuApu != true
-            && hw.SmuCustomApu != true;
+        bool vendorNucModes = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsIntelNuc
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu;
         TurboModeButton.Visibility = (ShouldShowTurboMode(caps) || vendorNucModes)
             ? Visibility.Visible
             : Visibility.Collapsed;
@@ -8473,7 +8905,7 @@ public partial class OriginalStyleWindow : Window
         var hw = _backendProbe.Hw;
         MechrevoDeviceCapabilities? caps = _backendProbe.Capabilities;
         string igpuMode = AppConfig.GetString("igpu_only_ui") ?? "auto";
-        bool igpuSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("IgpuOnly", hw?.CanOfferIgpuOnly ?? ((L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly")) || (hw?.SupportsIgpuOnly ?? false)));
+        bool igpuSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("IgpuOnly", L_Mechrevo.WpfP0.Services.WpfBackend.CanOfferIgpuOnlyIfKnown ?? ((L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly")) || (hw?.SupportsIgpuOnly ?? false)));
         if (hw?.GpuRowHiddenByGcuReports == true)
         {
             GpuEcoButton.Visibility = Visibility.Collapsed;
@@ -8485,16 +8917,16 @@ public partial class OriginalStyleWindow : Window
         GpuEcoColumn.Width = GpuEcoButton.Visibility == Visibility.Visible
             ? new GridLength(1, GridUnitType.Star)
             : new GridLength(0);
-        if (GpuEcoButton.Visibility == Visibility.Visible && hw?.IsIntelNucMachine != true)
+        if (GpuEcoButton.Visibility == Visibility.Visible && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsIntelNuc)
         {
             GpuSection.Visibility = Visibility.Visible;
         }
         bool keyboard = EcKeyboardActive
             ? EcKeyboardControllable
             : L_Mechrevo.WpfP0.Services.WpfBackend.FeatureState("KeyboardLight") == 1
-                || hw?.IsNucUmiFamily == true;
+                || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily;
         // shadow 的 old 必须是独立算出来的旧判据，不能拿门控结果自证。
-        bool legacyKeyboard = (hw?.SupportsKeyboard ?? false) || (EcKeyboardActive && EcKeyboardControllable) || hw?.IsNucUmiFamily == true;
+        bool legacyKeyboard = (hw?.SupportsKeyboard ?? false) || (EcKeyboardActive && EcKeyboardControllable) || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily;
         keyboard = ResolveLightChannel(LightingTopics.Keyboard, legacyKeyboard);
 
         bool hasStrip = L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("Lightbar") || (hw?.SupportsLightbar ?? false)
@@ -9145,7 +9577,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         _perfConfigBuilt = true;
-        int count = Math.Max(1, MechrevoLite.Mode.ModeProfileConfig.Count);
+        int count = Math.Max(1, MechrevoLite.Mode.ModeSettings.ProfileCount);
         ComboBox[] combos = { PerfConfigSilentCombo, PerfConfigBalancedCombo, PerfConfigTurboCombo };
         _syncingPerfConfig = true;
         foreach (ComboBox combo in combos)
@@ -9163,9 +9595,9 @@ public partial class OriginalStyleWindow : Window
     {
         var hw = _backendProbe?.Hw;
         // 只看「GCU 本身是 30 系」：显卡是 30 系但 GCU 不是 30 系时不显示模式×配置。
-        bool gcu30 = hw?.IsGcuConnected == true && L_Mechrevo.WpfP0.Services.WpfBackend.IsGcu30Variant;
+        bool gcu30 = L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected && L_Mechrevo.WpfP0.Services.WpfBackend.IsGcu30Variant;
         bool profileConfig = gcu30
-                && !(hw?.IsNucUmiFamily == true);
+                && !(L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily);
         bool show = profileConfig && currentMode >= 0 && currentMode <= 2;
         // 30 系配置下拉必须和对应性能模式按钮一起显隐；部分 30 系只有静音/平衡两档。
         PerfConfigSilentGroup.Visibility = SilentModeButton.Visibility;
@@ -9195,7 +9627,7 @@ public partial class OriginalStyleWindow : Window
             foreach ((ComboBox combo, int visualMode) in combos)
             {
                 combo.SelectedIndex = Math.Clamp(
-                    MechrevoLite.Mode.ModeProfileConfig.Get(visualMode),
+                    MechrevoLite.Mode.ModeSettings.GetProfile(visualMode),
                     0,
                     Math.Max(0, combo.Items.Count - 1));
             }
@@ -9214,7 +9646,7 @@ public partial class OriginalStyleWindow : Window
         {
             return;
         }
-        MechrevoLite.Mode.ModeProfileConfig.Set(visualMode, combo.SelectedIndex);
+        MechrevoLite.Mode.ModeSettings.SetProfile(visualMode, combo.SelectedIndex);
         // 先立即回填三行，保证当前下拉/其它模式下拉不读旧值。
         RefreshPerfConfigSelections();
         if (_backendProbe != null && _backendProbe.Service?.CurrentMode == visualMode)
@@ -9237,7 +9669,7 @@ public partial class OriginalStyleWindow : Window
             }
             L_Mechrevo.WpfP0.Services.WpfBackend.Attach(_backendProbe.Hw, _backendProbe.Service);
             int visualMode = _backendProbe.Service?.CurrentMode ?? 0;
-            int profileIndex = MechrevoLite.Mode.ModeProfileConfig.Get(visualMode);
+            int profileIndex = MechrevoLite.Mode.ModeSettings.GetProfile(visualMode);
             if (_customModeWindow == null || !_customModeWindow.IsVisible)
             {
                 _customModeWindow = new CustomModeWindow { Owner = this };
@@ -9263,12 +9695,12 @@ public partial class OriginalStyleWindow : Window
     {
         if (IsEcLocalRoute)
         {
-            string? ecActive = MechrevoLite.Mode.PerfModeStore.ActiveModeId;
+            string? ecActive = MechrevoLite.Mode.ModeSettings.ActiveModeId;
             if (ecActive?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) == true)
             {
                 return ecActive;
             }
-            MechrevoLite.Mode.PerfModeDefinition? custom = MechrevoLite.Mode.PerfModeStore.Load()
+            MechrevoLite.Mode.PerfModeDefinition? custom = MechrevoLite.Mode.ModeSettings.Modes
                 .FirstOrDefault(m => m.IsCustom);
             return custom?.Id ?? "custom1";
         }
@@ -9291,7 +9723,7 @@ public partial class OriginalStyleWindow : Window
                 }
             }
         }
-        return MechrevoLite.Mode.PerfModeStore.ActiveModeId;
+        return MechrevoLite.Mode.ModeSettings.ActiveModeId;
     }
 
     private async Task OpenCustomModeFormAsync(bool switchMode)
@@ -9326,7 +9758,7 @@ public partial class OriginalStyleWindow : Window
                     // 不能回退到 ActiveModeId（此时还停在静音/平衡），否则自定义窗口绑到内置档。
                     _customModeWindow.BindMode(_backendRoute == BackendRoute.Ec
                         ? customId
-                        : MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId ?? MechrevoLite.Mode.PerfModeStore.ActiveModeId);
+                        : MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId ?? MechrevoLite.Mode.ModeSettings.ActiveModeId);
                 }
             }
             else
@@ -9369,9 +9801,10 @@ public partial class OriginalStyleWindow : Window
         {
             return false;
         }
-        L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled = on;
         int modeBefore = _backendProbe.CurrentMode;
         bool ok = await _backendProbe.ApplyGpuOverclockAsync(on);
+        // 镜像只记"实际生效"：点开失败时不能显示已开（否则界面和硬件各说一套）。
+        L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled = ok && on;
         // 部分 50 GCU 在只写 OC 字段后会把 operating mode 落回平衡；超频开关本身不应切模式，
         // 原来在狂暴档时把档位恢复回去（不改变 OC 字段）。
         if (ok && modeBefore == 1)
@@ -9382,11 +9815,7 @@ public partial class OriginalStyleWindow : Window
                 await SwitchModeAsync(1);
             }
         }
-        if (ok)
-        {
-            AppConfig.Set("gpu_oc", on ? 1 : 0);
-            AppConfig.Flush();
-        }
+        // 记忆归硬件层（MechrevoService 写 gpu_oc），界面只下发意图。
         return ok;
     }
 
@@ -9400,7 +9829,7 @@ public partial class OriginalStyleWindow : Window
                 // 与迷你窗 GpuOverclockSwitch 同一条件：只在狂暴档且后端支持超频时显示；
                 // 不额外按 DgpuGeneration 硬屏蔽（50 系 GCU 支持时即可用）。
                 return hw != null
-                    && hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu
+                    && L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu
                     && _backendProbe?.GpuOcSupported == true
                     && WideCurrentMode == 1;
             }
@@ -9417,7 +9846,7 @@ public partial class OriginalStyleWindow : Window
         {
             try
             {
-                return L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled || AppConfig.Is("gpu_oc");
+                return L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled || L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockIntentOn;
             }
             catch
             {
@@ -9505,10 +9934,10 @@ public partial class OriginalStyleWindow : Window
                 }
             }
             CalibrationCombo.SelectedIndex = index;
-            Logger.WriteErrorIfChanged("calib-dropdown", "[calib] 下拉档位=" + CalibrationCombo.Items.Count + " · 自定义文件=" + localIcc.Count + " · 选中=" + ((CalibrationCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "") + " · 后端=" + (probe?.Hw?.IsGcuConnected == true ? "GCU" : "EC 本地"));
+            Logger.WriteErrorIfChanged("calib-dropdown", "[calib] 下拉档位=" + CalibrationCombo.Items.Count + " · 自定义文件=" + localIcc.Count + " · 选中=" + ((CalibrationCombo.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "") + " · 后端=" + (L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected ? "GCU" : "EC 本地"));
             bool calibrationOn = AppConfig.Exists("calib_enabled") && AppConfig.Is("calib_enabled");
             if (calibrationOn
-                && probe?.Hw?.IsGcuConnected != true
+                && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
                 && !IccHelper.HasFactoryIccFile()
                 && IccHelper.ListCustomIccFiles().Count == 0)
             {
@@ -9577,7 +10006,7 @@ public partial class OriginalStyleWindow : Window
     /// <summary>当前档位没有对应 ICC 时先等云端下载；已有文件直接匹配，不重复联网。</summary>
     private async Task<bool> EnsureCloudIccForModeAsync(int mode)
     {
-        if (mode == 999 || _backendProbe?.Hw?.IsGcuConnected == true)
+        if (mode == 999 || L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected)
         {
             return true;
         }
@@ -9735,23 +10164,23 @@ public partial class OriginalStyleWindow : Window
         }
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_58;
         bool ecLocalMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive
-            || _backendProbe.Hw?.IsGcuConnected != true;
+            || !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected;
         bool gcuCalibrationPath = !ecLocalMode
             && mode != 999
-            && _backendProbe.Hw?.IsGcuConnected == true
+            && L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
             && _backendProbe.Service != null;
         var gcuIccSnapshot = on && gcuCalibrationPath
             ? await MechrevoLite.Display.GcuIccProfileAssociator.CaptureAsync("ui-calib-on").ConfigureAwait(true)
             : null;
         bool ok;
-        if (!on && (L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive || _backendProbe.Hw?.IsGcuConnected != true))
+        if (!on && (L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive || !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected))
         {
             // EC 关闭校色必须真正解除本地 ICC；不能走 SetColorCalibrationAsync(0)，
             // 那里默认档会重新应用默认 ICC。
             await Task.Run(IccHelper.ClearAllIcc);
             ok = true;
         }
-        else if (on && mode != 999 && (L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive || _backendProbe.Hw?.IsGcuConnected != true))
+        else if (on && mode != 999 && (L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive || !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected))
         {
             // EC 默认档：走与自定义完全相同的 IccHelper.ApplyIcc 关联路径。
             string selected = mode <= 1
@@ -9849,7 +10278,7 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         bool ecLocalMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive
-            || _backendProbe.Hw?.IsGcuConnected != true;
+            || !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected;
         if (mode != 999 && ecLocalMode)
         {
             string file = mode <= 1
@@ -10046,7 +10475,7 @@ public partial class OriginalStyleWindow : Window
 
     private static (string Effect, string Name)[] EffectsForCurrentBackend((string Effect, string Name)[] effects)
     {
-        if (L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.UsesBaolongda == true)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda)
         {
             return new[]
             {
@@ -10064,11 +10493,11 @@ public partial class OriginalStyleWindow : Window
         {
             return EcKeyboardEffects();
         }
-        if (hw?.UsesBaolongda == true)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda)
         {
             return EffectsForCurrentBackend(Array.Empty<(string, string)>());
         }
-        if (hw?.WujieSmuApu == true)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu)
         {
             return new[] { ("Single", MechrevoLite.Properties.Strings.EffectSingle) };
         }
@@ -10105,11 +10534,11 @@ public partial class OriginalStyleWindow : Window
             }
         }
         if (!effectFound && L_Mechrevo.WpfP0.Services.WpfBackend.Hw != null && !L_Mechrevo.WpfP0.Services.WpfBackend.Hw.UsesBaolongda
-            && L_Mechrevo.WpfP0.Services.WpfBackend.Hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40)
+            && L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40)
         {
             try
             {
-                _services?.Lighting.SaveChannelEffect(topic, effects[0].Effect);
+                SaveChannelEffect(topic, effects[0].Effect);
             }
             catch
             {
@@ -10136,7 +10565,7 @@ public partial class OriginalStyleWindow : Window
     private static (string Effect, string Name)[] CurrentLightbarEffectsForBackend()
     {
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
-        if (hw?.IsIntelNucMachine == true)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsIntelNuc)
         {
             // NUC 灯带只有单色/彩虹两档，其余名称下发无效。
             return new[]
@@ -10218,7 +10647,7 @@ public partial class OriginalStyleWindow : Window
 
     private void ApplyLightChannelBackendVisibility()
     {
-        bool baolongda = L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.UsesBaolongda == true;
+        bool baolongda = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda;
         Visibility visibility = baolongda ? Visibility.Collapsed : Visibility.Visible;
         LightStripEffectCombo.Visibility = visibility;
         LightStripEditButton.Visibility = visibility;
@@ -10289,7 +10718,7 @@ public partial class OriginalStyleWindow : Window
     private void SyncLightSwitchesFromHardware()
     {
         var hw = _backendProbe?.Hw;
-        if (hw == null || !hw.IsConnected)
+        if (hw == null || !L_Mechrevo.WpfP0.Services.WpfBackend.MachineConnected)
         {
             return;
         }
@@ -10315,7 +10744,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     _pendingKeyboardPower = null;
                     KeyboardLightSwitch.IsChecked = L_Mechrevo.WpfP0.Services.WpfBackend.LightSwitchOn(
-                        MechrevoLite.KeyboardLightingDecision.ShouldWrite(hw.IsConnected, hardwareKeyboardPower), suspended);
+                        MechrevoLite.KeyboardLightingDecision.ShouldWrite(L_Mechrevo.WpfP0.Services.WpfBackend.MachineConnected, hardwareKeyboardPower), suspended);
                 }
             }
             else
@@ -10327,9 +10756,9 @@ public partial class OriginalStyleWindow : Window
                 }
                 else
                 {
-                    bool keyboardOn = hw.UsesBaolongda
+                    bool keyboardOn = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
                         ? hardwareKeyboardPower
-                        : MechrevoLite.KeyboardLightingDecision.ShouldWrite(hw.IsConnected, hardwareKeyboardPower);
+                        : MechrevoLite.KeyboardLightingDecision.ShouldWrite(L_Mechrevo.WpfP0.Services.WpfBackend.MachineConnected, hardwareKeyboardPower);
                     KeyboardLightSwitch.IsChecked = L_Mechrevo.WpfP0.Services.WpfBackend.LightSwitchOn(keyboardOn, suspended);
                 }
             }
@@ -10665,9 +11094,9 @@ public partial class OriginalStyleWindow : Window
                 BackendProbe? probe = _backendProbe;
                 var hw = probe?.Hw;
                 if (probe == null || hw == null
-                    || !hw.IsGcuConnected
-                    || hw.UsesBaolongda
-                    || hw.IsNucUmiFamily)
+                    || !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
+                    || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+                    || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily)
                 {
                     return;
                 }
@@ -10849,12 +11278,12 @@ public partial class OriginalStyleWindow : Window
     private void TryResumeBaolongdaRainbow(string reason)
     {
         var hw = _backendProbe?.Hw;
-        if (hw == null || !hw.UsesBaolongda || hw.IsKeyboardRainbowRunning) return;
+        if (hw == null || !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda || hw.IsKeyboardRainbowRunning) return;
         if (_services?.Lighting.ChannelEffectIs("Keyboard/Ctrl", "Rainbow") != true) return;
         var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.EnsurePerKeyRgb();
         if (rgb != null && rgb.KbPowerExplicitOff) return;
         if (!hw.TryReadKeyboardLightingViaBackend(out bool hardwareOn, out int _, out int brightness, out string _) || !hardwareOn) return;
-        if (brightness <= 0 && hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen30)
+        if (brightness <= 0 && L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen30)
         {
             L_Mechrevo.WpfP0.Services.WpfBackend.ReadEcKeyboardBrightness(out brightness);
         }
@@ -11245,11 +11674,8 @@ public partial class OriginalStyleWindow : Window
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_68;
             return;
         }
-        if (_backendProbe.Hw?.IsConnected == true)
-        {
-            _services?.Lighting.SaveChannelPower("HidLightbar/Ctrl", requested, "用户点击「灯光」开关");
-            OsdService.Show(LightChannelGlyph("HidLightbar/Ctrl"), LightChannelTitle("HidLightbar/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
-        }
+        SaveChannelPowerIntent("HidLightbar/Ctrl", requested, "用户点击「灯光」开关");
+        OsdService.Show(LightChannelGlyph("HidLightbar/Ctrl"), LightChannelTitle("HidLightbar/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_69;
     }
 
@@ -11316,11 +11742,8 @@ public partial class OriginalStyleWindow : Window
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_72;
             return;
         }
-        if (_backendProbe.Hw?.IsConnected == true)
-        {
-            _services?.Lighting.SaveChannelPower("HidLightbar_Hinge/Ctrl", requested, "用户点击「灯光」开关");
-            OsdService.Show(LightChannelGlyph("HidLightbar_Hinge/Ctrl"), LightChannelTitle("HidLightbar_Hinge/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
-        }
+        SaveChannelPowerIntent("HidLightbar_Hinge/Ctrl", requested, "用户点击「灯光」开关");
+        OsdService.Show(LightChannelGlyph("HidLightbar_Hinge/Ctrl"), LightChannelTitle("HidLightbar_Hinge/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_73;
     }
 
@@ -11386,11 +11809,8 @@ public partial class OriginalStyleWindow : Window
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_75;
             return;
         }
-        if (_backendProbe.Hw?.IsConnected == true)
-        {
-            _services?.Lighting.SaveChannelPower("HidLightbar_Sync/Ctrl", requested, "用户点击「灯光」开关");
-            OsdService.Show(LightChannelGlyph("HidLightbar_Sync/Ctrl"), LightChannelTitle("HidLightbar_Sync/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
-        }
+        SaveChannelPowerIntent("HidLightbar_Sync/Ctrl", requested, "用户点击「灯光」开关");
+        OsdService.Show(LightChannelGlyph("HidLightbar_Sync/Ctrl"), LightChannelTitle("HidLightbar_Sync/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
         StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_76;
     }
 
@@ -11479,22 +11899,47 @@ public partial class OriginalStyleWindow : Window
             return;
         }
         _keyboardLightUiLockUntil = Environment.TickCount64 + 2500;
-        if (_backendProbe?.Hw?.IsConnected == true)
-        {
-            _services?.Lighting.SaveChannelPower("Keyboard/Ctrl", requested, "用户点击键盘灯光开关");
-        }
+        SaveChannelPowerIntent("Keyboard/Ctrl", requested, "用户点击键盘灯光开关");
         OsdService.Show(LightChannelGlyph("Keyboard/Ctrl"), LightChannelTitle("Keyboard/Ctrl"),
             requested ? WpfStrings.StateOn : WpfStrings.StateOff);
     }
 
     private void SaveChannelEffect(string topic, string effect)
     {
+        // ⭐ 2026-11-19（机主：灯带/Logo 没有记忆）：记忆**不能**依赖服务实例是否就绪 ——
+        //   旧写法是 _services?.（可空链），服务没就绪就悄悄不落盘，磁盘上连一个 .cfg 都没有。
         try
         {
-            _services?.Lighting.SaveChannelEffect(topic, effect);
+            if (_services?.Lighting is { } lighting)
+            {
+                lighting.SaveChannelEffect(topic, effect);
+                return;
+            }
+            L_Mechrevo.WpfP0.Services.WpfBackend.SaveLightChannelSettings(
+                topic,
+                L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, effect) with { Effect = effect });
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.WriteLine("[light-cfg] 记忆灯效失败（" + topic + "）：" + ex.GetType().Name);
+        }
+    }
+
+    /// <summary>灯光开关记忆：同样不依赖服务实例是否就绪（⛔ 不要再用 MachineConnected 挡落盘）。</summary>
+    private void SaveChannelPowerIntent(string topic, bool on, string trigger)
+    {
+        try
+        {
+            if (_services?.Lighting is { } lighting)
+            {
+                lighting.SaveChannelPower(topic, on, trigger);
+                return;
+            }
+            L_Mechrevo.WpfP0.Services.WpfBackend.SaveLightChannelPower(topic, on, trigger);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[light-cfg] 记忆灯光开关失败（" + topic + "）：" + ex.GetType().Name);
         }
     }
 
@@ -11724,7 +12169,7 @@ public partial class OriginalStyleWindow : Window
             bool ecOk = ApplyEcKeyboard(effect, on);
             if (ecOk && on && !powerOnly)
             {
-                _services?.Lighting.SaveChannelEffect("Keyboard/Ctrl", effect);
+                SaveChannelEffect("Keyboard/Ctrl", effect);
             }
             if (showStatus)
             {
@@ -11771,7 +12216,7 @@ public partial class OriginalStyleWindow : Window
         bool ok = await SetKeyboardEffectServiceAsync(effect);
         if (ok)
         {
-            _services?.Lighting.SaveChannelEffect("Keyboard/Ctrl", effect);
+            SaveChannelEffect("Keyboard/Ctrl", effect);
         }
         if (showStatus) StatusText.Text = ok ? WpfStrings.LightKeyboardSentPrefix + effect : WpfStrings.LightKeyboardFailed;
         return ok;
@@ -11804,11 +12249,8 @@ public partial class OriginalStyleWindow : Window
             StatusText.Text = WpfStrings.OriginalStyleWindow_xaml_Text_86;
             return;
         }
-        if (_backendProbe?.Hw?.IsConnected == true)
-        {
-            _services?.Lighting.SaveChannelPower("HidLightbar_Logo/Ctrl", requested, "用户点击「灯光」开关");
-            OsdService.Show(LightChannelGlyph("HidLightbar_Logo/Ctrl"), LightChannelTitle("HidLightbar_Logo/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
-        }
+        SaveChannelPowerIntent("HidLightbar_Logo/Ctrl", requested, "用户点击「灯光」开关");
+        OsdService.Show(LightChannelGlyph("HidLightbar_Logo/Ctrl"), LightChannelTitle("HidLightbar_Logo/Ctrl"), requested ? WpfStrings.StateOn : WpfStrings.StateOff);
     }
 
     private async void LogoEffectCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -11881,7 +12323,7 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    internal bool LcdOverdrive => _backendProbe?.LcdOverdrive == true;
+    internal bool LcdOverdrive => L_Mechrevo.WpfP0.Services.WpfBackend.LcdOverdriveOn;
 
     internal async Task<bool> SetLcdOverdriveAsync(bool on)
     {
@@ -12165,7 +12607,7 @@ public partial class OriginalStyleWindow : Window
         //   VRAM/RAM（SensorSnapshot 暂无字段）仍从后端对象取，未连接回退 -1 ✅
         SensorSnapshot snapshot = _services?.Sensors.Read() ?? SensorSnapshot.Empty;
         var hw = _backendProbe?.Hw;
-        int battery = hw?.BatteryPercent ?? -1;
+        int battery = L_Mechrevo.WpfP0.Services.WpfBackend.BatteryPercent;
         try
         {
             double pct = L_Mechrevo.WpfP0.Services.PowerStatusService.Read().Percent;
@@ -12188,8 +12630,8 @@ public partial class OriginalStyleWindow : Window
         catch
         {
         }
-        int ramUsage = hw?.RamUsage ?? -1;
-        double ramUsedGb = hw?.RamUsedGb ?? -1;
+        int ramUsage = L_Mechrevo.WpfP0.Services.WpfBackend.RamUsage;
+        double ramUsedGb = L_Mechrevo.WpfP0.Services.WpfBackend.RamUsedGb;
         if (ramUsage <= 0 || ramUsedGb <= 0)
         {
             // WUJIE 的 GCU 不上报 SystemMemoryInfo；悬浮窗不能因此显示「—」。
@@ -12199,26 +12641,26 @@ public partial class OriginalStyleWindow : Window
                 ramUsedGb = localRamUsedMb / 1024.0;
             }
         }
-        // NoDgpu 时 hw.VramUsedMb 是 GCU 的 GpuMem（WUJIE 上会变成系统内存占用），
+        // NoDgpu 时 L_Mechrevo.WpfP0.Services.WpfBackend.VramUsedMb 是 GCU 的 GpuMem（WUJIE 上会变成系统内存占用），
         // 不能拿来当显存；无独显只认本地 LHM 共享显存。
         int vramUsedMb = MechrevoLite.HardwareControl.vramUsedMb
-            ?? ((hw != null && hw.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu && hw.VramUsedMb > 0)
-                ? hw.VramUsedMb : -1);
+            ?? ((hw != null && L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu && L_Mechrevo.WpfP0.Services.WpfBackend.VramUsedMb > 0)
+                ? L_Mechrevo.WpfP0.Services.WpfBackend.VramUsedMb : -1);
         return new OverlaySnapshot(
             // 悬浮窗必须和主界面同一口径：快照没有值时回退到本地优先源
-            // （Wujie/星耀 APU 的 hw.CpuTemp 是 ACPI 热区，可能比真实 Tctl 高 20℃+）。
+            // （Wujie/星耀 APU 的 L_Mechrevo.WpfP0.Services.WpfBackend.CpuTemp 是 ACPI 热区，可能比真实 Tctl 高 20℃+）。
             snapshot.CpuTempC > 0 ? snapshot.CpuTempC : (MechrevoLite.HardwareControl.cpuTemp > 0
-                ? MechrevoLite.HardwareControl.cpuTemp : (hw?.CpuTemp ?? -1)),
+                ? MechrevoLite.HardwareControl.cpuTemp : (L_Mechrevo.WpfP0.Services.WpfBackend.CpuTemp)),
             snapshot.CpuUsagePercent,
             snapshot.CpuFrequencyMhz,
             snapshot.GpuTempC > 0 ? snapshot.GpuTempC : (MechrevoLite.HardwareControl.gpuTemp > 0
-                ? MechrevoLite.HardwareControl.gpuTemp : (hw?.GpuTemp ?? -1)),
+                ? MechrevoLite.HardwareControl.gpuTemp : (L_Mechrevo.WpfP0.Services.WpfBackend.GpuTemp)),
             snapshot.GpuUsagePercent,
             snapshot.GpuCoreFrequencyMhz,
             vramUsedMb,
             MechrevoLite.HardwareControl.vramUsage ?? -1,
-            snapshot.CpuFanRpm > 0 ? snapshot.CpuFanRpm : (hw?.CpuFanRpm ?? -1),
-            snapshot.GpuFanRpm > 0 ? snapshot.GpuFanRpm : (hw?.GpuFanRpm ?? -1),
+            snapshot.CpuFanRpm > 0 ? snapshot.CpuFanRpm : (L_Mechrevo.WpfP0.Services.WpfBackend.CpuFanRpm),
+            snapshot.GpuFanRpm > 0 ? snapshot.GpuFanRpm : (L_Mechrevo.WpfP0.Services.WpfBackend.GpuFanRpm),
             snapshot.CpuFanDutyPercent,
             snapshot.GpuFanDutyPercent,
             ramUsage,

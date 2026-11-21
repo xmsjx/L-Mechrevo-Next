@@ -1,4 +1,4 @@
-namespace MechrevoLite.Hardware;
+namespace MechrevoLite.Contracts;
 
 public enum LiquidCoolingControlRoute
 {

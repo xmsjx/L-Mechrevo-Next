@@ -37,5 +37,8 @@ internal enum FeatureId
     SilentTurbo,
 
     /// <summary>CPU 性能调优与风扇设置的统一入口（PL/温度墙/风扇设置）。</summary>
-    PerfTuning
+    PerfTuning,
+
+    /// <summary>界面是否提供「GCU 模式 / EC 模式」切换（没有 GCU 的模具恒不支持）。</summary>
+    ControlModeSwitch
 }

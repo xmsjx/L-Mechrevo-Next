@@ -1739,7 +1739,7 @@ public static class HardwareControl
 			// 无界机型**以 EC 为准**覆盖 GCU FanInfo：主扇 0x0464 = CPU、副扇 0x046C = GPU。
 			// GCU FanInfo 未上报时（例如 GCU 服务预热/尚未 ready），按官方 EC 寄存器只读兜底。
 			// 与 OpenRevo 的 EC 轮询同理：Fan RPM 直接走 EC，不依赖 GCU 是否已 ready。
-			// 参考 OpenRevo：Fan RPM 直接轮询 EC（CPU 0x0464/0x0465，GPU 0x046C/0x046B），
+			// Fan RPM 直接轮询 EC（CPU 0x0464/0x0465，GPU 0x046C/0x046D，均大端），
 			// GCU FanInfo 缺失或超过 5 秒没更新时作为只读备路，避免界面停在旧转速。
 			bool fanInfoStale = !hw.IsFanInfoFresh(TimeSpan.FromSeconds(5));
 			// 反复读失败（设备缺失/驱动未就绪）时每拍重试会让一次失败付几百毫秒代价：

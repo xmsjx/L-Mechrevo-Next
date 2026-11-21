@@ -664,6 +664,9 @@ internal class Strings
 	internal static string GcuImportDone => ResourceManager.GetString("GcuImportDone", resourceCulture);
 	internal static string GcuImportFailed => ResourceManager.GetString("GcuImportFailed", resourceCulture);
 
+	internal static string GcuConnectFailedTitle => ResourceManager.GetString("GcuConnectFailedTitle", resourceCulture);
+	internal static string GcuConnectFailedAsk => ResourceManager.GetString("GcuConnectFailedAsk", resourceCulture);
+
 	internal static string GcuConnectedTooltip => ResourceManager.GetString("GcuConnectedTooltip", resourceCulture);
 
 	internal static string GcuConnectingText => ResourceManager.GetString("GcuConnectingText", resourceCulture);

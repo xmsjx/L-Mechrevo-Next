@@ -72,17 +72,43 @@ internal static class LightingSettingsStore
 		{
 			return;
 		}
-		_userLightingIntent = true;
 		try
 		{
 			string markerPath = GetUserIntentMarkerPath();
 			Directory.CreateDirectory(Path.GetDirectoryName(markerPath));
 			File.WriteAllText(markerPath, "configured=1" + Environment.NewLine, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+			// ⭐ 2026-11-19（机主：键盘名字在、灯效没了）：只有文件真的写成功才认这个意图。
+			//   旧写法先把内存标记置真、再 try 写文件；写失败只剩一条普通日志 ⇒ 诊断显示"用户意图标记=有"、
+			//   磁盘上却一个文件都没有，开机重放于是按"用户配置过"去覆盖固件状态。
+			_userLightingIntent = true;
 			Logger.WriteLine("灯效用户意图标记已写入（" + reason + "）：后续启动/唤醒恢复灯效");
 		}
 		catch (Exception ex)
 		{
-			Logger.WriteLine("灯效用户意图标记写入失败（" + reason + "）: " + ex.Message);
+			Logger.WriteError("[light-cfg] 灯效用户意图标记写入失败（" + reason + " · path=" + GetUserIntentMarkerPath()
+				+ "）：" + ex.GetType().Name + " " + ex.Message);
+		}
+	}
+
+	/// <summary>
+	/// 2026-11-19：磁盘上是否**真的**有用户灯光配置（标记文件或任一通道 .cfg）。
+	/// <para>⛔ 与 <see cref="HasUserLightingIntent"/> 的区别：本方法不看内存标记，只认磁盘证据 ——
+	/// 开机重放与诊断必须用它，否则写入失败时会误判"用户配置过"。</para>
+	/// </summary>
+	internal static bool HasPersistedLightingIntent()
+	{
+		try
+		{
+			if (File.Exists(GetUserIntentMarkerPath()))
+			{
+				return true;
+			}
+			return HasLegacySavedChannelConfig();
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[light-cfg] 判定磁盘灯光配置失败：" + ex.GetType().Name);
+			return false;
 		}
 	}
 
@@ -137,17 +163,29 @@ internal static class LightingSettingsStore
 			("HidLightbar_Sync/Ctrl", "同步")
 		};
 		StringBuilder sb = new StringBuilder();
-		sb.Append("用户意图标记=").Append(HasUserLightingIntent() ? "有" : "无");
+		// 2026-11-19：意图标记要看**磁盘** —— 旧版本"先置内存再写文件"，写失败会谎报"有"。
+		bool intentFile = false;
+		try
+		{
+			intentFile = File.Exists(GetUserIntentMarkerPath());
+		}
+		catch (Exception)
+		{
+		}
+		sb.Append("用户意图标记=").Append(intentFile
+			? "有(文件)"
+			: (HasUserLightingIntent() ? "有(仅内存·未落盘)" : "无"));
 		foreach ((string topic, string label) in channels)
 		{
 			if (!TryLoad(topic, out LightChannelSettings settings))
 			{
-				sb.Append(" · ").Append(label).Append("=无配置");
+				sb.Append(" · ").Append(label).Append("=无配置(文件缺失)");
 				continue;
 			}
 			sb.Append(" · ").Append(label)
 				.Append("={效果:").Append(string.IsNullOrEmpty(settings.Effect) ? "?" : settings.Effect)
 				.Append(" 亮度:").Append(settings.Light)
+				.Append(settings.BrightnessPct >= 0 ? "(" + settings.BrightnessPct + "%)" : "(档位)")
 				.Append(" 电源:").Append(settings.PowerOn ? "on" : "off")
 				.Append(settings.PowerExplicit ? "(显式)" : "(默认)")
 				.Append('}');
@@ -164,13 +202,18 @@ internal static class LightingSettingsStore
 			Directory.CreateDirectory(Path.GetDirectoryName(path));
 			File.WriteAllText(text, Serialize(settings), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 			File.Move(text, path, overwrite: true);
+			// 2026-11-19（机主：灯带/Logo 完全没有记忆）：落盘成功必须留痕，否则下次诊断还是只能猜。
+			Logger.WriteLine("[light-cfg] 已保存 " + topic + " ⇒ " + path + "（效果=" + settings.Effect
+				+ " 亮度=" + settings.Light + (settings.BrightnessPct >= 0 ? "(" + settings.BrightnessPct + "%)" : "")
+				+ " 电源=" + (settings.PowerOn ? "on" : "off")
+				+ (settings.PowerExplicit ? " 显式" : " 默认") + "）");
 			// 2026-10-10（① 安装后灯被熄灭）：Save 的全部调用点都是用户的灯光操作
 			// （RgbForm / SettingsForm / LightForm 的点击、拖拽）⇒ 这里顺手记下"用户明确设置过"。
 			MarkUserLightingIntent("Save " + topic);
 		}
 		catch (Exception ex)
 		{
-			Logger.WriteLine("Lighting settings write failed (" + topic + "): " + ex.Message);
+			Logger.WriteError("[light-cfg] 保存失败 " + topic + " ⇒ " + path + "：" + ex.GetType().Name + " " + ex.Message);
 		}
 	}
 
@@ -257,7 +300,7 @@ internal static class LightingSettingsStore
 		}
 		catch (Exception ex)
 		{
-			Logger.WriteLine("Lighting settings write failed (" + topic + "): " + ex.Message);
+			Logger.WriteError("[light-cfg] 内部写回失败 " + topic + " ⇒ " + path + "：" + ex.GetType().Name + " " + ex.Message);
 			return false;
 		}
 	}
@@ -275,6 +318,7 @@ internal static class LightingSettingsStore
 		int breathingIndex = 1;
 		int monoIndex = 4;
 		bool usePreset = false;
+		int brightnessPct = -1;
 		foreach (string line in lines)
 		{
 			int num = line.IndexOf('=');
@@ -401,9 +445,18 @@ internal static class LightingSettingsStore
 				}
 				break;
 			}
+			case "brightness_pct":
+			{
+				if (int.TryParse(text2, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pctResult))
+				{
+					// 0..100 原样；负数视为"没记录"，越界夹到 100（⛔ 不让坏值把整份配置读崩）。
+					brightnessPct = pctResult < 0 ? -1 : Math.Clamp(pctResult, 0, 100);
+				}
+				break;
+			}
 		}
 		}
-		return new LightChannelSettings(effect, light, speed, colorArgb, powerOn && explicitPower, manualIndexes, breathingIndex, monoIndex, usePreset, explicitPower, mixColors);
+		return new LightChannelSettings(effect, light, speed, colorArgb, powerOn && explicitPower, manualIndexes, breathingIndex, monoIndex, usePreset, explicitPower, mixColors, brightnessPct);
 	}
 
 	private static string Serialize(LightChannelSettings settings)
@@ -418,10 +471,13 @@ internal static class LightingSettingsStore
 			}
 			stringBuilder.Append(colors[i].ToString(CultureInfo.InvariantCulture));
 		}
-		return string.Join('\n', new string[12]
+		return string.Join('\n', new string[13]
 		{
 			"effect=" + settings.Effect,
 			"light=" + settings.Light.ToString(CultureInfo.InvariantCulture),
+			// ⭐ 2026-11-19（机主）：HID 键盘亮度是连续的 0..100 ⇒ 精确值单独存一行；
+			//   `light=` 继续只表示档位（EC 回落 / 老版本 / OSD 全靠它，⛔ 不改语义）。
+			"brightness_pct=" + settings.BrightnessPct.ToString(CultureInfo.InvariantCulture),
 			"speed=" + settings.Speed.ToString(CultureInfo.InvariantCulture),
 			"color=" + settings.ColorArgb.ToString(CultureInfo.InvariantCulture),
 			"power=" + (settings.PowerOn ? "1" : "0"),

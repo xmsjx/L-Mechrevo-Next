@@ -13,6 +13,9 @@ public static class PerfModeStore
 
 	internal const string LastCustomKey = "perf_last_custom";
 
+	// （开机档位重放）：用户最后一次明确选的档位，与 perf_active 分开保存。
+	internal const string BootIntentKey = "perf_boot_intent";
+
 	internal const string SchemaKey = "perf_schema";
 
 	internal const int CurrentSchema = 1;
@@ -39,6 +42,31 @@ public static class PerfModeStore
 	}
 
 	public static bool HasStoredActive => !string.IsNullOrWhiteSpace(AppConfig.GetString("perf_active"));
+
+	// （开机档位重放）：把"用户意图"与"当前状态"分开。启动对账会按固件回读改写 ActiveModeId，
+	// 若意图只存在那里，固件一旦回默认档，重启后就没有依据可重放了。
+	public static string? BootIntentId
+	{
+		get
+		{
+			string text = AppConfig.GetString("perf_boot_intent");
+			return string.IsNullOrWhiteSpace(text) ? null : text;
+		}
+		set
+		{
+			if (string.IsNullOrWhiteSpace(value))
+			{
+				AppConfig.Remove("perf_boot_intent");
+			}
+			else
+			{
+				AppConfig.Set("perf_boot_intent", value);
+			}
+			AppConfig.Flush();
+		}
+	}
+
+	public static bool HasBootIntent => !string.IsNullOrWhiteSpace(AppConfig.GetString("perf_boot_intent"));
 
 	public static string? LastCustomId
 	{

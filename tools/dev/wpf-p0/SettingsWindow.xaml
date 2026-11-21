@@ -337,6 +337,14 @@
                             <ComboBoxItem Content="EC 控制模式" Tag="ec" />
                         </ComboBox>
                         <TextBlock x:Name="ControlModeStatus" Style="{StaticResource Hint}" Margin="0,6,0,0" />
+                        <!-- 导入 / 移除 GCU 只对同方模具开放；宝龙达不是同方模具，不显示这些选项。 -->
+                        <StackPanel x:Name="GcuPackagePanel" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed">
+                            <Button x:Name="ImportGcuButton" Content="导入 GCU 包…" Style="{StaticResource FlatButton}"
+                                    Click="ImportGcu_Click" Margin="0,0,12,0" />
+                            <Button x:Name="RemoveGcuButton" Content="移除 GCU" Style="{StaticResource FlatButton}"
+                                    Click="RemoveGcu_Click" />
+                        </StackPanel>
+                        <TextBlock x:Name="GcuActionStatus" Style="{StaticResource Hint}" Margin="0,6,0,0" TextWrapping="Wrap" />
                         <CheckBox x:Name="PerfOnBatteryCheck" Content="允许离电使用狂暴/自定义模式"
                                   Style="{DynamicResource HeaderSwitch}" Margin="0,8,0,0" Click="PerfOnBattery_Click" />
                     </StackPanel>

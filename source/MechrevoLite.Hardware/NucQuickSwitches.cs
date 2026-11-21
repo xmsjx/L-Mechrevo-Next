@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 
 namespace MechrevoLite.Hardware;
 
@@ -92,7 +93,8 @@ internal static class NucQuickSwitches
             confirmed = true;
             return true;
         }
-        if (!TryRead(TriggerAddress, out int trigger) || !TryWrite(TriggerAddress, trigger | WinKeyBit))
+        // bit0 是快捷开关的翻转位：走统一入口，只改这一位，其余位原样保留。
+        if (!EcTriggerByte.TryApply(EcTriggerByte.QuickSwitchLatch, 0, ownQuickSwitch: true))
         {
             return false;
         }
@@ -104,8 +106,43 @@ internal static class NucQuickSwitches
     internal static bool TrySetTouchpad(bool on, out bool confirmed)
     {
         confirmed = false;
+        // 优先级与官方控制台（GCU）一致：① 合成 Win+Ctrl+F24（GCU 的 TriggerTouchpad 就是这一手，
+        // 由 Windows 的 Precision Touchpad 状态机执行开关）→ ② Windows 设置同款 API → ③ 老批次才写 EC bit3。
+        // ⛔ 0x7A6 bit3 不是触摸板开关位：GCU 开机就写 0x7A6=0x29（bit3=1），触摸板照样能用。
+        bool known = ReadPtpRegistry(out bool ptpNow);
+        if (known && ptpNow == on)
+        {
+            confirmed = true;
+            Logger.WriteLine($"[touchpad] 已是目标状态 PTP={on} · 不下发");
+            return true;
+        }
+        if (known)
+        {
+            SendTouchpadHotkey();
+            for (int waited = 80; waited <= 800; waited += 80)
+            {
+                Thread.Sleep(80);
+                if (ReadPtpRegistry(out bool ptpAfter) && ptpAfter == on)
+                {
+                    confirmed = true;
+                    Logger.WriteLine($"[touchpad] Win+Ctrl+F24 ⇒ PTP={on}（{waited}ms）· 不写 EC");
+                    return true;
+                }
+            }
+            Logger.WriteLine("[touchpad] Win+Ctrl+F24 未生效（PTP 未翻转）⇒ 退回 Windows 设置 API");
+        }
+        WritePtpRegistry(on);
+        bool systemOk = TrySystemTouchpad(on, out string systemDetail);
+        if (systemOk)
+        {
+            confirmed = ReadPtpRegistry(out bool ptpOn) ? ptpOn == on : true;
+            Logger.WriteLine($"[touchpad] Windows API PTP={confirmed}（{systemDetail}）· 不写 EC");
+            return confirmed;
+        }
+        // 兜底：系统工具缺失时才退回写 EC bit3（老批次用得到）。
         if (!TryRead(TouchpadAddress, out int current))
         {
+            Logger.WriteLine($"[touchpad] Windows=False（{systemDetail}）· EC 不可读");
             return false;
         }
         int target = on ? (current | TouchpadBit) : (current & ~TouchpadBit);
@@ -114,13 +151,32 @@ internal static class NucQuickSwitches
             return false;
         }
         confirmed = TryRead(TouchpadAddress, out int after) && ((after & TouchpadBit) != 0) == on;
-        WritePtpRegistry(on);
-        // Windows 输入子系统还需要 EnableTouchpad 开关；只写 EC/PTP 注册表不足以真正启用/禁用触摸板。
-        bool systemOk = TrySystemTouchpad(on, out string systemDetail);
-        Logger.WriteLine($"[touchpad] EC={confirmed} System={systemOk}（{systemDetail}）");
-        confirmed = confirmed && (systemOk || !File.Exists(SystemTouchpadTool));
+        Logger.WriteLine($"[touchpad] ①② 都不可用（{systemDetail}）· 退回写 EC bit3 确认={confirmed}");
         return confirmed;
     }
+
+    /// <summary>
+    /// 合成 <c>Win + Ctrl + F24</c>。
+    /// <para>官方控制台 <c>DeviceSwitchItem.TriggerTouchpad()</c> 就是发这个组合（同方机器通用），
+    /// 触摸板开关由 Windows 处理，结果会写回 <c>PTP Status\Enabled</c>，我们据此回读确认。</para>
+    /// <para>⚠️ 只调 Windows 公开 API，⛔ 不碰 EC、⛔ 不碰厂商寄存器。</para>
+    /// </summary>
+    private static void SendTouchpadHotkey()
+    {
+        const byte VkLWin = 0x5B;
+        const byte VkLCtrl = 0xA2;
+        const byte VkF24 = 0x87;
+        const uint KeyUp = 0x0002;
+        keybd_event(VkLWin, 0, 0, UIntPtr.Zero);
+        keybd_event(VkLCtrl, 0, 0, UIntPtr.Zero);
+        keybd_event(VkF24, 0, 0, UIntPtr.Zero);
+        keybd_event(VkF24, 0, KeyUp, UIntPtr.Zero);
+        keybd_event(VkLCtrl, 0, KeyUp, UIntPtr.Zero);
+        keybd_event(VkLWin, 0, KeyUp, UIntPtr.Zero);
+    }
+
+    [DllImport("user32.dll", SetLastError = false)]
+    private static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
 
     /// <summary>
     /// NUC/UMI 的关机 USB 供电是 trigger bit4 的“翻转脉冲”，不是常驻位。
@@ -136,22 +192,18 @@ internal static class NucQuickSwitches
             confirmed = true;
             return true;
         }
-        if (!TryRead(TriggerAddress, out int trigger))
-        {
-            return false;
-        }
         bool acBefore = TryRead(AcRecoveryAddress, out int acOld) && (acOld & AcRecoveryBit) != 0;
-        if (!TryWrite(TriggerAddress, trigger | UsbChargeTriggerBit))
+        // bit4 是翻转脉冲：置位 → 30ms → 清零。必须走统一入口，否则会和键盘灯/风扇表的锁存互相覆盖。
+        if (!EcTriggerByte.TryApply((byte)UsbChargeTriggerBit, 0, ownUsbPulse: true))
         {
             return false;
         }
         Thread.Sleep(30);
-        // 清掉 trigger，别让它一直挂着；清失败重读再清一次，避免 bit4 残留导致下次翻转失效。
-        bool clearOk = TryWrite(TriggerAddress, trigger & ~UsbChargeTriggerBit);
+        // 清掉 bit4，别让它一直挂着；清失败再清一次，避免残留导致下次翻转失效。
+        bool clearOk = EcTriggerByte.TryApply(0, (byte)UsbChargeTriggerBit, ownUsbPulse: true);
         if (!clearOk)
         {
-            clearOk = TryRead(TriggerAddress, out int retryTrigger)
-                && TryWrite(TriggerAddress, retryTrigger & ~UsbChargeTriggerBit);
+            clearOk = EcTriggerByte.TryApply(0, (byte)UsbChargeTriggerBit, ownUsbPulse: true);
         }
         bool pulseOk = clearOk && TryRead(TriggerAddress, out int after) && (after & UsbChargeTriggerBit) == 0;
         // USB 触发可能顺带清掉来电自启；按切换前的值恢复。
@@ -262,6 +314,26 @@ internal static class NucQuickSwitches
         }
     }
 
+    private static bool ReadPtpRegistry(out bool on)
+    {
+        on = true;
+        try
+        {
+            using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\PrecisionTouchPad\Status");
+            object? value = key?.GetValue("Enabled");
+            if (value is int i)
+            {
+                on = i != 0;
+                return true;
+            }
+        }
+        catch
+        {
+        }
+        return false;
+    }
+
     internal static void Sync(MechrevoHw hw)
     {
         if (TryRead(FnLockAddress, out int fn))
@@ -280,9 +352,10 @@ internal static class NucQuickSwitches
         {
             hw.QuickSwitches["winkey"] = (win & WinKeyBit) != 0;
         }
-        if (TryRead(TouchpadAddress, out int tp))
+        // 触摸板状态只认 Windows PTP；0x7A6 bit3 不是触摸板开关位（见 TrySetTouchpad 注释）。
+        if (ReadPtpRegistry(out bool ptpEnabled))
         {
-            hw.QuickSwitches["touchpad"] = (tp & TouchpadBit) != 0;
+            hw.QuickSwitches["touchpad"] = ptpEnabled;
         }
         if (TryRead(AcRecoveryAddress, out int ac))
         {

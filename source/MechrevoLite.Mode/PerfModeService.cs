@@ -43,6 +43,8 @@ internal sealed class PerfModeService
 	private int _reconcileSeq;
 
 	private string? _pendingModeId;
+	// 本次开机重放是否已经拿到结论（切了/已一致/无意图）；false 表示要保留档位保护。
+	private bool _bootReplayConcluded;
 
 	// (b)（2026-10-09，用户原话「OK 按你说的」）：懒验证 —— 把"已下发·待确认(Sent)"的步骤连同期望值留着，
 	// 在 300ms/2s/4s 多拍重读 + 每次 GCU 状态刷新上再读，读到一致原地升级为已确认（重抛 Applied 刷新界面）。
@@ -81,6 +83,21 @@ internal sealed class PerfModeService
 
 	public static PerfModeService? Instance { get; private set; }
 
+	// （开机档位重放）重放落地前，固件回读/启动对账都不得覆盖档位记忆，
+	// 否则开机第一帧快照就会把"上次选狂暴"改回固件默认档，重放也就失去依据。
+	// 时间兜底 60s：重放没跑（没有服务实例/后端未就绪）时不能永久锁住对账。
+	private long _bootIntentGuardUntilTick = Environment.TickCount64 + 60000;
+
+	private bool BootIntentGuardActive => Environment.TickCount64 < Interlocked.Read(ref _bootIntentGuardUntilTick);
+
+	internal void EndBootIntentGuard(string why)
+	{
+		if (Interlocked.Exchange(ref _bootIntentGuardUntilTick, 0L) != 0L)
+		{
+			Logger.WriteLine("[perfmode] 档位记忆保护解除（" + why + "）");
+		}
+	}
+
 	public IReadOnlyList<PerfModeDefinition> Modes => _modes ?? (_modes = PerfModeStore.Load());
 
 	/// <summary>丢弃缓存、从存储重新读取全部档位（用于切档后强制刷新界面）。</summary>
@@ -118,6 +135,17 @@ internal sealed class PerfModeService
 		}
 		PerfModeStore.ActiveModeId = modeId;
 		RaiseActiveChanged();
+	}
+
+	/// <summary>用户主动选定内置档：当前档与开机意图一起记，重启按这次选择恢复。</summary>
+	public void RememberIntent(string modeId)
+	{
+		if (string.IsNullOrEmpty(modeId) || (object)Find(modeId) == null)
+		{
+			return;
+		}
+		PerfModeStore.SetActiveFor(PowerSourceKey(), modeId);
+		PerfModeStore.BootIntentId = modeId;
 	}
 
 	public PerfModeDefinition? Active => Find(ActiveModeId);
@@ -866,7 +894,9 @@ internal sealed class PerfModeService
 		}		PerfModeCapabilities caps = Capabilities();
 		IReadOnlyList<FirmwareSlotState> slots = PerfModeStore.LoadSlots(SlotCount);
 		FirmwareSlotPlan plan = null;
-		if (mode.Route == PerfModeRoute.FirmwareSlot && !ecLocalOnly)
+		// 内置档默认走内置档；只有 30 系「模式 × 配置」重放仍按固件槽下发（显式覆盖）。
+		bool firmwareSlotRoute = mode.Route == PerfModeRoute.FirmwareSlot;
+		if (firmwareSlotRoute && !ecLocalOnly)
 		{
 			string activeModeId = ActiveModeId;
 			plan = FirmwareSlotPlanner.Plan(mode.Id, mode.Settings.FirmwareSignature(), slots, activeModeId);
@@ -890,8 +920,10 @@ internal sealed class PerfModeService
 				Logger.WriteError(wujieLog);
 			}
 		}
+		PerfModeRoute? routeOverride = ecLocalOnly ? PerfModeRoute.BuiltIn
+			: ((firmwareSlotRoute && mode.Route != PerfModeRoute.FirmwareSlot) ? PerfModeRoute.FirmwareSlot : (PerfModeRoute?)null);
 		IReadOnlyList<PerfApplyStep> readOnlyList = PerfModeApplyPlanner.Build(mode, plan, caps,
-			includeSwitch: true, routeOverride: ecLocalOnly ? PerfModeRoute.BuiltIn : (PerfModeRoute?)null);
+			includeSwitch: true, routeOverride: routeOverride);
 		// EC 直连：没有 GCU 固件通道 ⇒ 字段步不下发，记 Stale（不算失败，界面提示"可能没生效"）。
 		List<PerfApplyStepOutcome> ecSkippedSteps = new List<PerfApplyStepOutcome>();
 		if (ecLocalOnly)
@@ -1009,7 +1041,7 @@ internal sealed class PerfModeService
 			// 或本来就在该档）⇒ ActiveModeId 与固件槽位都不更新。档位**意图**已由
 			// MechrevoService.SwitchCustomProfile 在请求时写进 performance_<电源来源>，所以此后的自动重应用
 			// 会**重试自定义档**，不会再拿老键里的内置档（静音/平衡）把它顶掉。
-			Logger.WriteLine($"PerfModes: {mode.Id} 未切换成功（reason={reason} route={mode.Route}）→ ActiveModeId 仍为 {ActiveModeId}；档位意图保持用户选择，等下一次重试。失败/未确认项：{outcome.Describe()}");
+			Logger.WriteLine($"PerfModes: {mode.Id} 未切换成功（reason={reason} route={mode.Route}）→ 档位记忆仍按用户选择记为 {mode.Id}，等下一次重试。失败/未确认项：{outcome.Describe()}");
 			// 激活失败时回滚“稍后接管”写入的曲线存档，避免留下 enabled=true 但没人接管的状态。
 			RollbackBaolongdaCurveAfterFailedActivation(mode, hw, curveBefore, curveFileExisted, fanCurveStepGenerated, "激活失败");
 		}
@@ -1021,19 +1053,37 @@ internal sealed class PerfModeService
 			{
 				Logger.WriteError(wujieApplyLog);
 			}
-		}		if (outcome.ModeSwitched)
+		}
+		// 意图与当前档分开记：切档无论是否确认成功都记成意图（重启按它重放），
+		// 但「当前档」只在固件确认切换后才改，避免回读失败时界面写着已切过去。
+		bool modeMemoryFollow = !string.Equals(ActiveModeId, mode.Id, StringComparison.Ordinal);
+		PerfModeStore.SetActiveFor(PowerSourceKey(), mode.Id);
+		PerfModeStore.BootIntentId = mode.Id;
+		if (mode.IsCustom)
+		{
+			PerfModeStore.LastCustomId = mode.Id;
+		}
+		if (outcome.ModeSwitched)
+		{
+			PerfModeStore.ActiveModeId = mode.Id;
+			if (modeMemoryFollow)
+			{
+				RaiseActiveChanged();
+			}
+		}
+		else if (modeMemoryFollow)
+		{
+			Logger.WriteLine("PerfModes: activate(" + mode.Id + ") 未确认切换 ⇒ 当前档仍为 " + ActiveModeId + " · 意图已记为 " + mode.Id);
+		}
+		if (outcome.ModeSwitched)
 		{
 			if ((object)plan != null)
 			{
 				slots = FirmwareSlotPlanner.Assign(slots, plan.SlotIndex, mode.Id, outcome.FirmwareParametersIssued ? mode.Settings.FirmwareSignature() : null, PerfModeStore.NowStamp());
 				PerfModeStore.SaveSlots(slots);
 			}
-			PerfModeStore.ActiveModeId = mode.Id;
-			PerfModeStore.SetActiveFor(PowerSourceKey(), mode.Id);
-			if (mode.IsCustom)
-			{
-				PerfModeStore.LastCustomId = mode.Id;
-			}
+			// 用户主动切档 ⇒ 记忆就是这次选择，开机保护到此结束。
+			EndBootIntentGuard("切档：" + mode.Id);
 			// 切到内置档/未配曲线的自定义档时，主动交回固件，避免上一档的软件曲线继续接管风扇。
 			if (_hw != null && _hw.UsesBaolongda)
 			{
@@ -1180,7 +1230,7 @@ internal sealed class PerfModeService
 					Logger.WriteLine("PerfModes: reconcile field " + kv.Key + " failed: " + ex.Message);
 				}
 			}
-			PerfModeStore.SaveSettings(mode.Id, expected);
+			ModeSettings.Save(mode.Id, expected);
 			Invalidate();
 			Logger.WriteLine("PerfModes: reconcile 完成, 已同步本地配置");
 		}
@@ -1428,7 +1478,7 @@ internal sealed class PerfModeService
 			PerfModeSettings perfModeSettings = SnapshotLive(includeFanCurves).FillNulls(current);
 			if (!(perfModeSettings.FirmwareSignature() == current.FirmwareSignature()))
 			{
-				PerfModeStore.SaveSettings(mode.Id, perfModeSettings);
+				ModeSettings.Save(mode.Id, perfModeSettings);
 				IReadOnlyList<FirmwareSlotState> slotStates = PerfModeStore.LoadSlots(SlotCount);
 				PerfModeStore.SaveSlots(FirmwareSlotPlanner.Assign(slotStates, slot, mode.Id, slotStates.Any((FirmwareSlotState s) => s.Index == slot && s.OwnerModeId == mode.Id && s.Signature == current.FirmwareSignature()) ? perfModeSettings.FirmwareSignature() : null, PerfModeStore.NowStamp()));
 				Logger.WriteLine($"PerfModes: captured slot {slot} parameters into {mode.Id}");
@@ -1486,6 +1536,9 @@ internal sealed class PerfModeService
 		string previousActive = PerfModeStore.ActiveModeId;
 		PerfModeStore.ActiveModeId = mode.Id;
 		PerfModeStore.SetActiveFor(PowerSourceKey(), mode.Id);
+		PerfModeStore.BootIntentId = mode.Id;
+		// 用户主动切档 ⇒ 记忆就是这次选择，开机保护到此结束。
+		EndBootIntentGuard("切档：" + mode.Id);
 		PerfModeStore.LastCustomId = mode.Id;
 		string backendName = _hw == null
 			? "未知后端"
@@ -1504,159 +1557,172 @@ internal sealed class PerfModeService
 	{
 		return ReconcileAsync("startup warmup");
 	}
-	// <para> 幂等：先读当前值，与配置一致 ⇒ 跳过；失败不重试、只记日志 </para>
-	internal async Task ReplayLocalProfileOnStartupAsync()
+
+	// （开机档位重放）：部分同方机型重启后固件会回到默认档 ⇒ 记住用户最后选的档位，开机对不上就补发一次。
+	// 幂等：固件已在该档 ⇒ 不下发；失败只补发一次，不做无界重试。
+	internal async Task ReplayBootIntentOnStartupAsync()
 	{
+		try
+		{
+			await ReplayBootIntentOnStartupCoreAsync().ConfigureAwait(false);
+		}
+		finally
+		{
+			// 只有拿到结论（切了/已一致/无意图）才解除档位保护；后端没就绪或下发失败时保留，
+			// 避免随后的启动对账按固件默认档改写档位记忆。
+			if (_bootReplayConcluded)
+			{
+				EndBootIntentGuard("开机重放已结束");
+			}
+			else
+			{
+				Logger.WriteLine("[perfmode] 开机重放：本次没有结论 ⇒ 保留档位保护（等下次启动或用户切档）");
+			}
+		}
+	}
+
+	private async Task ReplayBootIntentOnStartupCoreAsync()
+	{
+		// 薄重放：取意图 → 问一次当前档 → 不一致就按意图下发一次。
+		// 参数要不要写、写没写进去，全部交给下发链（Confirmed/Sent/Stale），这里不按后端复判、不碰硬件。
 		MechrevoHw hw = _hw;
 		if (hw == null)
 		{
 			return;
 		}
-		// 同方 GCU（30/40 系）按 LM 本地保存的自定义档恢复（更新/重装 GCU 后不丢配置）
-		// 所有 GCU 机型（30/40/50 系）都按本地存档恢复自定义档；
-		// 不限代际，避免 50 系或新机型重启后掉回内置档。
-		bool gcuCustomRestore = hw.IsGcuConnected;
-		// EC 实验模式 GCU 离线，但自定义档仍由本地存档恢复；否则重启后 1798 已回 64，
-		// 界面会掉回内置档，用户看到的就不是重启前的自定义档。
-		bool ecExperimental = !hw.IsGcuConnected
-			&& MechrevoLite.Hardware.GcuEcExperimental.Enabled;
-		if (!hw.SmuCustomApu && !hw.UsesBaolongda && !gcuCustomRestore && !ecExperimental)
+		if (!hw.IsConnected && !hw.IsGcuConnected && !MechrevoLite.Hardware.GcuEcMode.IsEcMode && !hw.SmuCustomApu)
 		{
+			Logger.WriteLine("[perfmode] 开机重放：后端未就绪 ⇒ 跳过（固件回读=" + hw.OperatingMode + "）");
 			return;
 		}
-		bool isWujie = hw.SmuCustomApu;
-		bool isBaolongda = !isWujie && hw.UsesBaolongda;
-		bool isGcu = !isWujie && !isBaolongda;
-		if (isBaolongda)
+		_bootReplayConcluded = false;
+		// 意图来源分开记：boot-intent=上次切档落盘的意图；没有意图时才退回当前档记忆。
+		string bootIntentId = PerfModeStore.BootIntentId;
+		string intentId = string.IsNullOrEmpty(bootIntentId) ? PerfModeStore.ActiveModeId : bootIntentId;
+		string intentSource = string.IsNullOrEmpty(bootIntentId) ? "active" : "boot-intent";
+		PerfModeDefinition mode = string.IsNullOrEmpty(intentId) ? null : Find(intentId);
+		if (mode == null)
 		{
-			string stateLog = "[perfmode] " + (hw.UsesBaolongda ? "宝龙达" : "同方 GCU") + "启动：PerfModeStore.ActiveModeId=" + PerfModeStore.ActiveModeId
-				+ "（HasStoredActive=" + PerfModeStore.HasStoredActive + "）· 固件回读=" + hw.OperatingMode;
-			if (Logger.TryMarkChanged("baolongda-startup-state", stateLog))
-			{
-				Logger.WriteError(stateLog);
-			}
-		}
-		if (!PerfModeStore.HasStoredActive)
-		{
-			Logger.WriteError("[perfmode] 启动恢复：没有保存的活动档（HasStoredActive=False）⇒ 不重放；界面可能按固件回读显示默认档");
+			Logger.WriteLine("[perfmode] 开机重放：没有可用的档位意图 ⇒ 跳过");
+			_bootReplayConcluded = true;
 			return;
 		}
-		PerfModeDefinition mode = Find(ActiveModeId);
-		// 30 系内置档：按「模式 × 配置号」用 LM 存档重放一次
-		if ((object)mode != null && !mode.IsCustom && hw.IsGcuConnected && hw.DgpuGeneration == DgpuGenerationKind.Gen30)
+		string currentId = ResolveCurrentModeId(hw) ?? "";
+		// 「已在目标档」只说明档位一致，不说明参数还在：内置档参数由固件自己管，可以跳；
+		// 自定义档的参数在固件槽里重启即丢（槽里可能还留着上次的签名），必须走一次下发补齐。
+		if (!mode.IsCustom && string.Equals(currentId, mode.Id, StringComparison.Ordinal))
 		{
-			int visualMode30 = mode.Kind switch
+			_bootReplayConcluded = true;
+			Logger.WriteLine("[perfmode] 开机重放：意图=" + mode.Id + "（来源=" + intentSource + "） · 当前=" + currentId + " ⇒ 已在目标档，不重发");
+			if (!string.Equals(ActiveModeId, mode.Id, StringComparison.Ordinal))
 			{
-				PerfModeKind.Turbo => 1,
-				PerfModeKind.Silent => 2,
-				_ => 0
-			};
-			int profileIndex30 = ModeProfileConfig.Get(visualMode30);
-			PerfModeSettings storedProfile30 = PerfModeStore.LoadSettings("fw" + visualMode30.ToString() + "p" + profileIndex30.ToString());
-			if (!storedProfile30.IsUntouched)
-			{
-				PerfModeStore.SaveSettings(mode.Id, storedProfile30);
 				ActivateLocalProfile(mode.Id);
-				try
-				{
-					await ActivateAsync(mode.Id, "30 series profile replay", forceParameters: true).ConfigureAwait(continueOnCapturedContext: false);
-					Logger.WriteError($"[perfmode] 30 系启动恢复：模式={visualMode30} 配置={profileIndex30 + 1} ⇒ 按 LM 存档重放一次");
-				}
-				catch (Exception ex)
-				{
-					Logger.WriteError("[perfmode] 30 系配置重放失败（已吞掉）：" + ex.Message);
-				}
 			}
 			return;
 		}
-		// ⇒ 其它档位只恢复「保存的当前档位本身就是自定义」的情况
-		if ((object)mode == null || !mode.IsCustom)
-		{
-			string skipLog = "[perfmode] 启动恢复：保存的当前档不是自定义（ActiveModeId=" + ActiveModeId
-				+ "）⇒ 不切模式、不重放自定义参数";
-			if (Logger.TryMarkChanged("local-startup-skip-notcustom", skipLog))
-			{
-				Logger.WriteError(skipLog);
-			}
-			return;
-		}
-		// ⭐ 把当前模式设为该档（持久化 + RaiseActiveChanged）✅
-		ActivateLocalProfile(mode.Id);
-		string backendLabel = isWujie ? (hw.WujieSmuApu ? "无界 APU" : "星耀 AMD") : (isBaolongda ? "宝龙达" : "同方 GCU");
-		string modeLog = isWujie
-			? "[perfmode] 无界 APU 启动恢复（晚于 GCU 各项）：ActiveModeId=" + mode.Id + " ⇒ 重放 SMU"
-			: "[perfmode] " + backendLabel + "启动恢复：ActiveModeId=" + mode.Id + " ⇒ 模式=自定义";
-		if (Logger.TryMarkChanged("local-startup-mode-" + backendLabel, modeLog))
-		{
-			Logger.WriteError(modeLog);
-		}
-
-		PerfModeSettings settings = mode.Settings;
-		// 宝龙达重启后固件参数可能已被复位，但 WMI 回读可能仍是**缓存/默认值**恰好与配置相同 ⇒ 用「一致就跳过」会漏应用 ❌
-		bool match;
-		if (isWujie)
-		{
-		// 2026-10-21：无界开机“默认自定义但没应用”：SMU 回读可能还是固件默认/缓存值，
-		// 恰好与配置相同 ⇒ 误判“已应用”而跳过重放；启动恢复一律强制重放一次（幂等）。
-		if (TryReadWujieSmuCurrent(out int curPl1, out int curPl2, out int curTctl))
-		{
-			Logger.WriteError("[perfmode] 无界启动恢复：SMU 当前 PL1=" + curPl1 + "/PL2=" + curPl2 + "/tctl=" + curTctl
-				+ " · 配置 PL1=" + settings.Pl1.GetValueOrDefault() + "/PL2=" + settings.Pl2.GetValueOrDefault() + "/tctl=" + settings.TccTarget.GetValueOrDefault());
-		}
-		match = false;
-		}
-		else if (isBaolongda)
-		{
-			match = BaolongdaLocalValuesMatch(settings, hw);
-			if (match)
-			{
-				Logger.WriteLine("[perfmode] 宝龙达启动恢复：回读与配置一致，但按机主要求仍**强制应用一次**（30/40 系通用）");
-			}
-			match = false;
-		}
-		else
-		{
-			// 同方 GCU：以 LM 本地配置为准，启动强制应用一次
-			match = false;
-		}
-		if (match)
-		{
-			string skip = "[perfmode] " + backendLabel + " 启动恢复：当前值与配置一致 ⇒ 跳过（ActiveModeId=" + mode.Id + "）";
-			if (Logger.TryMarkChanged("local-startup-skip-" + backendLabel, skip))
-			{
-				Logger.WriteError(skip);
-			}
-			return;
-		}
-		string replay = isWujie
-			? "[perfmode] 无界 APU 启动恢复：ActiveModeId=" + mode.Id + " ⇒ 重放本机 SMU（PL1="
-				+ settings.Pl1.GetValueOrDefault() + "/PL2=" + settings.Pl2.GetValueOrDefault() + "/tctl=" + settings.TccTarget.GetValueOrDefault() + "）"
-			: "[perfmode] " + backendLabel + " 启动恢复：ActiveModeId=" + mode.Id + " ⇒ 重放本机参数（PL1="
-				+ settings.Pl1.GetValueOrDefault() + "/PL2=" + settings.Pl2.GetValueOrDefault() + "/tctl=" + settings.TccTarget.GetValueOrDefault() + "）";
-		// 2026-10-21（真机：启动空闲预热的重放与自定义页应用并发，两边互写导致值来回跳）
-		// 最近 10 秒内已经有过下发 ⇒ 用户/面板在管事，启动重放让位，避免并发覆盖。
 		long lastApply = Interlocked.Read(ref _lastApplyTick);
 		if (lastApply != 0 && Environment.TickCount64 - lastApply < 10000)
 		{
-			Logger.WriteError("[perfmode] " + backendLabel + " 启动恢复：最近 10 秒内已有下发（用户/面板在操作）⇒ 跳过本次启动重放，避免并发覆盖");
+			Logger.WriteError("[perfmode] 开机重放：最近 10 秒内已有下发（用户/面板在操作）⇒ 跳过，避免并发覆盖");
 			return;
 		}
-		if (Logger.TryMarkChanged("local-startup-replay-" + backendLabel, replay))
+		// 自定义档的固件槽参数重启即丢 ⇒ 强制重写一次；内置档只发档位命令，参数交固件。
+		bool force = mode.IsCustom;
+		Logger.WriteError("[perfmode] 开机重放：意图=" + mode.Id + "（来源=" + intentSource + "） · 当前=" + currentId + " ⇒ 按意图下发");
+		PerfApplyOutcome outcome = await ActivateAsync(mode.Id, "boot replay", forceParameters: force).ConfigureAwait(continueOnCapturedContext: false);
+		bool ok = outcome != null && outcome.ModeSwitched;
+		bool userTookOver = false;
+		if (!ok)
 		{
-			Logger.WriteError(replay);
+			await Task.Delay(1000).ConfigureAwait(continueOnCapturedContext: false);
+			// 这 1 秒里用户可能已经点了别的档（下发被取消 / 意图被改写）⇒ 不再补发旧意图，
+			// 否则会用旧档盖掉用户刚点的档，还会把旧意图重新写回记忆。
+			string intentNow = PerfModeStore.BootIntentId;
+			userTookOver = !string.IsNullOrEmpty(intentNow) && !string.Equals(intentNow, mode.Id, StringComparison.Ordinal);
+			if (userTookOver)
+			{
+				Logger.WriteLine("[perfmode] 开机重放：补发前发现意图已变为 " + intentNow + " ⇒ 放弃补发");
+			}
+			else
+			{
+				outcome = await ActivateAsync(mode.Id, "boot replay", forceParameters: force).ConfigureAwait(continueOnCapturedContext: false);
+				ok = outcome != null && outcome.ModeSwitched;
+			}
 		}
-		try
+		// 用户接管也算有了结论：保护该解除，别让后续对账再按固件默认档改写。
+		_bootReplayConcluded = ok || userTookOver;
+		Logger.WriteError(ok ? ("[perfmode] 开机重放：已按意图切到 " + mode.Id) : ("[perfmode] 开机重放：补发一次仍失败（意图=" + mode.Id + "）"));
+		// 后端连上就参与对账：EC 直连走 EC 通道补写；GCU 在线时同样按记忆重放一次，由 GCU 自己下发。
+		bool bootRoutingReady = (MechrevoLite.Hardware.GcuEcMode.IsEcMode && !hw.IsGcuConnected) || hw.IsGcuConnected;
+		if (ok && !userTookOver && bootRoutingReady)
 		{
-			await ActivateAsync(mode.Id, isWujie ? "wujie startup replay" : (isBaolongda ? "baolongda startup replay" : "gcu startup replay"), forceParameters: true).ConfigureAwait(continueOnCapturedContext: false);
-		}
-		catch (Exception ex)
-		{
-			Logger.WriteError("[perfmode] " + backendLabel + " 启动恢复失败（已吞掉、不重试）：" + ex.Message);
-			Logger.WriteError("[perfmode] " + backendLabel + "：重放失败 ⇒ 高亮仍按自定义（参数未恢复）· ActiveModeId=" + ActiveModeId);
+			_ = ReconcileBootModeAfterStartupAsync(mode, hw);
 		}
 	}
 
-	/// <summary>⭐ 兼容旧调用：无界专用入口（转发到泛化方法）✅</summary>
+	/// <summary>
+	/// 开机重放落地后再对一次账：固件可能在档位写完之后自己把回读值锁存成别的档
+	/// （退出自定义后自定义门控常被重新锁存，回读就成了自定义档）。
+	/// 此时按「软件记忆为准」把记忆档再下发一次，走同一条切档链路；
+	/// 用户自己在这期间切了档就不覆盖。只补一次，不做循环重试。
+	/// </summary>
+	private async Task ReconcileBootModeAfterStartupAsync(PerfModeDefinition mode, MechrevoHw hw)
+	{
+		try
+		{
+			await Task.Delay(3000).ConfigureAwait(false);
+			string intentNow = PerfModeStore.BootIntentId;
+			if (!string.IsNullOrEmpty(intentNow) && !string.Equals(intentNow, mode.Id, StringComparison.Ordinal))
+			{
+				Logger.WriteLine("[perfmode] 启动档位对账：意图已变为 " + intentNow + " ⇒ 不覆盖");
+				return;
+			}
+			bool ecRoute = MechrevoLite.Hardware.GcuEcMode.IsEcMode && !hw.IsGcuConnected;
+			if (!ecRoute && hw.OperatingMode < 0)
+			{
+				Logger.WriteLine("[perfmode] 启动档位对账：GCU 档位读不到 ⇒ 跳过");
+				return;
+			}
+			string route = ecRoute ? "EC 直连" : "GCU";
+			// 连着两次回读都对不上才算：开机瞬间 EC 字节 / GCU 状态包都可能还没刷新。
+			string currentId = ResolveCurrentModeId(hw) ?? "";
+			if (string.Equals(currentId, mode.Id, StringComparison.Ordinal))
+			{
+				return;
+			}
+			await Task.Delay(800).ConfigureAwait(false);
+			string confirmId = ResolveCurrentModeId(hw) ?? "";
+			if (string.Equals(confirmId, mode.Id, StringComparison.Ordinal))
+			{
+				Logger.WriteLine("[perfmode] 启动档位对账：复查已一致（" + confirmId + "，路由=" + route + "）⇒ 不重放");
+				return;
+			}
+			Logger.WriteError("[perfmode] 启动档位对账：回读=" + confirmId + " 记忆=" + mode.Id + "（路由=" + route + "）⇒ 按记忆重放");
+			PerfApplyOutcome outcome = await ActivateAsync(mode.Id, "启动档位对账", forceParameters: false).ConfigureAwait(false);
+			string afterId = ResolveCurrentModeId(hw) ?? "";
+			Logger.WriteError("[perfmode] 启动档位对账：重放=" + (outcome != null && outcome.ModeSwitched) + " · 回读=" + afterId + "（路由=" + route + "）");
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[perfmode] 启动档位对账失败（不影响档位）：" + ex.Message);
+		}
+	}
+
+	private string? ResolveCurrentModeId(MechrevoHw hw)
+	{
+		IReadOnlyList<FirmwareSlotState> slots = PerfModeStore.LoadSlots(SlotCount);
+		PerfModeResolution resolution = PerfModeResolver.Resolve(Modes, slots, hw.OperatingMode, hw.CustomProfileIndex, MechrevoService.IsSilentTurboActive, PerfModeStore.LastCustomId);
+		return resolution?.ModeId;
+	}
+	// <para> 幂等：先读当前值，与配置一致 ⇒ 跳过；失败不重试、只记日志 </para>
+	/// <summary>兼容旧入口：本地自定义档重放已并入开机重放的薄实现（见 ReplayBootIntentOnStartupCoreAsync）。</summary>
+	internal Task ReplayLocalProfileOnStartupAsync()
+	{
+		// 档位与参数重放统一由开机重放入口处理；这里只保留入口，避免启动顺序里重复下发一次。
+		Logger.WriteLine("[perfmode] 本地自定义档重放已并入开机重放入口 ⇒ 本次跳过");
+		return Task.CompletedTask;
+	}
+
 	internal Task ReplayWujieLocalProfileOnStartupAsync()
 	{
 		return ReplayLocalProfileOnStartupAsync();
@@ -1779,7 +1845,7 @@ internal sealed class PerfModeService
 				after = PerfModeResolver.Materialize(after, vendorSeed, live);
 				Logger.WriteLine("PerfModes: " + mode.Id + " now runs on a firmware slot (seeded from vendor defaults)");
 			}
-			PerfModeStore.SaveSettings(mode.Id, after);
+			ModeSettings.Save(mode.Id, after);
 			Invalidate();
 			PerfModeDefinition perfModeDefinition = mode.With(after);
 			lock (_requestLock)
@@ -1911,7 +1977,7 @@ internal sealed class PerfModeService
 			return;
 		}
 		PerfModeSettings settings = PerfModeStore.LoadSettings(mode.Id) with { FanCurveOn = enabled };
-		PerfModeStore.SaveSettings(mode.Id, settings);
+		ModeSettings.Save(mode.Id, settings);
 		// 只有关闭“当前活动档”的开关才停闭环；非活动档只改保存标志，不能影响正在跑的曲线。
 		if (!enabled && _hw != null && _hw.UsesBaolongda
 			&& string.Equals(mode.Id, ActiveModeId, StringComparison.Ordinal))
@@ -1936,8 +2002,17 @@ internal sealed class PerfModeService
 		}
 		if (mode.Route != PerfModeRoute.FirmwareSlot)
 		{
-			Logger.WriteLine($"[fan] RecordFanCurves 跳过：档位 {mode.Id} 的 route={mode.Route}（不是固件槽档）⇒ 这条曲线只写了 EC、没有写进配置；要保存曲线请先让该档固定到固件槽");
-			return;
+			// 本机接管的自定义档（无界/星耀 AMD/宝龙达）在固件里没有槽位，但曲线本来就是本机下发的 ——
+			// 必须照样写进配置，否则重启后开机自动曲线只会读到"没有保存过 CPU 曲线点位"直接跳过。
+			// 只放开 SMU 本机自定义档（无界 / 星耀 AMD）：它们的曲线本来就只能本机下发，
+			// 固件永远没有槽位；宝龙达/同方 GCU 的自定义档另有各自的曲线保存通道，保持原判据。
+			bool localCustom = mode.IsCustom && _hw != null && _hw.SmuCustomApu;
+			if (!localCustom)
+			{
+				Logger.WriteLine($"[fan] RecordFanCurves 跳过：档位 {mode.Id} 的 route={mode.Route}（不是固件槽档）⇒ 这条曲线只写了 EC、没有写进配置；要保存曲线请先让该档固定到固件槽");
+				return;
+			}
+			Logger.WriteLine($"[fan] RecordFanCurves 档位 {mode.Id}（route={mode.Route} · 本机接管的自定义档）⇒ 曲线照常落盘");
 		}
 		bool flag = cpuDuty != null && cpuDuty.Length == 16;
 		bool flag2 = gpuDuty != null && gpuDuty.Length == 16;
@@ -1960,7 +2035,7 @@ internal sealed class PerfModeService
 			{
 				Logger.WriteLine("[fan] RecordFanCurves 日志写入失败: " + ex.Message);
 			}
-			PerfModeStore.SaveSettings(mode.Id, perfModeSettings);
+			ModeSettings.Save(mode.Id, perfModeSettings);
 			IReadOnlyList<FirmwareSlotState> readOnlyList = PerfModeStore.LoadSlots(SlotCount);
 			FirmwareSlotState firmwareSlotState = readOnlyList.FirstOrDefault((FirmwareSlotState x) => string.Equals(x.OwnerModeId, mode.Id, StringComparison.Ordinal));
 			if ((object)firmwareSlotState != null)
@@ -2209,7 +2284,7 @@ internal sealed class PerfModeService
 		{
 			return null;
 		}
-		PerfModeStore.SaveSettings(perfModeDefinition.Id, settings);
+		ModeSettings.Save(perfModeDefinition.Id, settings);
 		Invalidate();
 		return Find(perfModeDefinition.Id);
 	}
@@ -2347,9 +2422,30 @@ internal sealed class PerfModeService
 				{
 					return;
 				}
-				Logger.WriteLine($"PerfModes: {reason}: follow {perfModeDefinition.Id} ({perfModeResolution.Reason})");
+				// EC 直控下固件的自定义位会残留：回读说「自定义」并不代表用户这次选过，
+				// 照它写记忆会让界面在切到 EC 之后自己跳到自定义档（风扇 / 功耗其实还是内置档）。
+				// 记忆本来就在自定义档时不拦（外部真的换到另一个自定义槽仍跟随），只拦「内置档被残留位拉去自定义」。
+				bool memoryIsBuiltIn = ActiveModeId == null || !ActiveModeId.StartsWith("custom", StringComparison.OrdinalIgnoreCase);
+				if (perfModeDefinition.IsCustom && memoryIsBuiltIn && MechrevoLite.Hardware.GcuEcMode.IsEcMode && !_hw.IsGcuConnected)
+				{
+					Logger.WriteLine("PerfModes: " + reason + "：EC 直控回读为自定义档（自定义位残留）⇒ 不覆盖档位记忆（保留 " + ActiveModeId + "）");
+					return;
+				}
+				if (BootIntentGuardActive)
+		{
+			// 开机重放还没落地：此刻固件大概率还是默认档，照它写记忆等于把用户选择删掉。
+			Logger.WriteLine($"PerfModes: {reason}: 开机档位重放还没结论 ⇒ 不覆盖档位记忆（固件当前={perfModeDefinition.Id}）");
+			return;
+		}
+		Logger.WriteLine($"PerfModes: {reason}: follow {perfModeDefinition.Id} ({perfModeResolution.Reason})");
 				PerfModeStore.ActiveModeId = perfModeDefinition.Id;
 				PerfModeStore.SetActiveFor(PowerSourceKey(), perfModeDefinition.Id);
+				// 运行期固件/按键真的改了档 ⇒ 这就是用户最新选择，意图跟着走；
+				// 但启动对账（固件回默认档）不能覆盖意图，否则首启重放就失去依据。
+				if (reason == null || reason.IndexOf("startup warmup", StringComparison.OrdinalIgnoreCase) < 0)
+				{
+					PerfModeStore.BootIntentId = perfModeDefinition.Id;
+				}
 				if (perfModeDefinition.IsCustom)
 				{
 					PerfModeStore.LastCustomId = perfModeDefinition.Id;

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
+using MechrevoLite.Hardware;
 using MechrevoLite.Helpers;
 using MechrevoLite.Properties;
 using Microsoft.Win32;
@@ -99,90 +100,6 @@ public static class ScreenControl
 		return ok;
 	}
 
-	public static void InitOptimalBrightness()
-	{
-		int num = AppConfig.Get("optimal_brightness");
-		if (num >= 0)
-		{
-			SetOptimalBrightness(num);
-		}
-	}
-
-	public static void SetOptimalBrightness(int status)
-	{
-		AppConfig.Set("optimal_brightness", status);
-	}
-
-	public static void ToogleFHD()
-	{
-		int value = Program.acpi.DeviceGet(327708u);
-		Logger.WriteLine($"FHD Toggle: {value}");
-		if (MessageBox.Show("Changing display mode requires reboot", Strings.AlertUltimateTitle, MessageBoxButtons.YesNo) == DialogResult.Yes)
-		{
-			SystemRestart.CaptureUserConfirmation();
-			SystemRestart.RequestRestart("FHD toggle", "/r /t 1");
-		}
-	}
-
-	public static void SetHDRControl(int status = -1)
-	{
-		if (status >= 0)
-		{
-			AppConfig.Set("hdr_control", status);
-		}
-	}
-
-	public static void ToogleHDRControl()
-	{
-		int num = Program.acpi.DeviceGet(327793u);
-		Logger.WriteLine($"HDR Control Toggle: {num}");
-		SetHDRControl((num == 1) ? 1 : 0);
-		InitScreen();
-	}
-
-	public static string ToogleMiniled()
-	{
-		int num = Program.acpi.DeviceGet(327710u);
-		int num2 = Program.acpi.DeviceGet(327726u);
-		Logger.WriteLine($"MiniledToggle: {num} {num2}");
-		int value;
-		string result;
-		if (num >= 0)
-		{
-			if (num == 1)
-			{
-				value = 0;
-				result = Strings.OneZone;
-			}
-			else
-			{
-				value = 1;
-				result = Strings.Multizone;
-			}
-		}
-		else
-		{
-			switch (num2)
-			{
-			case 1:
-				value = 2;
-				result = Strings.OneZone;
-				break;
-			case 2:
-				value = 0;
-				result = Strings.Multizone;
-				break;
-			default:
-				value = 1;
-				result = Strings.MultizoneStrong;
-				break;
-			}
-		}
-		AppConfig.Set("miniled", value);
-		SetScreen();
-		return result;
-	}
-
 	/// <summary>
 	/// 2026-10-09（"双屏同开一次后刷新率永久不正确"根因修复 · 纠正侧）。
 	/// 机主原话：「好像是只要两个屏幕同时开过一次，后面刷新率就识别不到正确的了」
@@ -268,26 +185,7 @@ public static class ScreenControl
 				maxFrequency = AppConfig.Get("max_frequency");
 			}
 		}
-		bool screenAuto = AppConfig.Is("screen_auto");
-		bool overdriveSetting = Program.acpi?.IsOverdriveSupported() == true && !AppConfig.IsNoOverdrive();
-		int overdrive = ((!AppConfig.IsNoOverdrive()) ? (Program.acpi?.DeviceGet(327705u) ?? 0) : 0);
-		bool hdr = false;
-		bool acm = false;
-		try
-		{
-			hdr = ScreenCCD.GetHDRStatus(out acm);
-		}
-		catch (Exception ex)
-		{
-			Logger.WriteLine(ex.Message);
-		}
 		bool screenEnabled = frequency >= 0;
-		int fhd = -1;
-		int hdrControl = Program.acpi?.DeviceGet(327793u) ?? -1;
-		if (hdrControl >= 0)
-		{
-			Logger.WriteLine($"HDR Control Status: {hdrControl}");
-		}
 		// 2026-10-09（写入侧硬口径）：frequency 同样只在屏幕确认为 eDP 内屏时落盘；否则保持原值不写。
 		if (flag && frequency >= 0)
 		{
@@ -297,18 +195,7 @@ public static class ScreenControl
 		{
 			Logger.WriteLineIfChanged("screen-metrics-skip-frequency", $"screen metrics: source={screenConfidence} measured={frequency} 未落盘（非 eDP，frequency 保持 {AppConfig.Get("frequency")}）");
 		}
-		AppConfig.Set("overdrive", overdrive);
-		// 2026-10-12 screen-diag: 与 SettingsForm.VisualiseScreen 入口那行**配对**，用于对照两端，
-		// 看清 maxFrequency / screenEnabled 传到 UI 时到底是几（无 GCU 时刷新率整块消失的定位用）。
+		// screen-diag：记录本次实测与落盘口径，便于对照 maxFrequency / screenEnabled。
 		Logger.WriteLine($"InitScreen -> screen={laptopScreen ?? "(null)"} confidence={screenConfidence} freq={frequency} maxFreq={maxFrequency} screenEnabled={screenEnabled} MIN_RATE={MIN_RATE} MAX_RATE={MAX_RATE} cfgMaxFreq={AppConfig.Get("max_frequency")}");
-		// WPF 进程没有 WinForms settingsForm：旧回调必须判空，否则切换刷新率时会在
-		// InitScreen 里抛 NullReference，界面只看到「Win32 切换失败」。
-		if (Program.settingsForm != null)
-		{
-			Program.settingsForm.BeginInvoke(() =>
-			{
-				Program.settingsForm.VisualiseScreen(screenEnabled, screenAuto, frequency, maxFrequency, overdrive, overdriveSetting, hdr, acm, fhd, hdrControl);
-			});
-		}
 	}
 }

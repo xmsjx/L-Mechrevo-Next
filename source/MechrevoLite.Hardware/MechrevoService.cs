@@ -1529,14 +1529,51 @@ public class MechrevoService
 
 	internal static bool GpuOverclockEnabled { get; set; } = false;
 
+	// （显卡超频记忆）：开关状态由硬件层落盘，界面/服务只下发意图。
+	internal const string GpuOcSavedKey = "gpu_oc";
+
+	internal static bool GpuOcIntentOn
+	{
+		get
+		{
+			try
+			{
+				return AppConfig.Is("gpu_oc");
+			}
+			catch
+			{
+				return false;
+			}
+		}
+	}
+
+	/// <summary>超频只在狂暴档（OperatingMode=1）生效；其它档只记意图、不下发。</summary>
+	internal static bool GpuOcModeIsTurbo(MechrevoHw? hw)
+	{
+		return hw != null && hw.OperatingMode == 1;
+	}
+
+	internal static void SaveGpuOcIntent(bool on)
+	{
+		try
+		{
+			AppConfig.Set("gpu_oc", on ? 1 : 0);
+			AppConfig.Flush();
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteError("[gpu-oc] 开关记忆写入失败：" + ex.Message);
+		}
+	}
+
 	internal static bool ShouldApplyTurboGpuOverclockDefaultsOnModeSwitch(int mode, bool turboSubModeSupported)
 	{
-		return mode == 1 && turboSubModeSupported && GpuOverclockEnabled;
+		return mode == 1 && turboSubModeSupported && GpuOcIntentOn;
 	}
 
 	internal static bool ShouldApplyTurboGpuOverclockDefaultsOnSubMode(bool silent)
 	{
-		return GpuOverclockEnabled;
+		return GpuOcIntentOn;
 	}
 
 	internal async Task<bool> ApplyTurboGpuOverclockDefaults()
@@ -1581,13 +1618,29 @@ public class MechrevoService
 		}
 	}
 
-	public async Task<bool> ApplyGpuOverclock(bool enabled)
+	public async Task<bool> ApplyGpuOverclock(bool enabled, bool rememberIntent = true)
 	{
 		if (enabled)
 		{
-			return await ApplyTurboGpuOverclockDefaults().ConfigureAwait(continueOnCapturedContext: false);
+			// 硬件层唯一闸门：非狂暴档不生效（界面开关、开机重放都走这里）。
+			if (!GpuOcModeIsTurbo(_hw))
+			{
+				Logger.WriteError("[gpu-oc] 当前档位=" + (_hw?.OperatingMode ?? -1) + " 不是狂暴 ⇒ 不启用超频（记忆保留）");
+				return false;
+			}
+			bool applied = await ApplyTurboGpuOverclockDefaults().ConfigureAwait(continueOnCapturedContext: false);
+			if (applied && rememberIntent)
+			{
+				SaveGpuOcIntent(true);
+			}
+			return applied;
 		}
-		return await RestoreGpuOverclockDefaults().ConfigureAwait(continueOnCapturedContext: false);
+		bool restored = await RestoreGpuOverclockDefaults().ConfigureAwait(continueOnCapturedContext: false);
+		if (restored && rememberIntent)
+		{
+			SaveGpuOcIntent(false);
+		}
+		return restored;
 	}
 
 	private async Task<bool> RestoreGpuOverclockDefaults()
@@ -1646,7 +1699,7 @@ public class MechrevoService
 		{
 			MechrevoHw hw = _hw;
 			// 2026-10-15（C-1 第 2 步分类 ①）：分路风扇曲线是 GCU 专属通路 ⇒ 真正需要 GCU。
-		if (hw == null || !hw.IsGcuConnected || !_hw.SupportsFanRespective)
+		if (hw == null || !hw.IsGcuConnected)
 			{
 				return false;
 			}
@@ -2897,6 +2950,29 @@ public class MechrevoService
 		}
 	}
 
+	/// <summary>
+	/// 分区控光 / LCD Overdrive 的"本机记忆"键（config.json）。
+	/// <para>⭐ 这两个开关在多数同方机型上只有下发、没有回读（苍龙 GCU 不回该字段，EC 通道也只写不读）
+	/// ⇒ 只能由本机记住上次选择，开机由 <c>DisplayToggleRestore</c> 重放。
+	/// ⛔ 界面层不再落盘：界面只下发意图，记忆归硬件层。</para>
+	/// </summary>
+	internal const string LocalDimmingSavedKey = "miniled_on";
+	internal const string LcdOverdriveSavedKey = "lcd_overdrive_on";
+
+	/// <summary>把"分区控光 / OD 开关意图"落盘（只在用户真的切换时调用；启动重放路径不写）。</summary>
+	internal static void SaveDisplayToggleIntent(string key, bool on)
+	{
+		try
+		{
+			AppConfig.Set(key, on ? 1 : 0);
+			AppConfig.Flush();
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[display] 开关记忆写入失败（" + key + "）：" + ex.Message);
+		}
+	}
+
 	public async Task<bool> SwitchLocalDimming(bool on)
 	{
 		try
@@ -2907,8 +2983,15 @@ public class MechrevoService
 			}
 			await _hw.Publish("Setting/Control", new Dictionary<string, object> { ["Action"] = (on ? "LOCALDIMMING_ON" : "LOCALDIMMING_OFF") });
 			bool flag = await ConfirmSettingAsync(() => _hw.LocalDimmingSeen && _hw.LocalDimming == on);
-			Logger.WriteLine($"SwitchLocalDimming({on}) confirmed={flag}");
-			return flag;
+			// ⭐ 没有回读通道（LocalDimmingSeen=false）⇒ 命令真发出去了就按"已下发"算 ✅
+			//   否则苍龙这类机器每次切换都被判失败，状态也就永远记不住 ⚠️。
+			bool accepted = flag || !_hw.LocalDimmingSeen;
+			if (accepted)
+			{
+				SaveDisplayToggleIntent(LocalDimmingSavedKey, on);
+			}
+			Logger.WriteLine($"SwitchLocalDimming({on}) confirmed={flag} accepted={accepted}");
+			return accepted;
 		}
 		catch (Exception ex)
 		{
@@ -2927,8 +3010,14 @@ public class MechrevoService
 			}
 			await _hw.Publish("Setting/Control", new Dictionary<string, object> { ["Action"] = (on ? "LCDOverdrive_ON" : "LCDOverdrive_OFF") });
 			bool flag = await ConfirmSettingAsync(() => _hw.LcdOverdriveSeen && _hw.LcdOverdrive == on);
-			Logger.WriteLine($"SwitchLcdOverdrive({on}) confirmed={flag}");
-			return flag;
+			// 同分区控光：没有回读通道时按"已下发"算，并把选择记在本机。
+			bool accepted = flag || !_hw.LcdOverdriveSeen;
+			if (accepted)
+			{
+				SaveDisplayToggleIntent(LcdOverdriveSavedKey, on);
+			}
+			Logger.WriteLine($"SwitchLcdOverdrive({on}) confirmed={flag} accepted={accepted}");
+			return accepted;
 		}
 		catch (Exception ex)
 		{
@@ -3040,7 +3129,7 @@ public class MechrevoService
 				{
 					bool tpOk = NucQuickSwitches.TrySetTouchpad(on, out bool tpConfirmed);
 					_hw.QuickSwitches["touchpad"] = tpConfirmed ? on : _hw.QuickSwitches.TryGetValue("touchpad", out bool oldTp) && oldTp;
-					Logger.WriteLine($"SwitchQuick(touchpad,{on}) ⭐ NUC/UMI ACPI EC + PTP ⇒ 确认={tpConfirmed}");
+					Logger.WriteLine($"SwitchQuick(touchpad,{on}) ⭐ Windows PTP（GCU 同款·不写 EC）⇒ 确认={tpConfirmed}");
 					return tpConfirmed;
 				}
 				if (string.Equals(key, "usb", StringComparison.Ordinal))
@@ -5546,6 +5635,11 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 
 	public Task<bool> SetKeyboardPower(bool on)
 	{
+		if (!on)
+		{
+			// 任何通道的关灯都先停掉 EC 单区轮播（它是软件定时循环，不写 0x78C 也照样在跑）。
+			NucKeyboardLighting.StopCarousel();
+		}
 		if (ShouldUseEcKeyboardLight())
 		{
 			bool ok = EcKeyboardLight.TrySetPower(on);

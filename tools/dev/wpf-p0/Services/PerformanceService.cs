@@ -121,7 +121,7 @@ internal sealed class PerformanceService : IPerformanceService
         {
             try
             {
-                return PerfModeStore.Load();
+                return ModeSettings.Modes;
             }
             catch
             {

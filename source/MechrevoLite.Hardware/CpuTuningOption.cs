@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace MechrevoLite.Hardware;
+namespace MechrevoLite.Contracts;
 
 // 2026-10-05 coread: 新增两个**可选**尾参（默认 null = 与旧行为完全一致，位置参数调用不受影响）：
 //   * CoreReadback        —— 逐核回读值（CO 步数）。只在 Probe() 里读一次填进来，**绝不轮询**。

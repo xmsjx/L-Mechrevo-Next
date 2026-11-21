@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -41,8 +42,10 @@ internal static class GcuPackageImport
 		return !hw.IsConnected || !MechrevoHw.IsGcuServiceInstalled;
 	}
 
-	/// <summary>弹引导 → 选包 → 解出变体 payload → 调用安装脚本。</summary>
-	internal static async Task OfferAsync(IWin32Window owner)
+	/// <summary>选包 → 解出变体 payload → 调用安装脚本。</summary>
+	/// <param name="askConfirm">只在自动弹出（后端连不上 GCU）时为 true：先问一句要不要导入；
+	/// 用户自己点「导入 GCU 包」进来时为 false，不再重复问一遍。</param>
+	internal static async Task OfferAsync(IWin32Window owner, bool askConfirm = true)
 	{
 		string baseDir = AppContext.BaseDirectory;
 		string archive = Path.Combine(baseDir, "GCU.7z");
@@ -57,7 +60,7 @@ internal static class GcuPackageImport
 			source = folder;
 		}
 		// 自动检测到包：确认；选「否」= 改手动选择
-		if (source != null)
+		if (source != null && askConfirm)
 		{
 			string askAuto = NormalizeNewlines(Strings.GcuImportAsk) + Environment.NewLine + Environment.NewLine + source;
 			if (MessageBox.Show(owner, askAuto, Strings.GcuImportTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
@@ -127,8 +130,9 @@ internal static class GcuPackageImport
 				}
 			}
 		}
-		if (MessageBox.Show(owner, NormalizeNewlines(Strings.GcuImportAsk) + Environment.NewLine + Environment.NewLine + source,
-			Strings.GcuImportTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+		if (askConfirm && source != null
+			&& MessageBox.Show(owner, NormalizeNewlines(Strings.GcuImportAsk) + Environment.NewLine + Environment.NewLine + source,
+				Strings.GcuImportTitle, MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
 		{
 			return;
 		}
@@ -407,23 +411,56 @@ internal static class GcuPackageImport
 		}
 	}
 
-	/// <summary>取应用目录里的 7za.exe（随安装器装机，不再内嵌进 DLL）。</summary>
+	/// <summary>
+	/// 取一个可用的 7z 可执行文件。优先应用目录（随安装器装机），其次安装目录/7-Zip 安装位置/系统 PATH。
+	/// <para>⭐ 从别处的副本启动本程序时，应用目录里没有 7za.exe 也不会再直接失败（旧实现只认应用目录两处）。</para>
+	/// </summary>
 	private static string ResolveSevenZip()
 	{
 		string baseDir = AppContext.BaseDirectory;
-		string[] candidates =
+		List<string> tried = new List<string>();
+		List<string> candidates = new List<string>
 		{
 			Path.Combine(baseDir, "7za.exe"),
-			Path.Combine(baseDir, "GCU", "7za.exe")
+			Path.Combine(baseDir, "GCU", "7za.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "L-Mechrevo", "7za.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "7-Zip", "7z.exe"),
+			Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "7-Zip", "7z.exe")
 		};
-		foreach (string candidate in candidates)
+		string pathVar = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+		foreach (string dir in pathVar.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
 		{
-			if (File.Exists(candidate))
+			try
 			{
-				return candidate;
+				candidates.Add(Path.Combine(dir.Trim(), "7za.exe"));
+				candidates.Add(Path.Combine(dir.Trim(), "7z.exe"));
+			}
+			catch
+			{
 			}
 		}
-		throw new FileNotFoundException("缺少 7za.exe（应随安装器装到软件根目录）。请重新运行安装器，或把 7za.exe 放到应用目录。");
+		foreach (string candidate in candidates)
+		{
+			if (string.IsNullOrWhiteSpace(candidate))
+			{
+				continue;
+			}
+			try
+			{
+				if (File.Exists(candidate))
+				{
+					return candidate;
+				}
+				tried.Add(candidate);
+			}
+			catch
+			{
+			}
+		}
+		string triedText = string.Join("；", tried.GetRange(0, Math.Min(5, tried.Count)));
+		Logger.WriteError("[gcu-import] 找不到 7z：baseDir=" + baseDir + " 已试=" + tried.Count + " 处，例如 " + triedText);
+		throw new FileNotFoundException("缺少 7za.exe（应随安装器装到软件根目录）。当前程序目录：" + baseDir
+			+ "；也找过安装目录、7-Zip 与 PATH（共 " + tried.Count + " 处）。请重新运行安装器，或把 7za.exe 放到应用目录。");
 	}
 
 	/// <summary>目录里是否真的含 GCU 包/解压树（自动检测路径用；没有就走手动选择）。</summary>

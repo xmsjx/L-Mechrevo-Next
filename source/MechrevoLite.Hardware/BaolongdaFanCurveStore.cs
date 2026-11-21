@@ -28,11 +28,17 @@ namespace MechrevoLite.Hardware;
 /// </summary>
 internal sealed class BaolongdaFanCurveSettings
 {
-	/// <summary>⭐ 点数（宝龙达新 10 点曲线）。</summary>
-	internal const int PointCount = 10;
+	/// <summary>CPU 通道点数：16 点（与 16 槽温度轴一致）。</summary>
+	internal const int CpuPointCount = 16;
+
+	/// <summary>GPU 通道点数：13 点（与固件可写槽位一致）。</summary>
+	internal const int GpuPointCount = 13;
+
+	/// <summary>旧 10 点存档的点数（仅用于迁移识别）。</summary>
+	internal const int Legacy10PointCount = 10;
 
 	/// <summary>⭐⭐ 本程序**能解释**的存档版本号 ✅（⭐ 见 <see cref="BaolongdaFanCurveStore" /> 的兼容策略 ✅）。</summary>
-	internal const int CurrentFormatVersion = 3;
+	internal const int CurrentFormatVersion = 4;
 
 	/// <summary>
 	/// ⭐ 旧的（⭐ 2026-10-16 之前 ✅）格式版本号 ⚠️ —— ⭐ 单位是**占空比** ✅、⭐ 且带 `modeid` ✅。
@@ -135,16 +141,16 @@ internal sealed class BaolongdaFanCurveSettings
 	/// <summary>⭐ 读档时的**如实说明**（⭐ 空 = ⭐ 没有特殊情况 ✅）—— ⭐ 供 UI/日志展示 ✅。</summary>
 	internal string StatusNote { get; init; } = string.Empty;
 
-	/// <summary>⭐ CPU 温度轴：45~95℃ · 10 点 ✅。</summary>
+	/// <summary>⭐ CPU 温度轴：30~100℃ · 16 点 ✅。</summary>
 	internal static int[] DefaultCpuTemperatures()
 	{
-		return new[] { 45, 51, 56, 62, 67, 73, 78, 84, 89, 95 };
+		return new[] { 30, 40, 45, 50, 55, 60, 64, 68, 72, 75, 78, 81, 85, 90, 95, 100 };
 	}
 
-	/// <summary>⭐ GPU 温度轴：45~87℃ · 10 点 ✅。</summary>
+	/// <summary>⭐ GPU 温度轴：30~87℃ · 13 点 ✅。</summary>
 	internal static int[] DefaultGpuTemperatures()
 	{
-		return new[] { 45, 50, 54, 59, 64, 68, 73, 78, 82, 87 };
+		return new[] { 30, 40, 45, 50, 54, 58, 62, 66, 70, 74, 78, 82, 87 };
 	}
 
 	/// <summary>⭐ 旧 16 点温度轴（仅用于 v2 存档迁移识别）。</summary>
@@ -225,9 +231,9 @@ internal sealed class BaolongdaFanCurveSettings
 			MinRpm = DefaultMinRpm,
 			MaxRpm = bandMax,
 			Channel0Temperatures = gpuTemps,
-			Channel0Rpms = DutiesToRpms(gpuDuties, bandMax, PointCount),
+			Channel0Rpms = DutiesToRpms(gpuDuties, bandMax, GpuPointCount),
 			Channel1Temperatures = cpuTemps,
-			Channel1Rpms = DutiesToRpms(cpuDuties, bandMax, PointCount)
+			Channel1Rpms = DutiesToRpms(cpuDuties, bandMax, CpuPointCount)
 		};
 	}
 
@@ -479,13 +485,16 @@ internal static class BaolongdaFanCurveStore
 				return Unreadable(BaolongdaFanCurveSettings.LegacyDutyFormatVersion,
 					"文件里没有 format 版本号 ⇒ 判定为旧的占空比格式（占空比无法换算成 RPM）", bandMax);
 			}
-			if (version != BaolongdaFanCurveSettings.CurrentFormatVersion && version != 2)
+			if (version != BaolongdaFanCurveSettings.CurrentFormatVersion && version != 3 && version != 2)
 			{
-				return Unreadable(version, $"format={version}（本程序只认 2/3）", bandMax);
+				return Unreadable(version, $"format={version}（本程序只认 2/3/4）", bandMax);
 			}
 
-			// v3 = 10 点；v2 = 旧 16 点，读取时迁移。
-			int expectedPoints = version == 2 ? BaolongdaFanCurveSettings.LegacyPointCount : BaolongdaFanCurveSettings.PointCount;
+			// v4 = CPU 16 / GPU 13；v3 = 10 点；v2 = 旧 16 点，读取后按温度重采样迁移。
+			int expectedCpu = version == 2 ? BaolongdaFanCurveSettings.LegacyPointCount
+				: (version == 3 ? BaolongdaFanCurveSettings.Legacy10PointCount : BaolongdaFanCurveSettings.CpuPointCount);
+			int expectedGpu = version == 2 ? BaolongdaFanCurveSettings.LegacyPointCount
+				: (version == 3 ? BaolongdaFanCurveSettings.Legacy10PointCount : BaolongdaFanCurveSettings.GpuPointCount);
 			List<string> problems = new List<string>();
 			if (!TryParseInt(map, "hysteresis", FanCurveEngine.DefaultHysteresisC, out int hysteresis, out string e1)) { problems.Add(e1); }
 			if (!TryParseInt(map, "intervalms", BaolongdaFanCurveSettings.DefaultIntervalMs, out int interval, out string e2)) { problems.Add(e2); }
@@ -493,21 +502,23 @@ internal static class BaolongdaFanCurveStore
 			if (!TryParseInt(map, "maxrpm", bandMax, out int maxRpm, out string e4)) { problems.Add(e4); }
 			// ⭐ 双风扇联动：⭐ 旧存档**没有这个键** ⇒ ⭐ 默认 **1（开）**，⛔ 不当作坏档 ✅（向后兼容）
 			if (!TryParseInt(map, "syncenabled", 1, out int syncEnabled, out string e0)) { problems.Add(e0); }
-			if (!TryParseCurve(map, "ch0temp", expectedPoints, out int[] ch0Temp, out string e5)) { problems.Add(e5); }
-			if (!TryParseCurve(map, "ch0rpm", expectedPoints, out int[] ch0Rpm, out string e6)) { problems.Add(e6); }
-			if (!TryParseCurve(map, "ch1temp", expectedPoints, out int[] ch1Temp, out string e7)) { problems.Add(e7); }
-			if (!TryParseCurve(map, "ch1rpm", expectedPoints, out int[] ch1Rpm, out string e8)) { problems.Add(e8); }
+			if (!TryParseCurve(map, "ch0temp", expectedGpu, out int[] ch0Temp, out string e5)) { problems.Add(e5); }
+			if (!TryParseCurve(map, "ch0rpm", expectedGpu, out int[] ch0Rpm, out string e6)) { problems.Add(e6); }
+			if (!TryParseCurve(map, "ch1temp", expectedCpu, out int[] ch1Temp, out string e7)) { problems.Add(e7); }
+			if (!TryParseCurve(map, "ch1rpm", expectedCpu, out int[] ch1Rpm, out string e8)) { problems.Add(e8); }
 			if (problems.Count > 0)
 			{
 				return Unreadable(version, string.Join("；", problems), bandMax);
 			}
-			if (version == 2)
+			if (version != BaolongdaFanCurveSettings.CurrentFormatVersion)
 			{
-				// 旧 16 点 → 新 10 点：保留旧点 1..10 的占空比，丢弃 11..16，温度轴换成新轴。
-				ch0Temp = BaolongdaFanCurveSettings.DefaultGpuTemperatures();
-				ch1Temp = BaolongdaFanCurveSettings.DefaultCpuTemperatures();
-				ch0Rpm = TakeFirst(ch0Rpm, BaolongdaFanCurveSettings.PointCount);
-				ch1Rpm = TakeFirst(ch1Rpm, BaolongdaFanCurveSettings.PointCount);
+				// 旧档点位数不同：温度轴换成当前轴，转速按温度插值重采样，曲线形状不丢。
+				int[] newGpuTemps = BaolongdaFanCurveSettings.DefaultGpuTemperatures();
+				int[] newCpuTemps = BaolongdaFanCurveSettings.DefaultCpuTemperatures();
+				ch0Rpm = ResampleToAxis(ch0Temp, ch0Rpm, newGpuTemps);
+				ch1Rpm = ResampleToAxis(ch1Temp, ch1Rpm, newCpuTemps);
+				ch0Temp = newGpuTemps;
+				ch1Temp = newCpuTemps;
 			}
 
 			return new BaolongdaFanCurveSettings
@@ -760,14 +771,37 @@ internal static class BaolongdaFanCurveStore
 		return true;
 	}
 
-	private static int[] TakeFirst(int[] values, int count)
+	/// <summary>把旧轴上的转速按温度插值重采样到新轴。</summary>
+	private static int[] ResampleToAxis(int[] temps, int[] values, int[] axis)
 	{
-		if (values == null || values.Length <= count)
+		int[] result = new int[axis.Length];
+		if (temps == null || values == null || temps.Length == 0 || values.Length == 0)
 		{
-			return values ?? Array.Empty<int>();
+			return result;
 		}
-		int[] result = new int[count];
-		Array.Copy(values, result, count);
+		int count = Math.Min(temps.Length, values.Length);
+		for (int i = 0; i < axis.Length; i++)
+		{
+			int temp = axis[i];
+			if (temp <= temps[0])
+			{
+				result[i] = values[0];
+				continue;
+			}
+			int value = values[count - 1];
+			for (int j = 1; j < count; j++)
+			{
+				if (temp <= temps[j])
+				{
+					int span = temps[j] - temps[j - 1];
+					value = span <= 0
+						? values[j]
+						: values[j - 1] + (int)Math.Round((values[j] - values[j - 1]) * (double)(temp - temps[j - 1]) / span);
+					break;
+				}
+			}
+			result[i] = value;
+		}
 		return result;
 	}
 

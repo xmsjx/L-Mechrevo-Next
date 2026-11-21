@@ -1,4 +1,4 @@
-namespace MechrevoLite.Hardware;
+namespace MechrevoLite.Contracts;
 
 /// <summary>显示效果 profile，对应 Display/Status 的 ProfileNameList 与 Display/Control 的写入对象。</summary>
 public sealed class DisplayEffectProfile

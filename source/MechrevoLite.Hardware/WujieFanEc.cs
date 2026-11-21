@@ -28,12 +28,33 @@ internal static class WujieFanEc
 
 	internal const int RegisterFan2RpmHigh = 0x046C;
 
-	// ⭐⭐ 2026-10-27（task-43 · 参考 fanctl 的 table 后端，仅取寄存器事实/做法，⛔ 未复制 Python）：
-	//   曲线表 0x0F20(fan1)/0x0F50(fan2) 各 48 字节，但**只写前 8 字节**（EC 取前 8 字节最大值，实测索引不随温度变化）；
-	//   0x0727 bit6 = 表锁存，0x07C5 bit7 = 主副扇输出隔离；两者都按“出厂基线绝对写”避免 read-modify-write 撕裂事故。
+	// 曲线表：温度轴 0x0F00(CPU 升)/0x0F10(CPU 降)/0x0F30(GPU 升)/0x0F40(GPU 降)，
+	// 占空比表 0x0F20(主扇 16 槽)/0x0F50(副扇 13 槽)，其后是最大占空比与控制量。
+	// 0x07C5 bit7 = 主副扇输出隔离；按“出厂基线绝对写”避免 read-modify-write 撕裂事故。
 	internal const int RegisterFanTableFan1 = 0x0F20;
 
 	internal const int RegisterFanTableFan2 = 0x0F50;
+
+	/// <summary>副扇占空比表只有 13 槽（0x0F50..0x0F5C），其后三个字节是控制量。</summary>
+	internal const int FanTableGpuDutyLength = 13;
+
+	/// <summary>最大占空比阈值 1（0x0F5D）。</summary>
+	internal const int RegisterFanTableMax1 = 0x0F5D;
+
+	/// <summary>最大占空比阈值 2（0x0F5E）。</summary>
+	internal const int RegisterFanTableMax2 = 0x0F5E;
+
+	/// <summary>表控制器（0x0F5F），写低于下限会让 EC 判为控制器复位。</summary>
+	internal const int RegisterFanTableCtrl = 0x0F5F;
+
+	/// <summary>表控制器下限（0xA0）。</summary>
+	internal const int FanTableCtrlFloor = 160;
+
+	/// <summary>降档温度相对升档温度的回差（℃），避免阈值附近反复横跳。</summary>
+	internal const int TableDownHysteresisC = 3;
+
+	/// <summary>占空比表量程上限（与实算占空比同口径）。</summary>
+	internal const int FanTableDutyMax = 200;
 
 	internal const int RegisterFanTableLatch = 0x07C6;
 
@@ -72,7 +93,7 @@ internal static class WujieFanEc
 	/// <summary>握手位（bit6）。</summary>
 	internal const int RestartHandshakeBit = 0x40;
 
-	/// <summary>表后端只写每张表前 8 字节（EC 取前 8 字节最大值；同时避开 0x38/0x3A 电源寄存器地址低字节）。</summary>
+	/// <summary>主扇占空比表槽数（0x0F20..0x0F2F，与 CPU 温度轴 16 点对齐）。</summary>
 	internal const int FanTableActiveLength = 16;
 
 	/// <summary>表后端心跳周期（ms）：先读目标，只有 EC 真的偏离（&gt; <see cref="TableDriftToleranceRaw" />）才重锁。</summary>
@@ -151,61 +172,25 @@ internal static class WujieFanEc
 		}
 	}
 
-	/// <summary>2026-10-22：优先 I2EC（inpoutx64）读，回退 ACPI-EC；供诊断与状态读取使用。</summary>
+	/// <summary>读一个 EC 字节（ACPIDriver 优先，其次 I2EC）：供诊断与状态读取使用。</summary>
 	private static bool ReadByteAny(int address, out int value, out string note)
 	{
-		if (I2ecInpOut.IsAvailable && I2ecInpOut.TryReadEcByte(address, out value, out string i2ecNote))
+		if (EcIo.Active == EcTransport.None)
 		{
-			note = "I2EC";
+			EcIo.TrySelect(out _);
+		}
+		if (EcIo.TryReadByte(address, out value, out string ecNote))
+		{
+			note = EcIo.Detail;
 			return true;
 		}
-		bool ok = EcPortIo.TryReadByteStable(address, out value, out note);
-		return ok;
-	}
-
-	/// <summary>单次写双扇占空比（百分比，0..100；非 0 时下限 20%）：写后逐个回读确认。</summary>
-	internal static bool TrySetDutyPercent(int percent, out string detail)
-	{
-		detail = "";
-		if (!IsWujiePlatform())
+		if (EcPortIo.TryReadByteStable(address, out value, out string portNote))
 		{
-			detail = "不是无界机型";
-			return false;
+			note = "ACPI-EC";
+			return true;
 		}
-		if (percent < 0)
-		{
-			percent = 0;
-		}
-		if (percent > 100)
-		{
-			percent = 100;
-		}
-		if (percent > 0 && percent < FanFloorPercent)
-		{
-			// 副扇低于 20% 会判堵转闭锁；宁可不给那么低。
-			percent = FanFloorPercent;
-		}
-		if (!TryReadState(out byte mode, out _, out _, out _, out _, out _, out string readDetail))
-		{
-			detail = "读取状态失败：" + readDetail;
-			return false;
-		}
-		if ((mode & 0x03) != 0x03)
-		{
-			detail = "I2EC 不是读写模式（0x200D=0x" + mode.ToString("X2") + "）";
-			return false;
-		}
-		int raw = (int)Math.Round(percent * 2.0);
-		if (raw < 1)
-		{
-			raw = 1;
-		}
-		bool ok1 = EcPortIo.TryWriteWujieFanDuty(RegisterDutyFan1, raw, out int readBack1);
-		bool ok2 = EcPortIo.TryWriteWujieFanDuty(RegisterDutyFan2, raw, out int readBack2);
-		detail = "目标=" + percent + "% (raw=" + raw + ")"
-			+ " · 主扇写/回读=" + (ok1 ? readBack1.ToString() : "失败")
-			+ " · 副扇写/回读=" + (ok2 ? readBack2.ToString() : "失败");
-		return ok1 && ok2;
+		note = ecNote + "；ACPI-EC：" + portNote;
+		return false;
 	}
 
 	/// <summary>2026-10-22：宝龙达同款 LPC EC-RAM 通道只读探测（PawnIO LpcIO）。返回一段诊断文本。</summary>
@@ -253,10 +238,8 @@ internal static class WujieFanEc
 			{
 				return sb.ToString();
 			}
-			sb.AppendLine("通道：PawnIO ACPI-EC 0x62/0x66 · 命令 0x92/0x93 · 地址 0x1804/0x1809（宝龙达同款通道，不需要 inpoutx64）");
-			// 2026-10-22：无界风扇**写**走 I2EC，需要本机 inpoutx64（DLL 放 LM 安装目录即可）；这里如实报告状态。
-			bool i2ecOk = I2ecInpOut.IsAvailable;
-			sb.AppendLine("I2EC 写通道（inpoutx64）：" + (i2ecOk ? "可用 · " : "不可用 · ") + I2ecInpOut.InitDetail);
+			_ = EcIo.TrySelect(out string ecChannelDetail);
+			sb.AppendLine("EC 通道：" + ecChannelDetail + " · ACPIDriver=" + (AcpiDriverEc.IsAvailable() ? "在" : "不在") + " · I2EC=" + (I2ecInpOut.IsAvailable ? "可用" : "不可用"));
 			if (!TryReadState(out byte mode, out int duty1, out int duty2, out int tempC, out int fan1Rpm, out int fan2Rpm, out string detail))
 			{
 				sb.AppendLine("读取失败：" + detail);
@@ -266,8 +249,8 @@ internal static class WujieFanEc
 			sb.AppendLine($"模式 0x200D=0x{mode:X2}（bit0/1={(((mode & 0x03) == 0x03) ? "读写模式" : "非读写模式")}）");
 			sb.AppendLine($"占空比：主扇={duty1}/200 · 副扇={duty2}/200 · CPU={tempC}℃ · 主扇={fan1Rpm}rpm · 副扇={fan2Rpm}rpm");
 			sb.AppendLine("参考语义：占空比 0..200 → 0..100%；低于 20% 副扇可能被判堵转闭锁；"
-				+ "table 后端默认优先（0x0F20/0x0F50 前 8 字节 + 0x07C6 写 0x04 锁存 + 0x07C5 bit7 隔离），失败/显式配置时回退 25Hz direct 直写。");
-			sb.AppendLine("边界：本段只读；写曲线尚未接入 UI（下一步：25Hz 控制器 + FanCurveForm 无界分支）。");
+				+ "写曲线只走 table 后端（0x0F20/0x0F50 前 8 字节 + 0x07C6 写 0x04 锁存 + 0x07C5 bit7 隔离），写表失败即交还 EC 原生曲线。");
+			sb.AppendLine("边界：本段只读。");
 			// 2026-10-22（机主：无界能不能走宝龙达那条 PawnIO 路子）：只读探测 LPC EC-RAM 通道是否能摸到无界的
 			// 温度/转速/占空比地址。若能读到合理值，就可以把写入也挪到 PawnIO（不再依赖 inpoutx64）。
 			sb.AppendLine(ProbeLpcPath());

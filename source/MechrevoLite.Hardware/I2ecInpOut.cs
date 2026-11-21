@@ -44,34 +44,6 @@ internal static class I2ecInpOut
 		return Path.Combine(dir, "i2ec.lock");
 	}
 
-	/// <summary>2026-10-23（机主：电池 2ms 循环下风扇曲线掉写）：风扇控制器运行期间写一个跨进程标记，
-	/// 电池保持循环看到标记就主动多让路，保证 25Hz 风扇写能拿到 I2EC。</summary>
-	private static string FanPriorityPath()
-	{
-		string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "L-Mechrevo");
-		return Path.Combine(dir, "i2ec.fan");
-	}
-
-	internal static void SetFanWritePriority(bool on)
-	{
-		try
-		{
-			string path = FanPriorityPath();
-			if (on)
-			{
-				Directory.CreateDirectory(Path.GetDirectoryName(path));
-				File.WriteAllText(path, Environment.ProcessId.ToString());
-			}
-			else
-			{
-				File.Delete(path);
-			}
-		}
-		catch
-		{
-		}
-	}
-
 	private static bool TryEnterEcMutex(out bool held)
 	{
 		held = false;
@@ -360,12 +332,20 @@ internal static class I2ecInpOut
 
 	private static int ReadByte(int address)
 	{
+		if (_out32 == null || _inp32 == null)
+		{
+			throw new InvalidOperationException("端口读通道未初始化（inpoutx64.dll 不可用）");
+		}
 		SelectAddress(address);
 		return _inp32(PortData) & 0xFF;
 	}
 
 	private static void WriteByte(int address, int value)
 	{
+		if (_out32 == null)
+		{
+			throw new InvalidOperationException("端口写通道未初始化（inpoutx64.dll 不可用）");
+		}
 		SelectAddress(address);
 		_out32(PortData, value & 0xFF);
 	}
@@ -489,9 +469,17 @@ internal static class I2ecInpOut
 			detail = "空写序列";
 			return false;
 		}
-		if (!EnsureInitialized(out detail) && !AcpiDriverAvailable())
+		bool useAcpi = false;
+		if (!EnsureInitialized(out detail))
 		{
-			return false;
+			if (!AcpiDriverAvailable())
+			{
+				return false;
+			}
+			// 2026-11-20：没有 inpoutx64 但 ACPI 驱动在 —— 整段序列改走 ACPI 驱动直写
+			//   （EC RAM 地址 0..0xFFFF 都能写；跨进程互斥仍由 Gate + i2ec.lock 保证）。
+			//   否则 WriteByte 会拿未初始化的 _out32 抛异常，整段写表必然失败。
+			useAcpi = true;
 		}
 		lock (Gate)
 		{
@@ -504,7 +492,18 @@ internal static class I2ecInpOut
 			{
 				foreach (I2ecWriteStep step in steps)
 				{
-					WriteByte(step.Address, step.Value & 0xFF);
+					if (useAcpi)
+					{
+						if (!AcpiDriverEc.TryWriteByte(step.Address, step.Value & 0xFF))
+						{
+							detail = "ACPI 驱动写失败（EC RAM 地址 0x" + step.Address.ToString("X") + "）";
+							return false;
+						}
+					}
+					else
+					{
+						WriteByte(step.Address, step.Value & 0xFF);
+					}
 					if (step.DelayAfterMs > 0)
 					{
 						Thread.Sleep(Math.Min(step.DelayAfterMs, 200));
@@ -514,7 +513,20 @@ internal static class I2ecInpOut
 				{
 					foreach (I2ecVerifyStep verify in verifySteps)
 					{
-						int actual = ReadByte(verify.Address);
+						int actual;
+						if (useAcpi)
+						{
+							if (!AcpiDriverEc.TryReadByte(verify.Address, out byte acpiValue))
+							{
+								detail = "回读失败（ACPI 通道 0x" + verify.Address.ToString("X4") + "）";
+								return false;
+							}
+							actual = acpiValue;
+						}
+						else
+						{
+							actual = ReadByte(verify.Address);
+						}
 						if (actual != (verify.Expected & 0xFF))
 						{
 							detail = "回读不一致 0x" + verify.Address.ToString("X4") + "：写 0x"

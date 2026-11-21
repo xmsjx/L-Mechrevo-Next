@@ -39,8 +39,9 @@
             <TextBlock x:Name="StatusText" Grid.Column="0" VerticalAlignment="Center" Style="{DynamicResource MutedText}"
                        TextTrimming="CharacterEllipsis" Margin="0,0,12,0" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                <CheckBox x:Name="WujieIndependentCheck" Content="{x:Static loc:WpfStrings.WujieIndependentCheck_Content}" IsChecked="False"
-                          VerticalAlignment="Center" Margin="0,0,14,0" Visibility="Collapsed" />
+                <CheckBox x:Name="GcuRespectiveCheck" Content="{x:Static loc:WpfStrings.FanIndependentControl_Content}" IsChecked="False"
+                          VerticalAlignment="Center" Margin="0,0,14,0" Visibility="Collapsed"
+                          Checked="GcuRespective_Changed" Unchecked="GcuRespective_Changed" />
                 <CheckBox x:Name="BaolongdaLoopCheck" Content="{x:Static loc:WpfStrings.FanCurveBaolongdaEnable_Content}" IsChecked="False"
                           VerticalAlignment="Center" Margin="0,0,14,0" Visibility="Collapsed" />
                 <CheckBox x:Name="BaolongdaSyncCheck" Content="{x:Static loc:WpfStrings.FanSyncSharedHeatPipe_Content}" IsChecked="True"

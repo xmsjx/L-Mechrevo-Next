@@ -66,6 +66,8 @@ internal static class GcuEcKeyboard
             _active = true;
             Logger.WriteError("[gcu-ec-kbd] 键盘灯分流 ⇒ " + _kind + "（" + detail + "）");
         }
+        // ⭐ EC 模式下顺手把「GCU 又起来了」守护挂上：这个入口每次启动必跑，比 UI 启动分支可靠。
+        try { GcuEcMode.EnsureGuardIfEcMode(); } catch { }
         // EC 路由下没有 GCU 报文可等，灯带/Logo 证据只能本地采集一次，之后门控只读缓存。
         IteLightingLocal.PrimeCaches();
     }
@@ -163,14 +165,20 @@ internal static class GcuEcKeyboard
             detail = hid + typeText;
             return GcuEcKeyboardKind.HidFourZone;
         }
-        if (NucKeyboardLighting.IsSingleZone())
+        // ⭐ 同方收敛：EC 单区只认「0x766 bit2=1 **且** 能力位没表明“不是单分区键盘”」。
+        // 能力位说是单键/其它分区机型时，即使这一位可读也不走 EC 单区 ⇒ 软件轮播只在真·单分区键盘上跑。
+        bool ecSingleBit = NucKeyboardLighting.IsSingleZone();
+        bool capabilityNotSingle = ecSingleBit && CapabilitySaysNotSingleZone();
+        if (ecSingleBit && !capabilityNotSingle)
         {
             detail = hid + typeText + " · 0x766 bit2=1";
             return GcuEcKeyboardKind.EcSingleZone;
         }
         if (EcKeyboardLight.ReadRegister() >= 0)
         {
-            detail = hid + typeText + " · 0x766 bit2=0 · 0x78C 可读";
+            detail = hid + typeText
+                + (capabilityNotSingle ? " · 0x766 bit2=1 但能力位表明非单分区 ⇒ 不按 EC 单区处理" : " · 0x766 bit2=0")
+                + " · 0x78C 可读";
             return GcuEcKeyboardKind.EcWhite;
         }
         detail = hid + typeText + " · EC 不可读";
@@ -222,19 +230,23 @@ internal static class GcuEcKeyboard
         if (IsEcSingleZone)
         {
             int color = settings.EffectiveColorArgb();
-            int speed = Math.Clamp(settings.Speed, 0, 4);
+            // 单区轮播的速度档是 1~8（界面上 1/8 .. 8/8，数值越大越快）。
+            int speed = Math.Clamp(settings.Speed, 1, NucKeyboardLighting.SpeedLevels);
             if (string.Equals(targetEffect, "Breathing", StringComparison.Ordinal))
             {
                 color = BreathingColor(settings.BreathingIndex, color);
             }
             else if (string.Equals(targetEffect, "Manual", StringComparison.Ordinal))
             {
-                speed = Math.Clamp((settings.Speed - 2) / 2, 0, 4);
+                // 旧存档可能还是“每键时间 2~10”，超出档位上限的折回档位；新存档直接就是档位。
+                speed = settings.Speed > NucKeyboardLighting.SpeedLevels
+                    ? Math.Clamp((settings.Speed - 2) / 2 + 1, 1, NucKeyboardLighting.SpeedLevels)
+                    : speed;
             }
             NucKeyboardLighting.Apply(targetEffect, on, on ? light : 0, speed, color, CycleColors(settings));
             bool ok = NucKeyboardLighting.TryReadBrightness(out int read) && (read > 0) == on;
             Logger.WriteError("[gcu-ec-kbd] EC 单区 effect=" + targetEffect + " on=" + on + " light=" + light
-                + " ⇒ " + (ok ? "OK" : "回读不一致"));
+                + " speed=" + speed + " ⇒ " + (ok ? "OK" : "回读不一致"));
             return ok;
         }
         if (IsEcWhite)
@@ -279,10 +291,7 @@ internal static class GcuEcKeyboard
         bool ok = on
             ? EcKeyboardLight.TryApply(true, Math.Clamp(level1to2, 1, 2))
             : EcKeyboardLight.TrySetPower(false);
-        if (AcpiDriverEc.TryReadByte(AddressTriggerByte, out byte trigger))
-        {
-            AcpiDriverEc.TryWriteByte(AddressTriggerByte, trigger | TriggerLatch);
-        }
+        EcTriggerByte.TryApply(EcTriggerByte.Latch, 0);
         Logger.WriteError("[gcu-ec-kbd] EC 白光 on=" + on + " level=" + level1to2 + " ⇒ " + (ok ? "OK" : "FAIL"));
         return ok;
     }

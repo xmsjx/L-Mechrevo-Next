@@ -462,9 +462,17 @@ public static class IccHelper
 	private static bool ApplyIccCore(string profilePath)
 	{
 		string? device = ScreenNative.FindLaptopScreen(log: true);
-		if (string.IsNullOrEmpty(device) || !File.Exists(profilePath))
+		if (string.IsNullOrEmpty(device))
 		{
-			Logger.WriteLine("ICC 应用失败：设备或文件不可用");
+			// 两种失败以前共用一句话，看不出到底是屏不在还是文件丢了，分开记。
+			Logger.WriteLine(File.Exists(profilePath)
+				? "ICC 应用失败：内屏不在当前活动显示路径（合盖/只接外屏/独显直连）⇒ 无法关联 - " + profilePath
+				: "ICC 应用失败：内屏不在当前活动显示路径，且 ICC 文件不存在 - " + profilePath);
+			return false;
+		}
+		if (!File.Exists(profilePath))
+		{
+			Logger.WriteLine("ICC 应用失败：ICC 文件不存在 - " + profilePath);
 			return false;
 		}
 		// 用户配置文件标记：复制到用户颜色目录 + HKCU RegisteredProfiles 空子键，

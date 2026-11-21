@@ -9,15 +9,19 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>L-Mechrevo</AssemblyName>
-    <Version>23.8.2.0</Version>
-    <AssemblyVersion>23.8.2.0</AssemblyVersion>
-    <FileVersion>23.8.2.0</FileVersion>
-    <InformationalVersion>beta23.8.2r3</InformationalVersion>
+    <Version>23.8.3.0</Version>
+    <AssemblyVersion>23.8.3.0</AssemblyVersion>
+    <FileVersion>23.8.3.0</FileVersion>
+    <InformationalVersion>beta23.8.3</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <RootNamespace>L_Mechrevo.WpfP0</RootNamespace>
     <StartupObject>L_Mechrevo.WpfP0.App</StartupObject>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="MechrevoLite.Contracts" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\source\MechrevoLite.Core.csproj" />

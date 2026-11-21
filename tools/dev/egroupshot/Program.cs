@@ -132,8 +132,8 @@ internal static class Program
 		_auditType = _asm.GetType("MechrevoLite.UI.UiAuditRunner");
 		_vpType = _auditType.GetNestedType("Viewport", BindingFlags.NonPublic);
 		_issueType = _auditType.GetNestedType("AuditIssue", BindingFlags.NonPublic);
-		_probeType = _asm.GetType("MechrevoLite.Hardware.CpuTuningProbe");
-		_optionType = _asm.GetType("MechrevoLite.Hardware.CpuTuningOption");
+		_probeType = _asm.GetType("MechrevoLite.Contracts.CpuTuningProbe");
+		_optionType = _asm.GetType("MechrevoLite.Contracts.CpuTuningOption");
 		_uiDpiType = _asm.GetType("MechrevoLite.UI.UiDpi");
 		Log.AppendLine("exe         = " + Environment.ProcessPath);
 		Log.AppendLine("suffix      = " + _suffix);

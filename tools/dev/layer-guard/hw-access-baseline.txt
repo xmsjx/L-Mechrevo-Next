@@ -1,0 +1,11 @@
+# 界面直读硬件对象行（棘轮）：<相对路径>	<允许行数上限>
+# 生成命令：dotnet run --project tools/dev/layer-guard -c Release -- --update
+CustomModeWindow.xaml.cs	12
+DisplayEffectEditorWindow.xaml.cs	3
+FeedbackWindow.xaml.cs	1
+FirstRunGuideWindow.xaml.cs	1
+HidKeyboardWindow.xaml.cs	1
+LightEditorWindow.xaml.cs	4
+MainWindow.xaml.cs	20
+OriginalStyleWindow.xaml.cs	63
+SettingsWindow.xaml.cs	1

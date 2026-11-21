@@ -1,6 +1,6 @@
 using PawnIO;
 
-namespace MechrevoLite.Hardware;
+namespace MechrevoLite.Contracts;
 
 // ==============================================================================================
 // 2026-10-10 fmax: 一次探针（"检测能力"）里得到的 FMax（PBO 最大频率）结果。

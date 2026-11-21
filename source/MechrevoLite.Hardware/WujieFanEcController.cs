@@ -1,56 +1,38 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using MechrevoLite.Hardware.FanCurve;
 
 namespace MechrevoLite.Hardware;
 
 /// <summary>
 /// 2026-10-22（无界风扇曲线）：无界（WUJIE14XA）EC 风扇曲线控制器。
 ///
-/// <para>通道：**I2EC 窗口**（端口 0x681/0x682/0x683，经本机已安装的 inpoutx64.dll）——
-/// 这是无界 EC 风扇占空比实际可写的通道；占空比目标为主扇 0x1804、副扇 0x1809（0..200 = 0..100%），
-/// 温度 0x043E，转速 0x0464/0x046C（大端）。</para>
+/// <para>通道：ACPIDriver（\\.\ACPIDriver IOCTL）优先，没有驱动时退 I2EC（inpoutx64）。温度 0x043E，
+/// 转速 0x0464/0x046C（大端）。</para>
 ///
-/// <para>默认走 **table 后端**（0x0F20/0x0F50 前 8 字节 + 0x07C6 写 0x04 锁存；旧版 WUJIE 实机已验证），
-/// 目标不变时停写、EC 自己保持；direct 25Hz 直写保留为回退/对照（只写主扇会让副扇被 EC 斜坡挪到 0）。</para>
+/// <para>只走 **table 后端**：温度轴 0x0F00/0x0F10/0x0F30/0x0F40，占空比表 0x0F20（主扇 16 槽）/
+/// 0x0F50（副扇 13 槽），加上 0x0F5D/0x0F5E/0x0F5F 与 0x07C6 写 0x04 锁存；
+/// 目标不变时停写、EC 自己保持；旧的 25Hz 直写后端已删除。</para>
 ///
-/// <para>安全：45℃ 以下不接管（EC 低温会停转）；副扇 20% 下限；≥85℃ 强制 100%；≥95℃ 停止交还 EC；
-/// 副扇连续约 12 秒 0 RPM 停止；温度读失败约 2.4 秒、写失败约 1 秒、回读持续不一致均停止。
-/// ⛔ 停止时不做渐进降速。</para>
+/// <para>安全：45℃ 以下不接管（EC 低温会停转）；副扇 5% 下限；≥85℃ 强制 100%；≥95℃ 停止交还 EC；
+/// 温度采样连续失败、写表连续失败到上限时停止并交还 EC。⛔ 停止时不做渐进降速。</para>
 /// </summary>
 internal sealed class WujieFanEcController : IDisposable
 {
 	private const int WriteIntervalMs = 40;
 
-	private const int SampleIntervalMs = 500;
-
-	private const int Fan2ZeroSamples = 24;
-
-	private const int MaxTempFailTicks = 60;
-
-	private const int MaxWriteFailTicks = 25;
-
-	private const int MaxReadbackMismatchSamples = 3;
-
-	/// <summary>2026-10-22：写入通道选择 —— I2EC（inpoutx64，实测可写）优先；没有驱动时回退 ACPI-EC 0x93（实验）。</summary>
-	private enum WriteChannel
-	{
-		None,
-		I2ec,
-		AcpiEc
-	}
-
 	/// <summary>
-	/// ⭐⭐ 2026-10-27（task-43）：控制后端 —— <see cref="Table" />（曲线表+锁存，默认优先）/
-	/// <see cref="Direct" />（25Hz 直写 0x1804/0x1809，回退/对照）。✅
+	/// 控制后端 —— <see cref="Table" />（曲线表+锁存，唯一路径）。旧 25Hz 直写后端已删除。
 	/// <para>⭐ table 优点：目标不变时稳态**零写入**（写表只在目标变化/10s 心跳漂移时），
 	/// 撕裂写暴露窗口从 ~50 次/秒 降到“每次目标变化 21 次写”；缺点：受 EC 软着陆斜坡限制
 	/// （目标变化时补写一次 0x1804/0x1809 跳坡）。</para>
 	/// </summary>
 	private enum ControlBackend
 	{
-		Direct,
-		Table
+		Table,
+		/// <summary>写表不可用时的显式失败态：⛔ 不回退 direct 直写，曲线不下发，由 EC 按原生曲线跑。</summary>
+		Unavailable
 	}
 
 	/// <summary>table 后端温度采样周期（ms）：25Hz 定时器里只每 500ms 读一次温度，减少端口读压力。</summary>
@@ -59,8 +41,14 @@ internal sealed class WujieFanEcController : IDisposable
 	/// <summary>table 后端温度连续读失败样本数（6 × 500ms ≈ 3s）⇒ 交还 EC。</summary>
 	private const int TableTempFailSamples = 6;
 
-	/// <summary>table 写表连续失败次数 ⇒ 自动回退 direct 后端。</summary>
+	/// <summary>table 写表连续失败次数 ⇒ 记一条“连续失败”并放慢重试（⛔ 不回退 direct）。</summary>
 	private const int TableWriteFailLimit = 3;
+
+	/// <summary>写表失败后的首次重试间隔（ms）：不狂写，也不放弃。</summary>
+	private const int TableWriteRetryMs = 5000;
+
+	/// <summary>连续失败到上限后的重试间隔（ms）。</summary>
+	private const int TableWriteRetrySlowMs = 30000;
 
 	/// <summary>心跳连续偏离多少次判定“别的程序争用 EC”⇒ 放慢重锁间隔（不跟着加码狂写）。</summary>
 	private const int TableContentionLimit = 5;
@@ -68,28 +56,41 @@ internal sealed class WujieFanEcController : IDisposable
 	/// <summary>判定争用后的心跳/重锁间隔（ms）。</summary>
 	private const int TableContentionHeartbeatMs = 30000;
 
-	private WriteChannel _channel;
 
-	private ControlBackend _backend = ControlBackend.Direct;
+	private ControlBackend _backend = ControlBackend.Unavailable;
 
 	// ---- table 后端状态（task-43）----
 	private int _tableLatchBase;
 	private int _tableIsolateBase;
 	private bool _tableActive;
 	private int _tableLastRaw1 = -1;
+
+	private int _tableSignature;
+
+	private long _lastZeroSlotTick;
+
+	private int _zeroSlotRetries;
+
+	private byte[] _tableCpuDuty = Array.Empty<byte>();
+
+	private byte[] _tableGpuDuty = Array.Empty<byte>();
 	private int _tableLastRaw2 = -1;
 	private long _tableTempSampleTick;
 	private long _tableLastWriteTick;
 	private int _tableHeartbeatMs = WujieFanEc.TableHeartbeatMs;
 	private int _tableContentionCount;
 	private int _tableWriteFailCount;
+
+	/// <summary>写表失败后的下一次重试时刻（TickCount64；0 = 立即可试）。</summary>
+	private long _tableRetryNotBeforeTick;
 	private bool _lowTempHandoff;
 
 	/// <summary>低温交还后重新接管的温度（℃，= 45 + 3）✅</summary>
 	internal const int HandoffResumeTemperatureC = WujieFanEc.HandoffResumeTemperatureC;
 
 	/// <summary>2026-10-22（机主：45℃ 以下风扇会停转、写不进去）：低温区不写占空比，交还 EC 原生策略。</summary>
-	internal const int MinimumOperatingTemperatureC = 45;
+	/// <summary>表后端的最低工作温度。0 表示不设下限：低温段同样按曲线走，不再交还 EC。</summary>
+	internal const int MinimumOperatingTemperatureC = 0;
 
 	private readonly Timer _timer;
 
@@ -124,13 +125,8 @@ internal sealed class WujieFanEcController : IDisposable
 
 	private bool _running;
 
-	private int _fan2ZeroCount;
 
 	private int _tempFailTicks;
-
-	private int _writeFailTicks;
-
-	private int _readbackMismatchSamples;
 
 	/// <summary>本次接管是否已置自定义模式标志。</summary>
 	private bool _customModeSet;
@@ -139,8 +135,6 @@ internal sealed class WujieFanEcController : IDisposable
 	private long _lastHandshakeTick;
 
 	private int _lastTempC = -1;
-
-	private int _lastRaw = -1;
 
 	private long _lastSampleTick;
 
@@ -153,16 +147,39 @@ internal sealed class WujieFanEcController : IDisposable
 
 	internal bool Running => _running;
 
+	// EC 通道后装/驱动自愈完成是常态（驱动被卸载、控制台重装、开机时设备还没就绪）⇒ 记下这次下发意图，
+	// 通道回来后自动重新接管，⛔ 不让用户自己去切一次档位才恢复。
+	private sealed class PendingStart
+	{
+		internal byte[] CpuTemps = Array.Empty<byte>();
+		internal int[] CpuDuties = Array.Empty<int>();
+		internal bool Independent;
+		internal byte[] GpuTemps = Array.Empty<byte>();
+		internal int[] GpuDuties = Array.Empty<int>();
+	}
+
+	private static readonly object RecoveryGate = new();
+	private static PendingStart? _pendingStart;
+	private static Timer? _recoveryTimer;
+	private static int _recoveryAttempts;
+	private const int RecoveryIntervalMs = 60000;
+	private const int RecoveryAttemptLimit = 30;
+
 	internal string LastDetail { get; private set; } = "";
 
 	/// <summary>启动曲线控制：CPU/GPU 两套温度与占空比数组（长度 16，0xFF 表示无效点）；
 	/// independent=true 时主扇按 CPU 曲线、副扇按 GPU 曲线分别输出。</summary>
-	/// <summary>2026-10-22：无界保存的只有占空比点位（官方表可能读失败/无温度轴）⇒ 开机自启用固定温度阶梯 45..90℃（16 点）。</summary>
+	/// <summary>无界默认温度轴（16 点，从 45℃ 起）。</summary>
 	internal static byte[] DefaultTemperatures()
 	{
-			// 温度轴不读 EC（该表常是脏值）：前 10 点与同方一致，最后 100℃，其余 4℃ 步进。
-			byte[] temps = { 46, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 100 };
-		return temps;
+		// 从 45℃ 起（控制器 45℃ 是硬门槛），与占空比同序对齐；返回副本，调用方改动不影响内置表。
+		return (byte[])FanCurveDefaults.WujieCpuTemperatures.Clone();
+	}
+
+	/// <summary>无界 GPU 默认温度轴（同一套表，尾部 255 表示无效点）。</summary>
+	internal static byte[] DefaultGpuTemperatures()
+	{
+		return (byte[])FanCurveDefaults.WujieGpuTemperatures.Clone();
 	}
 
 	internal bool Start(byte[] cpuTemps, int[] cpuDuties, bool independent, byte[] gpuTemps, int[] gpuDuties, out string detail)
@@ -177,11 +194,8 @@ internal sealed class WujieFanEcController : IDisposable
 			detail = "CPU 曲线数据为空";
 			return false;
 		}
-		if (independent && (gpuTemps == null || gpuDuties == null || gpuTemps.Length == 0 || gpuDuties.Length == 0))
-		{
-			detail = "独立控制需要 GPU 曲线，但 GPU 曲线为空";
-			return false;
-		}
+		// 无界只有一路温度输入，独立输出已退役：始终按单路执行，GPU 曲线不再单独下发。
+		independent = false;
 		// 同一套参数重复启动时复用现有会话，避免"交还 EC / 再接管"来回抖动。
 		string signature = BuildSignature(cpuTemps, cpuDuties, independent, gpuTemps, gpuDuties);
 		if (_active != null && _activeSignature == signature)
@@ -189,61 +203,38 @@ internal sealed class WujieFanEcController : IDisposable
 			detail = "已接管（复用现有会话）";
 			return true;
 		}
-		_activeSignature = signature;
-		// 2026-10-22（无界集成）：随包 DLL/sys 在，但驱动没装时先尝试自动安装一次，再验通道。
-		if (!I2ecInpOut.IsAvailable)
+		// 签名等真正接管成功后再记：中途失败时旧会话可能还在跑，提前记会让下次同参数误判「已在复用」。
+		// 通道：ACPIDriver 优先，inpout 兜底；两者都不在时才尝试装一次 inpout。
+		if (!AcpiDriverEc.IsAvailable() && !I2ecInpOut.IsAvailable)
 		{
-			// 厂商 ACPI 驱动可用时不需要装 inpout；两者都没有才尝试安装。
-			string installDetail = I2ecInpOut.AcpiDriverAvailable()
-				? "ACPI 驱动可用，跳过 inpout"
-				: (InpOutDriverInstaller.TryEnsureInstalled(out string installResult) ? "已安装" : installResult);
+			string installDetail = InpOutDriverInstaller.TryEnsureInstalled(out string installResult) ? "已安装" : installResult;
 			Logger.WriteLine("[fan] 无界 EC 曲线：驱动自动安装结果=" + installDetail);
 		}
-		// 启动前先验通道：I2EC（inpoutx64）优先；没有驱动时回退 ACPI-EC 0x93（实验路径）。
-		WriteChannel channel = WriteChannel.None;
 		int temp = -1;
-		string i2ecDetail = "";
-		if (I2ecInpOut.IsAvailable
-			&& I2ecInpOut.TryReadEcByte(WujieFanEc.RegisterMode, out int mode, out string modeDetail))
+		if (!EcIo.TrySelect(out string transportDetail))
 		{
-			if ((mode & 0x03) != 0x03)
-			{
-				detail = "I2EC 不是读写模式（0x200D=0x" + mode.ToString("X2") + "）";
-				return false;
-			}
-			if (!I2ecInpOut.TryReadEcByte(WujieFanEc.RegisterCpuTemp, out temp, out string tempDetail) || temp < 0 || temp > 120)
-			{
-				detail = "读取 CPU 温度失败（0x043E，I2EC）：" + tempDetail;
-				return false;
-			}
-			channel = WriteChannel.I2ec;
+			detail = "无可用 EC 通道（" + transportDetail + "）";
+			return false;
 		}
-		else
+		if (!EcIo.TryReadByte(WujieFanEc.RegisterCpuTemp, out temp, out string tempDetail) || temp < 0 || temp > 120)
 		{
-			i2ecDetail = I2ecInpOut.IsAvailable ? "I2EC 读失败" : "inpoutx64.dll 未安装";
-			if (!EcPortIo.TryReadByteStable(WujieFanEc.RegisterMode, out int modeAcpi, out string modeAcpiNote)
-				|| (modeAcpi & 0x03) != 0x03)
-			{
-				detail = "无可用 EC 通道（I2EC：" + i2ecDetail + "；ACPI-EC：" + modeAcpiNote + "）";
-				return false;
-			}
-			if (!EcPortIo.TryReadByte(WujieFanEc.RegisterCpuTemp, out temp) || temp < 0 || temp > 120)
-			{
-				detail = "无可用 EC 通道（I2EC：" + i2ecDetail + "；ACPI-EC 读温度失败）";
-				return false;
-			}
-			channel = WriteChannel.AcpiEc;
+			detail = "读取 CPU 温度失败（0x043E，" + EcIo.Detail + "）：" + tempDetail;
+			return false;
 		}
-		// ⭐⭐ 2026-10-27（task-43）：选择后端 —— table 默认优先；显式配置 direct / table 初始化失败时回退 direct。
-		ControlBackend backend = ControlBackend.Direct;
+Logger.WriteLine("[fan] 无界 EC 通道：" + EcIo.Detail + " · 当前 " + temp + "℃");
+		// 选择后端：只走 table（曲线表+锁存）。
+		ControlBackend backend = ControlBackend.Unavailable;
 		int latchBase = 0;
 		int isolateBase = 0;
 		string backendDetail = "";
-		SelectBackend(channel, out backend, out latchBase, out isolateBase, out backendDetail);
-		if (backend == ControlBackend.Direct)
+		SelectBackend(out backend, out latchBase, out isolateBase, out backendDetail);
+		if (backend == ControlBackend.Unavailable)
 		{
-			// direct 路径不依赖表；但要清理**上次崩溃/强杀遗留**的锁存/隔离位（否则 EC 可能仍在按旧表跑）。
-			ClearStaleTableStateBestEffort();
+			// 写表这条路走不通 ⇒ 如实报失败（机主要求：⛔ 不退回 direct 25Hz 直写，那是会被固件打乱的路子）。
+			Logger.WriteErrorIfChanged("wujie-fan-unavailable", "[fan] 无界 EC 曲线：未启用（" + backendDetail + "）");
+			ArmChannelRecovery(cpuTemps, cpuDuties, independent, gpuTemps, gpuDuties);
+			detail = backendDetail;
+			return false;
 		}
 		StopActive("被新的曲线控制器替换");
 		lock (_gate)
@@ -264,12 +255,8 @@ internal sealed class WujieFanEcController : IDisposable
 				_gpuDuties = (int[])_cpuDuties.Clone();
 				_validGpu = _validCpu;
 			}
-			_fan2ZeroCount = 0;
 			_tempFailTicks = 0;
-			_writeFailTicks = 0;
-			_readbackMismatchSamples = 0;
 			_lastTempC = temp;
-			_lastRaw = -1;
 			_lastSampleTick = Environment.TickCount64;
 			_lastTargetPercent = -1;
 			_backend = backend;
@@ -285,39 +272,105 @@ internal sealed class WujieFanEcController : IDisposable
 			_tableWriteFailCount = 0;
 			_lowTempHandoff = false;
 			_running = true;
-			_channel = channel;
 			_active = this;
-			// 2026-10-23（机主：电池 2ms 下风扇掉写）：风扇运行期间给电池循环一个跨进程优先标记。
-			I2ecInpOut.SetFanWritePriority(channel == WriteChannel.I2ec);
 			_timer.Change(WriteIntervalMs, WriteIntervalMs);
 		}
-		detail = "已启动（" + ChannelName(channel) + " · " + backendDetail + " · " + (independent ? "独立控制" : "同步控制")
+		ClearChannelRecovery("已重新接管");
+		_activeSignature = signature;
+		detail = "已启动（" + EcIo.Detail + " · " + backendDetail + " · " + (independent ? "独立控制" : "同步控制")
 			+ " · CPU " + _validCpu + " 点 / GPU " + _validGpu + " 点 · 当前 " + temp + "℃）";
 		Logger.WriteLine("[fan] 无界 EC 曲线启动：" + detail);
 		return true;
 	}
 
-	/// <summary>
-	/// ⭐ task-43：后端选择。默认 **table 优先**；`wujie_fan_backend=direct|duty` 显式强制旧 25Hz 直写；
-	/// table 初始化失败（读不到 0x0727/0x07C5 或通道不是 I2EC）⇒ 自动回退 direct 并在日志说明原因。
-	/// </summary>
-	private static void SelectBackend(WriteChannel channel, out ControlBackend backend, out int latchBase, out int isolateBase, out string backendDetail)
+	/// <summary>记下这次下发意图：EC 通道不可用导致没能接管时，等通道回来后自动重新接管。</summary>
+	private static void ArmChannelRecovery(byte[] cpuTemps, int[] cpuDuties, bool independent, byte[] gpuTemps, int[] gpuDuties)
 	{
-		backend = ControlBackend.Direct;
+		lock (RecoveryGate)
+		{
+			_pendingStart = new PendingStart
+			{
+				CpuTemps = (byte[])cpuTemps.Clone(),
+				CpuDuties = (int[])cpuDuties.Clone(),
+				Independent = independent,
+				GpuTemps = gpuTemps == null ? Array.Empty<byte>() : (byte[])gpuTemps.Clone(),
+				GpuDuties = gpuDuties == null ? Array.Empty<int>() : (int[])gpuDuties.Clone()
+			};
+			_recoveryAttempts = 0;
+			_recoveryTimer ??= new Timer(_ => RetryChannelRecovery(), null, RecoveryIntervalMs, RecoveryIntervalMs);
+		}
+	}
+
+	/// <summary>取消自动恢复（已接管成功、或用户明确交还 EC 时就不要再抢回来）。</summary>
+	private static void ClearChannelRecovery(string reason)
+	{
+		lock (RecoveryGate)
+		{
+			if (_pendingStart == null && _recoveryTimer == null)
+			{
+				return;
+			}
+			_pendingStart = null;
+			_recoveryTimer?.Dispose();
+			_recoveryTimer = null;
+			Logger.WriteLine("[fan] 无界 EC 曲线：取消通道恢复重试（" + reason + "）");
+		}
+	}
+
+	/// <summary>一分钟看一次通道：回来了就按上次下发重新接管；一直没回来最多等 30 轮。</summary>
+	private static void RetryChannelRecovery()
+	{
+		PendingStart? pending;
+		lock (RecoveryGate)
+		{
+			pending = _pendingStart;
+			if (pending == null || ++_recoveryAttempts > RecoveryAttemptLimit)
+			{
+				_pendingStart = null;
+				_recoveryTimer?.Dispose();
+				_recoveryTimer = null;
+				if (pending != null)
+				{
+					Logger.WriteError("[fan] 无界 EC 曲线：EC 通道 " + RecoveryAttemptLimit + " 分钟仍未恢复 ⇒ 停止自动重试");
+				}
+				return;
+			}
+			if (!AcpiDriverEc.IsAvailable() && !I2ecInpOut.IsAvailable)
+			{
+				// 通道还没回来：先借自愈安装再试一次（6 小时限频由 AcpiDriverInstaller 自己管），仍不行就静默等下一轮。
+				AcpiDriverInstaller.EnsureInstalled(force: false, out _);
+				if (!AcpiDriverEc.IsAvailable() && !I2ecInpOut.IsAvailable)
+				{
+					return;
+				}
+			}
+			_pendingStart = null;
+			_recoveryTimer?.Dispose();
+			_recoveryTimer = null;
+		}
+		WujieFanEcController controller = new();
+		bool ok = controller.Start(pending.CpuTemps, pending.CpuDuties, pending.Independent, pending.GpuTemps, pending.GpuDuties, out string detail);
+		Logger.WriteLine("[fan] 无界 EC 曲线：EC 通道恢复 ⇒ 按上次下发重新接管「" + (ok ? "成功" : "仍失败") + "」（" + detail + "）");
+	}
+
+	/// <summary>
+	/// 后端选择：只认 table（曲线表+锁存）。表初始化失败就如实报失败，⛔ 不回退直写。
+	/// </summary>
+	private static void SelectBackend(out ControlBackend backend, out int latchBase, out int isolateBase, out string backendDetail)
+	{
+		backend = ControlBackend.Unavailable;
 		latchBase = 0;
 		isolateBase = 0;
 		string configured = (MechrevoLite.AppConfig.GetString("wujie_fan_backend") ?? "").Trim();
 		if (configured.Equals("direct", StringComparison.OrdinalIgnoreCase)
 			|| configured.Equals("duty", StringComparison.OrdinalIgnoreCase))
 		{
-			backendDetail = "direct 后端（配置 wujie_fan_backend=" + configured + "）";
-			Logger.WriteLine("[fan] 无界 EC：配置强制 direct 25Hz 直写（wujie_fan_backend=" + configured + "）");
-			return;
+			Logger.WriteError("[fan] 无界 EC：wujie_fan_backend=" + configured + " 是已删除的直写后端，按 table 执行");
 		}
-		if (channel != WriteChannel.I2ec)
+		if (EcIo.Active == EcTransport.None)
 		{
-			backendDetail = "direct 后端（通道=" + ChannelName(channel) + "，table 需要 I2EC 批量写）";
-			Logger.WriteLine("[fan] 无界 EC：table 不可用 ⇒ " + backendDetail);
+			backendDetail = "曲线未启用（没有可用 EC 通道）";
+			Logger.WriteError("[fan] 无界 EC：写表通道不可用 ⇒ " + backendDetail + "，风扇交还 EC 原生曲线");
 			return;
 		}
 		if (configured.Length > 0
@@ -326,16 +379,16 @@ internal sealed class WujieFanEcController : IDisposable
 		{
 			Logger.WriteError("[fan] 无界 EC：未知 wujie_fan_backend=" + configured + " ⇒ 按默认策略尝试 table");
 		}
-		if (!I2ecInpOut.TryReadEcByte(WujieFanEc.RegisterFanTableLatch, out int latch, out string latchDetail))
+		if (!EcIo.TryReadByte(WujieFanEc.RegisterFanTableLatch, out int latch, out string latchDetail))
 		{
-			backendDetail = "direct 后端（table 初始化失败：读 0x0727 失败 " + latchDetail + "）";
-			Logger.WriteError("[fan] 无界 EC：table 初始化失败，自动回退 direct ⇒ " + latchDetail);
+			backendDetail = "曲线未启用（table 初始化失败：读 0x07C6 失败 " + latchDetail + "；⛔ 不回退 direct 直写）";
+			Logger.WriteError("[fan] 无界 EC：table 初始化失败 ⇒ " + latchDetail + "，风扇交还 EC 原生曲线");
 			return;
 		}
-		if (!I2ecInpOut.TryReadEcByte(WujieFanEc.RegisterFanIsolate, out int isolate, out string isolateDetail))
+		if (!EcIo.TryReadByte(WujieFanEc.RegisterFanIsolate, out int isolate, out string isolateDetail))
 		{
-			backendDetail = "direct 后端（table 初始化失败：读 0x07C5 失败 " + isolateDetail + "）";
-			Logger.WriteError("[fan] 无界 EC：table 初始化失败，自动回退 direct ⇒ " + isolateDetail);
+			backendDetail = "曲线未启用（table 初始化失败：读 0x07C5 失败 " + isolateDetail + "；⛔ 不回退 direct 直写）";
+			Logger.WriteError("[fan] 无界 EC：table 初始化失败 ⇒ " + isolateDetail + "，风扇交还 EC 原生曲线");
 			return;
 		}
 		latchBase = latch & ~WujieFanEc.TableLatchBit;
@@ -349,63 +402,13 @@ internal sealed class WujieFanEcController : IDisposable
 			+ " · 计划自检=" + tableSelfCheck + "（" + tableSelfCheckDetail + "）");
 	}
 
-	/// <summary>
-	/// direct 后端启动前：清理**上次崩溃/强杀**遗留的 table 锁存/隔离位（绝对写，read-modify-write 危险）。
-	/// <para>⚠️ 只读一次 + 按基线绝对写；读不到就跳过（⛔ 不猜、⛔ 不伪造）。</para>
-	/// </summary>
-	private static void ClearStaleTableStateBestEffort()
-	{
-		try
-		{
-			if (!I2ecInpOut.IsAvailable)
-			{
-				return;
-			}
-			if (!I2ecInpOut.TryReadEcByte(WujieFanEc.RegisterFanTableLatch, out int latch, out _)
-				|| !I2ecInpOut.TryReadEcByte(WujieFanEc.RegisterFanIsolate, out int isolate, out _))
-			{
-				return;
-			}
-			if ((latch & WujieFanEc.TableLatchBit) == 0 && (isolate & 0x80) == 0)
-			{
-				return;
-			}
-			int latchBase = latch & ~WujieFanEc.TableLatchBit;
-			int isolateBase = isolate & ~0x80;
-			List<I2ecInpOut.I2ecWriteStep> steps = new()
-			{
-				new(WujieFanEc.RegisterFanTableLatch, latchBase),
-				new(WujieFanEc.RegisterFanIsolate, isolateBase)
-			};
-			List<I2ecInpOut.I2ecVerifyStep> verify = new()
-			{
-				new(WujieFanEc.RegisterFanTableLatch, latchBase),
-				new(WujieFanEc.RegisterFanIsolate, isolateBase)
-			};
-			bool ok = I2ecInpOut.TryWriteEcSequence(steps, verify, out string detail);
-			if (ok)
-			{
-				Logger.WriteError("[fan] 无界 EC：检测到遗留 table 锁存/隔离（0x" + latch.ToString("X2") + "/0x"
-					+ isolate.ToString("X2") + "）⇒ 已清回基线并交还 EC");
-			}
-			else
-			{
-				Logger.WriteError("[fan] 无界 EC：⚠️ 遗留 table 锁存/隔离清理失败（" + detail + "）⇒ direct 直写仍会覆盖目标，但 EC 可能保留旧表设置");
-			}
-		}
-		catch (Exception ex)
-		{
-			Logger.WriteLine("[fan] 无界 EC：遗留 table 状态清理异常（已吞掉）：" + ex.Message);
-		}
-	}
-
 	/// <summary>停止写入，交还 EC（EC 会在 6~8 秒内接管；不做渐进降速）。</summary>
 	internal void Stop(string reason)
 	{
 		if (_customModeSet)
 		{
 			// 交还时清自定义模式标志（0x40），让固件按自己的策略接管风扇。
-			I2ecInpOut.TryWriteEcByte(WujieFanEc.RegisterCustomMode, 0x40, out _);
+			EcIo.TryWriteByte(WujieFanEc.RegisterCustomMode, 0x40, out _);
 			_customModeSet = false;
 		}
 		bool wasRunning;
@@ -416,10 +419,7 @@ internal sealed class WujieFanEcController : IDisposable
 			releaseTable = _backend == ControlBackend.Table && _tableActive;
 			_running = false;
 			_timer.Change(Timeout.Infinite, Timeout.Infinite);
-			_fan2ZeroCount = 0;
 			_tempFailTicks = 0;
-			_writeFailTicks = 0;
-			_readbackMismatchSamples = 0;
 			if (reason.Length > 0)
 			{
 				LastDetail = reason;
@@ -434,7 +434,6 @@ internal sealed class WujieFanEcController : IDisposable
 		{
 			Logger.WriteLine("[fan] 无界 EC 曲线停止：" + reason + "（交还 EC）");
 		}
-		I2ecInpOut.SetFanWritePriority(false);
 		if (ReferenceEquals(_active, this))
 		{
 			_active = null;
@@ -450,6 +449,8 @@ internal sealed class WujieFanEcController : IDisposable
 	/// <summary>停掉当前活动的无界风扇曲线控制器（例如强冷开启时；强冷本身仍走 GCU）。</summary>
 	internal static void StopActive(string reason)
 	{
+		// 明确交还/停掉曲线时，不要再用后台重试把它抢回来。
+		ClearChannelRecovery(reason);
 		WujieFanEcController active = _active;
 		if (active != null)
 		{
@@ -466,148 +467,57 @@ internal sealed class WujieFanEcController : IDisposable
 				return;
 			}
 		}
-		if (_channel == WriteChannel.I2ec)
-		{
-			// 心跳：让电池保持循环持续看到“风扇正在写”。
-			I2ecInpOut.SetFanWritePriority(true);
-		}
 		try
 		{
-			// ⭐⭐ 2026-10-27（task-43）：table 后端 —— 25Hz 定时器只用于采样/看门狗，**写表只在目标变化/心跳漂移时**。
-			if (_backend == ControlBackend.Table)
+			// table 后端：25Hz 定时器只用于采样与心跳校验，写表只在目标变化或表体漂移时发生。
+			if (_backend == ControlBackend.Unavailable)
 			{
-				OnTickTable();
-				return;
-			}
-			// ① 温度：读失败时短暂沿用上次值继续维持写入；超过约 2.4 秒仍失败则交还 EC。
-			bool tempOk = ReadEc(WujieFanEc.RegisterCpuTemp, out int temp) && temp >= 0 && temp <= 120;
-			if (!tempOk)
-			{
-				_tempFailTicks++;
-				if (_tempFailTicks >= MaxTempFailTicks)
+				// 曲线未启用：⛔ 不用 25Hz 直写兜底（无界固件会把表打乱，直写无意义还会覆盖用户预期）。
+				if (Logger.TryMarkChanged("wujie-fan-unavailable", "1"))
 				{
-					Stop("连续读 CPU 温度失败（I2EC），交还 EC");
-					LastDetail = "I/O 失败已停止";
-					return;
-				}
-				temp = _lastTempC;
-			}
-			else
-			{
-				_tempFailTicks = 0;
-				_lastTempC = temp;
-			}
-			if (temp < 0)
-			{
-				return;
-			}
-			if (temp >= 95)
-			{
-				Stop("温度 " + temp + "℃ ≥ 95℃，交还 EC 自动控速");
-				LastDetail = "温度过高已交还 EC";
-				return;
-			}
-			if (temp < MinimumOperatingTemperatureC)
-			{
-				// 45℃ 以下 EC 本来就会让风扇停转/低转；暂停写入并交还 EC，不做看门狗计数。
-				_lastRaw = -1;
-				_fan2ZeroCount = 0;
-				if (_lastTargetPercent != -1)
-				{
-					_lastTargetPercent = -1;
-					Logger.WriteLine("[fan] 无界 EC 曲线：温度 " + temp + "℃ < 45℃，暂停写入并交还 EC");
+					Logger.WriteError("[fan] 无界 EC：曲线后端未启用（table 初始化失败），已交还 EC 原生曲线；⛔ 不回退 direct");
 				}
 				return;
 			}
-			int cpuTarget = (temp >= 85) ? 100 : ResolveDuty(_cpuTemps, _cpuDuties, _validCpu, temp);
-			int secondaryTemp = temp;
-			if (_independent && ReadEc(0x044F, out int gpuTemp) && gpuTemp > 0 && gpuTemp <= 120)
-			{
-				secondaryTemp = gpuTemp;
-			}
-			int gpuTarget = (secondaryTemp >= 85) ? 100 : ResolveDuty(_gpuTemps, _gpuDuties, _validGpu, secondaryTemp);
-			if (cpuTarget > 0 && cpuTarget < WujieFanEc.FanFloorPercent)
-			{
-				cpuTarget = WujieFanEc.FanFloorPercent;
-			}
-			if (gpuTarget > 0 && gpuTarget < WujieFanEc.FanFloorPercent)
-			{
-				gpuTarget = WujieFanEc.FanFloorPercent;
-			}
-			int raw = Math.Max(1, Math.Min(EcPortIo.WujieFanDutyMaxRaw, (int)Math.Round(cpuTarget * 2.0)));
-			int rawSecondary = Math.Max(1, Math.Min(EcPortIo.WujieFanDutyMaxRaw, (int)Math.Round(gpuTarget * 2.0)));
-			bool ok1 = WriteDuty(WujieFanEc.RegisterDutyFan1, raw, out string writeDetail1);
-			bool ok2 = WriteDuty(WujieFanEc.RegisterDutyFan2, rawSecondary, out string writeDetail2);
-			if (!ok1 || !ok2)
-			{
-				_writeFailTicks++;
-				if (_writeFailTicks >= MaxWriteFailTicks)
-				{
-					Stop("连续写占空比失败（" + (ok1 ? writeDetail2 : writeDetail1) + "），交还 EC");
-					LastDetail = "写入失败已停止";
-					return;
-				}
-			}
-			else
-			{
-				_writeFailTicks = 0;
-				_lastRaw = raw;
-				int combined = (_independent ? (cpuTarget * 1000 + gpuTarget) : cpuTarget);
-				if (combined != _lastTargetPercent)
-				{
-					_lastTargetPercent = combined;
-					Logger.WriteLineIfChanged("wujie-fan-target", $"[fan] 无界 EC 曲线：{temp}℃ → CPU {cpuTarget}% (raw={raw}) · 副扇 {gpuTarget}% (raw={rawSecondary}) · {(_independent ? "独立" : "同步")}（I2EC）");
-				}
-			}
-			// ② 每 500ms 采样一次：回读一致性 + 副扇堵转看门狗。
-			if (Environment.TickCount64 - _lastSampleTick >= SampleIntervalMs)
-			{
-				_lastSampleTick = Environment.TickCount64;
-				if ((ReadEc(WujieFanEc.RegisterDutyFan1, out int readBack) && readBack != raw) || (ReadEc(WujieFanEc.RegisterDutyFan2, out int readBackSecondary) && readBackSecondary != rawSecondary))
-				{
-					_readbackMismatchSamples++;
-					if (_readbackMismatchSamples >= MaxReadbackMismatchSamples)
-					{
-						if (_backend == ControlBackend.Direct)
-						{
-							Stop("占空比回读持续不一致（主扇写 " + raw + "·副扇写 " + rawSecondary + "），交还 EC");
-							LastDetail = "回读不一致已停止";
-							return;
-						}
-						// 表后端：0x75B/0x75C 是 EC 按表算出的实际占空比，与目标不等属正常，不据此停止。
-						_readbackMismatchSamples = 0;
-						Logger.WriteLineIfChanged("wujie-fan-readback", "[fan] 无界 EC 表后端：占空比回读与目标不同属正常（EC 自算），不据此停止");
-					}
-				}
-				else
-				{
-					_readbackMismatchSamples = 0;
-				}
-				if (TryReadFan2Rpm(out int fan2Rpm) && fan2Rpm <= 0)
-				{
-					_fan2ZeroCount++;
-					// 副扇目标>0 但转速为 0 ⇒ 走停转重启握手（限 5 秒一次）。
-					if (rawSecondary > 0)
-					{
-						TryWakeFan(raw, rawSecondary);
-					}
-					if (_fan2ZeroCount >= Fan2ZeroSamples)
-					{
-						Stop("副扇连续 0 RPM（疑似被 EC 判堵转），交还 EC");
-						LastDetail = "副扇 0 RPM 看门狗触发";
-					}
-				}
-				else
-				{
-					_fan2ZeroCount = 0;
-				}
-			}
+			OnTickTable();
 		}
 		catch (Exception ex)
 		{
 			Stop("控制器异常（" + ex.GetType().Name + "），交还 EC");
 			LastDetail = "控制器异常已停止";
 		}
+	}
+
+	/// <summary>
+	/// 只读：回读表体并与当前目标比对（固件偶发把表打乱 ⇒ 靠校验发现后重锁）。
+	/// <para>期望值 = 目标 raw × 255 / 200（与写表同一换算，表量程 0..255）；只比前 
+	/// <see cref="WujieFanEc.FanTableActiveLength" /> 个字节。</para>
+	/// </summary>
+	private bool TableContentDrift(out string detail)
+	{
+		detail = "";
+		if (_tableCpuDuty.Length < WujieFanEc.FanTableActiveLength
+			|| _tableGpuDuty.Length < WujieFanEc.FanTableGpuDutyLength)
+		{
+			return false;
+		}
+		for (int i = 0; i < WujieFanEc.FanTableActiveLength; i++)
+		{
+			if (ReadEc(WujieFanEc.RegisterFanTableFan1 + i, out int v1) && v1 != _tableCpuDuty[i])
+			{
+				detail = "表1[" + i + "]=0x" + v1.ToString("X2") + "≠0x" + _tableCpuDuty[i].ToString("X2");
+				return true;
+			}
+		}
+		for (int i = 0; i < WujieFanEc.FanTableGpuDutyLength; i++)
+		{
+			if (ReadEc(WujieFanEc.RegisterFanTableFan2 + i, out int v2) && v2 != _tableGpuDuty[i])
+			{
+				detail = "表2[" + i + "]=0x" + v2.ToString("X2") + "≠0x" + _tableGpuDuty[i].ToString("X2");
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/// <summary>
@@ -650,34 +560,7 @@ internal sealed class WujieFanEcController : IDisposable
 			LastDetail = "温度过高已交还 EC";
 			return;
 		}
-		// ⭐ 低温交还：<45℃ 释放表（清锁存+隔离）把控制权交还 EC —— 避免低温时我们的表压住 EC 的省电策略。
-		if (temp < MinimumOperatingTemperatureC)
-		{
-			if (!_lowTempHandoff)
-			{
-				_lowTempHandoff = true;
-				_lastTargetPercent = -1;
-				Logger.WriteLine("[fan] 无界 table：温度 " + temp + "℃ < " + MinimumOperatingTemperatureC
-					+ "℃ ⇒ 释放表并交还 EC（≥" + HandoffResumeTemperatureC + "℃ 重新接管，3℃ 回差）");
-			}
-			if (_tableActive)
-			{
-				ReleaseTable("低温交还 EC（" + temp + "℃）");
-			}
-			_tableLastRaw1 = -1;
-			_tableLastRaw2 = -1;
-			_fan2ZeroCount = 0;
-			return;
-		}
-		if (_lowTempHandoff)
-		{
-			if (temp < HandoffResumeTemperatureC)
-			{
-				return;
-			}
-			_lowTempHandoff = false;
-			Logger.WriteLine("[fan] 无界 table：温度 " + temp + "℃ ≥ " + HandoffResumeTemperatureC + "℃ ⇒ 重新接管（3℃ 回差）");
-		}
+		// 低温段同样按曲线执行：不再把控制权交还 EC（曲线温度轴可以低于 45℃）。
 		int cpuTarget = (temp >= 85) ? 100 : ResolveDuty(_cpuTemps, _cpuDuties, _validCpu, temp);
 		int secondaryTemp = temp;
 		if (_independent && ReadEc(0x044F, out int gpuTemp) && gpuTemp > 0 && gpuTemp <= 120)
@@ -685,7 +568,7 @@ internal sealed class WujieFanEcController : IDisposable
 			secondaryTemp = gpuTemp;
 		}
 		int gpuTarget = (secondaryTemp >= 85) ? 100 : ResolveDuty(_gpuTemps, _gpuDuties, _validGpu, secondaryTemp);
-		// table 后端沿用旧版 WUJIE 实测口径：5% 下限（EC 自身约 1745 RPM 地板）；direct 仍保持 20%。
+		// 5% 下限：EC 自身约 1745 RPM 地板，低于此值副扇可能被判堵转。
 		if (cpuTarget < WujieFanEc.TableFanFloorPercent)
 		{
 			cpuTarget = WujieFanEc.TableFanFloorPercent;
@@ -696,14 +579,13 @@ internal sealed class WujieFanEcController : IDisposable
 		}
 		int raw1 = Math.Max(1, Math.Min(EcPortIo.WujieFanDutyMaxRaw, (int)Math.Round(cpuTarget * 2.0)));
 		int raw2 = Math.Max(1, Math.Min(EcPortIo.WujieFanDutyMaxRaw, (int)Math.Round(gpuTarget * 2.0)));
-		if (raw1 != _tableLastRaw1 || raw2 != _tableLastRaw2)
+		if (BuildCurveSignature() != _tableSignature)
 		{
-			if (!ApplyTable(raw1, raw2, "目标变化"))
+			if (!ApplyTable("曲线变化"))
 			{
 				return;
 			}
-			_tableLastRaw1 = raw1;
-			_tableLastRaw2 = raw2;
+			_tableSignature = BuildCurveSignature();
 			_tableLastWriteTick = now;
 			_tableContentionCount = 0;
 			_tableWriteFailCount = 0;
@@ -711,42 +593,30 @@ internal sealed class WujieFanEcController : IDisposable
 			if (combined != _lastTargetPercent)
 			{
 				_lastTargetPercent = combined;
-				Logger.WriteLineIfChanged("wujie-fan-target", $"[fan] 无界 table：{temp}℃ → CPU {cpuTarget}% (raw={raw1}) · 副扇 {gpuTarget}% (raw={raw2}) · {(_independent ? "独立" : "同步")}（0x0F20/0x0F50 表 + 0x0727 锁存）");
+				Logger.WriteLineIfChanged("wujie-fan-target", $"[fan] 无界 table：{temp}℃ → CPU {cpuTarget}% (raw={raw1}) · 副扇 {gpuTarget}% (raw={raw2}) · {(_independent ? "独立" : "同步")}（0x0F20/0x0F50 曲线表 + 0x07C6 锁存）");
 			}
 		}
 		else if (now - _tableLastWriteTick >= _tableHeartbeatMs)
 		{
-			// ⭐ 10s 心跳：先读目标，只有 EC 真的偏离才重锁 —— 稳态零写入（防别的程序覆盖表/目标）。
+			// 心跳只回读表体：表内容被别的程序改写才重写整表，稳态零写入。
 			_tableLastWriteTick = now;
-			int cur1 = -1;
-			int cur2 = -1;
-			bool drift = false;
-			if (ReadEc(WujieFanEc.RegisterDutyFan1, out int read1))
-			{
-				cur1 = read1;
-				drift |= Math.Abs(read1 - raw1) > WujieFanEc.TableDriftToleranceRaw;
-			}
-			if (ReadEc(WujieFanEc.RegisterDutyFan2, out int read2))
-			{
-				cur2 = read2;
-				drift |= Math.Abs(read2 - raw2) > WujieFanEc.TableDriftToleranceRaw;
-			}
+			bool drift = TableContentDrift(out string tableDriftDetail);
 			if (drift)
 			{
 				_tableContentionCount++;
-				if (!ApplyTable(raw1, raw2, "心跳漂移重锁"))
+				if (!ApplyTable("心跳漂移重锁"))
 				{
 					return;
 				}
 				if (_tableContentionCount >= TableContentionLimit)
 				{
 					_tableHeartbeatMs = TableContentionHeartbeatMs;
-					Logger.WriteError("[fan] 无界 table：心跳连续 " + _tableContentionCount + " 次发现目标被改回（0x1804="
-						+ cur1 + " / 0x1809=" + cur2 + "）⇒ 疑似别的程序争用 EC；重锁间隔放慢到 30s（⛔ 不跟着加码狂写）");
+					Logger.WriteError("[fan] 无界 table：心跳连续 " + _tableContentionCount + " 次发现表体被改（"
+						+ tableDriftDetail + "）⇒ 疑似别的程序争用 EC；重锁间隔放慢到 30s（⛔ 不跟着加码狂写）");
 				}
 				else
 				{
-					Logger.WriteLine("[fan] 无界 table：心跳发现偏离（0x1804=" + cur1 + " / 0x1809=" + cur2 + "）⇒ 重锁一次");
+					Logger.WriteLine("[fan] 无界 table：心跳发现表体被改（" + tableDriftDetail + "）⇒ 重锁一次");
 				}
 			}
 			else
@@ -754,40 +624,71 @@ internal sealed class WujieFanEcController : IDisposable
 				_tableContentionCount = 0;
 			}
 		}
-		SampleFan2Watchdog();
+		// 首档占空比为 0 时 EC 停在那里不会自己再起转：温度已过首档阈值就重新提交整表，
+		// 每个温度区间最多补 4 次（补完还是回到 0 档说明不是这个原因，⛔ 不无限重写抢选档权）。
+		if (_cpuTemps.Length > 1 && temp < _cpuTemps[1])
+		{
+			_zeroSlotRetries = 0;
+		}
+		if (_tableCpuDuty.Length == WujieFanEc.FanTableActiveLength && _tableCpuDuty[0] == 0
+			&& _cpuTemps.Length > 1 && temp >= _cpuTemps[1] && _zeroSlotRetries < 4
+			&& now - _lastZeroSlotTick >= 15000)
+		{
+			_zeroSlotRetries++;
+			_lastZeroSlotTick = now;
+			if (ApplyTable("回差落 0 档重新提交"))
+			{
+				Logger.WriteLineIfChanged("wujie-fan-zero-slot", "[fan] 无界 table：" + temp + "℃ 已过首档（"
+					+ _cpuTemps[0] + "℃→" + _cpuTemps[1] + "℃）⇒ 重新提交整表 + 握手，避免停在 0 档");
+				TryWakeFan(TableDutyAt(1), TableDutyAt(1));
+			}
+		}
 	}
 
 	/// <summary>
-	/// 温度轮廓写入计划：CPU/GPU 各写升档温度表与降档温度表（各前 8 点，与占空比表同样只取前 8 字节）。
-	/// 降档温度 = 升档温度 - 2℃（不低于 0），给 EC 留回差。
+	/// 温度轮廓写入计划：CPU/GPU 各写整张升档温度表与降档温度表。
+	/// 降档温度 = 升档温度 - 回差（不低于 0），给 EC 留回差。
 	/// </summary>
-	/// <summary>停转重启握手：写软启动占空比 → 置 0x07A3 bit6（EC 消费后不自清，回执看转速）。</summary>
-	private void TryWakeFan(int raw1, int raw2)
+	/// <summary>
+	/// 停转重启握手：0x0F21/0x0F51 就是两张表的 Duty[1] 槽，写进去的必须是表里第 2 档的占空比，
+	/// 不能塞当前目标（否则第 2 档被改坏）→ 再置 0x07A3 bit6（EC 消费后不自清，回执看转速）。
+	/// </summary>
+	private void TryWakeFan(int duty1, int duty2)
 	{
 		if (Environment.TickCount64 - _lastHandshakeTick < 5000)
 		{
 			return;
 		}
 		_lastHandshakeTick = Environment.TickCount64;
-		if (!I2ecInpOut.TryWriteEcByte(WujieFanEc.RegisterFanSoftStart1, (byte)Math.Clamp(raw1, 0, 255), out _)
-			|| !I2ecInpOut.TryWriteEcByte(WujieFanEc.RegisterFanSoftStart2, (byte)Math.Clamp(raw2, 0, 255), out _))
+		if (!EcIo.TryWriteByte(WujieFanEc.RegisterFanSoftStart1, (byte)Math.Clamp(duty1, 0, 255), out _)
+			|| !EcIo.TryWriteByte(WujieFanEc.RegisterFanSoftStart2, (byte)Math.Clamp(duty2, 0, 255), out _))
 		{
 			return;
 		}
-		int current = I2ecInpOut.TryReadEcByte(WujieFanEc.RegisterRestartHandshake, out int cur, out _) ? cur : 0;
-		I2ecInpOut.TryWriteEcByte(WujieFanEc.RegisterRestartHandshake, (byte)(current | WujieFanEc.RestartHandshakeBit), out _);
-		Logger.WriteLine("[fan] 无界 EC 停转握手：软启动 " + raw1 + "/" + raw2 + " → 置 0x07A3 bit6（等转速起转确认）");
+		int current = EcIo.TryReadByte(WujieFanEc.RegisterRestartHandshake, out int cur, out _) ? cur : 0;
+		EcIo.TryWriteByte(WujieFanEc.RegisterRestartHandshake, (byte)(current | WujieFanEc.RestartHandshakeBit), out _);
+		Logger.WriteLine("[fan] 无界 EC 停转握手：Duty[1]=" + duty1 + "/" + duty2 + " → 置 0x07A3 bit6（等转速起转确认）");
 	}
 
-	private static List<I2ecInpOut.I2ecWriteStep> BuildThresholdPlan(byte[] cpuTemps, byte[] gpuTemps)
+	/// <summary>表里第 index 档的占空比原始值（主扇表为准，越界取首/末档）。</summary>
+	private int TableDutyAt(int index)
 	{
-		List<I2ecInpOut.I2ecWriteStep> list = new(WujieFanEc.FanTableActiveLength * 4);
+		if (_tableCpuDuty.Length == 0)
+		{
+			return 0;
+		}
+		return _tableCpuDuty[Math.Clamp(index, 0, _tableCpuDuty.Length - 1)];
+	}
+
+	private static List<EcWriteStep> BuildThresholdPlan(byte[] cpuTemps, byte[] gpuTemps)
+	{
+		List<EcWriteStep> list = new(WujieFanEc.FanTableActiveLength * 4);
 		AppendThreshold(list, WujieFanEc.RegisterCpuUpT, WujieFanEc.RegisterCpuDownT, cpuTemps);
 		AppendThreshold(list, WujieFanEc.RegisterGpuUpT, WujieFanEc.RegisterGpuDownT, gpuTemps);
 		return list;
 	}
 
-	private static void AppendThreshold(List<I2ecInpOut.I2ecWriteStep> list, int upBase, int downBase, byte[] temps)
+	private static void AppendThreshold(List<EcWriteStep> list, int upBase, int downBase, byte[] temps)
 	{
 		if (temps == null || temps.Length < WujieFanEc.FanTableActiveLength)
 		{
@@ -795,46 +696,67 @@ internal sealed class WujieFanEcController : IDisposable
 		}
 		for (int i = 0; i < WujieFanEc.FanTableActiveLength; i++)
 		{
-			list.Add(new I2ecInpOut.I2ecWriteStep(upBase + i, temps[i]));
+			list.Add(new EcWriteStep(upBase + i, temps[i]));
 		}
+		// 降档阈值取上一档的升档阈值：只减固定回差时，相邻档间隔一旦大于回差，温度会同时满足
+		// 「从下一档升档」和「从本档降档」，档位在两个槽之间来回横跳。
 		for (int i = 0; i < WujieFanEc.FanTableActiveLength; i++)
 		{
-			int down = temps[i] - 2;
+			int limit = temps[i] > 0 ? temps[i] - 1 : 0;
+			int previous = i > 0 ? temps[i - 1] : limit;
+			int down = Math.Min(limit, previous);
 			if (down < 0)
 			{
 				down = 0;
 			}
-			list.Add(new I2ecInpOut.I2ecWriteStep(downBase + i, down));
+			list.Add(new EcWriteStep(downBase + i, down));
 		}
 	}
 
 	/// <summary>
 	/// ⭐ task-43：构造 table 写入计划（纯函数，便于离线自检）；顺序 = 表1 前 8 → 表2 前 8 → 隔离 → 清锁存 → 置锁存(50ms) → 补写占空比。
 	/// </summary>
-	private static void BuildTableWritePlan(int raw1, int raw2, int latchBase, int isolateBase,
-		out List<I2ecInpOut.I2ecWriteStep> steps, out List<I2ecInpOut.I2ecVerifyStep> verify, out bool needIsolate)
+	private static void BuildTableWritePlan(byte[] cpuDuty, byte[] gpuDuty, int latchBase, int isolateBase,
+		out List<EcWriteStep> steps, out List<EcVerifyStep> verify, out bool needIsolate)
 	{
-		needIsolate = raw1 != raw2;
-		// 表里的 Duty 槽是 0..255 原始量程，而 raw 是 0..200（0x75B 口径），必须换算，否则最高只到 78%。
-		int table1 = (int)Math.Round(raw1 * 255.0 / 200.0);
-		int table2 = (int)Math.Round(raw2 * 255.0 / 200.0);
+		// 副扇与主扇占空比完全一致时不需要分通道输出，清隔离位让两把扇共用主扇链路。
+		bool same = true;
+		for (int i = 0; i < WujieFanEc.FanTableGpuDutyLength; i++)
+		{
+			if (cpuDuty[i] != gpuDuty[i])
+			{
+				same = false;
+				break;
+			}
+		}
+		needIsolate = !same;
 		int isolateWant = needIsolate ? (isolateBase | 0x80) : (isolateBase & ~0x80);
-		steps = new List<I2ecInpOut.I2ecWriteStep>(WujieFanEc.FanTableActiveLength * 2 + 5);
+		steps = new List<EcWriteStep>(WujieFanEc.FanTableActiveLength + WujieFanEc.FanTableGpuDutyLength + 6);
+		int tableMax = WujieFanEc.FanTableCtrlFloor;
+		int v;
 		for (int i = 0; i < WujieFanEc.FanTableActiveLength; i++)
 		{
-			steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableFan1 + i, table1));
+			v = Math.Clamp((int)cpuDuty[i], 0, WujieFanEc.FanTableDutyMax);
+			tableMax = Math.Max(tableMax, v);
+			steps.Add(new EcWriteStep(WujieFanEc.RegisterFanTableFan1 + i, v));
 		}
-		for (int i = 0; i < WujieFanEc.FanTableActiveLength; i++)
+		// 副扇占空比表只有 13 槽；0x0F5D..0x0F5F 是阈值与控制量，按占空比写会覆盖它们。
+		for (int i = 0; i < WujieFanEc.FanTableGpuDutyLength; i++)
 		{
-			steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableFan2 + i, table2));
+			v = Math.Clamp((int)gpuDuty[i], 0, WujieFanEc.FanTableDutyMax);
+			tableMax = Math.Max(tableMax, v);
+			steps.Add(new EcWriteStep(WujieFanEc.RegisterFanTableFan2 + i, v));
 		}
+		steps.Add(new EcWriteStep(WujieFanEc.RegisterFanTableMax1, tableMax));
+		steps.Add(new EcWriteStep(WujieFanEc.RegisterFanTableMax2, tableMax));
+		steps.Add(new EcWriteStep(WujieFanEc.RegisterFanTableCtrl, tableMax));
 		// 锁存前先摆好隔离位（0→1 跳变时 EC 就看到最终状态），再清锁存 → 50ms → 置锁存。
-		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanIsolate, isolateWant, 20));
-		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableLatch, 0x00));
-		steps.Add(new I2ecInpOut.I2ecWriteStep(WujieFanEc.RegisterFanTableLatch, WujieFanEc.TableLatchBit, WujieFanEc.TableLatchPulseMs));
+		steps.Add(new EcWriteStep(WujieFanEc.RegisterFanIsolate, isolateWant, 20));
+		steps.Add(new EcWriteStep(WujieFanEc.RegisterFanTableLatch, 0x00));
+		steps.Add(new EcWriteStep(WujieFanEc.RegisterFanTableLatch, WujieFanEc.TableLatchBit, WujieFanEc.TableLatchPulseMs));
 		// 不补写 0x1804/0x1809：fanctl 的 table 语义是让 EC 自己沿软着陆斜坡走到表目标；
 		// 直接写目标寄存器会和 EC 的斜坡/表状态互相争用，且回读可能永远不相等（导致误判写表失败）。
-		verify = new List<I2ecInpOut.I2ecVerifyStep>
+		verify = new List<EcVerifyStep>
 		{
 			new(WujieFanEc.RegisterFanIsolate, isolateWant),
 			new(WujieFanEc.RegisterFanTableLatch, WujieFanEc.TableLatchBit)
@@ -864,38 +786,70 @@ internal sealed class WujieFanEcController : IDisposable
 				detail = "常量与设计不一致（table 长度/心跳/漂移/脉冲/回差）";
 				return false;
 			}
-			BuildTableWritePlan(60, 120, 0x00, 0x00, out List<I2ecInpOut.I2ecWriteStep> steps,
-				out List<I2ecInpOut.I2ecVerifyStep> verify, out bool needIsolate);
+			byte[] cpuDuty = new byte[WujieFanEc.FanTableActiveLength];
+			byte[] gpuDuty = new byte[WujieFanEc.FanTableGpuDutyLength];
+			for (int i = 0; i < cpuDuty.Length; i++)
+			{
+				cpuDuty[i] = (byte)(i * 10);
+			}
+			for (int i = 0; i < gpuDuty.Length; i++)
+			{
+				gpuDuty[i] = (byte)(i * 12);
+			}
+			BuildTableWritePlan(cpuDuty, gpuDuty, 0x00, 0x00, out List<EcWriteStep> steps,
+				out List<EcVerifyStep> verify, out bool needIsolate);
 			if (!needIsolate || steps.Count != 35 || verify.Count != 2)
 			{
 				detail = "计划形状不对：steps=" + steps.Count + " verify=" + verify.Count + " isolate=" + needIsolate;
 				return false;
 			}
-			if (steps[0].Address != WujieFanEc.RegisterFanTableFan1 || steps[0].Value != 77
-				|| steps[15].Address != WujieFanEc.RegisterFanTableFan1 + 15 || steps[7].Value != 60)
+			int expectMax = Math.Max(Math.Max((int)cpuDuty[cpuDuty.Length - 1], (int)gpuDuty[gpuDuty.Length - 1]),
+				WujieFanEc.FanTableCtrlFloor);
+			if (steps[0].Address != WujieFanEc.RegisterFanTableFan1 || steps[0].Value != cpuDuty[0]
+				|| steps[15].Address != WujieFanEc.RegisterFanTableFan1 + 15 || steps[7].Value != cpuDuty[7])
 			{
-				detail = "表1 前 8 字节计划不对";
+				detail = "主扇占空比表计划不对";
 				return false;
 			}
-			if (steps[16].Address != WujieFanEc.RegisterFanTableFan2 || steps[8].Value != 120
-				|| steps[31].Address != WujieFanEc.RegisterFanTableFan2 + 15 || steps[15].Value != 120)
+			int gpuLast = 16 + WujieFanEc.FanTableGpuDutyLength - 1;
+			if (steps[16].Address != WujieFanEc.RegisterFanTableFan2 || steps[16].Value != gpuDuty[0]
+				|| steps[gpuLast].Address != WujieFanEc.RegisterFanTableFan2 + WujieFanEc.FanTableGpuDutyLength - 1
+				|| steps[gpuLast].Value != gpuDuty[gpuDuty.Length - 1])
 			{
-				detail = "表2 前 8 字节计划不对";
+				detail = "副扇占空比表计划不对（应为 13 槽）";
 				return false;
 			}
-			if (steps[32].Address != WujieFanEc.RegisterFanIsolate || steps[16].Value != 0x80)
+			int ctrlIdx = 16 + WujieFanEc.FanTableGpuDutyLength;
+			if (steps[ctrlIdx].Address != WujieFanEc.RegisterFanTableMax1 || steps[ctrlIdx].Value != expectMax
+				|| steps[ctrlIdx + 1].Address != WujieFanEc.RegisterFanTableMax2 || steps[ctrlIdx + 1].Value != expectMax
+				|| steps[ctrlIdx + 2].Address != WujieFanEc.RegisterFanTableCtrl || steps[ctrlIdx + 2].Value != expectMax)
+			{
+				detail = "最大占空比阈值/表控制器计划不对";
+				return false;
+			}
+			if (steps[32].Address != WujieFanEc.RegisterFanIsolate || steps[32].Value != 0x80)
 			{
 				detail = "副扇隔离位置位计划不对";
 				return false;
 			}
-			if (steps[33].Address != WujieFanEc.RegisterFanTableLatch || steps[17].Value != 0x00
+			if (steps[33].Address != WujieFanEc.RegisterFanTableLatch || steps[33].Value != 0x00
 				|| steps[34].Address != WujieFanEc.RegisterFanTableLatch || steps[34].Value != WujieFanEc.TableLatchBit
 				|| steps[34].DelayAfterMs != WujieFanEc.TableLatchPulseMs)
 			{
 				detail = "锁存脉冲计划不对（应先 &~0x40 → 50ms → |0x40）";
 				return false;
 			}
-			BuildTableWritePlan(80, 80, 0x02, 0x10, out steps, out _, out bool sameTargetIsolate);
+			byte[] shared = new byte[WujieFanEc.FanTableActiveLength];
+			byte[] sharedGpu = new byte[WujieFanEc.FanTableGpuDutyLength];
+			for (int i = 0; i < shared.Length; i++)
+			{
+				shared[i] = 120;
+			}
+			for (int i = 0; i < sharedGpu.Length; i++)
+			{
+				sharedGpu[i] = 120;
+			}
+			BuildTableWritePlan(shared, sharedGpu, 0x02, 0x10, out steps, out _, out bool sameTargetIsolate);
 			if (sameTargetIsolate || steps[32].Value != 0x10)
 			{
 				detail = "主副扇目标相同时应清 0x07C5 bit7（并保留基线其它位）";
@@ -911,11 +865,99 @@ internal sealed class WujieFanEcController : IDisposable
 		}
 	}
 
+	/// <summary>由当前曲线算出两张占空比表（百分比 → 0..200 原始量程，单调不减）。</summary>
+	private bool BuildCurveDuties(out byte[] cpuDuty, out byte[] gpuDuty, out string detail)
+	{
+		cpuDuty = new byte[WujieFanEc.FanTableActiveLength];
+		gpuDuty = new byte[WujieFanEc.FanTableGpuDutyLength];
+		detail = "";
+		if (!FillDuties(_cpuTemps, _cpuDuties, _validCpu, cpuDuty))
+		{
+			detail = "主扇曲线不完整";
+			return false;
+		}
+		if (_independent && _validGpu >= WujieFanEc.FanTableActiveLength)
+		{
+			byte[] full = new byte[WujieFanEc.FanTableActiveLength];
+			if (FillDuties(_gpuTemps, _gpuDuties, _validGpu, full))
+			{
+				Array.Copy(full, gpuDuty, gpuDuty.Length);
+				return true;
+			}
+		}
+		// 副扇没有独立温度源时与主扇共用一张曲线。
+		Array.Copy(cpuDuty, gpuDuty, gpuDuty.Length);
+		return true;
+	}
+
+	/// <summary>把一条曲线转成占空比表；超量程截断，并保证单调不减。</summary>
+	private static bool FillDuties(byte[] temps, int[] duties, int valid, byte[] target)
+	{
+		if (valid < target.Length || temps.Length < target.Length || duties.Length < target.Length)
+		{
+			return false;
+		}
+		int running = 0;
+		for (int i = 0; i < target.Length; i++)
+		{
+			if (temps[i] > 120)
+			{
+				return false;
+			}
+			int raw = (int)Math.Round(duties[i] * 2.0);
+			raw = Math.Clamp(raw, 0, WujieFanEc.FanTableDutyMax);
+			if (raw < running)
+			{
+				raw = running;
+			}
+			running = raw;
+			target[i] = (byte)raw;
+		}
+		return true;
+	}
+
+	/// <summary>曲线指纹：温度轴与占空比都参与，内容变了才需要重写整表。</summary>
+	private int BuildCurveSignature()
+	{
+		int hash = 17;
+		for (int i = 0; i < _cpuTemps.Length; i++)
+		{
+			hash = hash * 31 + _cpuTemps[i];
+		}
+		for (int i = 0; i < _cpuDuties.Length; i++)
+		{
+			hash = hash * 31 + _cpuDuties[i];
+		}
+		if (_independent)
+		{
+			for (int i = 0; i < _gpuTemps.Length; i++)
+			{
+				hash = hash * 31 + _gpuTemps[i];
+			}
+			for (int i = 0; i < _gpuDuties.Length; i++)
+			{
+				hash = hash * 31 + _gpuDuties[i];
+			}
+		}
+		return hash;
+	}
+
+	/// <summary>占空比表摘要（起转档 / 次档 / 末档），便于日志核对。</summary>
+	private static string TableSummary(byte[] duty)
+	{
+		if (duty.Length == 0)
+		{
+			return "空表";
+		}
+		int second = duty.Length > 1 ? duty[1] : duty[0];
+		return "首档 raw=" + duty[0] + " 次档 raw=" + second + " 末档 raw=" + duty[duty.Length - 1];
+	}
+
 	/// <summary>
-	/// ⭐ task-43：写 fan1/fan2 表前 8 字节 → 设/清隔离位 → 锁存脉冲（base&amp;~0x40 → 50ms → base|0x40）
-	/// → 不写 0x1804/0x1809（由 EC 沿软着陆斜坡走到表目标）；整组序列在 I2EC 跨进程锁内一次完成（防撕裂写）。
+	/// 写整张曲线的占空比表 → 设/清隔离位 → 锁存脉冲（base&amp;~0x40 → 50ms → base|0x40）；
+	/// 不写 0x1804/0x1809，由 EC 沿软着陆斜坡走到表目标；整组序列在 I2EC 跨进程锁内一次完成。
 	/// </summary>
-	private bool ApplyTable(int raw1, int raw2, string reason)
+	private bool ApplyTable(string reason)
 	{
 		lock (_gate)
 		{
@@ -924,39 +966,45 @@ internal sealed class WujieFanEcController : IDisposable
 			// Stop 已把控制器置停（另一个线程正在交还 EC）⇒ ⛔ 不再重锁表，避免 Stop 之后又被锁上。
 			return false;
 		}
-		raw1 = Math.Clamp(raw1, 1, EcPortIo.WujieFanDutyMaxRaw);
-		raw2 = Math.Clamp(raw2, 1, EcPortIo.WujieFanDutyMaxRaw);
-		bool needIsolate = raw1 != raw2;
-		BuildTableWritePlan(raw1, raw2, _tableLatchBase, _tableIsolateBase, out List<I2ecInpOut.I2ecWriteStep> steps,
-			out List<I2ecInpOut.I2ecVerifyStep> verify, out _);
+		if (Environment.TickCount64 < _tableRetryNotBeforeTick)
+		{
+			// 刚失败过：等退避窗口过去再试，⛔ 不在 25Hz 里连打 EC。
+			return false;
+		}
+		if (!BuildCurveDuties(out byte[] cpuDuty, out byte[] gpuDuty, out string curveDetail))
+		{
+			Logger.WriteError("[fan] 无界 table：曲线无效，本次不下发（" + reason + "）：" + curveDetail);
+			return false;
+		}
+		BuildTableWritePlan(cpuDuty, gpuDuty, _tableLatchBase, _tableIsolateBase, out List<EcWriteStep> steps,
+			out List<EcVerifyStep> verify, out bool needIsolate);
 		// 温度轮廓先于占空比写入：升档温度表 + 降档温度表（降档 = 升档 -2℃，避免阈值附近反复横跳）。
 		steps.InsertRange(0, BuildThresholdPlan(_cpuTemps, _gpuTemps));
 		if (!_customModeSet)
 		{
 			// 自定义模式标志（开机值 0x41；退出时写 0x40 交还）。
-			_customModeSet = I2ecInpOut.TryWriteEcByte(WujieFanEc.RegisterCustomMode, 0x41, out string customDetail);
+			_customModeSet = EcIo.TryWriteByte(WujieFanEc.RegisterCustomMode, 0x41, out string customDetail);
 			Logger.WriteLine("[fan] 无界 EC 自定义模式：" + (_customModeSet ? "已置位（0x41）" : "置位失败：" + customDetail));
 		}
-		bool ok = I2ecInpOut.TryWriteEcSequence(steps, verify, out string detail);
+		bool ok = EcIo.TryWriteSequence(steps, verify, out string detail);
 		if (!ok)
 		{
 			_tableWriteFailCount++;
-			Logger.WriteError("[fan] 无界 table：写表失败（" + reason + "）：" + detail);
-			if (_tableWriteFailCount >= TableWriteFailLimit)
-			{
-				bool released = ReleaseTable("table 连续写失败回退 direct", force: true);
-				_backend = ControlBackend.Direct;
-				_tableActive = false;
-				_tableLastRaw1 = -1;
-				_tableLastRaw2 = -1;
-				Logger.WriteError("[fan] 无界 table：连续 " + _tableWriteFailCount + " 次写表失败 ⇒ 自动回退 25Hz direct 后端"
-					+ (released ? "（旧表已释放）" : "（⚠️ 旧表释放失败，direct 直写仍会覆盖目标）"));
-			}
+			bool slowRetry = _tableWriteFailCount >= TableWriteFailLimit;
+			_tableRetryNotBeforeTick = Environment.TickCount64 + (slowRetry ? TableWriteRetrySlowMs : TableWriteRetryMs);
+			Logger.WriteError("[fan] 无界 table：写表失败（" + reason + "）：" + detail
+				 + " ⇒ 第 " + _tableWriteFailCount + " 次，" + (slowRetry ? "30s" : "5s") + " 后重试"
+				 + (slowRetry ? "；连续失败已达上限，暂停下发（⛔ 不回退 direct 直写，EC 继续按原生曲线/旧表跑）"
+					: "（⛔ 不回退 direct 直写）"));
 			return false;
 		}
 		_tableActive = true;
-		Logger.WriteLineIfChanged("wujie-fan-table", "[fan] 无界 table：已写表+锁存（" + reason + " · raw1=" + raw1
-			+ " raw2=" + raw2 + " · 隔离=" + (needIsolate ? "置" : "清") + " · 回读确认 ok）");
+		_tableWriteFailCount = 0;
+		_tableRetryNotBeforeTick = 0;
+		_tableCpuDuty = cpuDuty;
+		_tableGpuDuty = gpuDuty;
+		Logger.WriteLineIfChanged("wujie-fan-table", "[fan] 无界 table：已写曲线表+锁存（" + reason + " · "
+			+ TableSummary(cpuDuty) + " · 隔离=" + (needIsolate ? "置" : "清") + " · 回读确认 ok）");
 		return true;
 		}
 	}
@@ -972,21 +1020,21 @@ internal sealed class WujieFanEcController : IDisposable
 		}
 		int latchWant = _tableLatchBase & ~WujieFanEc.TableLatchBit;
 		int isolateWant = _tableIsolateBase & ~0x80;
-		List<I2ecInpOut.I2ecWriteStep> steps = new()
+		List<EcWriteStep> steps = new()
 		{
 			new(WujieFanEc.RegisterFanTableLatch, latchWant),
 			new(WujieFanEc.RegisterFanIsolate, isolateWant)
 		};
-		List<I2ecInpOut.I2ecVerifyStep> verify = new()
+		List<EcVerifyStep> verify = new()
 		{
 			new(WujieFanEc.RegisterFanTableLatch, latchWant),
 			new(WujieFanEc.RegisterFanIsolate, isolateWant)
 		};
-		bool ok = I2ecInpOut.TryWriteEcSequence(steps, verify, out string detail);
+		bool ok = EcIo.TryWriteSequence(steps, verify, out string detail);
 		if (!ok)
 		{
 			Thread.Sleep(20);
-			ok = I2ecInpOut.TryWriteEcSequence(steps, verify, out detail);
+			ok = EcIo.TryWriteSequence(steps, verify, out detail);
 		}
 		_tableActive = false;
 		_tableLastRaw1 = -1;
@@ -998,40 +1046,11 @@ internal sealed class WujieFanEcController : IDisposable
 		else
 		{
 			Logger.WriteError("[fan] 无界 table：⚠️ 交还 EC 失败（" + reason + "）：" + detail
-				+ " ⇒ EC 可能仍按旧表运行；下次启动 direct 路径会尝试清理遗留位");
+				+ " ⇒ EC 可能仍按旧表运行，下次启动写表时会重新锁存");
 		}
 		return ok;
 	}
 
-	/// <summary>table 后端的副扇堵转看门狗（500ms 采样；目标变化后的软着陆期由 12 秒计数窗口覆盖）。</summary>
-	private void SampleFan2Watchdog()
-	{
-		if (Environment.TickCount64 - _lastSampleTick < SampleIntervalMs)
-		{
-			return;
-		}
-		_lastSampleTick = Environment.TickCount64;
-		// 表写入后 EC 需要沿软着陆斜坡（满量程约 30s）走到目标；这段时间副扇 0 RPM 是正常的，
-		// 不能按 12s 堵转处理。direct 路径不经过这里，保持旧行为。
-		if (Environment.TickCount64 - _tableLastWriteTick < 30000)
-		{
-			_fan2ZeroCount = 0;
-			return;
-		}
-		if (TryReadFan2Rpm(out int fan2Rpm) && fan2Rpm <= 0)
-		{
-			_fan2ZeroCount++;
-			if (_fan2ZeroCount >= Fan2ZeroSamples)
-			{
-				Stop("副扇连续 0 RPM（疑似被 EC 判堵转），交还 EC");
-				LastDetail = "副扇 0 RPM 看门狗触发";
-			}
-		}
-		else
-		{
-			_fan2ZeroCount = 0;
-		}
-	}
 
 	private static int CountValidPoints(byte[] temps, int[] duties)
 	{
@@ -1085,55 +1104,14 @@ internal sealed class WujieFanEcController : IDisposable
 		return duties[Math.Max(0, points - 1)];
 	}
 
-	private bool TryReadFan2Rpm(out int rpm)
-	{
-		rpm = 0;
-		if (!ReadEc(WujieFanEc.RegisterFan2RpmHigh, out int high)
-		|| !ReadEc(WujieFanEc.RegisterFan2RpmHigh + 1, out int low))
-		{
-			return false;
-		}
-		rpm = ((high & 0xFF) << 8) | (low & 0xFF);
-		return true;
-	}
-
 	private bool ReadEc(int address, out int value)
 	{
-		value = -1;
-		if (_channel == WriteChannel.I2ec)
-		{
-			return I2ecInpOut.TryReadEcByte(address, out value, out _);
-		}
-		if (_channel == WriteChannel.AcpiEc)
-		{
-			return EcPortIo.TryReadByte(address, out value);
-		}
-		return false;
+		return EcIo.TryReadByte(address, out value, out _);
 	}
 
 	private bool WriteDuty(int address, int raw, out string detail)
 	{
-		if (_channel == WriteChannel.I2ec)
-		{
-			return I2ecInpOut.TryWriteEcByte(address, raw, out detail);
-		}
-		if (_channel == WriteChannel.AcpiEc)
-		{
-			bool ok = EcPortIo.TryWriteWujieFanDuty(address, raw, out int readBack);
-			detail = ok ? "ok" : ("回读 0x" + readBack.ToString("X2") + " / " + EcPortIo.LastAcpiWriteTrace);
-			return ok;
-		}
-		detail = "通道未选择";
-		return false;
+		return EcIo.TryWriteByte(address, raw, out detail);
 	}
 
-	private static string ChannelName(WriteChannel channel)
-	{
-		return channel switch
-		{
-			WriteChannel.I2ec => "I2EC",
-			WriteChannel.AcpiEc => "ACPI-EC（实验）",
-			_ => "无",
-		};
-	}
 }

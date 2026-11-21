@@ -3,11 +3,9 @@ using System.Windows;
 using System.Linq;
 using System.Windows.Controls;
 using MechrevoLite;
-using MechrevoLite.Hardware;
 using L_Mechrevo.WpfP0.Services;
 
-using L_Mechrevo.WpfP0.Resources;
-namespace L_Mechrevo.WpfP0;
+using L_Mechrevo.WpfP0.Resources;namespace L_Mechrevo.WpfP0;
 
 public partial class HidKeyboardWindow : Window
 {
@@ -502,6 +500,23 @@ public partial class HidKeyboardWindow : Window
             _rgb.StartMode(localMode);
             _rgb.ApplyBrightnessToDevice();
             _rgb.SaveConfig();
+            // ⭐ 2026-11-19（机主）：HID 键盘亮度是连续的 0..100 ⇒ 精确值也写进通道存档，
+            //   开机重放才能还原到这个百分比（rgb.cfg 只是设备侧副本）。
+            try
+            {
+                var savedChannel = L_Mechrevo.WpfP0.Services.WpfBackend
+                    .LoadLightChannelSettings("Keyboard/Ctrl", "hid:" + localMode) with
+                {
+                    Effect = "hid:" + localMode,
+                    BrightnessPct = brightness,
+                    Light = L_Mechrevo.WpfP0.Services.WpfBackend.MapPercentToLevel(brightness)
+                };
+                L_Mechrevo.WpfP0.Services.WpfBackend.SaveLightChannelSettings("Keyboard/Ctrl", savedChannel);
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("[light-cfg] 单键 RGB 亮度存档失败：" + ex.GetType().Name);
+            }
             StatusText.Text = WpfStrings.HidKeyboardWindow_xaml_Text_10;
         }
         catch (Exception ex)

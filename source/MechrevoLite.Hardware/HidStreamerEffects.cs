@@ -1,6 +1,6 @@
 using System;
 
-namespace MechrevoLite.Hardware;
+namespace MechrevoLite.Contracts;
 
 /// <summary>
 /// OpenRevo HID 效果编号（100+）到 LM 内置软件效果的映射。

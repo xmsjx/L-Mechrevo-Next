@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.IO;
 using System.Linq;
 
@@ -155,10 +156,8 @@ internal static class NucFanTable
         ok &= TryWrite(GpuMax2, maxDuty);
         ok &= TryWrite(TableCtrl, ctrl);
         TryWrite(TableLatch, LatchBit);
-        if (TryRead(TriggerByte, out int trigger))
-        {
-            TryWrite(TriggerByte, (trigger & 0x10) | 0x20);
-        }
+        // 只置 bit5 提交；bit0-2 是快捷开关命令码、bit4 是 USB 充电脉冲，一律不动。
+        EcTriggerByte.TryApply(EcTriggerByte.Latch, 0);
 
         bool readMax1 = TryRead(GpuMax1, out int read1);
         bool ctrlReadOk = TryRead(TableCtrl, out int ctrlReadback);
@@ -187,6 +186,13 @@ internal static class NucFanTable
     internal static bool TrySetFanIsolated(bool enabled, out string detail)
     {
         detail = "";
+        // 强冷进行中不碰隔离位：隔离位属于「启用自定义曲线」的一部分，曲线没写进去就不该留下这半个状态。
+        // 只拦「设置」（enabled=true）；交回固件时的清除必须照常执行。
+        if (enabled && TryRead(FanBoostClamp, out int boostClamp) && (boostClamp & 0x40) != 0)
+        {
+            detail = "强冷开启，跳过风扇曲线写入";
+            return false;
+        }
         if (!TryRead(FanIsolated, out int current))
         {
             detail = "FanIsolated 读取失败";
@@ -204,6 +210,28 @@ internal static class NucFanTable
     }
 
     internal static bool TryApply(byte[] cpuTemps, int[] cpuDuties, byte[] gpuTemps, int[] gpuDuties, out string detail)
+        => TryApply(cpuTemps, cpuDuties, gpuTemps, gpuDuties, "应用", out detail);
+
+    /// <summary>带来源的下发：整表写入串行化，同一张表不重复写，现场一致时直接跳过。</summary>
+    internal static bool TryApply(byte[] cpuTemps, int[] cpuDuties, byte[] gpuTemps, int[] gpuDuties, string source, out string detail)
+    {
+        WriteGate.Wait();
+        try
+        {
+            return TryApplyLocked(cpuTemps, cpuDuties, gpuTemps, gpuDuties, source, out detail);
+        }
+        finally
+        {
+            WriteGate.Release();
+        }
+    }
+
+    /// <summary>写表闸门：软件内所有来源（应用/切档/开机重放）共用，避免并发写半截表。</summary>
+    private static readonly SemaphoreSlim WriteGate = new SemaphoreSlim(1, 1);
+    private static string _lastSignature = string.Empty;
+    private static DateTime _lastAppliedAt = DateTime.MinValue;
+
+    private static bool TryApplyLocked(byte[] cpuTemps, int[] cpuDuties, byte[] gpuTemps, int[] gpuDuties, string source, out string detail)
     {
         detail = "";
         if (cpuTemps.Length != 16 || gpuTemps.Length != 16 || cpuDuties.Length != 16 || gpuDuties.Length != 16)
@@ -226,53 +254,140 @@ internal static class NucFanTable
         byte[] cpuDown = BuildDown(cpuTemps);
         byte[] gpuDown = BuildDown(gpuTemps);
 
+        int maxDuty = Math.Max(cpuDuty[15], gpuDuty[15]);
+        int ctrl = Math.Max(maxDuty, 160);
+        string signature = Convert.ToBase64String(cpuTemps) + "|" + string.Join(",", cpuDuty)
+            + "|" + Convert.ToBase64String(gpuTemps) + "|" + string.Join(",", gpuDuty);
+        if (signature == _lastSignature && (DateTime.UtcNow - _lastAppliedAt).TotalSeconds < 3)
+        {
+            detail = "3 秒内重复下发同一张表，已跳过（来源=" + source + "）";
+            Logger.WriteLine("[fan] 下发跳过：" + detail);
+            return true;
+        }
+        if (TableMatches(cpuTemps, cpuDown, cpuDuty, gpuTemps, gpuDown, gpuDuty, maxDuty, ctrl))
+        {
+            _lastSignature = signature;
+            _lastAppliedAt = DateTime.UtcNow;
+            detail = "EC 现表与目标表一致，未重写（来源=" + source + "）";
+            Logger.WriteLine("[fan] 下发跳过：" + detail);
+            return true;
+        }
         if (TryRead(ApOemByte, out int ap)) TryWrite(ApOemByte, ap | 0x81);
         TryWrite(TableLatch, 0x00);
         for (int i = 0; i < 16; i++) if (!TryWrite(CpuUptBase + i, cpuTemps[i])) { detail = "CPU UpT 写入失败@" + i; return false; }
         for (int i = 0; i < 16; i++) if (!TryWrite(CpuDowntBase + i, cpuDown[i])) { detail = "CPU DownT 写入失败@" + i; return false; }
-        for (int i = 0; i < 16; i++) if (!TryWrite(CpuDutyBase + i, i == 0 ? 0 : cpuDuty[i])) { detail = "CPU Duty 写入失败@" + i; return false; }
+        for (int i = 0; i < 16; i++) if (!TryWrite(CpuDutyBase + i, cpuDuty[i])) { detail = "CPU Duty 写入失败@" + i; return false; }
         for (int i = 0; i < 16; i++) if (!TryWrite(GpuUptBase + i, gpuTemps[i])) { detail = "GPU UpT 写入失败@" + i; return false; }
         for (int i = 0; i < 16; i++) if (!TryWrite(GpuDowntBase + i, gpuDown[i])) { detail = "GPU DownT 写入失败@" + i; return false; }
-        for (int i = 0; i < 13; i++) if (!TryWrite(GpuDutyBase + i, i == 0 ? 0 : gpuDuty[i])) { detail = "GPU Duty 写入失败@" + i; return false; }
-        int maxDuty = Math.Max(cpuDuty[15], gpuDuty[15]);
-        int ctrl = Math.Max(maxDuty, 160);
-        TryWrite(GpuMax1, maxDuty);
-        TryWrite(GpuMax2, maxDuty);
-        TryWrite(TableCtrl, ctrl);
-        TryWrite(TableLatch, LatchBit);
+        for (int i = 0; i < 13; i++) if (!TryWrite(GpuDutyBase + i, gpuDuty[i])) { detail = "GPU Duty 写入失败@" + i; return false; }
+        // 阈值 / 控制器 / 锁存也要确认写进去了：只写表体、尾部失败仍报成功，会让上层以为曲线已生效。
+        bool tailOk = TryWrite(GpuMax1, maxDuty);
+        tailOk &= TryWrite(GpuMax2, maxDuty);
+        tailOk &= TryWrite(TableCtrl, ctrl);
+        tailOk &= TryWrite(TableLatch, LatchBit);
+        if (!tailOk)
+        {
+            detail = "最大占空比阈值 / 表控制器 / 锁存写入失败";
+            return false;
+        }
+        _lastSignature = signature;
+        _lastAppliedAt = DateTime.UtcNow;
+        Logger.WriteLine("[fan] 下发来源=" + source);
         detail = $"CPU={string.Join(',', cpuDuty)} GPU={string.Join(',', gpuDuty)} max={maxDuty} ctrl={ctrl}";
         return true;
     }
 
-    /// <summary>只读当前 EC 风扇表（UpT + Duty），用于无 GCU 时替代写死的默认表。</summary>
+    /// <summary>只读当前 EC 风扇表（UpT + Duty），用于无 GCU 时替代写死的默认表；
+    /// 数组下标与 EC 槽位一一对应，读到的就是槽里的值。重复的 0℃ 占位槽只留一个，
+    /// 避免历史数据把真实点位挤到后面。</summary>
     internal static bool TryReadCurrent(out byte[] cpuUpT, out byte[] cpuDuty, out byte[] gpuUpT, out byte[] gpuDuty)
     {
-        cpuUpT = new byte[16];
-        cpuDuty = new byte[16];
-        gpuUpT = new byte[16];
-        gpuDuty = new byte[16];
-        for (int i = 1; i < 16; i++)
+        byte[] ct = new byte[16];
+        byte[] cd = new byte[16];
+        byte[] gt = new byte[16];
+        byte[] gd = new byte[16];
+        for (int i = 0; i < 16; i++)
         {
-            if (!TryRead(CpuUptBase + i - 1, out int cpuTemp)
+            if (!TryRead(CpuUptBase + i, out int cpuTemp)
                 || !TryRead(CpuDutyBase + i, out int cpuRaw)
-                || !TryRead(GpuUptBase + i - 1, out int gpuTemp)
-                || !TryRead(GpuDutyBase + i, out int gpuRaw))
+                || !TryRead(GpuUptBase + i, out int gpuTemp)
+                || !TryRead(GpuDutyBase + Math.Min(i, 12), out int gpuRaw))
             {
+                cpuUpT = new byte[16];
+                cpuDuty = new byte[16];
+                gpuUpT = new byte[16];
+                gpuDuty = new byte[16];
                 return false;
             }
-            cpuUpT[i] = (byte)cpuTemp;
-            cpuDuty[i] = (byte)Math.Clamp(cpuRaw / 2, 0, 100);
-            gpuUpT[i] = (byte)gpuTemp;
-            gpuDuty[i] = (byte)Math.Clamp(gpuRaw / 2, 0, 100);
+            ct[i] = (byte)cpuTemp;
+            cd[i] = (byte)Math.Clamp(cpuRaw / 2, 0, 100);
+            gt[i] = (byte)gpuTemp;
+            gd[i] = (byte)Math.Clamp(gpuRaw / 2, 0, 100);
         }
-        cpuUpT[0] = 0;
-        cpuDuty[0] = 0;
-        gpuUpT[0] = 0;
-        gpuDuty[0] = 0;
+        cpuUpT = SqueezePlaceholders(ct, cd, out cpuDuty);
+        gpuUpT = SqueezePlaceholders(gt, gd, out gpuDuty);
         return true;
     }
 
-    private static byte[] NormalizeDuty(int[] percents) { byte[] result = new byte[16]; int running = 0; for (int i = 0; i < 16; i++) { int raw = Math.Clamp(percents[i], 0, 100) * 2; running = Math.Max(running, raw); result[i] = (byte)running; } result[0] = 0; return result; }
+    /// <summary>把连续重复的 0℃ 占位槽压成一个；遇到 255 结束位后按结束位补齐。</summary>
+    private static byte[] SqueezePlaceholders(byte[] temps, byte[] duties, out byte[] squeezedDuties)
+    {
+        byte[] result = new byte[16];
+        byte[] duty = new byte[16];
+        int n = 0;
+        bool sawZero = false;
+        for (int i = 0; i < 16 && n < 16; i++)
+        {
+            if (temps[i] == 255)
+            {
+                break;
+            }
+            if (temps[i] == 0)
+            {
+                if (sawZero)
+                {
+                    continue;
+                }
+                sawZero = true;
+            }
+            result[n] = temps[i];
+            duty[n] = duties[i];
+            n++;
+        }
+        byte tailDuty = n > 0 ? duty[n - 1] : (byte)0;
+        for (int i = n; i < 16; i++)
+        {
+            result[i] = 255;
+            duty[i] = tailDuty;
+        }
+        squeezedDuties = duty;
+        return result;
+    }
+
+    /// <summary>目标表与 EC 现表逐字节比对：全等就不必再写一遍。</summary>
+    private static bool TableMatches(byte[] cpuUp, byte[] cpuDown, byte[] cpuDuty, byte[] gpuUp, byte[] gpuDown, byte[] gpuDuty,
+        int maxDuty, int ctrl)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            if (!TryRead(CpuUptBase + i, out int v) || v != cpuUp[i]) return false;
+            if (!TryRead(CpuDowntBase + i, out v) || v != cpuDown[i]) return false;
+            if (!TryRead(CpuDutyBase + i, out v) || v != cpuDuty[i]) return false;
+            if (!TryRead(GpuUptBase + i, out v) || v != gpuUp[i]) return false;
+            if (!TryRead(GpuDowntBase + i, out v) || v != gpuDown[i]) return false;
+        }
+        for (int i = 0; i < 13; i++)
+        {
+            if (!TryRead(GpuDutyBase + i, out int g) || g != gpuDuty[i]) return false;
+        }
+        // 表体一致不代表生效：阈值与控制器没写进去时 EC 仍按旧上限跑。
+        if (!TryRead(GpuMax1, out int m1) || m1 != maxDuty) return false;
+        if (!TryRead(GpuMax2, out int m2) || m2 != maxDuty) return false;
+        if (!TryRead(TableCtrl, out int c) || c != ctrl) return false;
+        return true;
+    }
+
+    private static byte[] NormalizeDuty(int[] percents) { byte[] result = new byte[16]; int running = 0; for (int i = 0; i < 16; i++) { int raw = Math.Clamp(percents[i], 0, 100) * 2; running = Math.Max(running, raw); result[i] = (byte)running; } return result; }
     private static byte[] BuildDown(byte[] upt) { byte[] down = new byte[16]; int previous = 0; for (int i = 1; i < 16; i++) { if (upt[i] == 255) { down[i] = 255; continue; } int hysteresis = upt[i] <= 55 ? 8 : 5; int value = Math.Max(previous, upt[i] - hysteresis); value = Math.Max(0, Math.Min(value, upt[i])); down[i] = (byte)value; previous = value; } return down; }
     private static bool TryRead(int address, out int value) { if (AcpiDriverEc.TryReadByte(address, out byte b)) { value = b; return true; } if (EcPortIo.TryReadByteStable(address, out int legacy, out _)) { value = legacy; return true; } value = -1; return false; }
     private static bool TryWrite(int address, int value) => AcpiDriverEc.TryWriteByte(address, value) || EcPortIo.TryWriteByte(address, value);

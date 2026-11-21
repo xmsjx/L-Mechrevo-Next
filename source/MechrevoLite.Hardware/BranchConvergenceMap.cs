@@ -5,7 +5,7 @@ namespace MechrevoLite.Hardware;
 
 public static class BranchConvergenceMap
 {
-	public const int ExpectedTotal = 84;
+	public const int ExpectedTotal = 82;
 
 	public static readonly IReadOnlyDictionary<BranchArea, int> ExpectedAreaCounts;
 
@@ -22,8 +22,8 @@ public static class BranchConvergenceMap
 		ExpectedAreaCounts = new Dictionary<BranchArea, int>
 		{
 			[BranchArea.IdentitySources] = 8,
-			[BranchArea.FeatureGates] = 41,
-			[BranchArea.Hardcodes] = 22,
+			[BranchArea.FeatureGates] = 40,
+			[BranchArea.Hardcodes] = 21,
 			[BranchArea.Persistence] = 5,
 			[BranchArea.UngatedConsumers] = 8
 		};
@@ -38,7 +38,6 @@ public static class BranchConvergenceMap
 			["C2"] = "KeyboardRgb.cs:12-13",
 			["C3"] = "KeyboardRgb.cs:184-193",
 			["C4"] = "KeyboardRgb.cs:20-50",
-			["C5"] = "AsusACPI.cs:55-56",
 			["C6"] = "MechrevoDeviceCapabilities.cs:293-295",
 			["C7"] = "AppConfig.cs:508-511",
 			["C8"] = "AppConfig.cs:517-521",
@@ -72,9 +71,9 @@ public static class BranchConvergenceMap
 	public static void Validate(IReadOnlyList<BranchSite> sites)
 	{
 		ArgumentNullException.ThrowIfNull(sites, "sites");
-		if (sites.Count != 84)
+		if (sites.Count != ExpectedTotal)
 		{
-			throw new BranchConvergenceException($"convergence ledger must cover {84} sites, got {sites.Count}");
+			throw new BranchConvergenceException($"convergence ledger must cover {ExpectedTotal} sites, got {sites.Count}");
 		}
 		HashSet<string> hashSet = new HashSet<string>(StringComparer.Ordinal);
 		Dictionary<BranchArea, int> dictionary = new Dictionary<BranchArea, int>();
@@ -175,7 +174,6 @@ public static class BranchConvergenceMap
 		yield return new BranchSite("B28", BranchArea.FeatureGates, "MechrevoHw.cs:456", BranchDisposition.MatrixGated, "T34", "色彩校准运行时门。");
 		yield return new BranchSite("B29", BranchArea.FeatureGates, "MechrevoService.cs:618", BranchDisposition.MatrixGated, "T34", "色彩校准服务侧切换门。");
 		yield return new BranchSite("B30", BranchArea.FeatureGates, "MechrevoHw.cs:460-463", BranchDisposition.MatrixGated, "T6", "局部调光/LCD overdrive：registry OR Seen，且 *Support != false 否决。");
-		yield return new BranchSite("B31", BranchArea.FeatureGates, "AsusACPI.cs:158,169-170", BranchDisposition.MatrixGated, "T29", "局部调光 ASUS 适配层残留，改由能力位驱动。");
 		yield return new BranchSite("B32", BranchArea.FeatureGates, "MechrevoService.cs:1287,1301", BranchDisposition.MatrixGated, "T6", "局部调光服务侧门控。");
 		yield return new BranchSite("B33", BranchArea.FeatureGates, "MechrevoHw.cs:464", BranchDisposition.MatrixGated, "T6", "风扇增压运行时门。");
 		yield return new BranchSite("B34", BranchArea.FeatureGates, "MechrevoService.cs:2238; Settings.cs:1870", BranchDisposition.MatrixGated, "T21", "风扇增压服务与 UI 门。");
@@ -192,6 +190,11 @@ public static class BranchConvergenceMap
 	{
 		foreach (HardcodeEntry item in HardcodeDispositions.Items)
 		{
+			if (item.Item == "C5")
+			{
+				continue;
+			}
+
 			BranchDisposition disposition = ((item.Disposition != HardcodeDisposition.MatrixGated) ? BranchDisposition.KeptWithReason : BranchDisposition.MatrixGated);
 			string owner = (HardcodeOwners.TryGetValue(item.Item, out string value) ? value : "T9");
 			string location = (HardcodeLocations.TryGetValue(item.Item, out string value2) ? value2 : "AppConfig.cs");

@@ -19,6 +19,9 @@ internal sealed record PowerStatusSnapshot(
 /// </summary>
 internal static class PowerStatusService
 {
+    /// <summary>供电方式补刷的节流时间戳（采样器自身 5 秒窗口，这里只防重复派任务）。</summary>
+    private static long _lastPowerInputKick;
+
     internal static PowerStatusSnapshot Read(bool sample = false)
     {
         try
@@ -27,6 +30,38 @@ internal static class PowerStatusService
             {
                 // CPU/GPU 功耗、显存频率等属于本地采样链，不能只刷新电源输入/电池。
                 HardwareControl.SampleLocalPower();
+            }
+            else
+            {
+                // 电池充放功率、供电方式（适配器瓦数）都不在常驻采样泵里（那条链刻意跳过辅助项），
+                // 界面每次取快照时补一次：电池功率自带 5 秒节流；供电方式放后台跑，避免那 250ms 的等待卡住 UI。
+                try
+                {
+                    HardwareControl.RefreshBatteryRate();
+                }
+                catch
+                {
+                }
+                if (Environment.TickCount64 - Volatile.Read(ref _lastPowerInputKick) >= 4000)
+                {
+                    Interlocked.Exchange(ref _lastPowerInputKick, Environment.TickCount64);
+                    try
+                    {
+                        System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try
+                            {
+                                HardwareControl.RefreshPowerInput();
+                            }
+                            catch
+                            {
+                            }
+                        });
+                    }
+                    catch
+                    {
+                    }
+                }
             }
             int percent = HardwareControl.GetBatteryChargePercentage();
             if (percent <= 0)

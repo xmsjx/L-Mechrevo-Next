@@ -26,6 +26,22 @@ internal static class AcpiDriverEc
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool DeviceIoControl(SafeFileHandle handle, uint code, byte[] inBuffer, uint inSize, byte[] outBuffer, uint outSize, out uint bytesReturned, IntPtr overlapped);
 
+    /// <summary>设备是否能打开（用一次空 IOCTL 探测，避免把 0 当成读成功）。</summary>
+    internal static bool IsAvailable()
+    {
+        lock (Gate)
+        {
+            using SafeFileHandle handle = CreateFileW(DevicePath, GenericRead | GenericWrite, FileShareReadWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+            if (handle.IsInvalid)
+            {
+                return false;
+            }
+            byte[] input = BitConverter.GetBytes((uint)0x043E);
+            byte[] output = new byte[4];
+            return DeviceIoControl(handle, IoctlEcRead, input, 4, output, 4, out _, IntPtr.Zero);
+        }
+    }
+
     internal static bool TryReadByte(int address, out byte value)
     {
         value = 0;

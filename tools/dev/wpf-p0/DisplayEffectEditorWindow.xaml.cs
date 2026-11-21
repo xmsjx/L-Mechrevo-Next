@@ -8,7 +8,6 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using MechrevoLite;
-using MechrevoLite.Hardware;
 
 namespace L_Mechrevo.WpfP0;
 

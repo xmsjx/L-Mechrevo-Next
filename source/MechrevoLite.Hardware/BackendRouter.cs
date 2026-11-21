@@ -390,6 +390,15 @@ internal static class BackendRouter
 		Logger.WriteLine("[强化机型分流] 规则来源=" + RuleSource + " · 条数=" + RuleCount
 			+ (string.IsNullOrEmpty(RuleLoadError) ? "" : " · 错误=" + RuleLoadError));
 		Logger.WriteLine("[强化机型分流] " + DescribeDecision(decision));
+		// 同方机没装 GCU：只记日志，不在这里静默切 EC ——
+		// 改由界面弹一次「导入 GCU / 改用 EC」让用户选，选完才落模式（见 GcuStartupChoice）。
+		if (decision.Backend == MechrevoBackendKind.Gcu
+			&& decision.Identity.TongfangFamily
+			&& !decision.Identity.GcuServiceInstalled
+			&& !GcuWarmup.IsActive)
+		{
+			Logger.WriteLine("[gcu-svc] GCU 后端机型但本机没装 GCU 服务 ⇒ 等用户在界面上选择导入或改用 EC");
+		}
 		return decision;
 	}
 

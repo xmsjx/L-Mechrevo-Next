@@ -7,13 +7,11 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Media;
 using MechrevoLite;
-using MechrevoLite.Hardware;
 using MechrevoLite.Helpers;
 using Microsoft.Win32;
 
 using L_Mechrevo.WpfP0.Resources;
-using L_Mechrevo.WpfP0.Services;
-namespace L_Mechrevo.WpfP0;
+using L_Mechrevo.WpfP0.Services;namespace L_Mechrevo.WpfP0;
 
 public partial class SettingsWindow : Window
 {
@@ -29,7 +27,7 @@ public partial class SettingsWindow : Window
         InitializeComponent();
         try
         {
-            if (CpuVendor.LacksIgpuSilicon)
+            if (WpfBackend.CpuLacksIgpuSilicon)
             {
                 IgpuModeCard.Visibility = Visibility.Collapsed;
             }
@@ -371,9 +369,14 @@ public partial class SettingsWindow : Window
         }
         if (ControlModeCard != null)
         {
-            ControlModeCard.Visibility = _owner?.IsTongfangFamilyForSettings == true
-                ? Visibility.Visible
-                : Visibility.Collapsed;
+            // 门控结论由后端给出（宝龙达恒为不支持），这里只做绑定。
+            bool tongfang = _owner?.IsTongfangFamilyForSettings == true;
+            ControlModeCard.Visibility = tongfang ? Visibility.Visible : Visibility.Collapsed;
+            // 导入 / 移除 GCU 同样只给同方模具：宝龙达不是同方模具，不该出现这些选项。
+            if (GcuPackagePanel != null)
+            {
+                GcuPackagePanel.Visibility = tongfang ? Visibility.Visible : Visibility.Collapsed;
+            }
         }
         if (ControlModeCombo != null)
         {
@@ -442,7 +445,7 @@ public partial class SettingsWindow : Window
             {
                 try { family = L_Mechrevo.WpfP0.Services.WpfBackend.TongfangFamily(); } catch { }
             }
-            bool eligible = family && hw?.WujieSmuApu != true;
+            bool eligible = family && L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu != true;
             CustomButtonCard.Visibility = eligible ? Visibility.Visible : Visibility.Collapsed;
             if (!eligible)
             {
@@ -558,6 +561,94 @@ public partial class SettingsWindow : Window
         _owner?.ReloadCapabilities();
     }
 
+    private async void ImportGcu_Click(object sender, RoutedEventArgs e)
+    {
+        if (ImportGcuButton != null)
+        {
+            ImportGcuButton.IsEnabled = false;
+        }
+        try
+        {
+            if (GcuActionStatus != null)
+            {
+                GcuActionStatus.Text = "正在导入…";
+            }
+            using SettingsOwnerWindow owner = new(this);
+            // 手动点「导入 GCU 包」：直接进选包流程，不再多弹一层确认。
+            await GcuPackageImport.OfferAsync(owner, askConfirm: false);
+            if (GcuActionStatus != null)
+            {
+                GcuActionStatus.Text = "导入流程已结束：如提示安装成功，请把上方控制模式切到「GCU 模式」并重启程序。";
+            }
+        }
+        catch (Exception ex)
+        {
+            if (GcuActionStatus != null)
+            {
+                GcuActionStatus.Text = "导入 GCU 失败：" + ex.Message;
+            }
+        }
+        finally
+        {
+            if (ImportGcuButton != null)
+            {
+                ImportGcuButton.IsEnabled = true;
+            }
+        }
+    }
+
+    private async void RemoveGcu_Click(object sender, RoutedEventArgs e)
+    {
+        if (RemoveGcuButton != null)
+        {
+            RemoveGcuButton.IsEnabled = false;
+        }
+        try
+        {
+            using SettingsOwnerWindow owner = new(this);
+            (bool Ok, string Detail) result = await GcuPackageRemoval.RemoveAsync(owner);
+            if (GcuActionStatus != null)
+            {
+                GcuActionStatus.Text = result.Detail.Replace(Environment.NewLine, " · ");
+            }
+            if (result.Ok)
+            {
+                Status("GCU 已移除，建议切到「EC 控制模式」后重启程序");
+            }
+        }
+        catch (Exception ex)
+        {
+            if (GcuActionStatus != null)
+            {
+                GcuActionStatus.Text = "移除 GCU 失败：" + ex.Message;
+            }
+        }
+        finally
+        {
+            if (RemoveGcuButton != null)
+            {
+                RemoveGcuButton.IsEnabled = true;
+            }
+        }
+    }
+
+    /// <summary>把 WPF 窗口句柄包成 WinForms 弹窗所需的 owner。</summary>
+    private sealed class SettingsOwnerWindow : System.Windows.Forms.IWin32Window, IDisposable
+    {
+        private readonly WindowInteropHelper _helper;
+
+        public SettingsOwnerWindow(Window window)
+        {
+            _helper = new WindowInteropHelper(window);
+        }
+
+        public nint Handle => _helper.Handle;
+
+        public void Dispose()
+        {
+        }
+    }
+
     private async void ControlMode_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_syncing || ControlModeCombo == null)
@@ -573,6 +664,23 @@ public partial class SettingsWindow : Window
             ControlModeCombo.SelectedIndex = 0;
             _syncing = false;
             return;
+        }
+        if (!ecMode && !MechrevoLite.Hardware.MechrevoHw.IsGcuServiceInstalled)
+        {
+                // 切到 GCU 模式但本机没装 GCU：先问清楚要不要导入，避免切过去连不上又退回 EC。
+                if (_owner != null)
+                {
+                        await _owner.AskGcuOrEcOnStartupAsync(askOnce: false);
+                }
+                // 询问里选择了改用 EC ⇒ 这次切 GCU 就不继续了。
+                if (L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive)
+                {
+                        _syncing = true;
+                        ControlModeCombo.SelectedIndex = 1;
+                        _syncing = false;
+                        Status("本机没有 GCU 服务，先按 EC 控制模式运行。装好 GCU 后可再切回 GCU 模式。");
+                        return;
+                }
         }
         (bool Ok, string Detail) result = await L_Mechrevo.WpfP0.Services.WpfBackend.SetEcModeAsync(ecMode);
         Status(result.Detail);
@@ -590,7 +698,7 @@ public partial class SettingsWindow : Window
         else
         {
             _syncing = true;
-            ControlModeCombo.SelectedIndex = GcuEcMode.IsEcMode ? 1 : 0;
+            ControlModeCombo.SelectedIndex = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive ? 1 : 0;
             _syncing = false;
         }
     }
@@ -1036,7 +1144,7 @@ public partial class SettingsWindow : Window
 
     private void RefreshPawnIO()
     {
-        PawnIOInstaller.Status status = PawnIOInstaller.GetStatus();
+        (bool Installed, string Version) status = WpfBackend.PawnIoStatus();
         PawnStatus.Text = status.Installed
             ? WpfStrings.PawnDriverInstalled + (string.IsNullOrWhiteSpace(status.Version) ? "" : " (" + status.Version + ")")
             : WpfStrings.PawnDriverNotInstalled;
@@ -1047,7 +1155,7 @@ public partial class SettingsWindow : Window
         ReinstallPawnButton.IsEnabled = false;
         try
         {
-            int code = await PawnIOInstaller.RunInstallerAsync();
+            int code = await WpfBackend.PawnIoInstallAsync();
             Status(code == 0 ? WpfStrings.PawnInstallDone : WpfStrings.PawnInstallReturn + code);
             RefreshPawnIO();
         }
@@ -1153,9 +1261,7 @@ public partial class SettingsWindow : Window
             }
             else
             {
-                // EC 模式下没有回读通道，把选择记进配置，下次启动按它恢复。
-                AppConfig.Set("lcd_overdrive_on", requested ? 1 : 0);
-                AppConfig.Flush();
+                // 记忆归硬件层（GCU/EC 各自下发成功即落盘）⇒ 界面只显示结果，⛔ 不写配置。
                 Status(requested ? WpfStrings.DisplayResponseOn : WpfStrings.DisplayResponseOff);
             }
         }

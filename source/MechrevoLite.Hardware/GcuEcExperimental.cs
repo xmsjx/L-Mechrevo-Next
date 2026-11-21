@@ -185,7 +185,11 @@ internal static class GcuEcExperimental
             }
             // clamp(1873) 高半字节才是可靠档位：固件改档时不一定会清 mode 的 bit4，
             // 用 mode bit4 优先会把"实际静音/平衡"误判成狂暴（实测：静音 clamp=0xA0 + mode=0x10）。
-            if (custom == 65)
+            // 自定义门控字节（0x0706）只作辅助判据：固件在档位写完之后会把它周期性锁存成自定义槽，
+            // 而实际档位/性能仍是内置档，所以只有本程序确实在自定义档时才认这一位。
+            bool customLatch = (custom & 0x3F) != 0;
+            bool selfCustom = System.Threading.Volatile.Read(ref _selfCustomMode) != 0;
+            if (customLatch && selfCustom)
             {
                 visualMode = 3;
             }
@@ -210,7 +214,7 @@ internal static class GcuEcExperimental
             bool modeSaysTurbo = (mode & 0x10) != 0;
             bool clampSaysTurbo = (clamp & 0xF0) == 0x10;
             bool clampSaysSilent = (clamp & 0xF0) == 0xA0;
-            if (custom != 65 && !clampSaysSilent && modeSaysTurbo != clampSaysTurbo)
+            if (!(customLatch && selfCustom) && !clampSaysSilent && modeSaysTurbo != clampSaysTurbo)
             {
                 Logger.WriteErrorIfChanged("ec-mode-conflict-" + mode + "-" + clamp, "[gcu-ec] 档位判据冲突：mode=0x" + mode.ToString("X2") + " clamp=0x" + clamp.ToString("X2") + " ⇒ 以 clamp 为准（判为 " + visualMode + "）");
             }
@@ -311,6 +315,15 @@ internal static class GcuEcExperimental
                 detail = "读取 1963/1895/1873 失败";
                 return false;
             }
+            // 「是否从自定义退出」只看软件记忆：门控字节会被固件周期性锁存回自定义槽，
+            // 拿它当状态位会让每次内置档切换都被当成「退出自定义」，还会把切换误判成失败。
+            bool flagReadable = AcpiDriverEc.TryReadByte(CustomModeFlagAddress, out byte flagBefore);
+            bool memoryWasCustom = System.Threading.Volatile.Read(ref _selfCustomMode) != 0;
+            bool leavingCustom = visualMode != 3 && memoryWasCustom;
+            if (visualMode != 3 && !memoryWasCustom && flagReadable && (flagBefore & 0x3F) != 0)
+            {
+                Logger.WriteErrorIfChanged("gcu-ec-custom-latch", "[gcu-ec] 自定义门控回读 0x" + flagBefore.ToString("X2") + "（记忆里不是自定义）⇒ 按内置档处理，写档后清一次");
+            }
             byte target = visualMode is 1 or 3 ? (byte)0x10 : (byte)0x00;
             byte mode = (byte)((currentMode & 0xE0) | (target & 0x1E) | (currentMode & 0x01));
             byte trigger = (byte)((currentTrigger & 0x10) | (visualMode == 2 ? 0x28 : 0x20));
@@ -319,7 +332,7 @@ internal static class GcuEcExperimental
             clamp = (byte)(clamp | (currentClamp & 0x40));
             // 写入顺序：风扇 clamp → 自定义档标记 → 模式字节 → trigger → turbo 标记。
             bool clampWrite = AcpiDriverEc.TryWriteByte(FanBoostClampAddress, clamp);
-            bool customWrite = visualMode == 3
+            bool customWrite = visualMode == 3 || !leavingCustom
                 || AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 64);
             bool rampWrite = AcpiDriverEc.TryWriteByte(FanRampAddress, visualMode == 3 ? 0x81 : visualMode is 1 ? 0x00 : 0x83);
             bool modeWrite = AcpiDriverEc.TryWriteByte(ModeIndexAddress, mode);
@@ -363,6 +376,27 @@ internal static class GcuEcExperimental
                 {
                     isolatedWrite = AcpiDriverEc.TryWriteByte(1989, (byte)(isolated & ~0x80));
                 }
+                // 内置档一律把使能位清回 0x40：固件在 trigger 写完后会把它重新锁存成自定义槽，
+                // 所以清写放在 trigger 之后，写后回读确认，仍被锁回去就补写，直到确实读到 0x40。
+                bool customCleared = true;
+                for (int attempt = 0; attempt < 3; attempt++)
+                {
+                    if (!AcpiDriverEc.TryReadByte(CustomModeFlagAddress, out byte flag) || (flag & 0x3F) == 0)
+                    {
+                        break;
+                    }
+                    customCleared &= AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 64);
+                    System.Threading.Thread.Sleep(20);
+                }
+                if (AcpiDriverEc.TryReadByte(CustomModeFlagAddress, out byte clearedFlag))
+                {
+                    customCleared &= (clearedFlag & 0x3F) == 0;
+                    Logger.WriteErrorIfChanged("gcu-ec-custom-clear", "[gcu-ec] 自定义使能位回读 0x" + clearedFlag.ToString("X2")
+                        + (customCleared ? "（使能位已清）" : "（仍被锁存，需检查写序）"));
+                }
+                // 清不干净只影响「从自定义退出」这一路的结果判定；本来就在内置档时，
+                // 档位是否切成功仍只看模式/trigger/clamp，避免多出来的清写把切换误判成失败。
+                customWrite &= customCleared || !leavingCustom;
             }
             bool modeRead = AcpiDriverEc.TryReadByte(ModeIndexAddress, out byte readMode);
             bool triggerReadBack = AcpiDriverEc.TryReadByte(TriggerAddress, out byte readTrigger);
@@ -381,6 +415,10 @@ internal static class GcuEcExperimental
             {
                 System.Threading.Interlocked.Exchange(ref _lastSelfWriteTicks, Environment.TickCount64);
                 System.Threading.Volatile.Write(ref _selfCustomMode, visualMode == 3 ? 1 : 0);
+                if (visualMode != 3)
+                {
+                    ScheduleCustomFlagRecheck();
+                }
             }
             Logger.WriteError("[gcu-ec] 实验模式切换 " + technical + " ⇒ " + (modeOk && triggerOk && clampOk ? "OK" : "FAIL"));
             return modeWrite && triggerWrite && turboWrite && clampWrite && customWrite && modeOk && triggerOk && clampOk;
@@ -390,6 +428,40 @@ internal static class GcuEcExperimental
             detail = ex.GetType().Name + " " + ex.Message;
             Logger.WriteError("[gcu-ec] 实验模式切换异常：" + detail);
             return false;
+        }
+    }
+
+    /// <summary>离开自定义后的延迟复查：固件可能在模式写完之后又把自定义使能位锁回去。</summary>
+    private static void ScheduleCustomFlagRecheck()
+    {
+        try
+        {
+            System.Threading.Timer? timer = null;
+            timer = new System.Threading.Timer(_ =>
+            {
+                try
+                {
+                    if (AcpiDriverEc.TryReadByte(CustomModeFlagAddress, out byte flag) && (flag & 0x3F) != 0)
+                    {
+                        bool cleared = AcpiDriverEc.TryWriteByte(CustomModeFlagAddress, 64);
+                        bool readBack = AcpiDriverEc.TryReadByte(CustomModeFlagAddress, out byte after);
+                        Logger.WriteError("[gcu-ec] 离开自定义复查：1.5s 后被锁回 0x" + flag.ToString("X2")
+                            + "（再次清除=" + cleared + "，回读=" + (readBack ? "0x" + after.ToString("X2") : "读取失败") + "）");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.WriteError("[gcu-ec] 离开自定义复查失败：" + ex.GetType().Name + " " + ex.Message);
+                }
+                finally
+                {
+                    timer?.Dispose();
+                }
+            }, null, 1500, System.Threading.Timeout.Infinite);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteError("[gcu-ec] 离开自定义复查排程失败：" + ex.GetType().Name + " " + ex.Message);
         }
     }
 }

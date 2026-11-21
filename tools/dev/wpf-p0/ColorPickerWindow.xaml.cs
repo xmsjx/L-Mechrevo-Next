@@ -2,7 +2,6 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using MechrevoLite.Hardware;
 
 using L_Mechrevo.WpfP0.Resources;
 namespace L_Mechrevo.WpfP0;

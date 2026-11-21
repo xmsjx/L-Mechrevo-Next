@@ -4,19 +4,19 @@
 
 [Setup]
 AppName=L-Mechrevo
-AppVerName=L-Mechrevo beta23.8.1
+AppVerName=L-Mechrevo beta23.8.3
 AppId={{8F4E2C71-9B3A-4D6E-A1C2-7E5B9D0F3A64}
-AppVersion=beta23.8.1
+AppVersion=beta23.8.3
 AppPublisher=L-Mechrevo contributors
 AppCopyright=Copyright (C) 2026 L-Mechrevo contributors. GPL-3.0-only.
 DefaultDirName={autopf}\L-Mechrevo
 DefaultGroupName=L-Mechrevo
-OutputBaseFilename=LM-beta23.8.1-setup
+OutputBaseFilename=LM-beta23.8.3-setup
 UninstallDisplayIcon={app}\L-Mechrevo.exe
 SetupIconFile=files\favicon.ico
-VersionInfoVersion=23.8.1.0
+VersionInfoVersion=23.8.3.0
 VersionInfoProductVersion=23.8.1.0
-UninstallDisplayName=L-Mechrevo beta23.8.1
+UninstallDisplayName=L-Mechrevo beta23.8.3
 Compression=lzma2
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -231,6 +231,56 @@ begin
   end;
 end;
 
+function IsGcuServiceInstalled(): Boolean;
+// 2026-11-20：本机是否已装 GCU 服务（只读服务注册表键；⛔ 不启动、不探测进程）。
+begin
+  // 两个服务名都要看：只装了 Bridge 的机器也算「已装 GCU」。
+  Result := RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\GCUService')
+    or RegKeyExists(HKLM, 'SYSTEM\CurrentControlSet\Services\GCUBridge');
+end;
+
+function IsBaolongdaBoard(): Boolean;
+// 2026-11-20：宝龙达模具（板号 MRID6 / MRID6-*）不用 GCU，也不走 EC 直控 —— 不提示、不改配置。
+var
+  Board: String;
+begin
+  Result := False;
+  Board := '';
+  RegQueryStringValue(HKLM, 'HARDWARE\DESCRIPTION\System\BIOS', 'BaseBoardProduct', Board);
+  Board := Uppercase(Board);
+  Result := (Board = 'MRID6') or (Copy(Board, 1, 6) = 'MRID6-');
+end;
+
+function HasExternalGcuPayload(): Boolean;
+// 安装包同目录自带 GCU\ 或 GCU.7z ⇒ 安装时本来就会导入，不必再问。
+begin
+  Result := DirExists(ExpandConstant('{src}\GCU')) or FileExists(ExpandConstant('{src}\GCU.7z'));
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+// 2026-11-20（机主）：本包不含 GCU 服务 ⇒ 只如实告知 + 问一句「是否导入 GCU」。
+//   选「否」=> 不预写配置；主程序按「无 GCU 服务」自行默认 EC 直控。
+//   ⚠️ 已装 GCU 服务 / 宝龙达模具 / 同目录自带 GCU 包时，不问也不改配置。
+//   ⚠️ Result 一律保持 ''，两个选项都继续安装（⛔ 绝不中止）。
+begin
+  Result := '';
+  if (not IsGcuServiceInstalled()) and (not IsBaolongdaBoard()) and (not HasExternalGcuPayload()) then
+  begin
+    if MsgBox('本安装包不含 GCU 服务，主程序功能不受影响。' + #13#10 + #13#10 +
+        '是否导入 GCU？' + #13#10 +
+        '  · 是：继续安装，装好后打开 L-Mechrevo，点顶部「GCU」状态即可导入 GCU 包并安装；' + #13#10 +
+        '  · 否：继续安装；没装 GCU 服务时主程序自动走 EC 直控（风扇 / 功耗 / 灯光走本机 EC，不依赖 GCU）。',
+        mbConfirmation, MB_YESNO) = IDNO then
+    begin
+      // 这里不预写 config.json：主程序在「没有 GCU 服务 + 用户没选过控制方式」时本来就默认 EC 直控；
+      // 预写会把「没选过」变成「选了 EC」，以后用户装回 GCU 也会被这条覆盖。
+      Log('LM-GCU-IMPORT: 用户选择不导入 GCU => 由主程序按「无 GCU 服务」默认走 EC 直控');
+    end
+    else
+      Log('LM-GCU-IMPORT: 用户选择导入 GCU => 安装继续，装好后在应用内导入');
+  end;
+end;
+
 function InitializeSetup(): Boolean;
 begin
   // 2026-10-05：旧版卸载项存在 = 覆盖升级 -> 保留用户数据；不存在 = 全新安装 -> 清残留使首次引导重现
@@ -396,6 +446,8 @@ begin
     Log('LM-GCU: 外置 GCU 安装启动失败');
 end;
 
+procedure EnsureUwacpiDriverInstalled(); forward;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then
@@ -416,7 +468,7 @@ end;
 // 所以安装阶段先探一次设备，打不开就导入驱动包，再让 PnP 重新枚举一次把设备节点找回来。
 const
   ACPI_DEVICE_PATH   = '\\.\ACPIDriver';
-  LM_INVALID_HANDLE  = THandle($FFFFFFFF);
+  LM_INVALID_HANDLE  = -1;
   LM_GENERIC_RW      = $C0000000;
   LM_FILE_SHARE_RW   = 3;
   LM_OPEN_EXISTING   = 3;
@@ -435,7 +487,7 @@ var
 begin
   H := LmCreateFileW(ACPI_DEVICE_PATH, LM_GENERIC_RW, LM_FILE_SHARE_RW, 0,
                      LM_OPEN_EXISTING, 0, 0);
-  Result := H <> LM_INVALID_HANDLE;
+  Result := (H <> 0) and (Integer(H) <> LM_INVALID_HANDLE);
   if Result then
     LmCloseHandle(H);
 end;

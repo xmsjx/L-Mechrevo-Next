@@ -120,6 +120,21 @@ internal static class AcpiDriverInstaller
 				RuntimeModelSupport.InvalidateCache();
 				return true;
 			}
+			// 节点在、驱动包也导入了，设备还是打不开：多半是被禁用/没启动 ⇒ 明确启用一次再等（不需要重启）。
+			string instanceId = FirstDeviceInstanceId();
+			if (!string.IsNullOrEmpty(instanceId))
+			{
+				int enableCode = RunTool("pnputil.exe", "/enable-device \"" + instanceId + "\"", out string enableOutput);
+				Logger.WriteError("[acpi-drv] 启用设备 " + instanceId + "（pnputil /enable-device）退出码 " + enableCode
+					+ FormatOutput(enableOutput));
+				if (WaitForDevice(5))
+				{
+					detail = "驱动安装成功（导包后启用设备生效；pnputil 退出码 " + code + "）";
+					Logger.WriteError("[acpi-drv] " + detail);
+					RuntimeModelSupport.InvalidateCache();
+					return true;
+				}
+			}
 			bool nodePresent = DeviceNodePresent();
 			detail = nodePresent
 				? "驱动包已导入，但设备仍打不开（节点存在却未启动/被禁用；pnputil 退出码 " + code + "）" + FormatOutput(output)
@@ -148,6 +163,26 @@ internal static class AcpiDriverInstaller
 		catch
 		{
 			return false;
+		}
+	}
+
+	/// <summary>设备实例路径（如 ACPI\INOU0000\0）；节点不存在时返回空。</summary>
+	private static string FirstDeviceInstanceId()
+	{
+		try
+		{
+			using Microsoft.Win32.RegistryKey? key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
+				@"SYSTEM\CurrentControlSet\Enum\ACPI\INOU0000");
+			if (key == null)
+			{
+				return "";
+			}
+			string[] names = key.GetSubKeyNames();
+			return names.Length == 0 ? "" : @"ACPI\INOU0000\" + names[0];
+		}
+		catch
+		{
+			return "";
 		}
 	}
 

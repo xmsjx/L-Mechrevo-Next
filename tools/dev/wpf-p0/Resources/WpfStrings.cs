@@ -101,6 +101,7 @@ public static class WpfStrings
     public static string WujieIndependentCheck_Content => Get("WujieIndependentCheck_Content");
     public static string FanCurveBaolongdaEnable_Content => MechrevoLite.Properties.Strings.FanCurveBaolongdaEnable;
     public static string FanSyncSharedHeatPipe_Content => MechrevoLite.Properties.Strings.FanSyncSharedHeatPipe;
+    public static string FanIndependentControl_Content => MechrevoLite.Properties.Strings.FanIndependentControl;
     public static string FanCurveRestoreDefault_Content => Get("FanCurveRestoreDefault_Content");
     public static string FanCurveWindow_Text => Get("FanCurveWindow_Text");
     public static string FanCurveWindow_Text_2 => Get("FanCurveWindow_Text_2");

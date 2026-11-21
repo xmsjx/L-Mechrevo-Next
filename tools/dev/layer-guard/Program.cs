@@ -45,6 +45,26 @@ internal static class Program
         "HidDeviceWin",
         "UmiLightbar",
         "BaolongdaWmi",
+        // 裸类型：窗口 `using MechrevoLite.Hardware;` + 裸写法的逃逸口（带点的命名空间 token 抓不到）
+        "GcuEcExperimental",
+        "GcuEcMode",
+        "NucFanTable",
+        "NucPerformanceMode",
+        "NucGpuPower",
+        "WujieFanEcController",
+        "BaolongdaFanCurveApply",
+        "BaolongdaVendorEc",
+        "FanWriter",
+        "ModeProfileConfig",
+        "ReadFailureBackoff",
+    };
+
+
+    /// <summary>界面层不得出现的赋值/写法（比类型名更贴近「越权写」）。</summary>
+    private static readonly (Regex Pattern, string Note)[] ForbiddenWrites =
+    {
+        (new Regex(@"(?<![A-Za-z0-9_])ActiveModeId\s*=(?![=>])", RegexOptions.Compiled), "界面层不得直接写 ActiveModeId（应由 PerfModeService 单点写并广播）"),
+        (new Regex(@"(?<![A-Za-z0-9_])PerfModeStore\.", RegexOptions.Compiled), "界面层不得直接碰档位存储"),
     };
 
 // 后端能力位（界面层直接读这些就说明"能力由后端声明"还没落地）
@@ -85,6 +105,12 @@ private static readonly string[] CapabilityNames =
     string nullableReport = Path.Combine(Path.GetDirectoryName(baseline) ?? ".", "caps-nullable-report.txt");
     int nullableBase = ReadNullableBaseline(nullableReport);
     Console.WriteLine("键盘能力位直读行=" + CountKeyboardCapabilityReads(wpfDir) + "（SupportsKeyboard / Capabilities.Keyboard · 仅报告）");
+        Dictionary<string, int> hwUsings = ScanHardwareUsings(wpfDir);
+        string usingBaseline = Path.Combine(Path.GetDirectoryName(baseline) ?? ".", "using-baseline.txt");
+        Console.WriteLine("界面裸 using MechrevoLite.Hardware 行=" + hwUsings.Values.Sum() + "（棘轮：只准降不准升）");
+        Dictionary<string, int> hwAccess = ScanHwAccess(wpfDir);
+        string hwBaseline = Path.Combine(Path.GetDirectoryName(baseline) ?? ".", "hw-access-baseline.txt");
+        Console.WriteLine("界面直读硬件对象行=" + hwAccess.Values.Sum() + "（棘轮：只准降不准升）");
     Console.WriteLine("能力位空读行=" + nullableTotal + "（caps?. / Capabilities?. · 基线 " + nullableBase + " · 仅报告不参与闸门）");
 
         if (update)
@@ -103,6 +129,26 @@ private static readonly string[] CapabilityNames =
             File.WriteAllLines(baseline, lines, new UTF8Encoding(false));
         WriteCapsBaseline(Path.Combine(Path.GetDirectoryName(baseline)!, "caps-baseline.txt"), capsScan);
         WriteNullableBaseline(nullableReport, nullableTotal);
+            List<string> hwLines = new List<string>
+            {
+                "# 界面直读硬件对象行（棘轮）：<相对路径>\t<允许行数上限>",
+                "# 生成命令：dotnet run --project tools/dev/layer-guard -c Release -- --update",
+            };
+            foreach (KeyValuePair<string, int> item in hwAccess.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                hwLines.Add(item.Key + "\t" + item.Value);
+            }
+            File.WriteAllLines(hwBaseline, hwLines, new UTF8Encoding(false));
+            List<string> usingLines = new List<string>
+            {
+                "# 界面层 using MechrevoLite.Hardware（棘轮）：<相对路径>\t<允许行数上限>",
+                "# 生成命令：dotnet run --project tools/dev/layer-guard -c Release -- --update",
+            };
+            foreach (KeyValuePair<string, int> item in hwUsings.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                usingLines.Add(item.Key + "\t" + item.Value);
+            }
+            File.WriteAllLines(usingBaseline, usingLines, new UTF8Encoding(false));
             Console.WriteLine("[UPDATE] 已写入基线：" + baseline + " · 条目=" + scan.Count);
             return 0;
         }
@@ -114,6 +160,24 @@ private static readonly string[] CapabilityNames =
         }
 
         List<string> violations = new List<string>();
+        Dictionary<string, int> hwBudget = LoadBudget(hwBaseline, out _);
+        foreach (KeyValuePair<string, int> item in hwAccess.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            int allowed = hwBudget.TryGetValue(item.Key, out int hwValue) ? hwValue : 0;
+            if (item.Value > allowed)
+            {
+                violations.Add(item.Key + "：直读硬件对象 " + item.Value + " 行 > 上限 " + allowed + "（改走 WpfBackend）");
+            }
+        }
+        Dictionary<string, int> usingBudget = LoadBudget(usingBaseline, out _);
+        foreach (KeyValuePair<string, int> item in hwUsings.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
+        {
+            int allowed = usingBudget.TryGetValue(item.Key, out int usingValue) ? usingValue : 0;
+            if (item.Value > allowed)
+            {
+                violations.Add(item.Key + "：using MechrevoLite.Hardware " + item.Value + " 行 > 上限 " + allowed);
+            }
+        }
         foreach (KeyValuePair<string, (int Hits, List<string> Lines)> item in scan.OrderBy(k => k.Key, StringComparer.OrdinalIgnoreCase))
         {
             int allowed = budget.TryGetValue(item.Key, out int value) ? value : 0;
@@ -178,6 +242,7 @@ private static readonly string[] CapabilityNames =
     private static Dictionary<string, (int Hits, List<string> Lines)> Scan(string wpfDir)
     {
         Dictionary<string, (int Hits, List<string> Lines)> result = new Dictionary<string, (int, List<string>)>(StringComparer.OrdinalIgnoreCase);
+        Regex[] forbidden = Forbidden.Select(BuildTokenRegex).ToArray();
         foreach (string file in Directory.EnumerateFiles(wpfDir, "*.cs", SearchOption.AllDirectories))
         {
             string relative = Path.GetRelativePath(wpfDir, file).Replace('\\', '/');
@@ -191,10 +256,26 @@ private static readonly string[] CapabilityNames =
             foreach (string text in File.ReadLines(file))
             {
                 lineNumber++;
-                bool hit = false;
-                foreach (string token in Forbidden)
+                // 注释里提到类型名不算越界（判据看代码，不看说明文字）。
+                string trimmed = text.TrimStart();
+                if (trimmed.StartsWith("//", StringComparison.Ordinal))
                 {
-                    if (text.Contains(token, StringComparison.Ordinal))
+                    continue;
+                }
+                bool hit = false;
+                string? note = null;
+                foreach ((Regex rule, string ruleNote) in ForbiddenWrites)
+                {
+                    if (rule.IsMatch(text))
+                    {
+                        hit = true;
+                        note = ruleNote;
+                        break;
+                    }
+                }
+                foreach (Regex token in forbidden)
+                {
+                    if (token.IsMatch(text))
                     {
                         hit = true;
                         break;
@@ -207,7 +288,7 @@ private static readonly string[] CapabilityNames =
                 hits++;
                 if (matched.Count < 3)
                 {
-                    matched.Add(relative + ":" + lineNumber + " " + text.Trim());
+                    matched.Add(relative + ":" + lineNumber + " " + (note == null ? "" : "[" + note + "] ") + text.Trim());
                 }
             }
             if (hits > 0)
@@ -218,9 +299,91 @@ private static readonly string[] CapabilityNames =
         return result;
     }
 
+    /// <summary>整词匹配：避免 NucFanTable 命中 NucFanTableTryApply 这类合规转发名。</summary>
+    private static Regex BuildTokenRegex(string token)
+    {
+        string pattern = Regex.Escape(token);
+        if (char.IsLetterOrDigit(token[0]) || token[0] == '_')
+        {
+            pattern = "(?<![A-Za-z0-9_])" + pattern;
+        }
+        char last = token[token.Length - 1];
+        if (char.IsLetterOrDigit(last) || last == '_')
+        {
+            pattern += "(?![A-Za-z0-9_])";
+        }
+        return new Regex(pattern, RegexOptions.Compiled);
+    }
+
+    /// <summary>界面层还写着 using MechrevoLite.Hardware; 的行，按文件统计（棘轮：只准降不准升）。</summary>
+    private static Dictionary<string, int> ScanHardwareUsings(string wpfDir)
+    {
+        Regex pattern = new Regex(@"^\s*using\s+MechrevoLite\.Hardware\s*;", RegexOptions.Compiled);
+        Dictionary<string, int> result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (string file in Directory.EnumerateFiles(wpfDir, "*.cs", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(wpfDir, file).Replace('\\', '/');
+            if (IsExempt(relative))
+            {
+                continue;
+            }
+            int count = 0;
+            foreach (string text in File.ReadLines(file))
+            {
+                if (pattern.IsMatch(text))
+                {
+                    count++;
+                }
+            }
+            if (count > 0)
+            {
+                result[relative] = count;
+            }
+        }
+        return result;
+    }
+
+    /// <summary>界面层还直接读硬件对象的行，按文件统计（棘轮：只准降不准升）。</summary>
+    private static Dictionary<string, int> ScanHwAccess(string wpfDir)
+    {
+        Regex pattern = new Regex(@"(?<![A-Za-z0-9_])(?:HwOrProgram|_hw|hw|_probe\.Hw|_backendProbe\.Hw|Hw)\??\.[A-Z]", RegexOptions.Compiled);
+        Dictionary<string, int> result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (string file in Directory.EnumerateFiles(wpfDir, "*.cs", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(wpfDir, file).Replace('\\', '/');
+            if (IsExempt(relative))
+            {
+                continue;
+            }
+            int count = 0;
+            foreach (string text in File.ReadLines(file))
+            {
+                string trimmed = text.TrimStart();
+                if (trimmed.StartsWith("//", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+                if (pattern.IsMatch(text))
+                {
+                    count++;
+                }
+            }
+            if (count > 0)
+            {
+                result[relative] = count;
+            }
+        }
+        return result;
+    }
+
     /// <summary>Services 层就是“允许碰硬件”的地方；obj/bin 是生成物。</summary>
     private static bool IsExempt(string relative)
     {
+        // 诊断页（BackendProbe）职责就是直读硬件并展示，不计入分层闸门。
+        if (relative.Equals("BackendProbe.cs", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
         return relative.StartsWith("Services/", StringComparison.OrdinalIgnoreCase)
             || relative.Contains("/obj/", StringComparison.OrdinalIgnoreCase)
             || relative.Contains("/bin/", StringComparison.OrdinalIgnoreCase)

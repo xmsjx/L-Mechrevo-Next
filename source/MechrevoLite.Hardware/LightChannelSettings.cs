@@ -1,7 +1,14 @@
-namespace MechrevoLite.Hardware;
+namespace MechrevoLite.Contracts;
 
-internal readonly record struct LightChannelSettings(string Effect, int Light, int Speed, int ColorArgb, bool PowerOn, int[]? ManualIndexes = null, int BreathingIndex = 1, int MonochromeIndex = 4, bool UsePresetColor = false, bool PowerExplicit = false, int[] MixColors = null)
+internal readonly record struct LightChannelSettings(string Effect, int Light, int Speed, int ColorArgb, bool PowerOn, int[]? ManualIndexes = null, int BreathingIndex = 1, int MonochromeIndex = 4, bool UsePresetColor = false, bool PowerExplicit = false, int[] MixColors = null, int BrightnessPct = -1)
 {
+	/// <summary>
+	/// 重放用亮度百分比：有精确值（0..100）就用它，否则按档位折算成 0/25/50/75/100。
+	/// <para>⭐ HID 单键键盘亮度是连续的；EC/白色背光只有档位，靠这里统一折算。</para>
+	/// </summary>
+	internal int RestoreBrightnessPercent => BrightnessPct >= 0
+		? System.Math.Clamp(BrightnessPct, 0, 100)
+		: System.Math.Clamp(Light, 0, 4) * 25;
 	internal static readonly int[] DefaultManualIndexes = new int[6] { 1, 5, 9, 13, 21, 25 };
 
 	// Logo 多彩默认 7 色

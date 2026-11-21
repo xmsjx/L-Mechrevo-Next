@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
     <xsd:element name="root" msdata:IsDataSet="true">
@@ -5717,7 +5717,16 @@
     <value>导入 GCU</value>
   </data>
   <data name="GcuImportAsk" xml:space="preserve">
-    <value>检测到本机尚未安装/连接 GCU。是否从外置 GCU 包导入并安装？\n\n支持：与 L-Mechrevo 同目录的 GCU.7z 或 GCU 文件夹（也可手动选择）。</value>
+    <value>本机没有安装 GCU，或当前连不上 GCU。\n\n「是」= 从外置 GCU 包导入（放在 L-Mechrevo 同目录的 GCU.7z 或 GCU 文件夹，也可以手动选择）；\n「否」= 现在改用本机 EC 直控（风扇 / 功耗 / 灯光不依赖 GCU，之后可在设置里随时切换）。</value>
+  </data>
+  <data name="GcuConnectFailedTitle" xml:space="preserve">
+    <value>GCU 连接失败</value>
+  </data>
+  <data name="GcuConnectFailedAsk" xml:space="preserve">
+    <value>连不上 GCU（本机没有 GCU 服务，或服务没起来、端口不通）。
+
+「是」= 现在改用本机 EC 直控，并记住这个选择（风扇 / 功耗 / 灯光不依赖 GCU，之后可在设置里切回 GCU 模式）；
+「否」= 保持 GCU 模式显示「GCU 未连接」，本次运行不再重试连接，重启程序后再试。</value>
   </data>
   <data name="GcuImportNoPackage" xml:space="preserve">
     <value>所选位置没有可用的 GCU 变体包（.7z）。</value>

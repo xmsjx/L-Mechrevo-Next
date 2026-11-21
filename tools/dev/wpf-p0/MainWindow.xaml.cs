@@ -11,12 +11,10 @@ using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using MechrevoLite;
-using MechrevoLite.Hardware;
 using MechrevoLite.Display;
 using L_Mechrevo.WpfP0.Services;
 using L_Mechrevo.WpfP0.Resources;
 using Microsoft.Win32;
-
 namespace L_Mechrevo.WpfP0;
 
 public partial class MainWindow : Window
@@ -2386,7 +2384,7 @@ public partial class MainWindow : Window
         };
         try
         {
-            box.IsChecked = ChargeGatePin.Enabled;
+            box.IsChecked = WpfBackend.ChargeGateEnabled;
         }
         catch
         {
@@ -2395,14 +2393,14 @@ public partial class MainWindow : Window
         box.Click += (_, _) =>
         {
             bool on = box.IsChecked == true;
-            AppConfig.Set(ChargeGatePin.ConfigKey, on ? 1 : 0);
+            AppConfig.Set(WpfBackend.ChargeGateConfigKey, on ? 1 : 0);
             AppConfig.Flush();
             Logger.WriteError(on
                 ? "[charge-gate] 宽屏开关打开：写完不再还原门控（0x7C3 保持 4）"
                 : "[charge-gate] 宽屏开关关闭：门控改回临时模式，并立刻还原原值");
             if (!on)
             {
-                ChargeGatePin.TryReleaseNow();
+                WpfBackend.ChargeGateReleaseNow();
             }
         };
         _chargeGatePin = box;
@@ -2456,6 +2454,11 @@ public partial class MainWindow : Window
             "[display] 分区控光可用=" + (miniledSupported ? "是" : "否")
             + " · Overdrive 可用=" + (overdriveSupported ? "是" : "否")
             + " ⇒ 显示卡片开关行=" + ((miniledSupported || overdriveSupported) ? "显示" : "整行隐藏（标签/开关/提示都不显示）"));
+        // 控制模式卡片（GCU 模式 / EC 模式）的可见性同样只在翻转时落一行：门控在后端求值
+        // （宝龙达声明为不支持），界面只读结论，不在前端再判一次硬件。
+        Logger.WriteErrorIfChanged("settings-control-mode",
+            "[settings] 控制模式卡片=" + (_owner.IsTongfangFamilyForSettings ? "显示" : "隐藏")
+            + " · 依据=" + _owner.ControlModeCardReason);
         if (_miniledLabel != null)
         {
             _miniledLabel.Visibility = miniledSupported ? Visibility.Visible : Visibility.Collapsed;
@@ -2591,9 +2594,8 @@ public partial class MainWindow : Window
 
     private static bool HasAnyCustomRange()
     {
-        var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
-        return (hw?.Pl1Adjustable ?? false) || (hw?.Pl2Adjustable ?? false) || (hw?.Pl4Adjustable ?? false)
-            || (hw?.TccAdjustable ?? false) || (hw?.GpuTgpAdjustable ?? false) || (hw?.GpuDynamicBoostAdjustable ?? false)
+        return L_Mechrevo.WpfP0.Services.WpfBackend.Pl1Adjustable || L_Mechrevo.WpfP0.Services.WpfBackend.Pl2Adjustable || L_Mechrevo.WpfP0.Services.WpfBackend.Pl4Adjustable
+            || L_Mechrevo.WpfP0.Services.WpfBackend.TccAdjustable || L_Mechrevo.WpfP0.Services.WpfBackend.GpuTgpAdjustable || L_Mechrevo.WpfP0.Services.WpfBackend.GpuDynamicBoostAdjustable
             || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "FanSettings");
     }
 
@@ -2604,25 +2606,32 @@ public partial class MainWindow : Window
         {
             return;
         }
+        // 能力判据都经 WpfBackend 读后端实例；本页可能早于"后端就绪"回调渲染，先把桥接对象对齐，
+        // 否则门面拿到的是空实例，显卡模式等按钮会被判成不支持而消失。
+        if (_probe?.Hw != null && !ReferenceEquals(L_Mechrevo.WpfP0.Services.WpfBackend.Hw, _probe.Hw))
+        {
+            L_Mechrevo.WpfP0.Services.WpfBackend.Attach(_probe.Hw, _probe.Service);
+        }
         bool nucUmi = L_Mechrevo.WpfP0.Services.WpfBackend.NucGpuModeSupported(_probe?.Hw);
-        bool nucNoGpu = _probe?.Hw?.IsIntelNucMachine == true;
+        bool nucNoGpu = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsIntelNuc;
         bool ecLocal = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive;
         // Intel 星耀暂时屏蔽自定义；AMD 星耀/无界走本机 SMU 自定义。
-        bool smuCustom = _probe?.Hw?.SmuCustomApu == true;
+        bool smuCustom = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu;
         bool customAllowed = nucUmi || smuCustom
             || ((L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "FanSettings") || HasAnyCustomRange())
-                && !(_probe?.Hw?.SupportsModeProfileConfig ?? false))
-            || _probe?.Hw?.UsesBaolongda == true
+                && !L_Mechrevo.WpfP0.Services.WpfBackend.ModeProfileBindingSupported)
+            || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
             || (ecLocal && _probe?.Hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu);
         HomePerf自定义.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
         bool gpuRowHidden = _probe?.Hw?.GpuRowHiddenByGcuReports == true;
-        bool directSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", _probe?.Hw?.SupportsDgpuDirect ?? false);
-        bool gpuSwitchSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", _probe?.Hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("DgpuDirect") || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly") || L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap"))));
+        bool gpuHotSwap = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap"));
+        bool directSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", L_Mechrevo.WpfP0.Services.WpfBackend.SupportsDgpuDirectIfKnown ?? false);
+        bool gpuSwitchSupported = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuModeSwitch", _probe?.Hw?.CanOfferGpuModeSwitch ?? (L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("DgpuDirect") || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly") || gpuHotSwap));
         bool gpuSupported = !nucNoGpu && !gpuRowHidden
-            && (gpuSwitchSupported || directSupported || L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap")));
+            && (gpuSwitchSupported || directSupported || gpuHotSwap);
         HomeGpuCard.Visibility = gpuSupported ? Visibility.Visible : Visibility.Collapsed;
         HomeGpu独显.Visibility = directSupported ? Visibility.Visible : Visibility.Collapsed;
-        HomeGpu集显.Visibility = (L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("IgpuOnly", _probe?.Hw?.CanOfferIgpuOnly ?? L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly")))
+        HomeGpu集显.Visibility = (L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("IgpuOnly", L_Mechrevo.WpfP0.Services.WpfBackend.CanOfferIgpuOnlyIfKnown ?? L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("IgpuOnly")))
             ? Visibility.Visible : Visibility.Collapsed;
         HomeGpuOcToggle.Visibility = _owner?.WideGpuOverclockVisible == true
             ? Visibility.Visible : Visibility.Collapsed;
@@ -2645,11 +2654,10 @@ public partial class MainWindow : Window
         HomeDisplayGap.Width = displaySupported ? new GridLength(10) : new GridLength(0);
         Grid.SetColumn(BatteryCardHost, displaySupported ? 2 : 0);
         Grid.SetColumnSpan(BatteryCardHost, displaySupported ? 1 : 3);
+        // 旧判据必须走门控回退参数，不能 OR 在门控外面，否则后端声明 Unsupported 也会被显示出来
         bool hasLighting = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureState("KeyboardLight") == 1
-            || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("Lightbar", false)
-            || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("LogoLight", false)
-            || _probe?.Hw?.SupportsLightbar == true
-            || _probe?.Hw?.SupportsLogoLight == true
+            || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("Lightbar", _probe?.Hw?.SupportsLightbar == true)
+            || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeature("LogoLight", _probe?.Hw?.SupportsLogoLight == true)
             || (ecLocal && (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardActiveNow
                 || L_Mechrevo.WpfP0.Services.WpfBackend.IteHasLightbar
                 || L_Mechrevo.WpfP0.Services.WpfBackend.IteHasUsbLogo
@@ -3154,7 +3162,7 @@ public partial class MainWindow : Window
         {
             try
             {
-                string id = _owner?.WideCustomModeId ?? MechrevoLite.Mode.PerfModeStore.ActiveModeId;
+                string id = _owner?.WideCustomModeId ?? MechrevoLite.Mode.ModeSettings.ActiveModeId;
                 if (!string.IsNullOrWhiteSpace(id))
                 {
                     editor.BindMode(id);
@@ -3230,7 +3238,7 @@ public partial class MainWindow : Window
             Logger.WriteError("[wide-light] 读取键盘效果表失败（本次不建键盘卡，⛔ 不伪造能力）：" + ex);
             keyboardEffects = Array.Empty<(string, string)>();
         }
-        if (hw?.UsesBaolongda == true && keyboardEffects.Length > 0)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda == true && keyboardEffects.Length > 0)
         {
             // ⭐ task-17：与迷你窗 EffectsForCurrentBackend 同口径（宝龙达固件只支持 单色/彩虹；
             //    能力位驱动、⛔ 不硬编码机型）⇒ 宽屏内联卡与完整编辑器都不再露出无效效果 ✅
@@ -3243,7 +3251,7 @@ public partial class MainWindow : Window
         var channels = new List<(string Topic, string Title, (string Effect, string Name)[] Effects)>
         {
             ("Keyboard/Ctrl", WpfStrings.LightingKeyboard, keyboardEffects),
-            ("HidLightbar/Ctrl", WpfStrings.LightingStrip, hw?.IsIntelNucMachine == true
+            ("HidLightbar/Ctrl", WpfStrings.LightingStrip, L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsIntelNuc == true
                 ? new[] { ("Single", MechrevoLite.Properties.Strings.EffectSingle), ("Rainbow", MechrevoLite.Properties.Strings.EffectRainbow) }
                 : LightingCatalog.LightbarEffects),
             ("HidLightbar_Logo/Ctrl", WpfStrings.LightingLogo, LightingCatalog.CurrentLogoEffects()),
@@ -3251,7 +3259,7 @@ public partial class MainWindow : Window
             ("HidLightbar_Sync/Ctrl", WpfStrings.LightingSync, LightingCatalog.SyncEffects)
         };
         bool hasKeyboard = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureState("KeyboardLight") == 1;
-        if (hw?.IsNucUmiFamily == true)
+        if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily == true)
         {
             // NUC/UMI：HID 单键 RGB 优先；没有 HID 时看 EC 单区支持位（0x766 bit2）。
                 hasKeyboard = hasKeyboard
@@ -3428,12 +3436,17 @@ public partial class MainWindow : Window
         LightChannelSettings settings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, effects[0].Effect);
         bool keyboardChannel = string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
         bool gradeLightChannel = IsGradeLightChannel(topic);
-        int maxLight = whiteKeyboard ? 2 : (keyboardChannel || gradeLightChannel ? 4 : 100);
+        // ⭐ 2026-11-19（机主）：HID 单键键盘亮度是连续的 0..100 ⇒ 主界面卡也按百分比给；
+        //   EC / 白色背光 / 宝龙达仍按各自档位（4 档 / 2 档 / 校准上限）。
+        bool hidContinuous = keyboardChannel && L_Mechrevo.WpfP0.Services.WpfBackend.IsHidKeyboardNow();
+        int maxLight = whiteKeyboard ? 2 : (hidContinuous ? 100 : (keyboardChannel || gradeLightChannel ? 4 : 100));
         int light = whiteKeyboard
             ? (settings.Light >= 3 ? 2 : Math.Clamp(settings.Light, 1, 2))
-            : gradeLightChannel || keyboardChannel
-                ? Math.Clamp(settings.Light, 0, 4)
-                : Math.Clamp(settings.Light * 25, 0, 100);
+            : hidContinuous
+                ? settings.RestoreBrightnessPercent
+                : gradeLightChannel || keyboardChannel
+                    ? Math.Clamp(settings.Light, 0, 4)
+                    : Math.Clamp(settings.Light * 25, 0, 100);
         int colorArgb = settings.ColorArgb;
         int breathingIndex = Math.Clamp(settings.BreathingIndex, 1, 4);
         bool singleZoneKeyboard = topic == "Keyboard/Ctrl"
@@ -3452,7 +3465,11 @@ public partial class MainWindow : Window
                 selectedEffect = hidEffect;
             }
             powerOn = hidState.KbPowerOn;
-            light = Math.Clamp(L_Mechrevo.WpfP0.Services.WpfBackend.MapHidBrightnessToLevel(hidState.Brightness), 0, maxLight);
+            // HID 真实亮度优先（设备连着时比存档新）；连续机型直接取百分比，其它仍按档位回读。
+            int liveHidBrightness = L_Mechrevo.WpfP0.Services.WpfBackend.CurrentHidBrightness();
+            light = hidContinuous
+                ? Math.Clamp(liveHidBrightness >= 0 ? liveHidBrightness : light, 0, 100)
+                : Math.Clamp(L_Mechrevo.WpfP0.Services.WpfBackend.MapHidBrightnessToLevel(hidState.Brightness), 0, maxLight);
         }
         ToggleButton? powerRef = null;
         Action<string>? updateEffectUi = null;
@@ -3498,6 +3515,14 @@ public partial class MainWindow : Window
             _ = ApplyLightCardAsync(topic, selectedEffect, sliderRef!, speedRef!, colorArgb, mixColors, breathingIndex, manualIndexes, powerRef?.IsChecked == true, channelPowerOsd: true);
         };
         _lightCardApplyTimers.Add(lightApplyTimer);
+        // 速度改动单独一路 500ms 防抖：拖动时一次都不下发，停下后只下发最后一次。
+        DispatcherTimer speedApplyTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
+        speedApplyTimer.Tick += (_, _) =>
+        {
+            speedApplyTimer.Stop();
+            _ = ApplyLightCardAsync(topic, selectedEffect, sliderRef!, speedRef!, colorArgb, mixColors, breathingIndex, manualIndexes, powerRef?.IsChecked == true, channelPowerOsd: true);
+        };
+        _lightCardApplyTimers.Add(speedApplyTimer);
 
         Grid layout = new();
         layout.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -3749,7 +3774,7 @@ public partial class MainWindow : Window
         sliderRef = slider;
         TextBlock value = new()
         {
-            Text = light + "/" + maxLight,
+            Text = hidContinuous ? light + "%" : light + "/" + maxLight,
             Style = (Style)FindResource("MutedText"),
             Width = 48,
             TextAlignment = TextAlignment.Right,
@@ -3795,12 +3820,27 @@ public partial class MainWindow : Window
         Grid.SetColumn(speedText, 2);
         speedRow.Children.Add(speedText);
         right.Children.Add(speedRow);
+        // 速度滑块：拖动过程中只改数字（⛔ 不重启灯效：轮播每次重启都从第一个颜色开始），松手后再下发。
+        bool speedDragging = false;
+        speed.AddHandler(System.Windows.Controls.Primitives.Thumb.DragStartedEvent,
+            new System.Windows.Controls.Primitives.DragStartedEventHandler((_, _) =>
+            {
+                speedDragging = true;
+                speedApplyTimer.Stop();
+            }));
+        speed.AddHandler(System.Windows.Controls.Primitives.Thumb.DragCompletedEvent,
+            new System.Windows.Controls.Primitives.DragCompletedEventHandler((_, _) =>
+            {
+                speedDragging = false;
+                speedApplyTimer.Stop();
+                speedApplyTimer.Start();
+            }));
         speed.ValueChanged += (_, _) =>
         {
             speedText.Text = (int)Math.Round(speed.Value) + "/" + (int)speed.Maximum;
-            if (lightUiSyncing) return;
-            lightApplyTimer.Stop();
-            lightApplyTimer.Start();
+            if (lightUiSyncing || speedDragging) return;
+            speedApplyTimer.Stop();
+            speedApplyTimer.Start();
         };
         Grid.SetColumn(right, 2);
         layout.Children.Add(right);
@@ -3810,7 +3850,8 @@ public partial class MainWindow : Window
         };
         slider.ValueChanged += (_, _) =>
         {
-            value.Text = (int)Math.Round(slider.Value) + "/" + maxLight;
+            int currentLight = (int)Math.Round(slider.Value);
+            value.Text = hidContinuous ? currentLight + "%" : currentLight + "/" + maxLight;
             if (lightUiSyncing) return;
             lightApplyTimer.Stop();
             lightApplyTimer.Start();
@@ -3933,13 +3974,13 @@ public partial class MainWindow : Window
                 return L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardIsHidNow;
             }
             if (hw == null
-                || hw.UsesBaolongda
-                || hw.WujieSmuApu
+                || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+                || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu
                 || KeyboardFirmwareEffects.IsGcuZoneKeyboardPath(hw.Capabilities.KeyboardType))
             {
                 return false;
             }
-            if (hw.IsNucUmiFamily)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily)
             {
                 // NUC/UMI：只有 HID 控制器在线才走 HID；否则是 EC 单区/无键盘。
                 return WpfBackend.rgb?.IsConnected == true;
@@ -3949,7 +3990,7 @@ public partial class MainWindow : Window
                 && KeyboardLightPathPolicy.ShouldUseGcuKeyboardFallback(
                     rgb.ControllerAvailability,
                     rgb.IsConnected,
-                    WpfBackend.Service != null && hw.IsConnected,
+                    WpfBackend.Service != null && L_Mechrevo.WpfP0.Services.WpfBackend.MachineConnected,
                     hidBrightnessTookEffect: true))
             {
                 return false;
@@ -3977,16 +4018,16 @@ public partial class MainWindow : Window
             {
                 return L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardIsWhiteNow;
             }
-            if (hw == null || !hw.SupportsKeyboard || WideIsHidKeyboard() || hw.UsesBaolongda)
+            if (hw == null || !hw.SupportsKeyboard || WideIsHidKeyboard() || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda)
             {
                 return false;
             }
             // NUC/UMI 单区 RGB 不是白色背光，走 LightEditorWindow 的四档单区效果。
-            if (hw.IsNucUmiFamily)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily)
             {
                 return false;
             }
-            if (hw.WujieSmuApu)
+            if (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu)
             {
                 return true;
             }
@@ -4020,8 +4061,8 @@ public partial class MainWindow : Window
                 keyboardType = hw.Capabilities.KeyboardType;
                 solution = hw.KeyboardSolution;
                 supportsKeyboard = hw.SupportsKeyboard;
-                usesBaolongda = hw.UsesBaolongda;
-                wujie = hw.WujieSmuApu;
+                usesBaolongda = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda;
+                wujie = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu;
                 gcuZonePath = KeyboardFirmwareEffects.IsGcuZoneKeyboardPath(keyboardType);
                 firmwareVisible = KeyboardFirmwareEffects.Visible(keyboardType).Length;
             }
@@ -4157,8 +4198,8 @@ public partial class MainWindow : Window
         return (string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
                 || string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal))
             && hw != null
-            && !hw.UsesBaolongda
-            && hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40;
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+            && L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40;
     }
 
     private static bool EffectSupportsSpeed(string topic, string effect, bool hidKeyboard)
@@ -4209,8 +4250,9 @@ public partial class MainWindow : Window
         {
             bool keyboardChannel = string.Equals(topic, "Keyboard/Ctrl", StringComparison.Ordinal);
             bool gradeLightChannel = IsGradeLightChannel(topic);
+            bool hidContinuous = keyboardChannel && L_Mechrevo.WpfP0.Services.WpfBackend.IsHidKeyboardNow();
             int sliderLight = (int)Math.Round(slider.Value);
-            int light = keyboardChannel || gradeLightChannel
+            int light = hidContinuous || keyboardChannel || gradeLightChannel
                 ? sliderLight
                 : Math.Clamp(sliderLight * 4 / 100, 0, 4);
             bool speedApplicable = EffectSupportsSpeed(topic, effect, effect.StartsWith("hid:", StringComparison.Ordinal));
@@ -4224,10 +4266,13 @@ public partial class MainWindow : Window
                 }
                 return;
             }
-            LightChannelSettings settings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, effect) with
+            LightChannelSettings current = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, effect);
+            LightChannelSettings settings = current with
             {
                 Effect = effect,
-                Light = light,
+                // ⭐ HID 连续机型：存精确百分比 + 折算档位（EC 回落用）；其它通道保持原档位语义。
+                Light = hidContinuous ? L_Mechrevo.WpfP0.Services.WpfBackend.MapPercentToLevel(light) : light,
+                BrightnessPct = hidContinuous ? light : current.BrightnessPct,
                 Speed = speedValue,
                 ColorArgb = colorArgb,
                 MixColors = (int[])mixColors.Clone(),

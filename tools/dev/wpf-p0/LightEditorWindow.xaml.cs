@@ -5,11 +5,9 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using MechrevoLite;
-using MechrevoLite.Hardware;
 using L_Mechrevo.WpfP0.Services;
 
-using L_Mechrevo.WpfP0.Resources;
-namespace L_Mechrevo.WpfP0;
+using L_Mechrevo.WpfP0.Resources;namespace L_Mechrevo.WpfP0;
 
 public partial class LightEditorWindow : Window
 {
@@ -17,7 +15,12 @@ public partial class LightEditorWindow : Window
     private readonly (string Effect, string Name)[] _effects;
     private LightChannelSettings _settings;
     private int _light;
+    /// <summary>键盘通道是否按连续亮度（0..100）编辑（HID 单键键盘）。</summary>
+    private bool _hidContinuousLight;
     private int _speed;
+
+    /// <summary>当前通道的速度档位上限：单区 EC 轮播 8 档，其它键盘通道 5 档，灯带 4 档。</summary>
+    private int _speedMax = 5;
     private int _manualInterval = 5;
     private int _breathingIndex = 1;
     private int[] _manualIndexes = (int[])LightChannelSettings.DefaultManualIndexes.Clone();
@@ -41,6 +44,9 @@ public partial class LightEditorWindow : Window
     private readonly bool _hideSpeedForNucLightbar;
     private int _lightMax = 4;
     private readonly DispatcherTimer _applyTimer = new() { Interval = TimeSpan.FromMilliseconds(450) };
+    /// <summary>速度滑块专用防抖：松手后再等 550ms 才下发（拖动中⛔ 不重启轮播）。</summary>
+    private readonly DispatcherTimer _speedApplyTimer = new() { Interval = TimeSpan.FromMilliseconds(550) };
+    private bool _speedDragging;
     private bool _suppressAutoApply;
     private bool _applying;
     private bool _inline;
@@ -72,20 +78,25 @@ public partial class LightEditorWindow : Window
         TitleText.Text = title;
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.Hw;
         bool gen40 = hw != null
-            && !hw.UsesBaolongda
-            && (hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen30
-                || hw.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40);
+            && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
+            && (L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen30
+                || L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.Gen40);
         _logoGrade = gen40 && string.Equals(topic, "HidLightbar_Logo/Ctrl", StringComparison.Ordinal);
         bool lightbarGrade = gen40 && string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal);
         _gradeColors = _logoGrade || lightbarGrade;
-        _gradeBrightness = _keyboard || _logoGrade;
+        // ⭐ 2026-11-19（机主）：HID 单键键盘亮度是连续的 0..100 ⇒ 键盘通道按百分比编辑；
+        //   EC / 白色背光 / 宝龙达仍按档位（_gradeBrightness 语义不变）。
+        _hidContinuousLight = _keyboard && L_Mechrevo.WpfP0.Services.WpfBackend.IsHidKeyboardNow();
+        _gradeBrightness = (_keyboard && !_hidContinuousLight) || _logoGrade;
         LightSlider.Minimum = 0;
         LightSlider.Maximum = _gradeBrightness ? 4 : 100;
         SpeedSlider.Minimum = _keyboard ? 1 : 0;
-        SpeedSlider.Maximum = _keyboard ? 5 : 4;
+        // 单区（EC 软件轮播）八档：1 最慢、8 最快；其它键盘通道仍是五档。
+        _speedMax = _keyboard ? (_nucSingleZone ? L_Mechrevo.WpfP0.Services.WpfBackend.NucKbdSpeedLevels : 5) : 4;
+        SpeedSlider.Maximum = _speedMax;
         if (_keyboard)
         {
-            bool bd = hw?.UsesBaolongda == true;
+            bool bd = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda == true;
             if (bd)
             {
                 try
@@ -98,7 +109,7 @@ public partial class LightEditorWindow : Window
             }
             // 无界目前只有白色背光键盘；GCU 的 Keyboard/Status 有时晚到/不报，
             // 不能因为 KeyboardStatusSeen=false 就把它当普通 RGB 键盘（滑块会落到 0..4）。
-            _wujieWhite = hw?.WujieSmuApu == true && _keyboard;
+            _wujieWhite = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu == true && _keyboard;
             Logger.WriteLine("[light-editor] wujieWhite=" + _wujieWhite
                 + " statusSeen=" + (hw?.KeyboardStatusSeen == true)
                 + " solution=" + (hw?.KeyboardSolution ?? "")
@@ -114,17 +125,24 @@ public partial class LightEditorWindow : Window
             else
             {
                 _lightMax = _wujieWhite ? 2 : (bd ? Math.Max(1, L_Mechrevo.WpfP0.Services.WpfBackend.KeyboardBrightnessMax()) : 4);
+                if (_hidContinuousLight)
+                {
+                    // HID 单键键盘：滑块与内部值都按 0..100 连续走。
+                    _lightMax = 100;
+                }
                 LightSlider.Minimum = 0;
                 LightSlider.Maximum = _lightMax;
             }
         }
         _settings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, effects.Length > 0 ? effects[0].Effect : "Single");
-        _light = Math.Clamp(_settings.Light, (int)LightSlider.Minimum, (int)LightSlider.Maximum);
+        _light = _hidContinuousLight
+            ? Math.Clamp(_settings.RestoreBrightnessPercent, 0, 100)
+            : Math.Clamp(_settings.Light, (int)LightSlider.Minimum, (int)LightSlider.Maximum);
         if (_nucSingleZone && L_Mechrevo.WpfP0.Services.WpfBackend.NucKbdTryReadBrightness(out int nucBrightness))
         {
             _light = nucBrightness;
         }
-        if (_keyboard && !_wujieWhite && !_whiteBacklightOnly && !_ecExperimentKeyboard && hw != null)
+        if (_keyboard && !_hidContinuousLight && !_wujieWhite && !_whiteBacklightOnly && !_ecExperimentKeyboard && hw != null)
         {
             // 编辑器以硬件当前亮度为准；否则 Fn 调过亮度后，编辑窗口仍显示旧的保存值。
             int actual = hw.KeyboardBrightness;
@@ -215,11 +233,10 @@ public partial class LightEditorWindow : Window
             // 不能放在 ApplyCore 里反复执行，否则用户主动拉到 0 会被一直改回 1。
             if (_keyboard && _light <= 0 && LightSlider.Minimum <= 0)
             {
-                _light = 1;
-                LightSlider.Value = 1;
-                LightText.Text = (_wujieWhite || _whiteBacklightOnly)
-                    ? WpfStrings.LightLevelDim
-                    : (_light + "/" + _lightMax);
+                // HID 连续亮度下 1% 太暗 ⇒ 给 25%（与旧版「1 档」观感一致）。
+                _light = _hidContinuousLight ? 25 : 1;
+                LightSlider.Value = _light;
+                LightText.Text = FormatLightText();
             }
             UpdateEditorPowerUi();
             ScheduleAutoApply();
@@ -236,6 +253,25 @@ public partial class LightEditorWindow : Window
             await ApplyCoreAsync(fromAuto: true);
         };
         Closed += (_, _) => _applyTimer.Stop();
+        _speedApplyTimer.Tick += async (_, _) =>
+        {
+            _speedApplyTimer.Stop();
+            await ApplyCoreAsync(fromAuto: true);
+        };
+        Closed += (_, _) => _speedApplyTimer.Stop();
+        // 拖动中只改数字，松手才下发：轮播每次重启都从第一个颜色开始，拖动时不能反复重启。
+        SpeedSlider.AddHandler(System.Windows.Controls.Primitives.Thumb.DragStartedEvent,
+            new System.Windows.Controls.Primitives.DragStartedEventHandler((_, _) =>
+            {
+                _speedDragging = true;
+                _speedApplyTimer.Stop();
+            }));
+        SpeedSlider.AddHandler(System.Windows.Controls.Primitives.Thumb.DragCompletedEvent,
+            new System.Windows.Controls.Primitives.DragCompletedEventHandler((_, _) =>
+            {
+                _speedDragging = false;
+                ScheduleSpeedApply();
+            }));
     }
 
     /// <summary>宽屏卡内联：隐藏标题/提示/电源行，保留效果和完整二级菜单；控件变化直接自动应用。</summary>
@@ -266,6 +302,17 @@ public partial class LightEditorWindow : Window
         }
         _applyTimer.Stop();
         _applyTimer.Start();
+    }
+
+    /// <summary>速度滑块专用防抖：拖动中不下发，松手后 550ms 再下发一次。</summary>
+    private void ScheduleSpeedApply()
+    {
+        if (_suppressAutoApply || (!IsLoaded && !_inline))
+        {
+            return;
+        }
+        _speedApplyTimer.Stop();
+        _speedApplyTimer.Start();
     }
 
     private void UpdateEditorPowerUi()
@@ -320,14 +367,24 @@ public partial class LightEditorWindow : Window
         ScheduleAutoApply();
     }
 
+    /// <summary>键盘亮度文案：HID 连续机显示百分比，其余显示档位（白色背光仍是亮/暗）。</summary>
+    private string FormatLightText()
+    {
+        if (_wujieWhite || _whiteBacklightOnly)
+        {
+            return _light >= 2 ? WpfStrings.LightLevelBright : WpfStrings.LightLevelDim;
+        }
+        return _hidContinuousLight ? _light + "%" : _light + "/" + _lightMax;
+    }
+
     private void NetSliderValues()
     {
         if (_keyboard)
         {
             LightSlider.Value = _light;
-            LightText.Text = (_wujieWhite || _whiteBacklightOnly) ? (_light >= 2 ? WpfStrings.LightLevelBright : WpfStrings.LightLevelDim) : (_light + "/" + _lightMax);
+            LightText.Text = FormatLightText();
             SpeedSlider.Value = _speed;
-            SpeedText.Text = _speed + "/5";
+            SpeedText.Text = _speed + "/" + _speedMax;
             return;
         }
         LightSlider.Value = _gradeBrightness ? _light : _light * 25;
@@ -372,7 +429,7 @@ public partial class LightEditorWindow : Window
         if (_keyboard)
         {
             MixRow.Visibility = Visibility.Collapsed;
-            bool wujie = L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.WujieSmuApu == true;
+            bool wujie = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsWujieSmuApu;
             bool keyboardManual = string.Equals(effect, "Manual", StringComparison.Ordinal);
             bool keyboardBreathing = string.Equals(effect, "Breathing", StringComparison.Ordinal);
             bool keyboardRainbow = string.Equals(effect, "Rainbow", StringComparison.Ordinal);
@@ -631,7 +688,7 @@ public partial class LightEditorWindow : Window
             }
             if (LightText != null)
             {
-                LightText.Text = (_wujieWhite || _whiteBacklightOnly) ? (_light >= 2 ? WpfStrings.LightLevelBright : WpfStrings.LightLevelDim) : (_light + "/" + _lightMax);
+                LightText.Text = FormatLightText();
             }
             ScheduleAutoApply();
             return;
@@ -650,12 +707,16 @@ public partial class LightEditorWindow : Window
     {
         if (_keyboard)
         {
-            _speed = Math.Clamp((int)Math.Round(e.NewValue), 1, 5);
+            _speed = Math.Clamp((int)Math.Round(e.NewValue), 1, _speedMax);
             if (SpeedText != null)
             {
-                SpeedText.Text = _speed + "/5";
+                SpeedText.Text = _speed + "/" + _speedMax;
             }
-            ScheduleAutoApply();
+            if (_speedDragging)
+            {
+                return;
+            }
+            ScheduleSpeedApply();
             return;
         }
         _speed = Math.Clamp((int)Math.Round(e.NewValue), 0, 4);
@@ -663,7 +724,11 @@ public partial class LightEditorWindow : Window
         {
             SpeedText.Text = _speed.ToString();
         }
-        ScheduleAutoApply();
+        if (_speedDragging)
+        {
+            return;
+        }
+        ScheduleSpeedApply();
     }
 
     private void Mix_Click(object sender, RoutedEventArgs e)
@@ -762,8 +827,15 @@ public partial class LightEditorWindow : Window
             LightChannelSettings next = _settings with
             {
                 Effect = effect,
-                Light = (_wujieWhite || _whiteBacklightOnly) ? (_light >= 2 ? 4 : 2) : _light,
-                Speed = manualKeyboard ? _manualInterval : (_keyboard ? _settings.Speed : _speed),
+                Light = (_wujieWhite || _whiteBacklightOnly)
+                    ? (_light >= 2 ? 4 : 2)
+                    : (_hidContinuousLight ? L_Mechrevo.WpfP0.Services.WpfBackend.MapPercentToLevel(_light) : _light),
+                // ⭐ HID 连续机型额外记精确百分比；其它通道原样保留（-1 = 从没记过）。
+                BrightnessPct = _hidContinuousLight ? _light : _settings.BrightnessPct,
+                // 单区（EC）轮播的档位就是 _speed(1~5)；只有 HID 单键 Manual 才是“每键时间 2~10”。
+                Speed = _nucSingleZone
+                    ? Math.Clamp(_speed, 1, _speedMax)
+                    : (manualKeyboard ? _manualInterval : (_keyboard ? _settings.Speed : _speed)),
                 ColorArgb = _colorArgb,
                 UsePresetColor = _usePresetColor,
                 MonochromeIndex = _monochromeIndex,
@@ -818,7 +890,7 @@ public partial class LightEditorWindow : Window
                         cycleColors[i] = LightChannelSettings.ManualPalette[paletteIndex - 1];
                     }
                     int nucSpeed = _nucSingleZone
-                        ? Math.Clamp(_speed, 1, 5)
+                        ? Math.Clamp(_speed, 1, _speedMax)
                         : (manualKeyboard
                             ? Math.Clamp((_manualInterval - 2) / 2, 1, 5)
                             : Math.Clamp(_speed, 1, 5));
@@ -863,7 +935,7 @@ public partial class LightEditorWindow : Window
                         ok = await L_Mechrevo.WpfP0.Services.WpfBackend.Service.SetKeyboardBrightnessPreservingEffect(_light >= 2 ? 4 : 2);
                         return ok;
                     }
-                    bool baolongda = L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.UsesBaolongda == true;
+                    bool baolongda = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda;
                     System.Drawing.Color? color = baolongda
                         ? System.Drawing.Color.FromArgb(L_Mechrevo.WpfP0.Services.WpfBackend.Hw != null ? _settings.EffectiveColorArgb() : _colorArgb)
                         : (string.Equals(effect, "Single", StringComparison.Ordinal)

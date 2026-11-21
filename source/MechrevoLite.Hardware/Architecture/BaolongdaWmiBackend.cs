@@ -45,6 +45,10 @@ internal sealed class BaolongdaWmiBackend : IBackendModule
 			BackendChannel.WmiMailbox, "宝龙达性能档通道", new[] { "wmi:Baolongda.OperatingMode" });
 		FeatureDeclaration refreshRate = new FeatureDeclaration(FeatureAvailability.Supported,
 			BackendChannel.Local, "Windows 显示通道", new[] { "win32:EnumDisplaySettings" });
+		// 宝龙达模具没有 GCU（无 GCUService/GCUBridge，也没有 GCU 载荷可写），
+		// 「GCU 模式 / EC 模式」对本模具不是一个选项 ⇒ 由后端口径直接声明不支持，界面不再自己判。
+		FeatureDeclaration controlModeSwitch = new FeatureDeclaration(FeatureAvailability.Unsupported,
+			BackendChannel.None, "宝龙达模具没有 GCU 服务", new[] { "wmi:Baolongda.NoGcu" });
 
         // 显卡三项与性能档四项：能力位上报了就按上报判，没上报保持 Unknown（⛔ 不写 Unsupported）。
         FeatureDeclaration gpuMode4 = probe.GpuModeCapability
@@ -101,6 +105,7 @@ WmiMailbox
 				[FeatureId.ChargeLimit] = chargeLimit,
 				[FeatureId.PerformanceMode] = performanceMode,
 				[FeatureId.RefreshRate] = refreshRate,
+        [FeatureId.ControlModeSwitch] = controlModeSwitch,
         [FeatureId.GpuModeSwitch] = gpuMode4,
         [FeatureId.GpuHotSwap] = gpuHotSwap4,
         [FeatureId.IgpuOnly] = igpuOnly4,

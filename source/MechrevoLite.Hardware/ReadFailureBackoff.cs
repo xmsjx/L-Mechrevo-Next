@@ -146,6 +146,51 @@ namespace MechrevoLite.Hardware
             }
         }
 
+        /// <summary>
+        /// 探针统一入口：退避期内直接返回 false（不再付一次失败的代价）；失败按阶梯记账并落一行去重错误；
+        /// 成功立即复位。探针侧只写这一句，⛔ 不再各写一份「暂停多久 / 记几次 / 什么时候复位」的重复代码。
+        /// </summary>
+        /// <param name="channel">通道名（同一物理通道用同一个名字，跨对象重建也能接上阶梯）。</param>
+        /// <param name="failNote">失败时给人看的一句话（可含命令字等信息）。</param>
+        /// <param name="probe">真正去读硬件的委托；返回 true 表示这一拍读成功。</param>
+        internal static bool TryRun(string channel, string failNote, Func<bool> probe)
+        {
+            if (probe == null)
+            {
+                return false;
+            }
+            if (ShouldSkip(channel))
+            {
+                return false;
+            }
+            bool ok;
+            try
+            {
+                ok = probe();
+            }
+            catch (Exception ex)
+            {
+                NoteFailure(channel);
+                LogProbeFailure(channel, failNote + "：" + ex.GetType().Name + " " + ex.Message);
+                return false;
+            }
+            if (ok)
+            {
+                NoteSuccess(channel);
+                return true;
+            }
+            NoteFailure(channel);
+            LogProbeFailure(channel, failNote);
+            return false;
+        }
+
+        /// <summary>失败只在该通道该档位第一次出现时落一行（默认日志级别可见），档位变化才再记。</summary>
+        private static void LogProbeFailure(string channel, string note)
+        {
+            Logger.WriteErrorIfChanged("probe-backoff:" + channel + ":" + note,
+                "[probe] 通道=" + channel + " " + note + " ⇒ " + Describe(channel));
+        }
+
         /// <summary>清空所有通道的退避（仅"手动恢复本地采样"这个显式入口可以调用）。</summary>
         internal static void ResetAll()
         {

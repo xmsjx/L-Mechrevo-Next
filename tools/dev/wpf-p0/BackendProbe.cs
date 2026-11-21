@@ -20,6 +20,9 @@ internal sealed class BackendProbe : IDisposable
     private bool _disposed;
     private int _cameraSyncBusy;
     private int _cameraQuickState = -1;
+    private int _gpuOcReplayStarted;
+    private int _gpuOcReplayDone;
+    private int _gpuOcReplayAttempts;
     // 快捷开关状态缓存：这些状态要读无线/摄像头/音频等系统通道，单次可达数十毫秒，
     // 界面每次 tick 都全量重读会把 UI 线程拖住（宽屏 home 卡片曾因此每 3 秒卡 ~0.8 秒）。
     private const int QuickStateCacheMs = 4000;
@@ -68,7 +71,7 @@ internal sealed class BackendProbe : IDisposable
             }
             if (ok)
             {
-                L_Mechrevo.WpfP0.Services.WpfBackend.acpi ??= new AsusACPI();
+                MechrevoLite.Program.HwReady = true;
                 _service = new MechrevoService(_hw);
             }
             Connected = ok;
@@ -261,28 +264,9 @@ internal sealed class BackendProbe : IDisposable
         }
     }
 
-    internal async Task<bool> SetLcdOverdriveAsync(bool on)
-    {
-        try
-        {
-            // GCU 和 EC 两条路分开：GCU 只走 MQTT 服务，EC 才走本地 ACPI 命令。
-            if (_service != null && _hw?.IsGcuConnected == true)
-            {
-                return await _service.SwitchLcdOverdrive(on).ConfigureAwait(false);
-            }
-            if (MechrevoLite.Hardware.GcuEcMode.IsEcMode
-                && MechrevoLite.Hardware.AcpiDisplaySwitch.TrySetLcdOverdrive(on))
-            {
-                _hw?.ApplyLcdOverdriveState(on);
-                return true;
-            }
-            return false;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    /// <summary>通道判据统一在 <see cref="L_Mechrevo.WpfP0.Services.WpfBackend.SwitchLcdOverdriveAsync"/>（避免两处各写一套）。</summary>
+    internal Task<bool> SetLcdOverdriveAsync(bool on)
+        => L_Mechrevo.WpfP0.Services.WpfBackend.SwitchLcdOverdriveAsync(on);
 
     internal bool SupportsColorCalibration
     {
@@ -441,7 +425,7 @@ internal sealed class BackendProbe : IDisposable
     {
         detail = "";
         MechrevoHw? hw = _hw;
-        if (hw == null || hw.UsesBaolongda || hw.IsNucUmiFamily)
+        if (hw == null || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily)
         {
             return false;
         }
@@ -627,27 +611,9 @@ internal sealed class BackendProbe : IDisposable
         }
     }
 
-    internal async Task<bool> SwitchLocalDimmingAsync(bool on)
-    {
-        try
-        {
-            if (_service != null && _hw?.IsGcuConnected == true)
-            {
-                return await _service.SwitchLocalDimming(on).ConfigureAwait(false);
-            }
-            if (MechrevoLite.Hardware.GcuEcMode.IsEcMode
-                && MechrevoLite.Hardware.AcpiDisplaySwitch.TrySetLocalDimming(on))
-            {
-                _hw?.ApplyLocalDimmingState(on);
-                return true;
-            }
-            return false;
-        }
-        catch
-        {
-            return false;
-        }
-    }
+    /// <summary>通道判据统一在 <see cref="L_Mechrevo.WpfP0.Services.WpfBackend.SwitchLocalDimmingAsync"/>（避免两处各写一套）。</summary>
+    internal Task<bool> SwitchLocalDimmingAsync(bool on)
+        => L_Mechrevo.WpfP0.Services.WpfBackend.SwitchLocalDimmingAsync(on);
 
     internal async Task<bool> SwitchRefreshRateAsync(int hz)
     {
@@ -797,26 +763,32 @@ internal sealed class BackendProbe : IDisposable
         {
             MechrevoHw? hw = _hw;
             // 0.293.5.1 基线：只要 GCU 能力位承认超频就显示，不按载荷变体号硬屏蔽。
-            return hw != null && (hw.IsGcuConnected || _service == null)
+            return hw != null && (L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected || _service == null)
                 && (hw.SupportsGpuOverclock || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("OverclockSettings") || hw.GcuGpuOverclockAvailable
                     || _service == null);
         }
     }
 
-    internal async Task<bool> ApplyGpuOverclockAsync(bool on)
+    internal async Task<bool> ApplyGpuOverclockAsync(bool on, bool rememberIntent = true)
     {
         try
         {
             if (_service != null)
             {
-                return await _service.ApplyGpuOverclock(on).ConfigureAwait(false);
+                return await _service.ApplyGpuOverclock(on, rememberIntent).ConfigureAwait(false);
             }
             MechrevoHw? hw = _hw;
             if (hw == null)
             {
                 return false;
             }
-            return await Task.Run(() =>
+            // 非狂暴档不能生效：只记意图、不下发。判据必须走 probe 的 IsGpuOcTurboNow（含 EC 回读）。
+            if (on && !IsGpuOcTurboNow())
+            {
+                Logger.WriteError("[gpu-oc] 当前档位不是狂暴 ⇒ 不启用超频（记忆保留）");
+                return false;
+            }
+            bool direct = await Task.Run(() =>
             {
                 if (!hw.EnsureDirectGpuOverclock())
                 {
@@ -839,15 +811,132 @@ internal sealed class BackendProbe : IDisposable
                         Logger.WriteError("[gpu-oc] EC直写默认显存偏移 +500 ⇒ " + memOk);
                     }
                 }
-                bool ok = hw.TrySetDirectGpuOverclockField("OverClockingSwitch", on ? 1 : 0);
-                Logger.WriteError("[gpu-oc] EC直写开关=" + on + " ⇒ " + ok);
-                return ok;
+                bool written = hw.TrySetDirectGpuOverclockField("OverClockingSwitch", on ? 1 : 0);
+                Logger.WriteError("[gpu-oc] EC直写开关=" + on + " ⇒ " + written);
+                return written;
             }).ConfigureAwait(false);
+            if (direct && rememberIntent)
+            {
+                MechrevoService.SaveGpuOcIntent(on);
+            }
+            return direct;
         }
         catch
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// （显卡超频记忆重放）：开关状态由硬件层记忆（gpu_oc），开机按记忆补发一次。
+    /// 只在下发通道可用且当前是狂暴档时重放；非狂暴档不生效、也不重放（记忆保留）。
+    /// </summary>
+    internal async Task<bool> ReplayGpuOcOnStartupAsync()
+    {
+        if (Volatile.Read(ref _gpuOcReplayDone) == 1)
+        {
+            return false;
+        }
+        if (Interlocked.CompareExchange(ref _gpuOcReplayStarted, 1, 0) != 0)
+        {
+            return false;
+        }
+        try
+        {
+            if (Interlocked.Increment(ref _gpuOcReplayAttempts) > 3)
+            {
+                Volatile.Write(ref _gpuOcReplayDone, 1);
+                Logger.WriteLine("[gpu-oc] 开机重放：本次开机已尝试 3 次 ⇒ 不再重放");
+                return false;
+            }
+            if (!MechrevoService.GpuOcIntentOn)
+            {
+                Volatile.Write(ref _gpuOcReplayDone, 1);
+                Logger.WriteLine("[gpu-oc] 开机重放：记忆为关 ⇒ 跳过");
+                return false;
+            }
+            if (!GpuOcSupported)
+            {
+                // 能力位可能还没到：不置“已完成”，等后续那次再判。
+                Logger.WriteLine("[gpu-oc] 开机重放：暂未拿到超频能力位 ⇒ 稍后再判");
+                return false;
+            }
+            // 档位重放可能同时在别处下发，先等一拍再判档位（狂暴才生效）。
+            if (!IsGpuOcTurboNow())
+            {
+                await Task.Delay(3000).ConfigureAwait(false);
+                try
+                {
+                    await RefreshCurrentModeAsync().ConfigureAwait(false);
+                }
+                catch
+                {
+                }
+            }
+            if (!IsGpuOcTurboNow())
+            {
+                // 档位重放可能还没跑完：不置“已完成”，让后续（最终同步）那次再判一次。
+                Logger.WriteError("[gpu-oc] 开机重放：当前不是狂暴档 ⇒ 不重放（记忆保留）");
+                return false;
+            }
+            bool ok = await ApplyGpuOverclockAsync(true).ConfigureAwait(false);
+            if (!ok)
+            {
+                await Task.Delay(1000).ConfigureAwait(false);
+                ok = await ApplyGpuOverclockAsync(true).ConfigureAwait(false);
+            }
+            if (ok)
+            {
+                Volatile.Write(ref _gpuOcReplayDone, 1);
+            }
+            Logger.WriteError("[gpu-oc] 开机重放：按记忆开启显卡超频 ⇒ " + ok);
+            return ok;
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[gpu-oc] 开机重放失败：" + ex.Message);
+            return false;
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _gpuOcReplayStarted, 0);
+        }
+    }
+
+    /// <summary>显卡超频当前是否已经与期望一致（开机重放用：一致就不重复下发）。</summary>
+    internal bool IsGpuOcAlreadyApplied(int core, int mem)
+    {
+        try
+        {
+            MechrevoHw? hw = _hw;
+            if (hw == null || !hw.GpuOverclockEnabled)
+            {
+                return false;
+            }
+            if (_service == null)
+            {
+                if (!hw.TryGetDirectGpuOverclockReadback(out int directCore, out int directMemory))
+                {
+                    return false;
+                }
+                return directCore == core && directMemory == mem;
+            }
+            return hw.EffectiveGpuCoreClockOffset == core && hw.EffectiveGpuMemoryClockOffset == mem;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private bool IsGpuOcTurboNow()
+    {
+        MechrevoHw? hw = _hw;
+        if (hw == null)
+        {
+            return false;
+        }
+        return CurrentMode == 1 || MechrevoService.GpuOcModeIsTurbo(hw);
     }
 
     /// <summary>按指定 core/mem 应用显卡超频（自定义档启动恢复用；EC 路走 NVAPI P0）。</summary>
@@ -1123,7 +1212,7 @@ internal sealed class BackendProbe : IDisposable
     {
         try
         {
-            MechrevoLite.Hardware.LightChannelSettings settings = MechrevoLite.Hardware.LightingSettingsStore.Load(topic, effect);
+            MechrevoLite.Contracts.LightChannelSettings settings = MechrevoLite.Hardware.LightingSettingsStore.Load(topic, effect);
             // 键盘：宝龙达用实际 ARGB；非宝龙达只有 Single 带颜色（原版 SettingsForm/RgbForm 逐字如此）。
             // 灯带/Logo/铰链/同步：原版 LightForm 对所有单色系效果带颜色。
             bool baolongda = L_Mechrevo.WpfP0.Services.WpfBackend.Hw?.UsesBaolongda == true;
@@ -1138,7 +1227,7 @@ internal sealed class BackendProbe : IDisposable
             }
             else
             {
-                color = MechrevoLite.Hardware.KeyboardFirmwareEffects.IsSingleColorEffect(effect)
+                color = MechrevoLite.Contracts.KeyboardFirmwareEffects.IsSingleColorEffect(effect)
                     ? Color.FromArgb(settings.ColorArgb)
                     : null;
             }
@@ -1777,7 +1866,7 @@ internal sealed class BackendProbe : IDisposable
             return "CPU " + hw.CpuTemp + "℃ · GPU " + hw.GpuTemp
                 + WpfStrings.L("℃ · 风扇 ", "°C · fans ") + hw.CpuFanRpm + "/" + hw.GpuFanRpm
                 + WpfStrings.L(" rpm · 电池 ", " rpm · battery ") + hw.BatteryPercent + "%"
-                + " · " + (hw.IsConnected ? WpfStrings.L("已连接", "Connected") : WpfStrings.L("未连接", "Not connected"))
+                + " · " + (L_Mechrevo.WpfP0.Services.WpfBackend.MachineConnected ? WpfStrings.L("已连接", "Connected") : WpfStrings.L("未连接", "Not connected"))
                 + (Connected ? "" : WpfStrings.L(" · 连接未确认", " · connection unconfirmed"));
         }
         catch (Exception ex)

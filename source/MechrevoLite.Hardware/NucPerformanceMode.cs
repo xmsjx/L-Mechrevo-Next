@@ -168,11 +168,8 @@ public static class NucPerformanceMode
             }
         }
         tccOk = TryWrite(1926, tccRaw);
-        // 触发字节 bit5=0x20 让 EC 重新锁存自定义功耗配置；保留 USB 充电 bit4。
-        if (TryRead(1895, out int trigger))
-        {
-            TryWrite(1895, (trigger & 0x10) | 0x20);
-        }
+        // 触发字节 bit5=0x20 让 EC 重新锁存自定义功耗配置；bit0-2 与 bit4 由统一入口原样保留。
+        EcTriggerByte.TryApply(EcTriggerByte.Latch, 0);
         TryWrite(1798, 65);
         bool tccRead = TryRead(1926, out int tccBack);
         // 官方只要求写入成功；EC 对 TCC 的回读可能是掩码后的值，不能因此判整个自定义档失败。

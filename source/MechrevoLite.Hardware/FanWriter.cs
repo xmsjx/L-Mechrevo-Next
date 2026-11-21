@@ -3,11 +3,14 @@
 // ⭐⭐ 背景：WMI 写（20=1）会卡死；LPC 端口 I/O 读成功、写被 EC 拒绝；ACPI EC 读成功、写待验证。
 //    机主批准：一次性把写入链路做完，但**默认不开放**（UI 隐藏，验证通过后才放开）。
 //
-// ⭐ 通道优先级（本类内部）：
-//    ① `AcpiEc`   —— `EcPortIo`（0x62/0x66 · XRAM mailbox 0x93 写）✅ 新候选，实测未定
+// ⭐ 通道优先级（本类内部，顺序即优先级）：
+//    ① `AcpiEc`   —— `EcPortIo`（0x62/0x66 · XRAM mailbox 0x93 写）：端口权由 PawnIO / ACPIDriver / inpout 提供，
+//                   ⭐ 这条路上固件才真的接管风扇 ⇒ **默认首选** ✅
 //    ② `SmuEcLpc` —— `SmuEcAccess`（= 7.3 `RyzenAccess` 的真实实现：LPC 0x4E/0x4F 端口 I/O；
 //                   ⚠️ 不存在 SMU 邮箱命令，见 `SmuEcAccess.cs` 顶部来源说明）
-//    ③ 若首选通道失败 ⇒ 自动尝试次选；成功过的通道记入 <see cref="PreferredChannel" />，下轮优先用。
+//    ③ `VendorEc` —— `BaolongdaVendorEc`（0x2E/0x2F 间接窗口，仅宝龙达路径显式打开）：
+//                   ⭐ 只在①②都不通时**兜底**；写前先做 0x1060 bit7 解锁与身份校验 ✅
+//    ④ 若首选通道失败 ⇒ 自动尝试次选；成功过的通道记入 <see cref="PreferredChannel" />，下轮优先用。
 //
 // ⭐ 对外 API（只有这三个写入口，白名单/回读/恢复都封在内部）：
 //    · <see cref="TrySetFanTargets" />（两路目标档 0..68）
@@ -54,7 +57,7 @@ internal static class FanWriter
 	internal static FanWriteChannel PreferredChannel => _preferred;
 
 	/// <summary>⭐ 两路目标档（0..68）；按通道优先级尝试，成功即记住通道 ✅。</summary>
-	private static bool TrySetFanTargetsCore(int fan1Units, int fan2Units, out string detail)
+	private static bool TrySetFanTargetsCore(int fan1Units, int fan2Units, out string detail, bool allowAcpiEc = true)
 	{
 		detail = "";
 		int f1 = Math.Clamp(fan1Units, 0, 68);
@@ -62,14 +65,14 @@ internal static class FanWriter
 		// 目标写 0 而接管位仍置位 ⇒ EC 可能把风扇拉到 0 转：直接拒绝，必须先交回固件。
 		if (f1 == 0 || f2 == 0)
 		{
-			if (TryReadMask(out int maskNow) && (maskNow & 0x0A) != 0)
+			if (TryReadMask(out int maskNow, out _) && (maskNow & 0x0A) != 0)
 			{
 				detail = "拒绝写 0 目标：接管掩码仍为 0x" + maskNow.ToString("X2") + "（先交回固件再写）";
 				Logger.WriteError("[fan] " + detail);
 				return false;
 			}
 		}
-		foreach (FanWriteChannel channel in Candidates())
+		foreach (FanWriteChannel channel in Candidates(allowAcpiEc))
 		{
 			if (TryWriteTargetsOn(channel, f1, f2, out string channelDetail))
 			{
@@ -107,33 +110,37 @@ internal static class FanWriter
 		return false;
 	}
 
-	/// <summary>读接管掩码（按当前可用通道；读不到返回 false）。</summary>
-	private static bool TryReadMask(out int mask)
+	/// <summary>读接管掩码 0xB20（按当前可用通道，只读；读不到返回 false）。</summary>
+	internal static bool TryReadMask(out int mask, out string detail)
 	{
 		mask = -1;
 		if (_vendorEnabled && BaolongdaVendorEc.IsReady && BaolongdaVendorEc.TryReadByte(0xB20, out byte vm))
 		{
 			mask = vm;
+			detail = "厂商EC 0xB20=0x" + vm.ToString("X2");
 			return true;
 		}
 		if (EcPortIo.TryReadByteStable(0xB20, out int acpiMask, out _))
 		{
 			mask = acpiMask;
+			detail = "ACPI 0xB20=0x" + acpiMask.ToString("X2");
 			return true;
 		}
 		if (EcLpcIo.TryReadByteStable(0xB20, out int lpcMask, out _))
 		{
 			mask = lpcMask;
+			detail = "LPC 0xB20=0x" + lpcMask.ToString("X2");
 			return true;
 		}
+		detail = "三个通道都读不到 0xB20";
 		return false;
 	}
 
 	/// <summary>⭐ 0xB20 接管掩码（只改 bit1/bit3，保留其它位）；回读确认 ✅。</summary>
-	private static bool TrySetManualMaskCore(bool bit1, bool bit3, out string detail)
+	private static bool TrySetManualMaskCore(bool bit1, bool bit3, out string detail, bool allowAcpiEc = true)
 	{
 		detail = "";
-		foreach (FanWriteChannel channel in Candidates())
+		foreach (FanWriteChannel channel in Candidates(allowAcpiEc))
 		{
 			bool ok;
 			string channelDetail;
@@ -141,19 +148,28 @@ internal static class FanWriter
 			{
 				int target = -1;
 				bool read = BaolongdaVendorEc.TryReadByte(0xB20, out byte maskNow);
+				string takeover = "";
 				if (read)
 				{
 					byte want = (byte)((maskNow & ~0x0A) | (bit1 ? 0x02 : 0x00) | (bit3 ? 0x08 : 0x00));
 					target = want;
 					ok = BaolongdaVendorEc.TryWriteByte(0xB20, want)
 						&& BaolongdaVendorEc.TryReadByte(0xB20, out byte rb) && (rb & 0x0A) == (want & 0x0A);
+					if (ok)
+					{
+						// 接管位写进去不代表固件认账：隔一拍再读，被收回就判失败并交给后面的通道。
+						System.Threading.Thread.Sleep(120);
+						bool kept = BaolongdaVendorEc.TryReadByte(0xB20, out byte again) && (again & 0x0A) == (want & 0x0A);
+						takeover = kept ? "" : " · 接管位被收回";
+						ok = kept;
+					}
 				}
 				else
 				{
 					ok = false;
 				}
 				channelDetail = "厂商EC 0xB20 目标=0x" + (target < 0 ? "读不到" : target.ToString("X2"))
-					+ " · 回读确认=" + ok;
+					+ " · 回读确认=" + ok + takeover;
 			}
 			else if (channel == FanWriteChannel.AcpiEc)
 			{
@@ -379,12 +395,19 @@ internal static class FanWriter
 		detail = "";
 		if (channel == FanWriteChannel.VendorEc)
 		{
+			// 先解锁：身份不符或解锁不成功就不动风扇寄存器（否则写进去也只是存了个值）。
+			if (!BaolongdaVendorEc.TryUnlockEcRam(out string unlockNote))
+			{
+				detail = "厂商EC 解锁失败（" + unlockNote + "）";
+				return false;
+			}
 			bool v1 = BaolongdaVendorEc.TryWriteByte(0xC83C, (byte)fan1Units)
 				&& BaolongdaVendorEc.TryReadByte(0xC83C, out byte vb1) && vb1 == (byte)fan1Units;
 			bool v2 = BaolongdaVendorEc.TryWriteByte(0xC83D, (byte)fan2Units)
 				&& BaolongdaVendorEc.TryReadByte(0xC83D, out byte vb2) && vb2 == (byte)fan2Units;
 			detail = "厂商EC 0xC83C=" + fan1Units + "（回读=" + (v1 ? "一致" : "不一致/读不到") + "）"
-				+ " · 0xC83D=" + fan2Units + "（回读=" + (v2 ? "一致" : "不一致/读不到") + "）";
+				+ " · 0xC83D=" + fan2Units + "（回读=" + (v2 ? "一致" : "不一致/读不到") + "）"
+				+ " · " + unlockNote;
 			return v1 && v2;
 		}
 		if (channel == FanWriteChannel.AcpiEc)
@@ -412,6 +435,24 @@ internal static class FanWriter
 		}
 	}
 
+	/// <summary>强冷专用：只走厂商驱动 / PawnIO 通道，⛔ 不回退 ACPI-EC（那路写不进去还会假成功）。</summary>
+	internal static bool TrySetFanTargetsForBoost(int fan1Units, int fan2Units, out string detail)
+	{
+		lock (WriteGate)
+		{
+			return TrySetFanTargetsCore(fan1Units, fan2Units, out detail, allowAcpiEc: false);
+		}
+	}
+
+	/// <summary>强冷专用掩码写入：同样不回退 ACPI-EC。</summary>
+	internal static bool TrySetManualMaskForBoost(bool bit1, bool bit3, out string detail)
+	{
+		lock (WriteGate)
+		{
+			return TrySetManualMaskCore(bit1, bit3, out detail, allowAcpiEc: false);
+		}
+	}
+
 	/// <summary>0xB20 接管掩码：整段加锁。</summary>
 	internal static bool TrySetManualMask(bool bit1, bool bit3, out string detail)
 	{
@@ -429,12 +470,23 @@ internal static class FanWriter
 			return TryReleaseToFirmwareCore(out detail);
 		}
 	}
-	private static System.Collections.Generic.IEnumerable<FanWriteChannel> Candidates()
+	private static System.Collections.Generic.IEnumerable<FanWriteChannel> Candidates(bool allowAcpiEc = true)
 	{
-		// 厂商驱动通道只对宝龙达启用（由宝龙达路径显式打开），驱动不可用时不参与候选。
-		if (_vendorEnabled && BaolongdaVendorEc.EnsureReady())
+		// 顺序即优先级：宝龙达（蛟龙 30/40 系）优先厂商驱动通道 —— 该机型由本程序自己
+		// 创建/启动驱动服务，不需要 PawnIO。厂商通道不可用则回退 PawnIO（LPC 模块）通道，
+		// ACPI-EC 排最后：这台模具上它常读不到身份、写进去也留不住，只作最后兜底。
+		if (_vendorEnabled)
 		{
-			yield return FanWriteChannel.VendorEc;
+			if (BaolongdaVendorEc.EnsureReady())
+			{
+				yield return FanWriteChannel.VendorEc;
+			}
+			yield return FanWriteChannel.SmuEcLpc;
+			if (allowAcpiEc)
+			{
+				yield return FanWriteChannel.AcpiEc;
+			}
+			yield break;
 		}
 		if (_preferred == FanWriteChannel.SmuEcLpc)
 		{

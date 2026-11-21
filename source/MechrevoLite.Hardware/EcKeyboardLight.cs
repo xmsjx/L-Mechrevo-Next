@@ -183,6 +183,11 @@ internal static class EcKeyboardLight
 				Logger.WriteError("[kbd-ec] 键盘背光：0x78C 0x" + before.ToString("X2") + " -> 0x" + value.ToString("X2")
 					+ "（" + DescribeLevel(targetLevel) + "）"
 					+ " ⇒ " + (ok ? "回读一致" : ("未确认（写=" + (written ? "成功" : "失败") + " · 回读档=" + (afterLevel < 0 ? "读不到" : afterLevel.ToString()) + "）")));
+				if (targetLevel == 0 && ok)
+				{
+					// 关灯成功 ⇒ 让 EC 单区轮播停下，否则软件循环会继续写 RGB/锁存把灯点回来。
+					NucKeyboardLighting.StopCarousel();
+				}
 				return ok;
 			}
 			finally

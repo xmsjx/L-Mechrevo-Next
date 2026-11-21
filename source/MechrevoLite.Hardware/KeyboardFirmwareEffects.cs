@@ -1,6 +1,7 @@
 using System;
 using MechrevoLite.Properties;
-namespace MechrevoLite.Hardware;
+using MechrevoLite.Hardware;
+namespace MechrevoLite.Contracts;
 
 /// <summary>
 /// 键盘灯效表 + 键盘类型判据。

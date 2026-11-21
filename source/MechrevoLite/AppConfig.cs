@@ -544,18 +544,6 @@ public static class AppConfig
 		Remove(name + "_" + Modes.GetCurrent());
 	}
 
-	public static string GgetParamName(AsusFan device, string paramName = "fan_profile")
-	{
-		int current = Modes.GetCurrent();
-		string text = device switch
-		{
-			AsusFan.GPU => "gpu", 
-			AsusFan.Mid => "mid", 
-			_ => "cpu", 
-		};
-		return paramName + "_" + text + "_" + current;
-	}
-
 	public static byte[] StringToBytes(string str)
 	{
 		string[] array = str.Split('-');
