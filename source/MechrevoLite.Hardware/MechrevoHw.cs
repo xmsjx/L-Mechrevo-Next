@@ -6212,7 +6212,7 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		{
 			// 2026-10-22（机主：LM 显示的 CPU 转速其实是副扇、GPU 读不到）：
 			// 无界风扇转速改用与风扇曲线同源的 I2EC 寄存器：主扇 0x0464/0x0465（大端），副扇 0x046C/0x046D；
-			// 主扇 = CPU 侧、副扇 = GPU 侧。I2EC 不可用时回退 ACPI-EC，再回退旧的 0xC834/0xC835（×100）。
+			// 主扇 = CPU 侧、副扇 = GPU 侧。读取优先 ACPIDriver，其次 I2EC/LPC，最后回退旧的 0xC834/0xC835（×100）。
 			bool okMain = TryReadWujieFanWord(0x0464, out int mainRpm);
 			bool okSecondary = TryReadWujieFanWord(0x046C, out int secondaryRpm);
 			if (okMain)
