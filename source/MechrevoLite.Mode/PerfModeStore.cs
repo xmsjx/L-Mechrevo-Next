@@ -161,6 +161,33 @@ public static class PerfModeStore
 		return AppConfig.Get(name);
 	}
 
+	/// <summary>
+	/// 一次性清理旧版本留下的强冷配置键（自定义档的 fanboost 与基准键）。
+	/// <para>强冷现在只有快捷开关一个入口，这些键已不再读取，留着只会让人误会"配置里有强冷"。</para>
+	/// </summary>
+	internal static void CleanupLegacyFanBoostKeys()
+	{
+		try
+		{
+			foreach (string key in AppConfig.Snapshot().Keys)
+			{
+				bool legacy = key is "boost_base" or "boost_in_custom"
+					|| (key.StartsWith("perf_", StringComparison.OrdinalIgnoreCase)
+						&& key.EndsWith("_fanboost", StringComparison.OrdinalIgnoreCase));
+				if (!legacy)
+				{
+					continue;
+				}
+				AppConfig.Remove(key);
+				Logger.WriteLine("[fan] 清理旧的强冷配置键：" + key);
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[fan] 清理强冷旧键失败（已吞掉）：" + ex.Message);
+		}
+	}
+
 	private static bool? GetBool(string id, string field)
 	{
 		string name = FieldKey(id, field);
@@ -305,7 +332,8 @@ public static class PerfModeStore
 			GpuOverclockOn = GetBool(id, "ocon"),
 			GpuCoreOffset = GetInt(id, "occore"),
 			GpuMemoryOffset = GetInt(id, "ocmem"),
-			FanBoost = GetBool(id, "fanboost"),
+			// 强冷只有快捷开关一个入口（2026-11-27 机主决定）：任何档位都不再读写这一项，旧存档值一律忽略。
+			FanBoost = null,
 			FanSwitchSpeedOn = GetBool(id, "fsson"),
 			FanSwitchSpeedMs = GetInt(id, "fss"),
 			WindowsPowerMode = GetInt(id, "power"),

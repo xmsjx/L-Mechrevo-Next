@@ -86,7 +86,10 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			SupportsFanCurve = !MechrevoLite.Hardware.DeclarationRuntime.Flag("fanCurve", "disabled")
 				&& (hw.FanCurveSeen || hw.WujieSmuApu || MechrevoLite.Hardware.EcFanFivePoint.InUse),
 			// 强冷是否支持由后端声明决定；具体走哪一路由 SwitchFanBoost 按后端分派。
-			SupportsFanBoost = FeatureGate.ResolveSupportOrLegacy(FeatureId.FanBoost, hw, hw.SupportsFanBoost),
+			// ⚠️ 必须与界面可见性同一判据：入口露出来（含 EC 直连强冷位）就必须能下发，
+			//    否则表现为「打开没反应」——档位里存了强冷，应用时这一步被整条跳过。
+			SupportsFanBoost = FeatureGate.ResolveSupportOrLegacy(FeatureId.FanBoost, hw, hw.SupportsFanBoost)
+				|| hw.SupportsFanBoostQuickSwitch,
 			SupportsFanSwitchSpeed = hw.SupportsFanSwitchSpeed,
 			// 2026-10-15（用户拍板：刷新率这条**整个改走 Windows API**，不再依赖 GCU）：
 			// 原来判的是 GCU 能力位 + 固件的「自动刷新率」字段（`hw.SupportsDisplayRefresh && !hw.DcHz`）

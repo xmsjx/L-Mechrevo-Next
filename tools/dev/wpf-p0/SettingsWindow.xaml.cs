@@ -189,7 +189,8 @@ public partial class SettingsWindow : Window
         {
             int mode = Math.Clamp(MechrevoLite.AppConfig.Get("overlay_wpf_mode", 1), 0, 2);
             int opacity = Math.Clamp(MechrevoLite.AppConfig.Get("overlay_opacity", 72), 30, 100);
-            int interval = Math.Clamp(MechrevoLite.AppConfig.Get("overlay_interval_ms", 1000), 500, 10000);
+            // 默认 2 秒（与 Core 采样泵的 DefaultSampleIntervalMs 一致，改一处不够）。
+        int interval = Math.Clamp(MechrevoLite.AppConfig.Get("overlay_interval_ms", 2000), 500, 10000);
             foreach (ComboBoxItem item in OverlayModeCombo.Items)
             {
                 if (item.Tag as string == mode.ToString())
@@ -251,7 +252,18 @@ public partial class SettingsWindow : Window
         MechrevoLite.AppConfig.Set("overlay_wpf_mode", mode);
         MechrevoLite.AppConfig.Set("overlay_opacity", opacity);
         MechrevoLite.AppConfig.Set("overlay_interval_ms", interval);
+        // 同一个「刷新间隔」也决定硬件采样的节奏（Core 侧会夹在安全范围里）。
+        MechrevoLite.HardwareControl.SetLocalSampleInterval(interval);
         _owner.ApplyOverlayAppearance(opacity, mode, interval, resetPosition);
+    }
+
+    private void CustomTileJump_Click(object sender, RoutedEventArgs e)
+    {
+        MechrevoLite.AppConfig.Set("custom_tile_jump_enabled", CustomTileJumpCheck.IsChecked == true ? 1 : 0);
+        MechrevoLite.AppConfig.Flush();
+        Status(CustomTileJumpCheck.IsChecked == true
+            ? WpfStrings.L("宽屏下点「自定义」档时会跳到自定义页", "Wide mode: clicking Custom jumps to the custom page")
+            : WpfStrings.L("宽屏下点「自定义」档只切档，不跳页", "Wide mode: clicking Custom only switches mode"));
     }
 
     private void OverlayMode_Changed(object sender, SelectionChangedEventArgs e)
@@ -391,6 +403,14 @@ public partial class SettingsWindow : Window
         if (PerfOnBatteryCheck != null)
         {
             PerfOnBatteryCheck.IsChecked = AppConfig.Is("perf_allow_on_battery");
+        }
+        if (CustomTileJumpCheck != null)
+        {
+            CustomTileJumpCheck.Content = WpfStrings.L(
+                "宽屏下点「自定义」档时直接跳到自定义页",
+                "Wide mode: jump to the custom page when clicking the Custom preset");
+            // 默认开：没写过这个键就按"开"显示。
+            CustomTileJumpCheck.IsChecked = AppConfig.IsNotFalse("custom_tile_jump_enabled");
         }
         LoadCustomButtonAction();
         _syncing = false;
@@ -564,6 +584,16 @@ public partial class SettingsWindow : Window
             {
                 return;
             }
+            if (SysSnapTitle != null)
+            {
+                SysSnapTitle.Text = WpfStrings.L("自定义恢复基准", "Custom restore baseline");
+            }
+            if (SysSnapHint != null)
+            {
+                SysSnapHint.Text = WpfStrings.L(
+                    "自定义模式「系统」里改过的选项，切换模式时会先按这里的值恢复，再下发新模式的设置；每项只在第一次要改它时记录一次，之后不再被覆盖。",
+                    "Options changed in the custom mode System section are restored to the values below before the new mode is applied. Each field is captured once, the first time it has to change.");
+            }
             SysSnapPlanText.Text = DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field.PowerPlan);
             SysSnapOverlayText.Text = DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field.PowerOverlay);
             SysSnapBoostText.Text = DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field.CpuBoost);
@@ -571,9 +601,14 @@ public partial class SettingsWindow : Window
             SysSnapFreqText.Text = DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field.ProcessorMaxFreq);
             bool enabled = MechrevoLite.Mode.ModeSystemSnapshot.Enabled;
             SysSnapStatus.Text = enabled
-                ? "自动恢复已开启：切模式时先恢复这里的值，再下发新模式的配置。"
-                : "自动恢复已关闭：切模式只改不恢复（等于旧行为）。要重新启用点「以当前系统状态重新记录」。";
-            SysSnapClearButton.Content = enabled ? "关闭自动恢复" : "已关闭";
+                ? WpfStrings.L("自动恢复已开启：切模式时先恢复这里的值，再下发新模式的配置。",
+                    "Auto restore is on: switching modes restores these values before applying the new mode.")
+                : WpfStrings.L("自动恢复已关闭：切模式只改不恢复（等于旧行为）。要重新启用点「以当前系统状态重新记录」。",
+                    "Auto restore is off: switching modes only applies settings. Use \"Capture current system state\" to enable it again.");
+            SysSnapClearButton.Content = enabled
+                ? WpfStrings.L("关闭自动恢复", "Turn off auto restore")
+                : WpfStrings.L("已关闭", "Off");
+            SysSnapRecaptureButton.Content = WpfStrings.L("以当前系统状态重新记录", "Capture current system state");
         }
         catch (Exception ex)
         {
@@ -589,9 +624,13 @@ public partial class SettingsWindow : Window
         string? saved = MechrevoLite.Mode.ModeSystemSnapshot.Get(field);
         if (string.IsNullOrWhiteSpace(saved))
         {
-            return "未记录（第一次要改它时自动记录当时的系统值）";
+            // 从未记录和「记录了 0（不限频）」必须在显示上分开，否则用户以为这里什么都没写。
+            return WpfStrings.L(
+                "—  未记录（第一次要改它时，自动记录当时的系统值）",
+                "—  Not captured yet (captured automatically the first time this field has to change)");
         }
         string text = saved;
+        bool allUnlimited = false;
         if (field == MechrevoLite.Mode.ModeSystemSnapshot.Field.PowerPlan)
         {
             // 电源计划存的是 GUID，显示成中文名更好认；查不到就原样显示。
@@ -614,9 +653,9 @@ public partial class SettingsWindow : Window
         {
             text = saved switch
             {
-                "0" => "最佳能效",
-                "2" => "最佳性能",
-                _ => "平衡"
+                "0" => WpfStrings.L("最佳能效", "Best efficiency"),
+                "2" => WpfStrings.L("最佳性能", "Best performance"),
+                _ => WpfStrings.L("平衡", "Balanced")
             };
         }
         else if (field == MechrevoLite.Mode.ModeSystemSnapshot.Field.RefreshHz)
@@ -629,11 +668,16 @@ public partial class SettingsWindow : Window
             string[] parts = saved.Split(',', StringSplitOptions.TrimEntries);
             if (parts.Length == 2)
             {
-                string Show(string v) => (v == "0") ? "不限制" : (v + " MHz");
-                text = "插电 " + Show(parts[0]) + " · 离电 " + Show(parts[1]);
+                string Show(string v) => (v == "0") ? WpfStrings.L("不限制", "no limit") : (v + " MHz");
+                allUnlimited = parts[0] == "0" && parts[1] == "0";
+                text = WpfStrings.L("插电 ", "AC ") + Show(parts[0])
+                    + WpfStrings.L(" · 离电 ", " · DC ") + Show(parts[1]);
             }
         }
-        return text + "（已记录）";
+        string suffix = allUnlimited
+            ? WpfStrings.L("（已记录：两项都是不限频）", " (recorded: both unlimited)")
+            : WpfStrings.L("（已记录）", " (recorded)");
+        return text + suffix;
     }
 
     private void SysSnapRecapture_Click(object sender, RoutedEventArgs e)
@@ -644,8 +688,10 @@ public partial class SettingsWindow : Window
             int count = MechrevoLite.Mode.ModeSystemSnapshot.RecaptureAll();
             RefreshSysSnap();
             SysSnapStatus.Text = count > 0
-                ? "已用当前系统状态重记 " + count + "/4 项基准。"
-                : "当前系统状态读不到（电源/刷新率接口无响应），未改动基准。";
+                ? WpfStrings.L("已用当前系统状态重记 " + count + "/5 项基准。",
+                    "Recaptured " + count + "/5 baseline fields from the current system state.")
+                : WpfStrings.L("当前系统状态读不到（电源/刷新率接口无响应），未改动基准。",
+                    "Could not read the current system state (power/refresh-rate interfaces did not respond); baseline unchanged.");
         }
         catch (Exception ex)
         {

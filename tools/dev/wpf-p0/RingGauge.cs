@@ -1,6 +1,8 @@
+using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace L_Mechrevo.WpfP0;
 
@@ -10,6 +12,13 @@ internal sealed class RingGauge : FrameworkElement
     private double _maximum = 100;
     private string _caption = "";
     private double? _fraction;
+    // 动画用：_displayRatio 是"正在画的填充比例"，向 _targetRatio 逼近。
+    private double _displayRatio = double.NaN;
+    private double _targetRatio;
+    private DispatcherTimer? _animTimer;
+
+    /// <summary>是否为这个环形启用平滑过渡。默认关闭，由需要的界面显式打开。</summary>
+    internal bool Animate { get; set; }
 
     internal void SetValue(double value, double maximum, string caption, double? fraction = null)
     {
@@ -17,6 +26,67 @@ internal sealed class RingGauge : FrameworkElement
         _maximum = Math.Max(1, maximum);
         _caption = caption;
         _fraction = fraction;
+        double target = Math.Clamp(_fraction ?? (_value / _maximum), 0, 1);
+        if (!Animate)
+        {
+            _displayRatio = target;
+            _targetRatio = target;
+            StopAnimation();
+            InvalidateVisual();
+            return;
+        }
+        _targetRatio = target;
+        if (double.IsNaN(_displayRatio))
+        {
+            _displayRatio = target;
+            InvalidateVisual();
+            return;
+        }
+        if (Math.Abs(_targetRatio - _displayRatio) < 0.004)
+        {
+            _displayRatio = _targetRatio;
+            StopAnimation();
+            InvalidateVisual();
+            return;
+        }
+        EnsureAnimation();
+        InvalidateVisual();
+    }
+
+    private void EnsureAnimation()
+    {
+        if (_animTimer != null)
+        {
+            if (!_animTimer.IsEnabled)
+            {
+                _animTimer.Start();
+            }
+            return;
+        }
+        _animTimer = new DispatcherTimer(DispatcherPriority.Render) { Interval = TimeSpan.FromMilliseconds(16) };
+        _animTimer.Tick += (_, _) => StepAnimation();
+        _animTimer.Start();
+    }
+
+    private void StopAnimation()
+    {
+        if (_animTimer is { IsEnabled: true })
+        {
+            _animTimer.Stop();
+        }
+    }
+
+    private void StepAnimation()
+    {
+        double diff = _targetRatio - _displayRatio;
+        if (Math.Abs(diff) < 0.004)
+        {
+            _displayRatio = _targetRatio;
+            StopAnimation();
+            InvalidateVisual();
+            return;
+        }
+        _displayRatio += diff * 0.25;
         InvalidateVisual();
     }
 
@@ -32,7 +102,9 @@ internal sealed class RingGauge : FrameworkElement
         Pen accentPen = new(accent, 8) { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round };
         drawingContext.DrawEllipse(null, trackPen, center, radius, radius);
 
-        double ratio = Math.Clamp(_fraction ?? (_value / _maximum), 0, 1);
+        double ratio = double.IsNaN(_displayRatio)
+            ? Math.Clamp(_fraction ?? (_value / _maximum), 0, 1)
+            : Math.Clamp(_displayRatio, 0, 1);
         if (ratio >= 0.999)
         {
             // 100% 时起点和终点重合，单个 ArcTo 不画线；直接画整圆。

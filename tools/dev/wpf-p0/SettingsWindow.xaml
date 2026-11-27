@@ -347,14 +347,16 @@
                         <TextBlock x:Name="GcuActionStatus" Style="{StaticResource Hint}" Margin="0,6,0,0" TextWrapping="Wrap" />
                         <CheckBox x:Name="PerfOnBatteryCheck" Content="允许离电使用狂暴/自定义模式"
                                   Style="{DynamicResource HeaderSwitch}" Margin="0,8,0,0" Click="PerfOnBattery_Click" />
+                        <!-- 文案在代码里按语言取（英文模式不能留中文）。 -->
+                        <CheckBox x:Name="CustomTileJumpCheck"
+                                  Style="{DynamicResource HeaderSwitch}" Margin="0,8,0,0" Click="CustomTileJump_Click" />
                     </StackPanel>
                 </Border>
 
                 <Border x:Name="SystemSnapshotCard" Style="{StaticResource Card}">
                     <StackPanel>
-                        <TextBlock Text="系统设置恢复基准" Style="{StaticResource CardTitle}" />
-                        <TextBlock Text="切模式时先恢复下面这些值，再下发新模式；每项只在第一次要改它时记录一次，之后不再覆盖。"
-                                   Style="{StaticResource Hint}" TextWrapping="Wrap" />
+                        <TextBlock x:Name="SysSnapTitle" Style="{StaticResource CardTitle}" />
+                        <TextBlock x:Name="SysSnapHint" Style="{StaticResource Hint}" TextWrapping="Wrap" />
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                             <TextBlock Text="电源计划" VerticalAlignment="Center" />

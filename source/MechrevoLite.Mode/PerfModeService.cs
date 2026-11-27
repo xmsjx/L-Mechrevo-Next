@@ -183,6 +183,8 @@ internal sealed class PerfModeService
 		// (b)："下一次 GCU 状态刷新（或下一次读回）"的入口：GCU 每次刷页面状态（含 HWOC 的 Support/Enable/偏移）都会触发。
 		// ⚠️ 这里只把待办标成"到期立刻读"，读硬件在懒验证的后台循环里做（事件处理器里不做慢活）。
 		hw.CustomModeChanged += OnHwCustomModeChanged;
+		// 强冷只留快捷开关（2026-11-27）：一次性清掉旧版本留下的强冷配置键。
+		PerfModeStore.CleanupLegacyFanBoostKeys();
 	}
 
 	private void OnHwCustomModeChanged()

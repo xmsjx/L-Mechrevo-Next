@@ -736,11 +736,47 @@ public static class HardwareControl
 	/// </summary>
 	private static long _lastPowerRefreshTick;
 
+
+
 	/// <summary>
 	/// ⭐ 采样泵周期（ms）。⚠️ 必须**明显短于** <see cref="MechrevoHw.FanInfoMaximumAge"/>（6 s），
 	/// 否则 GPU 温度会在两帧之间被新鲜度判据判成「—」❌。
 	/// </summary>
 	private const int LocalSamplingPumpIntervalMs = 2500;
+
+	/// <summary>没有配置时的采样/刷新默认间隔（ms）。设置界面与悬浮窗的默认值必须与这里一致。</summary>
+	internal const int DefaultSampleIntervalMs = 2000;
+
+	/// <summary>采样泵周期的安全下限（ms）：0.5 s 已到「够用但不再往下」的边界。</summary>
+	internal const int LocalSampleIntervalMinMs = 500;
+
+	/// <summary>采样泵周期的安全上限（ms）：必须小于 <see cref="MechrevoHw.FanInfoMaximumAge"/>（6 s）。</summary>
+	internal const int LocalSampleIntervalMaxMs = 4500;
+
+	private static int _localSampleIntervalMs = LocalSamplingPumpIntervalMs;
+
+	/// <summary>采样泵当前周期（ms）。</summary>
+	internal static int LocalSampleIntervalMs => Volatile.Read(in _localSampleIntervalMs);
+
+	/// <summary>
+	/// 按界面「刷新间隔」设置调整采样泵周期（夹在安全范围内）。
+	/// <para>界面读数本身只跟快照变化走，这里改的是"多久真去采一次硬件"。</para>
+	/// </summary>
+	internal static void SetLocalSampleInterval(int milliseconds)
+	{
+		int clamped = Math.Clamp(milliseconds, LocalSampleIntervalMinMs, LocalSampleIntervalMaxMs);
+		Volatile.Write(ref _localSampleIntervalMs, clamped);
+		try
+		{
+			_localSamplingPump?.Change(clamped, clamped);
+		}
+		catch (ObjectDisposedException)
+		{
+			// 泵已停（息屏/退出）⇒ 下次启动会按新值建。
+		}
+		Logger.WriteLine("[sample] 采样周期 ⇒ " + clamped + " ms"
+			+ (clamped == milliseconds ? "" : "（请求 " + milliseconds + " ms，已按 " + LocalSampleIntervalMinMs + "-" + LocalSampleIntervalMaxMs + " ms 夹取）"));
+	}
 
 	/// <summary>⭐ 最近这段时间内已经有人采过 ⇒ 采样泵让位（ms）。</summary>
 	private const int LocalSamplingPumpIdleGuardMs = 2000;
@@ -919,8 +955,14 @@ public static class HardwareControl
 			return;
 		}
 		Interlocked.Exchange(ref _lastLocalSampleTick, 0L);
-		_localSamplingPump = new System.Threading.Timer(LocalSamplingPumpTick, null, LocalSamplingPumpIntervalMs, LocalSamplingPumpIntervalMs);
-		Logger.WriteLine($"本地采样泵已启动（{LocalSamplingPumpIntervalMs} ms · ⭐ 与界面无关：自定义模式页/悬浮窗都不开时也照常刷新"
+		// 启动周期跟随界面设置；没有配置时默认 2 s（界面那三处默认值必须一致）。
+		int interval = Math.Clamp(
+			AppConfig.Get("overlay_interval_ms", DefaultSampleIntervalMs),
+			LocalSampleIntervalMinMs,
+			LocalSampleIntervalMaxMs);
+		Volatile.Write(ref _localSampleIntervalMs, interval);
+		_localSamplingPump = new System.Threading.Timer(LocalSamplingPumpTick, null, interval, interval);
+		Logger.WriteLine($"本地采样泵已启动（{interval} ms · ⭐ 与界面无关：自定义模式页/悬浮窗都不开时也照常刷新"
 			+ " GPU 温度（NVML）与 CPU/GPU 功耗 ✅ ⇒ ⛔ 不再出现「关页 6 秒后温度变 —、功耗冻结」❌）");
 	}
 
@@ -1022,7 +1064,7 @@ public static class HardwareControl
 			// （机主：「4070 显卡温度读取」才是要修的）： 之前泵里**只**调了
 			RefreshGpuTempFromNvmlWhenNoVendor();
 			// ⭐ `includeAuxiliary:false`：⛔ 不刷供电/电池（那些仍由主界面既有的 2 s 刷新负责 ✅）
-			SampleLocalPowerCore(includeAuxiliary: false);
+			SampleLocalPowerCore(includeAuxiliary: false, fromSamplingPump: true);
 		}
 		catch
 		{
@@ -1034,6 +1076,7 @@ public static class HardwareControl
 			Interlocked.Exchange(ref _localSamplingPumpInFlight, 0);
 		}
 	}
+
 
 	/// <summary>
 	/// ⭐ 2026-10-17：⭐ 功耗读数是不是「⭐ 刚刚真的被刷新过」✅ —— 供界面把冻结值判成「不可用」⛔ 不冒充实时值。
@@ -3291,7 +3334,7 @@ public static class HardwareControl
 	/// ＋ ⭐ 健康判定/隔离到期重试 ✅），⛔ 不跑「功耗墙判定 / 供电方式 / 电池功率」——
 	/// 那三项仍由主界面既有的 2 s 刷新（`SettingsForm.RefreshSensors`）负责，⛔ 不重复做 ⚠️。</para>
 	/// </summary>
-	private static void SampleLocalPowerCore(bool includeAuxiliary)
+	private static void SampleLocalPowerCore(bool includeAuxiliary, bool fromSamplingPump = false)
 	{
 		// (a) 异常防护：整条采样链在这里兜底（SampleLocalPower 会被 UI 线程的 2s Timer 直接调用，
 		// 任何漏出来的异常都会穿过消息循环把进程带走）。
@@ -3299,7 +3342,12 @@ public static class HardwareControl
 		{
 			// ⭐ 2026-10-17：⭐ 先记"有人来采过"（⭐ 采样泵据此让位，⛔ 不重复采样 ✅）。
 			//   ⚠️ 与 `_lastPowerRefreshTick` 分工不同：那个在**值真的被写入**之后才打 ✅。
-			Interlocked.Exchange(ref _lastLocalSampleTick, Environment.TickCount64);
+			//   ⭐ 2026-11-27：泵自己不算"别人来采过" —— 否则把泵周期设到 2 s 以下时，
+			//   泵每次都会看见"2 秒内刚有人采过"而跳过一次，实测被拉到 3 s（诊断包实证 2907-3031 ms）。
+			if (!fromSamplingPump)
+			{
+				Interlocked.Exchange(ref _lastLocalSampleTick, Environment.TickCount64);
+			}
 			RefreshLocalMonitoring();
 			// ⭐⭐ 2026-10-18（机主：CPU/GPU 占用率显示不对）：⭐ 占用率诊断日志
 			//   （⭐ 值变化 ≥5 个百分点 / 来源变化 / 首次 ⇒ 立即一行；否则 60 s 心跳 ✅）

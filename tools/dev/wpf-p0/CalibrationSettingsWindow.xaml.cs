@@ -196,6 +196,8 @@ public partial class CalibrationSettingsWindow : Window
             MessageBox.Show(this, "删除失败：" + file, "校色", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
         LoadState();
+        // 删除后两个窗口的档位与开关要立刻跟上（自定义校色已在删除流程里自动关闭）。
+        (Owner as OriginalStyleWindow)?.NotifyCustomCalibrationChanged();
     }
 
     private void StartupSwitch_Click(object sender, RoutedEventArgs e)
@@ -208,7 +210,7 @@ public partial class CalibrationSettingsWindow : Window
         AppConfig.Flush();
     }
 
-    private void CustomSwitch_Click(object sender, RoutedEventArgs e)
+    private async void CustomSwitch_Click(object sender, RoutedEventArgs e)
     {
         if (_syncing)
         {
@@ -229,7 +231,51 @@ public partial class CalibrationSettingsWindow : Window
         ImportButton.IsEnabled = true;
         if (!on)
         {
-            _ = System.Threading.Tasks.Task.Run(() => IccHelper.ClearAllIcc());
+            // 关掉自定义＝回到「默认校色」并重新关联：不能留下“校色开着却什么都没挂”的状态。
+            await System.Threading.Tasks.Task.Run(() => IccHelper.ClearAllIcc());
+            ReapplyDefaultCalibration();
+        }
+        // 开关一变，档位列表与选中项必须马上跟新状态：关掉自定义就回到默认校色。
+        (Owner as OriginalStyleWindow)?.NotifyCustomCalibrationChanged();
+    }
+
+    /// <summary>关掉自定义校色后，把系统关联切回默认校色文件（没有可用文件时提示去云端获取）。</summary>
+    private void ReapplyDefaultCalibration()
+    {
+        try
+        {
+            if (!AppConfig.Exists("calib_enabled") || !AppConfig.Is("calib_enabled"))
+            {
+                // 校色本来就是关的：只把档位拨回默认，不去动系统关联。
+                return;
+            }
+            string profile = IccHelper.ResolveDefaultIccFile();
+            string path = string.IsNullOrWhiteSpace(profile)
+                ? ""
+                : Path.Combine(IccHelper.OfficialIccDir, Path.GetFileName(profile));
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                if (CloudStatusText != null)
+                {
+                    CloudStatusText.Text = WpfStrings.L(
+                        "没有可用的默认校色文件，已关闭自定义校色；请点「云端获取 ICC」补一份。",
+                        "No default profile available. Custom calibration is off; use \"Get ICC from cloud\" to fetch one.");
+                }
+                return;
+            }
+            if (IccHelper.ApplyIcc(path))
+            {
+                AppConfig.Set("calib_mode", 1);
+                AppConfig.Flush();
+                if (CloudStatusText != null)
+                {
+                    CloudStatusText.Text = WpfStrings.L("已回到默认校色。", "Switched back to the default profile.");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[calib] 回到默认校色失败：" + ex.Message);
         }
     }
 
@@ -299,13 +345,34 @@ public partial class CalibrationSettingsWindow : Window
             IccCombo.IsEnabled = false;
             ImportButton.IsEnabled = false;
             RefreshIccList();
-            string importedList = result.FileNames is { Count: > 0 } names
-                ? string.Join(Environment.NewLine, names)
-                : result.FileName;
+            // 本机复用和云端下载要分开说，否则标题写着“云端获取”、正文列一堆本机文件名，看着像云端塞了一堆文件。
+            string importedList;
+            if (result.FromLocal)
+            {
+                int others = (result.FileNames?.Count ?? 1) - 1;
+                importedList = WpfStrings.L(
+                    "当前使用：" + result.FileName
+                    + (others > 0
+                        ? Environment.NewLine + "同包另有 " + others + " 个备用档（sRGB／P3／AdobeRGB 等），只有选到对应档位时才会用到。"
+                        : ""),
+                    "In use: " + result.FileName
+                    + (others > 0
+                        ? Environment.NewLine + others + " other file(s) in the package are only used when that tier is selected."
+                        : ""));
+            }
+            else
+            {
+                importedList = result.FileNames is { Count: > 0 } names
+                    ? string.Join(Environment.NewLine, names)
+                    : result.FileName;
+            }
+            string title = result.FromLocal
+                ? WpfStrings.L("校色文件", "Color profile")
+                : WpfStrings.L("云端获取 ICC", "Get ICC from cloud");
             MessageBoxResult openFolder = MessageBox.Show(this,
                 result.Detail + Environment.NewLine + Environment.NewLine + importedList
                 + Environment.NewLine + Environment.NewLine + "是否打开校色文件所在位置？",
-                WpfStrings.L("云端获取 ICC", "Get ICC from cloud"), MessageBoxButton.YesNo, MessageBoxImage.Information);
+                title, MessageBoxButton.YesNo, MessageBoxImage.Information);
             if (openFolder == MessageBoxResult.Yes)
             {
                 try
@@ -367,6 +434,8 @@ public partial class CalibrationSettingsWindow : Window
         {
             _syncing = false;
         }
+        // 导入后马上把新档位补进两个窗口，不用等下次刷新。
+        (Owner as OriginalStyleWindow)?.NotifyCustomCalibrationChanged();
     }
 
     private void CloseButton_Click(object sender, RoutedEventArgs e)

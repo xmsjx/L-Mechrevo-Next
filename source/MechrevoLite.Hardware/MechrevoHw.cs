@@ -5185,7 +5185,28 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	/// 其余机型按满转 6000 RPM 折算（超过 100% 由调用方压回）。
 	/// ⚠️ 只用于显示，⛔ 不参与风扇曲线/下发通道的分母。
 	/// </summary>
-	public int FanRpmPercentDisplayMax => UsesBaolongda ? FanRpmMaxForPercent : 6000;
+	public int FanRpmPercentDisplayMax => UsesBaolongda ? FanRpmMaxForPercent : DeclaredRpmPercentMax();
+
+	/// <summary>
+	/// 只报转速、没有占空比读数的机型（声明 fanTelemetry.params.rpmPercentMax）按转速折算显示。
+	/// <para>没有声明的机型保持原判据：占空比读得到就直接用占空比，不做任何折算。</para>
+	/// </summary>
+	private static int DeclaredRpmPercentMax()
+	{
+		try
+		{
+			string? text = MechrevoLite.Hardware.DeclarationRuntime.Param("fanTelemetry", "rpmPercentMax");
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				return 0;
+			}
+			return int.TryParse(text.Trim(), out int value) && value > 0 ? value : 0;
+		}
+		catch
+		{
+			return 0;
+		}
+	}
 
 	/// <summary>
 	/// ⭐⭐ 2026-10-18（机主 30 系反馈）：⭐ 宝龙达风扇百分比的**显示上限** = **140%** ✅

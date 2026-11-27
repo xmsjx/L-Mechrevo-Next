@@ -6,8 +6,17 @@
         <Style x:Key="PageTitle" TargetType="TextBlock"><Setter Property="FontSize" Value="20" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
         <Style x:Key="CardTitle" TargetType="TextBlock" BasedOn="{StaticResource SectionTitle}" />
         <Style x:Key="HomePerfSegment" TargetType="ToggleButton" BasedOn="{StaticResource SegmentButton}">
-            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="Padding" Value="10,0" />
             <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="FontSize" Value="13" />
+            <!-- 不再固定宽度：英文「Balance」比中文长，固定 76 会把字裁掉。 -->
+            <Setter Property="MinWidth" Value="76" />
+        </Style>
+        <!-- 显卡模式这排同理：英文 iGPU only / dGPU only 比原来的 Integrated mode 还长，交给内容撑开。 -->
+        <Style x:Key="HomeGpuSegment" TargetType="ToggleButton" BasedOn="{StaticResource SegmentButton}">
+            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Margin" Value="0,0,6,0" />
             <Setter Property="Height" Value="34" />
             <Setter Property="FontSize" Value="13" />
         </Style>
@@ -53,7 +62,7 @@
                                                           VerticalAlignment="Center" Visibility="Collapsed" />
                                             </Grid>
                                             <TextBlock x:Name="PerfCurrentText" Text="{x:Static loc:WpfStrings.PerfCurrentText_Text}" Style="{StaticResource MutedText}" Margin="0,3,0,12" />
-                                            <WrapPanel x:Name="HomePerfButtonsPanel" Orientation="Horizontal" ItemWidth="76" ItemHeight="34">
+                                            <WrapPanel x:Name="HomePerfButtonsPanel" Orientation="Horizontal" ItemHeight="34">
                                                 <ToggleButton x:Name="HomePerf静音" Content="{x:Static loc:WpfStrings.OriginalStyleWindow_Text_23}" Tag="2" Style="{StaticResource HomePerfSegment}" />
                                                 <ToggleButton x:Name="HomePerf平衡" Content="{x:Static loc:WpfStrings.CustomModeWindow_Content_13}" Tag="0" Style="{StaticResource HomePerfSegment}" IsChecked="True" />
                                                 <ToggleButton x:Name="HomePerf狂暴" Content="{x:Static loc:WpfStrings.OriginalStyleWindow_Text_22}" Tag="1" Style="{StaticResource HomePerfSegment}" />
@@ -77,11 +86,11 @@
                                         <StackPanel Grid.Column="1">
                                             <TextBlock Text="{x:Static loc:WpfStrings.OriginalStyleWindow_Text_15}" Style="{StaticResource CardTitle}" />
                                             <TextBlock x:Name="GpuCurrentText" Text="{x:Static loc:WpfStrings.GpuCurrentText_Text}" Style="{StaticResource MutedText}" Margin="0,3,0,12" />
-                                            <StackPanel Orientation="Horizontal">
-                                                <ToggleButton x:Name="HomeGpu集显" Content="{x:Static loc:WpfStrings.GpuModeIntegrated}" Tag="0" Style="{StaticResource SegmentButton}" />
-                                                <ToggleButton x:Name="HomeGpu混合" Content="{x:Static loc:WpfStrings.GpuModeHybrid}" Tag="1" Style="{StaticResource SegmentButton}" IsChecked="True" />
-                                                <ToggleButton x:Name="HomeGpu独显" Content="{x:Static loc:WpfStrings.GpuModeDedicated}" Tag="2" Style="{StaticResource SegmentButton}" />
-                                            </StackPanel>
+                                            <WrapPanel Orientation="Horizontal">
+                                                <ToggleButton x:Name="HomeGpu集显" Content="{x:Static loc:WpfStrings.GpuModeIntegrated}" Tag="0" Style="{StaticResource HomeGpuSegment}" />
+                                                <ToggleButton x:Name="HomeGpu混合" Content="{x:Static loc:WpfStrings.GpuModeHybrid}" Tag="1" Style="{StaticResource HomeGpuSegment}" IsChecked="True" />
+                                                <ToggleButton x:Name="HomeGpu独显" Content="{x:Static loc:WpfStrings.GpuModeDedicated}" Tag="2" Style="{StaticResource HomeGpuSegment}" />
+                                            </WrapPanel>
                                             <StackPanel x:Name="HomeIgpuSavingPanel" Margin="0,10,0,0" />
                                         </StackPanel>
                                     </Grid>

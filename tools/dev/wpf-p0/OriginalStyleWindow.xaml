@@ -467,7 +467,7 @@
                                             </Canvas>
                                         </Viewbox>
                                 <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Title}" Style="{StaticResource SectionHeader}" Margin="0" />
-                                <CheckBox x:Name="GpuOverclockSwitch" Content="{x:Static loc:WpfStrings.CustomModeWindow_Text_3}" Style="{StaticResource HeaderSwitch}" Margin="14,0,0,0" VerticalAlignment="Center" Click="GpuOverclock_Click" />
+                                <CheckBox x:Name="GpuOverclockSwitch" Content="{x:Static loc:WpfStrings.CustomModeWindow_Text_3}" Style="{StaticResource HeaderSwitch}" Visibility="Collapsed" Margin="14,0,0,0" VerticalAlignment="Center" Click="GpuOverclock_Click" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                 <TextBlock x:Name="CurrentModeText" Text="{x:Static loc:WpfStrings.CurrentModeText_Text}" Style="{StaticResource StatText}" Margin="0,0,10,0" />

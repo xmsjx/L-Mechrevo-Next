@@ -21,7 +21,7 @@
       "channels": {
         "plCustom": { "channel": "ec", "params": { "pl1": "0x783", "pl2": "0x784", "pl4": "0x785", "min": "5", "maxPl1": "85", "maxPl2": "85", "maxPl4": "85", "trigger": "0", "turbo": "0", "customFlag": "0", "modeIndex": "0", "ramp": "0", "customByMemory": "1", "customClamp": "0", "builtInPl": "1", "plBalance": "45/54", "plTurbo": "54/60", "plSilent": "25/25" } },
         "officePreset": { "channel": "ec", "params": { "enabled": "1", "quietBit": "0" } },
-        "fanTelemetry": { "channel": "ec" },
+        "fanTelemetry": { "channel": "ec", "params": { "rpmPercentMax": "6000" } },
         "modeSpy": { "channel": "ec", "params": { "officePlAddr": "0x783", "officePlSilent": "0x19", "officePlBalance": "0x2D", "officeFanTier": "0x744", "fanTierBalance": "0x46", "fanTierSilent": "0x40" } },
         "tcc": { "channel": "ec", "params": { "disabled": "1", "smu": "1" } },
         "chargeLimit": { "channel": "ec", "params": { "upper": "0x7B9", "lower": "0x7D0", "gate": "0x7C3", "romId": "0x770", "effect": "0x742", "allowNoDgpu": "1" } },

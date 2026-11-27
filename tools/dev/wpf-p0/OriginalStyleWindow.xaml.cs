@@ -93,6 +93,10 @@ public partial class OriginalStyleWindow : Window
     private bool _perfRestoreStarted;
     private CustomModeWindow? _customModeWindow;
     private readonly DispatcherTimer _lightingIdleTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    // 小窗传感器读数：250 ms 问一次共享快照，只有"快照真的变了"才更新那两行（不挂 2 s 的整页心跳）。
+    private readonly DispatcherTimer _miniSensorTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private L_Mechrevo.WpfP0.Services.SensorSnapshot? _lastMiniSnapshot;
+    private long _miniLastPushTick;
     private bool _lightingIdleSuspended;
     private long _lastLightingConnectionGeneration;
     private long _lastLightingRestoreTick;
@@ -584,6 +588,10 @@ public partial class OriginalStyleWindow : Window
                 ReloadBackgroundImage();
             }
             _ = Dispatcher.BeginInvoke(new Action(() => _ = ConnectBackendAsync()), System.Windows.Threading.DispatcherPriority.Background);
+            _ = RestoreFanBoostQuickOnStartupAsync();
+            // 小窗读数自己的节拍：只读传感器缓存快照，不跟着 2 s 的整页心跳走。
+            _miniSensorTimer.Tick += (_, _) => PumpMiniSensorLines();
+            _miniSensorTimer.Start();
             // 静默开机启动只驻留托盘，不在这里弹宽屏；否则会出现“宽屏一闪又消失”。
             if (!L_Mechrevo.WpfP0.Services.StartupPopupGate.IsStartupLaunch
                 && string.Equals(AppConfig.GetString("last_window_mode"), "wide", StringComparison.OrdinalIgnoreCase))
@@ -1333,7 +1341,32 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    internal (bool Enabled, (string Label, object? Tag)[] Options, int Selected) WideCalibration()
+    /// <summary>
+/// 导入/删除自定义 ICC 之后统一刷新两个窗口的校色档位：小窗下拉重建，宽屏档位按钮重建。
+/// <para>只刷界面，不应用、不写配置。</para>
+/// </summary>
+internal void NotifyCustomCalibrationChanged()
+{
+    try
+    {
+        WideSyncCustomCalibrationTiers();
+        ReloadCalibrationUi();
+    }
+    catch (Exception ex)
+    {
+        Logger.WriteLine("[calib] 刷新小窗档位失败（已吞掉）：" + ex.Message);
+    }
+    try
+    {
+        _wideWindow?.ReloadCalibrationOptions();
+    }
+    catch (Exception ex)
+    {
+        Logger.WriteLine("[calib] 刷新宽屏档位失败（已吞掉）：" + ex.Message);
+    }
+}
+
+internal (bool Enabled, (string Label, object? Tag)[] Options, int Selected) WideCalibration()
     {
         List<(string, object?)> options = new();
         foreach (object item in CalibrationCombo.Items)
@@ -2202,6 +2235,37 @@ public partial class OriginalStyleWindow : Window
         {
             MiniledSwitch.IsEnabled = true;
             RefreshMiniledSwitch();
+        }
+    }
+
+    /// <summary>
+    /// 强冷只有快捷开关一个入口，固件不保留这一位 ⇒ 开机按上次的选择补发一次。
+    /// </summary>
+    private async Task RestoreFanBoostQuickOnStartupAsync()
+    {
+        try
+        {
+            if (!MechrevoLite.AppConfig.Exists("fanboost_quick"))
+            {
+                return;
+            }
+            bool want = MechrevoLite.AppConfig.Get("fanboost_quick") == 1;
+            await Task.Delay(1500);
+            var probe = _backendProbe;
+            if (probe == null || !probe.SupportsQuick("fanboost"))
+            {
+                return;
+            }
+            if (probe.QuickState("fanboost") == want)
+            {
+                return;
+            }
+            bool ok = await probe.SwitchQuickAsync("fanboost", want);
+            Logger.WriteError("[fan] 强冷开机按记忆恢复为" + (want ? "开" : "关") + " ⇒ " + ok);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteLine("[fan] 强冷开机恢复失败（已吞掉）：" + ex.Message);
         }
     }
 
@@ -7797,8 +7861,7 @@ public partial class OriginalStyleWindow : Window
         // 核显模式下独显会从总线上消失（此时也是 NoDgpu），但机型仍有独显 ⇒ 不能当核显本处理。
         GpuStat.Visibility = (noDgpu && !hw.DgpuEverPresent && !igpuSensorPresent) ? Visibility.Collapsed : Visibility.Visible;
         // 状态行的文本必须每次心跳都刷（之前这两行被改漏了，界面就一直停在默认的 "CPU —"/"GPU —"）。
-        SetTextIfChanged(CpuStat, SensorLine(cpu: true));
-        SetTextIfChanged(GpuStat, SensorLine(cpu: false));
+            RefreshMiniSensorLines();
         using (UiTrace.Phase("mini-igpu"))
         {
             // 显卡模式/核显省电状态的读取走 ACPI/WMI，单次 0.2~0.3 秒：
@@ -8036,6 +8099,44 @@ public partial class OriginalStyleWindow : Window
     /// 只在文本真的变化时才写控件：心跳每 2 秒都会走到这些赋值点，
     /// 相同内容反复赋值虽不会触发重绘，但每次都要新建字符串并走一遍依赖属性通路。
     /// </summary>
+    /// <summary>小窗那两行传感器读数：独立节奏刷新，只读缓存快照，不跟整页心跳跑。</summary>
+    /// <summary>小窗读数的节拍：快照没变就不写控件，另有 3 s 兜底。</summary>
+    private void PumpMiniSensorLines()
+    {
+        if (_services == null && _backendProbe == null)
+        {
+            return;
+        }
+        try
+        {
+            L_Mechrevo.WpfP0.Services.SensorSnapshot snapshot = _services?.Sensors.Read()
+                ?? L_Mechrevo.WpfP0.Services.SensorSnapshot.Empty;
+            long now = Environment.TickCount64;
+            if (_lastMiniSnapshot != null && snapshot.Equals(_lastMiniSnapshot)
+                && now - _miniLastPushTick < 3000)
+            {
+                return;
+            }
+            _lastMiniSnapshot = snapshot;
+            _miniLastPushTick = now;
+        }
+        catch
+        {
+            return;
+        }
+        RefreshMiniSensorLines();
+    }
+
+    private void RefreshMiniSensorLines()
+    {
+        if (_services == null && _backendProbe == null)
+        {
+            return;
+        }
+        SetTextIfChanged(CpuStat, SensorLine(cpu: true));
+        SetTextIfChanged(GpuStat, SensorLine(cpu: false));
+    }
+
     private static void SetTextIfChanged(System.Windows.Controls.TextBlock target, string? text)
     {
         string value = text ?? string.Empty;
@@ -8120,14 +8221,15 @@ public partial class OriginalStyleWindow : Window
             return "";
         }
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
-        if (!hw.IsFanInfoFresh(L_Mechrevo.WpfP0.Services.WpfBackend.FanInfoMaxAgeMs))
-        {
-            return "";
-        }
         int? duty;
         int rpmFullPercent = hw.FanRpmPercentDisplayMax;
         if (rpmFullPercent > 0)
         {
+            // 折算要用转速 ⇒ 转速必须是新读数，否则会拿旧转速算出跳动的百分比。
+            if (!hw.IsFanInfoFresh(L_Mechrevo.WpfP0.Services.WpfBackend.FanInfoMaxAgeMs))
+            {
+                return "";
+            }
             int rpm = cpu ? L_Mechrevo.WpfP0.Services.WpfBackend.CpuFanRpm : L_Mechrevo.WpfP0.Services.WpfBackend.GpuFanRpm;
             // 转速 0 = 风扇真的停转（读不到会给 -1，界面按 — 显示）⇒ 占空比显示 0%，
             // 与"占空比 0% 也是有效读数"保持一致；否则静音时整段百分比会消失。
@@ -8136,7 +8238,14 @@ public partial class OriginalStyleWindow : Window
         }
         else
         {
+            // 占空比走 EC 只读兜底（读失败会保留上一次有效值），不跟 GCU 的 FanInfo 新鲜度联动：
+            // 那一位在一些机型上每秒翻一次 False，界面就会"时不时消失"。
             duty = cpu ? hw.CpuFanDuty : hw.GpuFanDuty;
+            if (duty.GetValueOrDefault() <= 0
+                && !hw.IsFanInfoFresh(L_Mechrevo.WpfP0.Services.WpfBackend.FanInfoMaxAgeMs))
+            {
+                return "";
+            }
         }
         // 占空比 0% 也是有效读数（风扇停转/低速），⛔ 不再因为"小于 1"而整段隐藏。
         if (!duty.HasValue || duty.GetValueOrDefault() < 0)
@@ -10113,9 +10222,10 @@ public partial class OriginalStyleWindow : Window
                 AppConfig.Flush();
                 selected = 0;
             }
-            // 导入过的校色文件在两个后端（GCU / EC 本地）都要能出现在下拉里并被选中，
-            // 不能因为"当前没开自定义校色"就把文件列表藏掉（否则 EC 模式看起来像没记住）。
-            bool customAvailable = localIcc.Count > 0;
+            // 只有「自定义校色开着」或「当前档位就是自定义」时，才把自定义文件列进下拉；
+            // 关掉自定义后列表必须立刻回到原生档位，不能还留着一个已失效的选项。
+            // 文件本身仍留在 customICC 里，重新打开开关就回来。
+            bool customAvailable = localIcc.Count > 0 && (customOn || selected == 999);
             if (customAvailable)
             {
                 foreach (string profile in localIcc)

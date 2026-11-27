@@ -52,7 +52,8 @@ public partial class OverlayWindow : Window
         {
             _displayMode = Math.Clamp(MechrevoLite.AppConfig.Get("overlay_wpf_mode", 1), 0, 2);
             ApplyOverlayBackground(Math.Clamp(MechrevoLite.AppConfig.Get("overlay_opacity", 72), 30, 100));
-            _timer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(MechrevoLite.AppConfig.Get("overlay_interval_ms", 1000), 500, 10000));
+            // 默认 2 秒（与 Core 采样泵、设置界面的默认值一致）。
+        _timer.Interval = TimeSpan.FromMilliseconds(Math.Clamp(MechrevoLite.AppConfig.Get("overlay_interval_ms", 2000), 500, 10000));
         }
         catch
         {

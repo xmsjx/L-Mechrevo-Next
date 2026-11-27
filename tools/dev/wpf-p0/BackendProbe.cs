@@ -614,6 +614,26 @@ internal sealed class BackendProbe : IDisposable
 
     internal async Task<bool> SwitchQuickAsync(string key, bool on)
     {
+        bool ok = await SwitchQuickCoreAsync(key, on).ConfigureAwait(false);
+        // 强冷只有快捷开关一个入口（自定义档不再保存）：把用户最后一次选择记下来，开机按它补发。
+        if (ok && string.Equals(key, "fanboost", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                MechrevoLite.AppConfig.Set("fanboost_quick", on ? 1 : 0);
+                MechrevoLite.AppConfig.Flush();
+                Logger.WriteLine("[fan] 强冷快捷开关记忆 ⇒ " + (on ? "开" : "关"));
+            }
+            catch (Exception ex)
+            {
+                Logger.WriteLine("[fan] 强冷记忆写入失败（已吞掉）：" + ex.Message);
+            }
+        }
+        return ok;
+    }
+
+    private async Task<bool> SwitchQuickCoreAsync(string key, bool on)
+    {
         try
         {
             // ⭐ task-24：息屏（monitoroff）由 Core VirtualDisplayBlank 接管（等价旧 SettingsForm.ApplyQuickMonitorOffAsync）。

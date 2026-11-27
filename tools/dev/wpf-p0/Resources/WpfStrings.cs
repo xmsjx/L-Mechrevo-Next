@@ -94,6 +94,10 @@ public static class WpfStrings
     public static string NewButton_Content => Get("NewButton_Content");
     public static string CustomModeWindow_Text_22 => Get("CustomModeWindow_Text_22");
     public static string CustomModeWindow_Text_23 => Get("CustomModeWindow_Text_23");
+    public static string CustomModeWindow_Text_24 => Get("CustomModeWindow_Text_24");
+    public static string CustomModeWindow_Text_25 => Get("CustomModeWindow_Text_25");
+    public static string CustomModeWindow_Text_26 => Get("CustomModeWindow_Text_26");
+    public static string CustomModeWindow_Text_27 => Get("CustomModeWindow_Text_27");
     public static string CustomModeWindow_Title => Get("CustomModeWindow_Title");
     public static string DisplayEffectEditorWindow_Content => Get("DisplayEffectEditorWindow_Content");
     public static string DisplayEffectEditorWindow_Text => Get("DisplayEffectEditorWindow_Text");

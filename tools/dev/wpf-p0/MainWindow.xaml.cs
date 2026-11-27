@@ -28,6 +28,10 @@ public partial class MainWindow : Window
     private string _lastStatusTip = string.Empty;
     private readonly DispatcherTimer _sensorTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer _interactionTimer = new() { Interval = TimeSpan.FromMilliseconds(350) };
+    // 性能卡片独立节奏：不跟 2 s 的整页 tick；250 ms 问一次共享快照，只有"快照真的变了"才重画。
+    private readonly DispatcherTimer _perfTimer = new(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
+    private SensorSnapshot _lastPerfSnapshot = SensorSnapshot.Empty;
+    private long _perfLastPushTick;
     private bool _dark = true;
     private bool _navCollapsed;
     private readonly List<(RoundedBar Bar, TextBlock Value, string Unit)> _cpuMetrics = new();
@@ -48,6 +52,9 @@ public partial class MainWindow : Window
     private TextBlock? _overdriveLabel;
     private CheckBox? _autoRefresh;
     private readonly List<ToggleButton> _calibrationOptionButtons = new();
+    // 档位标签签名：导入/删除自定义 ICC 后档位数量可能不变、只是名字变了，
+    // 只比数量会漏掉重建，所以连标签一起比。
+    private string _calibrationOptionSignature = "";
     private readonly List<ToggleButton> _effectOptionButtons = new();
     private readonly List<ToggleButton> _lightingIdleButtons = new();
     private readonly Dictionary<string, Slider> _effectSliders = new();
@@ -148,6 +155,8 @@ public partial class MainWindow : Window
         ApplyPage("home");
         _sensorTimer.Tick += (_, _) => RefreshSensors();
         _sensorTimer.Start();
+        _perfTimer.Tick += (_, _) => PumpPerfCard();
+        _perfTimer.Start();
         _interactionTimer.Tick += (_, _) =>
         {
             _interactionTimer.Stop();
@@ -306,6 +315,46 @@ public partial class MainWindow : Window
             snapshot = _owner.Services?.Sensors.Read() ?? SensorSnapshot.Empty;
         }
 
+        RefreshPerfCard(snapshot);
+        // ⭐ task-26：连接状态可能后变（GCU 服务重连/掉线）⇒ 每次传感器 tick 顺带校正一次屏幕页门控（有缓存，只在变化时改 UI）
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-gating"))
+        {
+            UpdateScreenBackendGating();
+        }
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-status"))
+        {
+            UpdateWideBackendStatus();
+        }
+        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-home"))
+        {
+            RefreshHomeExtras();
+        }
+    }
+
+    /// <summary>
+    /// 性能卡片自己的节拍：快照没变就不重画（传感器泵 2.5 s 才换一次值，本地 CPU 温度 0.8 s），
+    /// 另外每 3 s 兜一次，保证断开/重连这类"值没变但显示该变"的情况也能跟上。
+    /// </summary>
+    private void PumpPerfCard()
+    {
+        SensorSnapshot snapshot = _owner?.Services?.Sensors.Read() ?? SensorSnapshot.Empty;
+        long now = Environment.TickCount64;
+        if (snapshot.Equals(_lastPerfSnapshot) && now - _perfLastPushTick < 3000)
+        {
+            return;
+        }
+        _lastPerfSnapshot = snapshot;
+        _perfLastPushTick = now;
+        RefreshPerfCard(snapshot);
+    }
+
+    /// <summary>性能卡片（温度/占用/功耗/频率 + 风扇环 + 占空比）：只跟传感器快照，不跟着整页刷新跑。</summary>
+    private void RefreshPerfCard(SensorSnapshot snapshot)
+    {
+        if (_owner == null || !IsVisible)
+        {
+            return;
+        }
         double rpmMax = snapshot.FanRpmMaxForPercent;
         bool hasRpmDenominator = rpmMax > 1;
         double fanMax = hasRpmDenominator ? rpmMax : 5000;
@@ -328,25 +377,13 @@ public partial class MainWindow : Window
         bool dutyVisible = L_Mechrevo.WpfP0.Services.WpfBackend.FanDutyVisible();
         if (_cpuDutyText != null) _cpuDutyText.Text = dutyVisible ? (WpfStrings.MainWindow_xaml_Text_2 + snapshot.CpuFanDutyPercent + "%") : "";
         if (_gpuDutyText != null) _gpuDutyText.Text = dutyVisible ? (WpfStrings.MainWindow_xaml_Text_2 + snapshot.GpuFanDutyPercent + "%") : "";
-        // ⭐ task-26：连接状态可能后变（GCU 服务重连/掉线）⇒ 每次传感器 tick 顺带校正一次屏幕页门控（有缓存，只在变化时改 UI）
-        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-gating"))
-        {
-            UpdateScreenBackendGating();
-        }
-        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-status"))
-        {
-            UpdateWideBackendStatus();
-        }
-        using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-home"))
-        {
-            RefreshHomeExtras();
-        }
     }
 
     private static void SetMetric(List<(RoundedBar Bar, TextBlock Value, string Unit)> metrics, int index, double value, string unit)
     {
         if (index < 0 || index >= metrics.Count) return;
         (RoundedBar bar, TextBlock text, string _) = metrics[index];
+        bar.Animate = true;
         if (double.IsNaN(value))
         {
             bar.SetValue(0, bar.Maximum);
@@ -471,7 +508,9 @@ public partial class MainWindow : Window
         {
             Width = 116,
             Height = 116,
-            HorizontalAlignment = HorizontalAlignment.Center
+            HorizontalAlignment = HorizontalAlignment.Center,
+            // 传感器值是一次一次跳变的，环形跟着平滑走过去，不再硬切。
+            Animate = true
         };
         TextBlock duty = new()
         {
@@ -1133,6 +1172,12 @@ public partial class MainWindow : Window
         if (ReferenceEquals(button, HomePerf自定义))
         {
             _owner?.WideActivateCustomMode();
+            // 切档后是否跳自定义页由「设置 → 点自定义档时直接跳到自定义页」决定（默认开）。
+            if (MechrevoLite.AppConfig.IsNotFalse("custom_tile_jump_enabled"))
+            {
+                ApplyPage("custom");
+                return;
+            }
             StatusText.Text = WpfStrings.MainWindow_xaml_Text_6 + button.Content;
             return;
         }
@@ -1899,12 +1944,25 @@ public partial class MainWindow : Window
         UpdateScreenBackendGating();
     }
 
+    /// <summary>自定义 ICC 导入/删除后重建宽屏档位按钮（只刷界面，不下发硬件）。</summary>
+    internal void ReloadCalibrationOptions()
+    {
+        if (_owner == null || ScreenCalibrationOptionsPanel == null)
+        {
+            return;
+        }
+        BuildCalibrationOptions();
+        (bool calibEnabled, _, _) = _owner.WideCalibration();
+        ScreenCalibrationToggle.IsChecked = calibEnabled;
+    }
+
     private void BuildCalibrationOptions()
     {
         if (_owner == null) return;
         ScreenCalibrationOptionsPanel.Children.Clear();
         _calibrationOptionButtons.Clear();
         (_, (string Label, object? Tag)[] options, int selected) = _owner.WideCalibration();
+        _calibrationOptionSignature = string.Join("\u0001", options.Select(option => option.Label));
         for (int i = 0; i < options.Length; i++)
         {
             int index = i;
@@ -2140,9 +2198,8 @@ public partial class MainWindow : Window
             RefreshIccList();
             int index = CalibrationIccCombo.Items.IndexOf(imported);
             if (index >= 0) CalibrationIccCombo.SelectedIndex = index;
-            // 导入后把「自定义」档位补进档位列表，并立刻重建宽屏的档位按钮。
-            _owner.WideSyncCustomCalibrationTiers();
-            BuildCalibrationOptions();
+            // 导入后把「自定义」档位补进档位列表，并立刻刷新两个窗口的档位按钮。
+            _owner.NotifyCustomCalibrationChanged();
         }
         finally
         {
@@ -2286,7 +2343,11 @@ public partial class MainWindow : Window
         if (_owner == null || ScreenCalibrationToggle == null || ScreenEffectToggle == null) return;
         (bool calibEnabled, (string Label, object? Tag)[] calibOptions, int calibSelected) = _owner.WideCalibration();
         ScreenCalibrationToggle.IsChecked = calibEnabled;
-        if (_calibrationOptionButtons.Count != calibOptions.Length) BuildCalibrationOptions();
+        string calibSignature = string.Join("\u0001", calibOptions.Select(option => option.Label));
+        if (_calibrationOptionButtons.Count != calibOptions.Length || calibSignature != _calibrationOptionSignature)
+        {
+            BuildCalibrationOptions();
+        }
         for (int i = 0; i < _calibrationOptionButtons.Count; i++) _calibrationOptionButtons[i].IsChecked = i == calibSelected;
         foreach ((ToggleButton button, Func<bool> get, Action<bool> _) in _screenFeatures)
         {
@@ -2490,10 +2551,11 @@ public partial class MainWindow : Window
         bool silentTurboVisible = _owner.WideSilentTurboVisible;
         HomePerf狂暴.Visibility = _owner.WideTurboModeVisible ? Visibility.Visible : Visibility.Collapsed;
         EnsureWideSilentTurboButton(silentTurboVisible);
-        // 只有静音狂暴/高能狂暴机型才用 76px 宽按钮；其它机型恢复原 64px，避免影响 NUC/UMI 等布局。
+        // 宽度交给内容（2026-11-27）：英文「Balance」比中文「平衡」宽，运行时钉死 64/76 px 会把字裁掉。
+        // 中文仍由样式的 MinWidth=76 保持等宽，英文/多语言按内容撑开，一行放不下会换行而不是裁字。
         if (_homeView != null)
         {
-            _homeView.HomePerfButtonsPanel.ItemWidth = silentTurboVisible ? 76 : 64;
+            _homeView.HomePerfButtonsPanel.ItemWidth = double.NaN;
         }
         EnsureWideExtremeButton(_owner.WideExtremeModeVisible);
         HomePerf狂暴.Content = silentTurboVisible ? WpfStrings.TurboHighEnergy : WpfStrings.ModeTurbo;

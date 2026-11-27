@@ -32,7 +32,8 @@ public static class CloudIccFetcher
     private static readonly string[] AllSuffixes = { "", ".zip", ".icm" };
     private static readonly string[] PlainSuffixOnly = { "" };
 
-    public sealed record Result(bool Ok, string? FileName, string Detail, IReadOnlyList<string>? FileNames = null);
+    // FromLocal=true 表示这次没联网，直接用了本机已有的文件（界面文案要据此区分，别写成“云端获取”）。
+    public sealed record Result(bool Ok, string? FileName, string Detail, IReadOnlyList<string>? FileNames = null, bool FromLocal = false);
 
     private sealed record MonitorId(string Pnp, string Friendly, string Serial);
 
@@ -51,30 +52,17 @@ public static class CloudIccFetcher
             }
             Logger.WriteError("[icc-cloud] monitors=" + monitors.Count + " macs=" + macs.Count);
 
-            // 本机已有官方 ICC（GCU 下载的副本、系统颜色目录里的标准档）时直接用，不再走网络。
-            List<string> localImported = new();
-            foreach (string localFile in CollectLocalOfficialIccFiles(monitors, macs))
-            {
-                string? name = IccHelper.ImportOfficialIcc(localFile);
-                if (!string.IsNullOrWhiteSpace(name) && !localImported.Contains(name, StringComparer.OrdinalIgnoreCase))
-                {
-                    localImported.Add(name);
-                }
-            }
-            if (localImported.Count > 0)
-            {
-                Logger.WriteError("[icc-cloud] 使用本机已有 ICC " + string.Join(",", localImported));
-                string localPrimary = localImported.FirstOrDefault(IccHelper.IsDefaultIccName) ?? localImported[0];
-                return new Result(true, localPrimary,
-                    "已使用本机已有的官方 ICC：" + string.Join("、", localImported), localImported);
-            }
+            // 云端优先：点「云端获取」就真的联网问一次；本机文件只作为云端没命中时的兜底（见下方）。
 
             // 50 系优先序列号（aistone）；40 系/未知优先 MAC（uniwill）。
             bool gen50 = MechrevoLite.Program.hw?.DgpuGeneration
                 == MechrevoLite.Gpu.DgpuGenerationKind.Gen50;
             // 逐个候选尝试；服务器响应慢时给整轮设上限，避免界面长时间无响应。
             using CancellationTokenSource deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            deadline.CancelAfter(TimeSpan.FromSeconds(90));
+            // 本机还有可用的兜底文件时，网络只给 15 秒：失败就立刻退回本机，别让人干等。
+            bool hasLocalFallback = CollectGcuIccFiles(monitors, macs).Count > 0
+                || CollectSpoolPanelIccFiles(monitors, macs).Count > 0;
+            deadline.CancelAfter(TimeSpan.FromSeconds(hasLocalFallback ? 15 : 90));
             CancellationToken token = deadline.Token;
             Hit? hit;
             if (gen50)
@@ -115,17 +103,50 @@ public static class CloudIccFetcher
                     token).ConfigureAwait(false);
             }
 
-            if (hit == null)
+            if (hit != null)
             {
-                Logger.WriteError("[icc-cloud] 未命中（monitors=" + monitors.Count + " macs=" + macs.Count + "）");
-                return new Result(false, null, "云端获取校色失败：未找到匹配当前面板的 ICC（已尝试序列号、MAC 和兜底路径）");
+                Logger.WriteError("[icc-cloud] 命中 " + hit.Url + " files=" + hit.FileNames.Count);
+                // 多文件包的默认项固定是 default.icc；单文件包只有屏幕厂商+序列号/MAC 那个文件。
+                string primary = hit.FileNames.FirstOrDefault(IccHelper.IsDefaultIccName)
+                    ?? hit.FileNames.FirstOrDefault()
+                    ?? "";
+                return new Result(true, primary, $"已从云端获取 {hit.FileNames.Count} 个 ICC：{hit.Url}（{hit.Bytes} 字节）", hit.FileNames);
             }
-            Logger.WriteError("[icc-cloud] 命中 " + hit.Url + " files=" + hit.FileNames.Count);
-            // 多文件包的默认项固定是 default.icc；单文件包只有屏幕厂商+序列号/MAC 那个文件。
-            string primary = hit.FileNames.FirstOrDefault(IccHelper.IsDefaultIccName)
-                ?? hit.FileNames.FirstOrDefault()
-                ?? "";
-            return new Result(true, primary, $"已从云端获取 {hit.FileNames.Count} 个 ICC：{hit.Url}（{hit.Bytes} 字节）", hit.FileNames);
+
+            // 云端没命中才退到本机，顺序：官方目录里已经下过的整包 → 程序目录自带的官方包 → Windows 颜色目录。
+            Logger.WriteError("[icc-cloud] 未命中，尝试本机来源（monitors=" + monitors.Count + " macs=" + macs.Count + "）");
+
+            // 以前从云端下过的整包还在官方目录里：多文件包（sRGB／DCIP3／AdobeRGB／Default）就靠这一步保底，
+            // 断网时不必再下第二次。
+            List<string> cachedFiles = IccHelper.ListOfficialIccFiles()
+                .Where(file => File.Exists(Path.Combine(IccHelper.OfficialIccDir, Path.GetFileName(file))))
+                .OrderBy(file => IccRank(file, monitors, macs))
+                .ThenBy(file => file, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (cachedFiles.Count > 0)
+            {
+                Logger.WriteError("[icc-cloud] 改用官方目录里已有的 ICC " + string.Join(",", cachedFiles));
+                return new Result(true, PickPrimary(cachedFiles),
+                    "云端未命中，已使用本机官方目录里已有的校色文件（未联网）。", cachedFiles, true);
+            }
+            List<string> gcuImported = ImportLocalFiles(CollectGcuIccFiles(monitors, macs));
+            if (gcuImported.Count > 0)
+            {
+                Logger.WriteError("[icc-cloud] 改用程序目录自带的官方 ICC " + string.Join(",", gcuImported));
+                string gcuPrimary = PickPrimary(gcuImported);
+                return new Result(true, gcuPrimary,
+                    "云端未命中，已改用程序目录里自带的官方 ICC（未联网）。", gcuImported, true);
+            }
+            List<string> spoolImported = ImportLocalFiles(CollectSpoolPanelIccFiles(monitors, macs));
+            if (spoolImported.Count > 0)
+            {
+                Logger.WriteError("[icc-cloud] 改用 Windows 颜色目录里的厂校色 " + string.Join(",", spoolImported));
+                string spoolPrimary = PickPrimary(spoolImported);
+                return new Result(true, spoolPrimary,
+                    "云端未命中，已改用 Windows 颜色目录里与当前面板匹配的厂校色文件（未联网）。", spoolImported, true);
+            }
+            Logger.WriteError("[icc-cloud] 云端与本机都未命中");
+            return new Result(false, null, "云端获取校色失败：未找到匹配当前面板的 ICC（云端、程序目录、Windows 颜色目录都没命中）");
         }
         catch (OperationCanceledException)
         {
@@ -444,8 +465,8 @@ public static class CloudIccFetcher
 
     private const string SpoolColorDir = @"C:\Windows\System32\spool\drivers\color";
 
-    /// <summary>本机已有的官方 ICC：GCU 目录里下载好的副本，以及系统颜色目录里的标准档文件。</summary>
-    private static List<string> CollectLocalOfficialIccFiles(IReadOnlyList<MonitorId> monitors, IReadOnlyList<string> macs)
+    /// <summary>程序目录里自带的官方 ICC（GCU\ICCProfile）：官方包里既有面板校色，也有 sRGB／P3／AdobeRGB 参考档。</summary>
+    private static List<string> CollectGcuIccFiles(IReadOnlyList<MonitorId> monitors, IReadOnlyList<string> macs)
     {
         List<string> dirs = new();
         string gcuRoot = Path.Combine(AppContext.BaseDirectory, "GCU");
@@ -460,7 +481,36 @@ public static class CloudIccFetcher
             }
         }
         catch { }
-        dirs.Add(SpoolColorDir);
+        return CollectRecognizedIccFiles(dirs, monitors, macs, allowStandard: true);
+    }
+
+    /// <summary>
+    /// Windows 颜色目录里的厂校色，只当云端未命中时的兜底。
+    /// <para>这个目录是所有色彩关联的落脚点，我们应用校色时也会往里面放副本，所以不能把它当“官方来源”整体搬走；
+    /// 这里只认与本机面板 ID 对应的那一个文件，标准档（sRGB／P3／AdobeRGB）一律不收。</para>
+    /// </summary>
+    private static List<string> CollectSpoolPanelIccFiles(IReadOnlyList<MonitorId> monitors, IReadOnlyList<string> macs)
+    {
+        return CollectRecognizedIccFiles(new List<string> { SpoolColorDir }, monitors, macs, allowStandard: false);
+    }
+
+    /// <summary>把找到的本机文件复制进官方 ICC 目录，返回去重后的文件名。</summary>
+    private static List<string> ImportLocalFiles(IEnumerable<string> files)
+    {
+        List<string> imported = new();
+        foreach (string file in files)
+        {
+            string? name = IccHelper.ImportOfficialIcc(file);
+            if (!string.IsNullOrWhiteSpace(name) && !imported.Contains(name, StringComparer.OrdinalIgnoreCase))
+            {
+                imported.Add(name);
+            }
+        }
+        return imported;
+    }
+
+    private static List<string> CollectRecognizedIccFiles(IReadOnlyList<string> dirs, IReadOnlyList<MonitorId> monitors, IReadOnlyList<string> macs, bool allowStandard)
+    {
 
         List<string> result = new();
         foreach (string dir in dirs)
@@ -477,14 +527,20 @@ public static class CloudIccFetcher
             foreach (string file in files)
             {
                 string name = Path.GetFileNameWithoutExtension(file);
-                bool recognized = IccHelper.StandardLevelFor(file) > 0;
+                bool recognized = allowStandard && IccHelper.StandardLevelFor(file) > 0;
                 if (!recognized)
                 {
-                    // 面板文件要能对上本机网卡，避免把同型号别的机器的校色一起拿进来。
+                    // 多文件 ICC 包整包用标准名（sRGB／DCIP3／AdobeRGB／Default），
+                    // 这类机器本机就只有这些文件：Default 是包里的默认校色，必须收。
+                    recognized = IccHelper.IsDefaultIccName(file);
+                }
+                if (!recognized)
+                {
+                    // 面板 ID（如 BOE0CBE）相同就算这块屏的校色文件。
+                    // 不能再要求 MAC 也匹配：换主板 / 换网卡后 MAC 会变，
+                    // 旧 MAC 命名的那个文件反而是这块面板真正的校色。
                     recognized = monitors.Any(m => !string.IsNullOrWhiteSpace(m.Pnp)
-                            && name.StartsWith(m.Pnp, StringComparison.OrdinalIgnoreCase))
-                        && macs.Any(mac => !string.IsNullOrWhiteSpace(mac)
-                            && name.EndsWith("_" + mac, StringComparison.OrdinalIgnoreCase));
+                        && name.StartsWith(m.Pnp, StringComparison.OrdinalIgnoreCase));
                 }
                 if (!recognized)
                 {
@@ -521,7 +577,37 @@ public static class CloudIccFetcher
                 }
             }
         }
-        return result;
+        // 名字以当前 MAC 结尾的排前面（同一块面板下多份校色时，优先用与本机网卡对得上的那份），
+        // 其余按文件名排，保证每次结果顺序稳定。
+        // 排序：面板匹配且与本机 MAC 对得上 > 面板匹配 > 整包默认项（Default）> 其它。
+        return result
+            .OrderBy(file => IccRank(file, monitors, macs))
+            .ThenBy(file => file, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>本机文件的优先级：0=面板+本机 MAC、1=面板同名、2=整包默认项、3=其它。</summary>
+    private static int IccRank(string file, IReadOnlyList<MonitorId> monitors, IReadOnlyList<string> macs)
+    {
+        string stem = Path.GetFileNameWithoutExtension(file);
+        bool panel = monitors.Any(m => !string.IsNullOrWhiteSpace(m.Pnp)
+            && stem.StartsWith(m.Pnp, StringComparison.OrdinalIgnoreCase));
+        if (panel)
+        {
+            bool macHit = macs.Any(mac => !string.IsNullOrWhiteSpace(mac)
+                && stem.EndsWith("_" + mac, StringComparison.OrdinalIgnoreCase));
+            return macHit ? 0 : 1;
+        }
+        return IccHelper.IsDefaultIccName(file) ? 2 : 3;
+    }
+
+    /// <summary>本机兜底时选主用文件：优先面板校色，其次整包默认项，最后第一个。</summary>
+    private static string PickPrimary(IReadOnlyList<string> files)
+    {
+        return files.FirstOrDefault(file => !IccHelper.IsDefaultIccName(file) && IccHelper.StandardLevelFor(file) == 0)
+            ?? files.FirstOrDefault(IccHelper.IsDefaultIccName)
+            ?? files.FirstOrDefault()
+            ?? "";
     }
 
     private static List<MonitorId> ReadMonitorIds()

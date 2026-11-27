@@ -36,6 +36,16 @@ internal sealed class SensorService : ISensorService
     /// <para>本地值一律来自后端快照，界面线程不碰任何硬件通道 —— 原先在界面线程上同步读
     /// EC 风扇寄存器 / NVML / nvidia-smi，会与后台采样泵争同一条串行通路，窗口在前台时每 2 s 卡一次。</para>
     /// </summary>
+    /// <summary>转速折算出占空比；转速拿不到时才用后端/本地给的占空比。</summary>
+    private static int DutyPercentFromRpm(int rpm, int rpmFull, int hwDuty, int localDuty)
+    {
+        if (rpm >= 0 && rpmFull > 0)
+        {
+            return Math.Min(100, (int)Math.Round(rpm * 100.0 / rpmFull));
+        }
+        return Prefer(hwDuty, localDuty);
+    }
+
     public SensorSnapshot Read()
     {
         MechrevoHw? hw = _backend.Hw;
@@ -54,8 +64,11 @@ internal sealed class SensorService : ISensorService
                 : Prefer(connected ? hw!.GpuTemp : -1, snap.GpuTemp);
             int cpuFanRpm = Prefer(connected ? hw!.CpuFanRpm : -1, snap.CpuFanRpm);
             int gpuFanRpm = Prefer(connected ? hw!.GpuFanRpm : -1, snap.GpuFanRpm);
-            int cpuDutyPercent = Prefer(connected ? hw!.CpuFanDuty : -1, snap.CpuFanDuty ?? 0);
-            int gpuDutyPercent = Prefer(connected ? hw!.GpuFanDuty : -1, snap.GpuFanDuty ?? 0);
+            // 占空比与主窗口同一判据：只有"只报转速、没有占空比读数"的机型（FanRpmPercentDisplayMax>0）
+            // 才按转速折算；其余机型仍直接用后端/本地给的占空比，⛔ 不拿 6000 去折算别人的转速。
+            int rpmFull = connected ? hw!.FanRpmPercentDisplayMax : 0;
+            int cpuDutyPercent = DutyPercentFromRpm(cpuFanRpm, rpmFull, connected ? hw!.CpuFanDuty : -1, snap.CpuFanDuty ?? 0);
+            int gpuDutyPercent = DutyPercentFromRpm(gpuFanRpm, rpmFull, connected ? hw!.GpuFanDuty : -1, snap.GpuFanDuty ?? 0);
             return new SensorSnapshot(
                 HardwareAvailable: true,
                 CpuTempC: cpuTemp,

@@ -4,19 +4,19 @@
 
 [Setup]
 AppName=L-Mechrevo
-AppVerName=L-Mechrevo beta23.8.4
+AppVerName=L-Mechrevo beta23.8.5
 AppId={{8F4E2C71-9B3A-4D6E-A1C2-7E5B9D0F3A64}
-AppVersion=beta23.8.4
+AppVersion=beta23.8.5
 AppPublisher=L-Mechrevo contributors
 AppCopyright=Copyright (C) 2026 L-Mechrevo contributors. GPL-3.0-only.
 DefaultDirName={autopf}\L-Mechrevo
 DefaultGroupName=L-Mechrevo
-OutputBaseFilename=LM-beta23.8.4-setup
+OutputBaseFilename=LM-beta23.8.5-setup
 UninstallDisplayIcon={app}\L-Mechrevo.exe
 SetupIconFile=files\favicon.ico
-VersionInfoVersion=23.8.4.0
+VersionInfoVersion=23.8.5.0
 VersionInfoProductVersion=23.8.1.0
-UninstallDisplayName=L-Mechrevo beta23.8.4
+UninstallDisplayName=L-Mechrevo beta23.8.5
 Compression=lzma2
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
@@ -66,10 +66,10 @@ Source: "files\WinRT.Runtime.dll"; DestDir: "{app}"; Flags: ignoreversion
 Source: "files\Resources\DefaultCurve_Gaming.json"; DestDir: "{app}\Resources"; Flags: ignoreversion 
 Source: "files\Resources\DefaultCurve_Office.json"; DestDir: "{app}\Resources"; Flags: ignoreversion 
 Source: "files\Resources\DefaultCurve_Turbo.json"; DestDir: "{app}\Resources"; Flags: ignoreversion 
-Source: "files\Resources\qrcode1.jpg"; DestDir: "{app}\Resources"; Flags: ignoreversion 
-Source: "files\Resources\qrcode2.jpg"; DestDir: "{app}\Resources"; Flags: ignoreversion 
-Source: "files\Resources\qrcode3.png"; DestDir: "{app}\Resources"; Flags: ignoreversion 
-Source: "files\Resources\qrcode4.png"; DestDir: "{app}\Resources"; Flags: ignoreversion 
+Source: "files\Assets\Resources\qrcode1.jpg"; DestDir: "{app}\Assets\Resources"; Flags: ignoreversion 
+Source: "files\Assets\Resources\qrcode2.jpg"; DestDir: "{app}\Assets\Resources"; Flags: ignoreversion 
+Source: "files\Assets\Resources\qrcode3.png"; DestDir: "{app}\Assets\Resources"; Flags: ignoreversion 
+Source: "files\Assets\Resources\qrcode4.png"; DestDir: "{app}\Assets\Resources"; Flags: ignoreversion 
 Source: "files\zh-CN\L-Mechrevo.resources.dll"; DestDir: "{app}\zh-CN"; Flags: ignoreversion 
 Source: "files\zh-CN\MechrevoLite.Core.resources.dll"; DestDir: "{app}\zh-CN"; Flags: ignoreversion 
 Source: "files\zh-CN\Microsoft.Win32.TaskScheduler.resources.dll"; DestDir: "{app}\zh-CN"; Flags: ignoreversion 

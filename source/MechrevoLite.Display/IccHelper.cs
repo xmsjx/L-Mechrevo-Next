@@ -240,14 +240,25 @@ public static class IccHelper
 	public static string EnsureFactoryIccBound()
 	{
 		string configured = AppConfig.GetString("calib_factory_icc") ?? "";
+		List<string> files = ListOfficialIccFiles();
 		if (!string.IsNullOrWhiteSpace(configured)
 			&& File.Exists(Path.Combine(OfficialIccDir, Path.GetFileName(configured))))
 		{
 			return configured;
 		}
-		// ICC 目录本身就是官方云端目录；单文件 BOE 也属于官方，不再要求 origin 标记。
-		List<string> files = ListOfficialIccFiles();
-		if (files.Count == 0) return "";
+		// 配置指向的文件被删掉了（用户手动清理过目录）：按磁盘上真实存在的文件重绑，
+		// 否则注册表里的关联会一直挂在一个已经不存在的文件上。
+		if (!string.IsNullOrWhiteSpace(configured))
+		{
+			Logger.WriteLine("[calib] 默认校色文件已不存在，重新绑定：" + configured);
+		}
+		if (files.Count == 0)
+		{
+			AppConfig.Remove("calib_factory_icc");
+			AppConfig.Remove("calib_factory_files");
+			AppConfig.Flush();
+			return "";
+		}
 		string candidate = files.FirstOrDefault(IsDefaultIccName) ?? files[0];
 		AppConfig.Set("calib_factory_icc", candidate);
 		AppConfig.Set("calib_factory_files", string.Join("|", files));
@@ -418,22 +429,21 @@ public static class IccHelper
 			bool lastCustom = ListCustomIccFiles().Count <= 1;
 			if (applied || customMode)
 			{
-				// 删掉的如果是当前自定义 ICC：先切回默认校色，
-				// 不能留下 calib_mode=999 + calib_custom_on=1 的悬空状态。
+				// 删掉的正是当前自定义 ICC（或正处于自定义校色）：连 ICC 绑定一起清掉，
+				// 直接回到默认校色，不留 calib_mode=999 + calib_custom_on=1 的悬空状态。
 				ClearAllIcc();
 				AppConfig.Remove("calib_custom_icc");
-				AppConfig.Set("calib_custom_on", 0);
 				AppConfig.Set("calib_enabled", 0);
 				AppConfig.Set("calib_mode", 0);
-				AppConfig.Flush();
 			}
 			else if (lastCustom)
 			{
 				// 删的是最后一个未应用 ICC：清掉自定义选择，但不关闭当前原生校色。
 				AppConfig.Remove("calib_custom_icc");
-				AppConfig.Set("calib_custom_on", 0);
-				AppConfig.Flush();
 			}
+			// 删掉任意一个自定义配置后，自定义校色一律自动关闭。
+			AppConfig.Set("calib_custom_on", 0);
+			AppConfig.Flush();
 			File.Delete(path);
 			Logger.WriteLine("自定义 ICC 已删除: " + fileName);
 			return true;

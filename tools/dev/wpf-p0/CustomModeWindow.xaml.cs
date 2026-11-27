@@ -365,7 +365,7 @@ public partial class CustomModeWindow : Window
             S(SmuSlowLimitSlider), S(SmuSlowTimeSlider), S(SmuFastTimeSlider), S(GpuPowerLimitSlider),
             TccSwitch.IsChecked == true, DbSwitch.IsChecked == true,
             FanSensitivitySwitch.IsChecked == true, GpuOcSwitch.IsChecked == true,
-            C(PowerModeCombo), C(PowerPlanCombo), C(CpuBoostCombo), C(FanBoostCombo), C(RefreshCombo),
+            C(PowerModeCombo), C(PowerPlanCombo), C(CpuBoostCombo), C(RefreshCombo),
             ProcFreqAcBox?.Text.Trim() ?? "", ProcFreqDcBox?.Text.Trim() ?? "");
     }
 
@@ -873,7 +873,6 @@ public partial class CustomModeWindow : Window
             ProcFreqDcBox.Text = s.ProcessorMaxFreqDc?.ToString() ?? "";
         }
         SelectComboInt(CpuBoostCombo, s.CpuBoost);
-        SelectComboBool(FanBoostCombo, s.FanBoost);
         RefreshOptions(s.RefreshHz);
         LoadPowerPlans(s.PowerPlanGuid);
         SetSlider(StapmTimeSlider, StapmTimeText, s.StapmTimeSeconds ?? 28);
@@ -1016,9 +1015,6 @@ public partial class CustomModeWindow : Window
             && (hwForRows.GpuTgpAdjustable || hwForRows.IsNucUmiFamily);
         GpuTgpRow.Visibility = (apuOrNoDgpu || fixedBaseTgp || intelXingyaoMsr || !tgpAdjustable)
             ? Visibility.Collapsed : Visibility.Visible;
-        // 强冷与风扇卡的显示判据同样在后端：按本机有没有这一路，不看有没有独显。
-        FanBoostRow.Visibility = MechrevoLite.Hardware.FeatureVisibility.FanBoost(hwForRows)
-            ? Visibility.Visible : Visibility.Collapsed;
         FanCard.Visibility = MechrevoLite.Hardware.FeatureVisibility.FanCard(hwForRows)
             ? Visibility.Visible : Visibility.Collapsed;
         StapmTimeRow.Visibility = (smuPowerRows && !wujieApu && PawnIO.CpuInfo.IsAMD) ? Visibility.Visible : Visibility.Collapsed;
@@ -1059,7 +1055,6 @@ public partial class CustomModeWindow : Window
         if (L_Mechrevo.WpfP0.Services.WpfBackend.GpuDb > 0) SetSlider(DbSlider, DbText, L_Mechrevo.WpfP0.Services.WpfBackend.GpuDb);
         FanSensitivitySwitch.IsChecked = L_Mechrevo.WpfP0.Services.WpfBackend.FanSwitchSpeedEnabled;
         if (L_Mechrevo.WpfP0.Services.WpfBackend.FanSwitchSpeed > 0) SetSlider(FanDelaySlider, FanDelayText, L_Mechrevo.WpfP0.Services.WpfBackend.FanSwitchSpeed);
-        SelectComboBool(FanBoostCombo, L_Mechrevo.WpfP0.Services.WpfBackend.FanBoost);
         GpuOcSwitch.IsChecked = L_Mechrevo.WpfP0.Services.WpfBackend.HwGpuOverclockEnabled;
         SetSlider(CoreOffsetSlider, CoreOffsetText, L_Mechrevo.WpfP0.Services.WpfBackend.EffectiveGpuCoreClockOffset);
         SetSlider(MemoryOffsetSlider, MemoryOffsetText, L_Mechrevo.WpfP0.Services.WpfBackend.EffectiveGpuMemoryClockOffset);
@@ -1912,7 +1907,7 @@ public partial class CustomModeWindow : Window
                 WindowsPowerMode = PowerModeCombo.SelectedItem is ComboBoxItem pm && pm.Tag is string pmText && int.TryParse(pmText, out int pmValue) ? pmValue : (int?)null,
                 PowerPlanGuid = PowerPlanCombo.SelectedItem is ComboBoxItem plan && plan.Tag is string planTag && !string.IsNullOrWhiteSpace(planTag) ? planTag : null,
                 CpuBoost = CpuBoostCombo.SelectedItem is ComboBoxItem cb && cb.Tag is string cbText && int.TryParse(cbText, out int cbValue) ? cbValue : (int?)null,
-                FanBoost = FanBoostCombo.SelectedItem is ComboBoxItem fb && fb.Tag is string fbText && int.TryParse(fbText, out int fbValue) ? fbValue == 1 : (bool?)null,
+                FanBoost = null, // 强冷不再随自定义配置保存（只有快捷开关一个入口）
                 RefreshHz = RefreshCombo.SelectedItem is ComboBoxItem rr && rr.Tag is string rrText && int.TryParse(rrText, out int rrValue) ? rrValue : (int?)null,
                 // 处理器最大频率：留空 = 不改变（null），0 = 不限制；超出合理范围直接丢弃，避免把 1MHz 这种值写进去。
                 ProcessorMaxFreqAc = ParseProcFreq(ProcFreqAcBox),
@@ -2119,8 +2114,7 @@ public partial class CustomModeWindow : Window
                 PowerPlanGuid = PowerPlanCombo.SelectedItem is ComboBoxItem plan && plan.Tag is string planTag && !string.IsNullOrWhiteSpace(planTag) ? planTag : null,
                 GpuPowerLimitW = GpuPowerLimitRow.Visibility == Visibility.Visible ? (int)GpuPowerLimitSlider.Value : (int?)null,
                 CpuBoost = ReadInt(CpuBoostCombo),
-                FanBoost = FanBoostCombo.SelectedItem is ComboBoxItem fb && fb.Tag is string fbText && int.TryParse(fbText, out int fbValue)
-                    ? fbValue == 1 : (bool?)null,
+                FanBoost = null, // 强冷不再随自定义配置保存（只有快捷开关一个入口）
                 RefreshHz = ReadInt(RefreshCombo)
             };
             if (!_firmwareMode && _current?.IsCustom != true)

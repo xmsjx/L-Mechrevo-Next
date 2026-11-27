@@ -175,7 +175,7 @@
     <value>不改变</value>
   </data>
   <data name="CustomModeWindow_Text_16" xml:space="preserve">
-    <value>风扇增强</value>
+    <value>强冷</value>
   </data>
   <data name="CustomModeWindow_Text_17" xml:space="preserve">
     <value>屏幕刷新率</value>
@@ -237,6 +237,18 @@
   <data name="CustomModeWindow_Text_23" xml:space="preserve">
     <value>性能模式 · 自定义</value>
   </data>
+    <data name="CustomModeWindow_Text_24" xml:space="preserve">
+      <value>处理器最大频率</value>
+    </data>
+    <data name="CustomModeWindow_Text_25" xml:space="preserve">
+      <value>插电</value>
+    </data>
+    <data name="CustomModeWindow_Text_26" xml:space="preserve">
+      <value>离电</value>
+    </data>
+    <data name="CustomModeWindow_Text_27" xml:space="preserve">
+      <value>留空 = 不改变 · 0 = 不限制</value>
+    </data>
   <data name="CustomModeWindow_Title" xml:space="preserve">
     <value>性能模式</value>
   </data>
@@ -544,13 +556,13 @@
     <value>核显省电</value>
   </data>
   <data name="GpuDirectButton_Content" xml:space="preserve">
-    <value>独显直连</value>
+      <value>独显模式</value>
   </data>
   <data name="GpuHybridButton_Content" xml:space="preserve">
-    <value>混合模式</value>
+      <value>混合模式</value>
   </data>
   <data name="GpuEcoButton_Content" xml:space="preserve">
-    <value>核显模式</value>
+      <value>核显模式</value>
   </data>
   <data name="OriginalStyleWindow_Text_15" xml:space="preserve">
     <value>显卡模式</value>
@@ -901,13 +913,13 @@
     <value>自定义性能模式与风扇曲线</value>
   </data>
   <data name="HomePageView_Content" xml:space="preserve">
-    <value>集显</value>
+      <value>核显模式</value>
   </data>
   <data name="HomePageView_Content_2" xml:space="preserve">
-    <value>独显</value>
+      <value>独显模式</value>
   </data>
   <data name="HomePageView_Content_3" xml:space="preserve">
-    <value>混合</value>
+      <value>混合模式</value>
   </data>
   <data name="GpuCurrentText_Text" xml:space="preserve">
     <value>当前：混合输出</value>
@@ -2949,13 +2961,13 @@ GCU：{0} · 宝龙达：{1} · 无界：{2}</value>
     <value>返回</value>
   </data>
   <data name="GpuModeIntegrated" xml:space="preserve">
-    <value>核显模式</value>
+      <value>核显模式</value>
   </data>
   <data name="GpuModeHybrid" xml:space="preserve">
-    <value>混合模式</value>
+      <value>混合模式</value>
   </data>
   <data name="GpuModeDedicated" xml:space="preserve">
-    <value>独显模式</value>
+      <value>独显模式</value>
   </data>
   <data name="SilentTurbo" xml:space="preserve">
     <value>静音狂暴</value>

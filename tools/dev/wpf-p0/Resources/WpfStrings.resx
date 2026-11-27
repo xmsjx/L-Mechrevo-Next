@@ -175,7 +175,7 @@
     <value>Unchanged</value>
   </data>
   <data name="CustomModeWindow_Text_16" xml:space="preserve">
-    <value>Fan boost</value>
+    <value>Max cooling</value>
   </data>
   <data name="CustomModeWindow_Text_17" xml:space="preserve">
     <value>Refresh rate</value>
@@ -211,7 +211,7 @@
     <value>High performance</value>
   </data>
   <data name="CustomModeWindow_Content_13" xml:space="preserve">
-    <value>Balanced</value>
+      <value>Balanced</value>
   </data>
   <data name="CustomModeWindow_Content_14" xml:space="preserve">
     <value>Efficiency first</value>
@@ -237,6 +237,18 @@
   <data name="CustomModeWindow_Text_23" xml:space="preserve">
     <value>Performance mode · Custom</value>
   </data>
+    <data name="CustomModeWindow_Text_24" xml:space="preserve">
+      <value>CPU max frequency</value>
+    </data>
+    <data name="CustomModeWindow_Text_25" xml:space="preserve">
+      <value>AC</value>
+    </data>
+    <data name="CustomModeWindow_Text_26" xml:space="preserve">
+      <value>DC</value>
+    </data>
+    <data name="CustomModeWindow_Text_27" xml:space="preserve">
+      <value>Blank = unchanged · 0 = no limit</value>
+    </data>
   <data name="CustomModeWindow_Title" xml:space="preserve">
     <value>Mode</value>
   </data>
@@ -544,13 +556,13 @@
     <value>iGPU Saving</value>
   </data>
   <data name="GpuDirectButton_Content" xml:space="preserve">
-    <value>dGPU Mode</value>
+      <value>dGPU only</value>
   </data>
   <data name="GpuHybridButton_Content" xml:space="preserve">
-    <value>Hybrid Mode</value>
+      <value>Hybrid</value>
   </data>
   <data name="GpuEcoButton_Content" xml:space="preserve">
-    <value>iGPU</value>
+      <value>iGPU only</value>
   </data>
   <data name="OriginalStyleWindow_Text_15" xml:space="preserve">
     <value>GPU Mode</value>
@@ -901,19 +913,19 @@
     <value>Custom performance modes and fan curves</value>
   </data>
   <data name="HomePageView_Content" xml:space="preserve">
-    <value>Integrated</value>
+      <value>iGPU only</value>
   </data>
   <data name="HomePageView_Content_2" xml:space="preserve">
-    <value>Dedicated</value>
+      <value>dGPU only</value>
   </data>
   <data name="HomePageView_Content_3" xml:space="preserve">
-    <value>Hybrid</value>
+      <value>Hybrid</value>
   </data>
   <data name="GpuCurrentText_Text" xml:space="preserve">
     <value>Current: Hybrid output</value>
   </data>
   <data name="PerfCurrentText_Text" xml:space="preserve">
-    <value>Current: Balanced</value>
+      <value>Current: Balanced</value>
   </data>
   <data name="LightingPageView_Text" xml:space="preserve">
     <value>Global lighting</value>
@@ -1663,7 +1675,7 @@
     <value>Silent</value>
   </data>
   <data name="ModeBalanced" xml:space="preserve">
-    <value>Balanced</value>
+      <value>Balanced</value>
   </data>
   <data name="ModeTurbo" xml:space="preserve">
     <value>Turbo</value>
@@ -1930,7 +1942,7 @@
     <value>Silent</value>
   </data>
   <data name="TrayBalanced" xml:space="preserve">
-    <value>Balanced</value>
+      <value>Balanced</value>
   </data>
   <data name="TraySilentTurbo" xml:space="preserve">
     <value>Silent Turbo</value>
@@ -2949,13 +2961,13 @@ Cancel: do not switch</value>
     <value>Back</value>
   </data>
   <data name="GpuModeIntegrated" xml:space="preserve">
-    <value>Integrated mode</value>
+      <value>iGPU only</value>
   </data>
   <data name="GpuModeHybrid" xml:space="preserve">
-    <value>Hybrid mode</value>
+      <value>Hybrid</value>
   </data>
   <data name="GpuModeDedicated" xml:space="preserve">
-    <value>Dedicated mode</value>
+      <value>dGPU only</value>
   </data>
   <data name="SilentTurbo" xml:space="preserve">
     <value>Silent Turbo</value>
