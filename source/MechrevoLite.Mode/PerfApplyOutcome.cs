@@ -28,7 +28,12 @@ public sealed record PerfApplyOutcome(string ModeId, IReadOnlyList<PerfApplyStep
 		{
 			if (Steps.Any((PerfApplyStepOutcome s) => IsSwitch(s.Step)))
 			{
-				return Steps.Where((PerfApplyStepOutcome s) => IsSwitch(s.Step)).All((PerfApplyStepOutcome s) => s.Result == PerfApplyResult.Confirmed);
+				// 声明 noVisualSync=1 的机型：档位回读不可用 ⇒ 切档步只能是"已下发·未确认"（Sent）。
+				// 这种机型把 Sent 当成功，否则每次切档都被判"未切换成功"，高亮与档位记忆都不更新。
+				bool switchVerifyUnavailable = MechrevoLite.Hardware.DeclarationRuntime.Flag("modeSpy", "noVisualSync");
+				return Steps.Where((PerfApplyStepOutcome s) => IsSwitch(s.Step)).All((PerfApplyStepOutcome s) =>
+					s.Result == PerfApplyResult.Confirmed
+					|| (switchVerifyUnavailable && s.Result == PerfApplyResult.Sent));
 			}
 			// ⭐ 宝龙达（无固件槽）：没有切换步骤是**预期**的 ⇒ 只要有下发步骤且都没失败，就算已生效 ✅
 			// 本地化后端没有固件槽：没有失败步骤即视为已生效（含零步骤重放）。

@@ -181,3 +181,7 @@ tmp_*.ps1
 修改日志.txt.bak*
 installer-src/files/修改日志.txt
 installer-src/files/修改日志.txt.bak*
+
+# 本地临时/诊断目录（不发布）
+/tmp*/
+/.plan-mode/

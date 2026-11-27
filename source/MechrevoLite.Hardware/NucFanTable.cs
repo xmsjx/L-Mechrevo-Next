@@ -209,16 +209,32 @@ internal static class NucFanTable
         return ok;
     }
 
+    /// <summary>本机是否有独立 GPU 表：声明表 fanCurve.params.gpuCurve 写 0 表示只有一路 PWM，GPU 表不写。</summary>
+    internal static bool GpuCurveSupported
+        => !string.Equals(DeclarationRuntime.Param("fanCurve", "gpuCurve"), "0", StringComparison.Ordinal);
+
     internal static bool TryApply(byte[] cpuTemps, int[] cpuDuties, byte[] gpuTemps, int[] gpuDuties, out string detail)
         => TryApply(cpuTemps, cpuDuties, gpuTemps, gpuDuties, "应用", out detail);
 
     /// <summary>带来源的下发：整表写入串行化，同一张表不重复写，现场一致时直接跳过。</summary>
-    internal static bool TryApply(byte[] cpuTemps, int[] cpuDuties, byte[] gpuTemps, int[] gpuDuties, string source, out string detail)
+    internal static bool TryApply(byte[] cpuTemps, int[] cpuDuties, byte[] gpuTemps, int[] gpuDuties, string source, out string detail, bool includeGpu = true)
     {
+        if (DeclarationRuntime.FeatureBlocked("fanCurve", "ec", "gcu"))
+        {
+            detail = "声明表判定本机无风扇曲线通道，未写任何寄存器";
+            return false;
+        }
+        // 老双模模具的固件自己维护风扇状态机：往里塞 RAM 风扇表会把它搞乱，直接让给固件曲线。
+        if (UefiGpuMux.IsLegacyDualModeConfirmed)
+        {
+            detail = "老双模模具：风扇表由固件维护，软件不注入（" + source + "）";
+            Logger.WriteLine("[fan] " + detail);
+            return false;
+        }
         WriteGate.Wait();
         try
         {
-            return TryApplyLocked(cpuTemps, cpuDuties, gpuTemps, gpuDuties, source, out detail);
+            return TryApplyLocked(cpuTemps, cpuDuties, gpuTemps, gpuDuties, source, includeGpu, out detail);
         }
         finally
         {
@@ -231,7 +247,7 @@ internal static class NucFanTable
     private static string _lastSignature = string.Empty;
     private static DateTime _lastAppliedAt = DateTime.MinValue;
 
-    private static bool TryApplyLocked(byte[] cpuTemps, int[] cpuDuties, byte[] gpuTemps, int[] gpuDuties, string source, out string detail)
+    private static bool TryApplyLocked(byte[] cpuTemps, int[] cpuDuties, byte[] gpuTemps, int[] gpuDuties, string source, bool includeGpu, out string detail)
     {
         detail = "";
         if (cpuTemps.Length != 16 || gpuTemps.Length != 16 || cpuDuties.Length != 16 || gpuDuties.Length != 16)
@@ -246,13 +262,17 @@ internal static class NucFanTable
         }
 
         byte[] cpuDuty = NormalizeDuty(cpuDuties);
-        byte[] gpuDuty = NormalizeDuty(gpuDuties);
-        byte gpuTail = Math.Max(gpuDuty[12], gpuDuty[15]);
-        gpuDuty[13] = Math.Max(gpuDuty[13], gpuTail);
-        gpuDuty[14] = Math.Max(gpuDuty[14], gpuTail);
-        gpuDuty[15] = gpuTail;
+        // 只有一路 PWM 的机型不碰 GPU 表：整段跳过，也不参与最大占空比计算。
+        byte[] gpuDuty = includeGpu ? NormalizeDuty(gpuDuties) : (byte[])cpuDuty.Clone();
+        if (includeGpu)
+        {
+            byte gpuTail = Math.Max(gpuDuty[12], gpuDuty[15]);
+            gpuDuty[13] = Math.Max(gpuDuty[13], gpuTail);
+            gpuDuty[14] = Math.Max(gpuDuty[14], gpuTail);
+            gpuDuty[15] = gpuTail;
+        }
         byte[] cpuDown = BuildDown(cpuTemps);
-        byte[] gpuDown = BuildDown(gpuTemps);
+        byte[] gpuDown = includeGpu ? BuildDown(gpuTemps) : (byte[])cpuDown.Clone();
 
         int maxDuty = Math.Max(cpuDuty[15], gpuDuty[15]);
         int ctrl = Math.Max(maxDuty, 160);
@@ -277,9 +297,12 @@ internal static class NucFanTable
         for (int i = 0; i < 16; i++) if (!TryWrite(CpuUptBase + i, cpuTemps[i])) { detail = "CPU UpT 写入失败@" + i; return false; }
         for (int i = 0; i < 16; i++) if (!TryWrite(CpuDowntBase + i, cpuDown[i])) { detail = "CPU DownT 写入失败@" + i; return false; }
         for (int i = 0; i < 16; i++) if (!TryWrite(CpuDutyBase + i, cpuDuty[i])) { detail = "CPU Duty 写入失败@" + i; return false; }
-        for (int i = 0; i < 16; i++) if (!TryWrite(GpuUptBase + i, gpuTemps[i])) { detail = "GPU UpT 写入失败@" + i; return false; }
-        for (int i = 0; i < 16; i++) if (!TryWrite(GpuDowntBase + i, gpuDown[i])) { detail = "GPU DownT 写入失败@" + i; return false; }
-        for (int i = 0; i < 13; i++) if (!TryWrite(GpuDutyBase + i, gpuDuty[i])) { detail = "GPU Duty 写入失败@" + i; return false; }
+        if (includeGpu)
+        {
+            for (int i = 0; i < 16; i++) if (!TryWrite(GpuUptBase + i, gpuTemps[i])) { detail = "GPU UpT 写入失败@" + i; return false; }
+            for (int i = 0; i < 16; i++) if (!TryWrite(GpuDowntBase + i, gpuDown[i])) { detail = "GPU DownT 写入失败@" + i; return false; }
+            for (int i = 0; i < 13; i++) if (!TryWrite(GpuDutyBase + i, gpuDuty[i])) { detail = "GPU Duty 写入失败@" + i; return false; }
+        }
         // 阈值 / 控制器 / 锁存也要确认写进去了：只写表体、尾部失败仍报成功，会让上层以为曲线已生效。
         bool tailOk = TryWrite(GpuMax1, maxDuty);
         tailOk &= TryWrite(GpuMax2, maxDuty);

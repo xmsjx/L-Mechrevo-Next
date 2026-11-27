@@ -929,6 +929,13 @@ public class MechrevoHw : IDisposable
 				// 避免在无独显机型上凭一个回答造出显卡面板/托盘项。
 				return DgpuGeneration != DgpuGenerationKind.NoDgpu;
 			}
+			// 判据优先级：NVRAM > 独显存在性。固件里真的有显示模式变量 ⇒ 本机存在 MUX，
+			// 这个结论压过能力位和"有没有独显"的推断（dGPU 会被停用或摘出设备树，注册表残留还会凭空造出一张卡）。
+			if (UefiGpuMux.HasMuxVariable)
+			{
+				Logger.WriteLineIfChanged("igpu-mux-nvram", "IgpuOnly offered: firmware exposes display-mode NVRAM (NVRAM outranks dGPU presence)");
+				return IsGpuActionAllowedByGeneration("DGPU_DIRECT_CONNECT_TOGGLE_IGPU");
+			}
 			if (UefiGpuMux.IsLegacyOrUnknownMux)
 			{
 				Logger.WriteLineIfChanged("igpu-mux-legacy", "IgpuOnly hidden by default: no modern OemDisplayMode NVRAM (Legacy Dual-Mode / unknown chassis)");
@@ -1103,6 +1110,7 @@ public class MechrevoHw : IDisposable
 /// <summary>EC 本地的 USB Logo 证据（只读已缓存结果，不触发 HID 枚举；null=尚未采集）。</summary>
 internal bool? EcLogoEvidence =>
     IteLightingLocal.TryGetUsbLogoCached(out bool value) ? value : (bool?)null;
+
 
     private static bool? _mbaLogoSupport;
 
@@ -1469,6 +1477,9 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			return directGpuOverclockEnabled ?? OcSwitch;
 		}
 	}
+
+	/// <summary>本机是否有在用的独显：无独显机型不显示显卡超频相关界面。</summary>
+	public bool HasDiscreteGpu => MechrevoLite.Gpu.GpuRouteProbe.ReadPresence() != MechrevoLite.Gpu.DgpuPresence.Absent;
 
 	public bool GpuCoreOffsetAdjustable => IsOffsetAdjustable(GpuCoreOffsetUserMinimum, GpuCoreOffsetUserMaximum);
 
@@ -2045,6 +2056,9 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 
 	public byte[] GpuCurveDuty { get; private set; } = new byte[16];
 
+	/// <summary>本机是否有独立的 GPU 风扇曲线通道；声明表把 fanCurve.params.gpuCurve 写成 0 表示只有一路 PWM。</summary>
+	public bool SupportsGpuFanCurve => NucFanTable.GpuCurveSupported;
+
 	/// <summary>
 	/// ⭐⭐ 2026-10-15（C-1 第 2 步）：**GCU 后端**是否可用 —— 语义与改动前的 <c>IsConnected</c> <b>逐字相同</b>
 	/// （「会话是否可用」：订阅也成了才算；带 publishOverride 的测试/审计通路恒为 true）。
@@ -2122,11 +2136,8 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	internal bool SupportsControlModeSwitch =>
 		MechrevoLite.Hardware.Architecture.FeatureGate.ResolveSupportOrLegacy(
 			MechrevoLite.Hardware.Architecture.FeatureId.ControlModeSwitch, this,
-			// 旧判据四项并集：同方家族 / 无界 SMU（APU 独显版）/ 型号识别为同方 / GCU 已连接。
-			// 只看 IsTongfangFamily || IsGcuConnected 会漏掉「无独显的无界 APU」和「LastDecision 尚未落定」。
-			IsTongfangFamily || WujieSmuApu
-			|| MachineIdentity.Collect().TongfangFamily
-			|| IsGcuConnected);
+			// 只有同方系的机器才有 GCU 模式 / EC 模式两条路可选；其它模具没有这一路。
+			IsTongfangFamily || MachineIdentity.Collect().TongfangFamily);
 
 	/// <summary>控制模式切换门控的判定依据（诊断日志用，只读）。</summary>
 	internal string ControlModeSwitchReason
@@ -2455,6 +2466,26 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		// 其余 internal 构造（注入 publishOverride 的测试/UI 审计、注入 capabilities 的假硬件）一律不探
 		// ⇒ 审计与单测在**任何机器上**结果都不变（老接口后端绝不参与）。
 		_allowLegacyProbe = true;
+		// 开机后补两件事：强冷状态按 EC 回读对齐；关机 USB 给电按记忆重下发（这一位重启会掉）。
+		QueueBootStateSync();
+	}
+
+	private void QueueBootStateSync()
+	{
+		Task.Run(async delegate
+		{
+			try
+			{
+				await Task.Delay(5000).ConfigureAwait(continueOnCapturedContext: false);
+				SyncEcFanBoostState();
+				NucQuickSwitches.ApplyPersistedUsbCharge(this);
+				NucQuickSwitches.ApplyPersistedFnLock(this);
+			}
+			catch (Exception ex)
+			{
+				Logger.WriteError("[boot] 开机状态对齐失败：" + ex.Message);
+			}
+		});
 	}
 
 	internal MechrevoHw(string clientId)
@@ -2868,12 +2899,20 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		get
 		{
+			// 声明 blocked=1（没有独立强冷位）的机型连入口都不给，避免点了没反应或改动档位。
+			if (MechrevoLite.Hardware.DeclarationRuntime.Flag("fanBoost", "blocked"))
+			{
+				return false;
+			}
 			bool oldPredicate = SupportsFanBoost || UsesBaolongda;
 			// NUC/UMI 与同方 EC-only 的强冷都走本地 EC 0x751 bit6，不依赖 GCU 能力位。
 			// EC-only 由门控（TongfangEc 声明 FanBoost=Supported/Local）决定，旧判据只在 Unknown 时兜底。
 			// 本机 EC clamp（0x751）可读 ⇒ 强冷可用，不依赖 GCU 是否在线。
+			// ⚠️ 「0x751 可读」只说明这条路能读，不说明这台机器的强冷位在这里：
+			//   EC-only 机型 0x751 同时承载档位信息，把它当"强冷可用"曾把入口放给没有独立强冷位的机型。
+			//   ⇒ 强冷可见性只按声明/能力位判定，⛔ 探测可读不再作为支持依据（可读仅记日志）。
 			bool ecClampReady = AcpiDriverEc.TryReadByte(0x751, out _);
-			bool legacyVisible = oldPredicate || WujieSmuApu || IsNucUmiFamily || ecClampReady;
+			bool legacyVisible = oldPredicate || WujieSmuApu || IsNucUmiFamily;
 			bool visible = legacyVisible;
 			string declared = "n/a";
 			try
@@ -2929,7 +2968,9 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 			"usb" => !UsesBaolongda, 
 			"deepsleep" => DeepSleepSeen, 
 			"copilot" => CopilotSeen || XingyaoQuickSwitch.IsApplicable(this), 
-			"acrecovery" => Capabilities.AcRecovery || AcRecoverySeen || IsNucUmiFamily, 
+			// 声明表明文说本机没有这一项（控制台不提供）⇒ 整条隐藏，不做旧判据回退。
+			"acrecovery" => !DeclarationRuntime.FeatureBlocked("acRecovery", "ec")
+				&& (Capabilities.AcRecovery || AcRecoverySeen || IsNucUmiFamily), 
 			// ⇒ 界面显示"下发被拒、已回滚"（机主日志 [QS-apply] 键=highperf 下发结果=False）
 			"highperf" => true, 
 			// （风扇强冷 · 无 GCU）：宝龙达用本机通道（EC 目标档/掩码 + 13 回读）
@@ -4673,6 +4714,12 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	// 本机键盘灯亮度**上限**（硬件级）—— UI 滑块与所有下发夹取**共用这一个来源** 。
 	internal static int EffectiveKeyboardBrightnessMax()
 	{
+		// 声明了亮暗档数的机型以声明为准（例如只有开/关的白光机，界面不该再给出两个亮度）。
+		int declaredLevels = MechrevoLite.Hardware.EcKeyboardLight.DeclaredLevels;
+		if (declaredLevels > 0)
+		{
+			return declaredLevels;
+		}
 		MechrevoHw hw = Program.hw;
 		KeyboardLightingCalibration caps = hw?.KeyboardLightingCaps;
 		if (caps != null && caps.BrightnessProbed)
@@ -5134,6 +5181,13 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		: 0;
 
 	/// <summary>
+	/// 界面"转速 → 百分比"的显示分母：宝龙达按代际（40 系 6000 / 30 系 4900），
+	/// 其余机型按满转 6000 RPM 折算（超过 100% 由调用方压回）。
+	/// ⚠️ 只用于显示，⛔ 不参与风扇曲线/下发通道的分母。
+	/// </summary>
+	public int FanRpmPercentDisplayMax => UsesBaolongda ? FanRpmMaxForPercent : 6000;
+
+	/// <summary>
 	/// ⭐⭐ 2026-10-18（机主 30 系反馈）：⭐ 宝龙达风扇百分比的**显示上限** = **140%** ✅
 	/// <para>⭐ 依据：机主新基准下 30 系 100% = 4900 RPM；140% 只作为**显示余量**
 	/// （⭐ 实测上限一般就是 100% 附近；⛔ 不会真到 140%）✅</para>
@@ -5525,7 +5579,11 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 				&& ((read & 0x40) != 0) == on;
 			if (confirmed)
 			{
+				// ⭐ 这一位是唯一真状态：软件侧（界面 / 曲线守卫 / 上层"已应用"判断）都从这里取值，
+				//   以前只写 QuickSwitches，导致关闭时被 upstream 判成"已经是关"而根本不下发。
 				QuickSwitches["fanboost"] = on;
+				FanBoost = on;
+				_fanBoostActive = on;
 			}
 			Logger.WriteError("[fan] EC强冷=" + on + " clamp=0x" + target.ToString("X2") + " confirmed=" + confirmed);
 			return true;
@@ -5533,6 +5591,32 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 		catch (Exception ex)
 		{
 			Logger.WriteError("[fan] EC强冷失败：" + ex.GetType().Name + " " + ex.Message);
+			return false;
+		}
+	}
+
+	/// <summary>
+	/// 按 EC 回读刷新强冷状态。重启后软件侧是关、硬件 bit6 可能仍是开，
+	/// 不同步就会出现「外面开关显示关、实际强冷还在」。
+	/// </summary>
+	internal bool SyncEcFanBoostState()
+	{
+		try
+		{
+			if (IsNucUmiFamily || IsGcuConnected || !AcpiDriverEc.TryReadByte(1873, out byte value))
+			{
+				return false;
+			}
+			bool on = (value & 0x40) != 0;
+			QuickSwitches["fanboost"] = on;
+			FanBoost = on;
+			_fanBoostActive = on;
+			Logger.WriteLineIfChanged("fan-boost-state-sync", "[fan] 强冷状态按 EC 回读同步 ⇒ " + (on ? "开" : "关"));
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[fan] 强冷状态同步失败：" + ex.Message);
 			return false;
 		}
 	}
@@ -6437,6 +6521,10 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	// 软件闭环是否已被当前目标档“武装”；交回固件后必须 disarm，否则 3 s tick 会重新接管。
 	private volatile bool _fanCurveArmed;
 	private volatile bool _fanCurveRestorePending;
+	/// <summary>本轮交回已尝试次数（成功或重新武装后清零）。</summary>
+	private int _fanCurveRestoreAttempts;
+	/// <summary>交回最多试几次（每次由下一轮 tick 重试），之后才认定交不回去。</summary>
+	private const int FanCurveRestoreMaxAttempts = 3;
 	private readonly object _fanCurveIoGate = new object();
 
 	private const int BaolongdaCurveReassertMs = 30000;
@@ -7213,16 +7301,50 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 				+ "（⭐ 可能是上次被强杀留下的 ⚠️）⇒ ⭐ 现在交回固件控制 ✅");
 			// ⭐⭐ 2026-10-18（统一门面）：⭐ 交回固件改走 `FanWriter`（ACPI EC → LPC/SMU-EC）；
 			//   ⛔ 不再写 WMI 20/21（20=1 真机卡死；写 0 也统一走 EC）✅
-			bool released = FanWriter.TryReleaseToFirmware(out string releaseDetail);
+			bool released = FanWriter.TryReleaseToFirmware(out string releaseDetail, CpuTemp, GpuTemp);
 			if (released)
 			{
 				_baolongdaFanCurveApplied = false;
+				_fanCurveRestoreAttempts = 0;
+				_fanCurveRestorePending = false;
 				Logger.WriteLine($"宝龙达风扇曲线：⭐ 已交回固件控制（{releaseDetail} ✅）");
 			}
 			else
 			{
 				_baolongdaFanCurveApplied = false;
-				Logger.WriteLine("宝龙达风扇曲线：⚠️ 交回固件未确认（通道均失败）⇒ 已记录、⛔ 不假装成功：" + releaseDetail);
+				_fanCurveRestoreAttempts++;
+				Logger.WriteLine("宝龙达风扇曲线：⚠️ 交回固件未确认（第 " + _fanCurveRestoreAttempts + " 次 · 通道均失败）⇒ ⛔ 不假装成功：" + releaseDetail);
+				if (_fanCurveRestoreAttempts < FanCurveRestoreMaxAttempts)
+				{
+					// 宝龙达响应慢：EC 可能只是还没接住 ⇒ 下一轮 tick 再试，别急着把控制权抢回来。
+					_fanCurveRestorePending = true;
+					Logger.WriteLine("[fan] 交回未确认 ⇒ 下一轮 tick 重试（" + _fanCurveRestoreAttempts + "/" + FanCurveRestoreMaxAttempts + "）");
+				}
+				else
+				{
+					// 多次都交不回去：⛔ 不留下“掩码置位 + 没人管”的固定转速。
+					// 用户自己的曲线还开着 ⇒ 重新武装闭环，风扇至少按温度走；没有可用曲线才只能如实记录。
+					string targetModeId = string.IsNullOrWhiteSpace(_fanCurveModeId)
+						? MechrevoLite.Mode.PerfModeService.Instance?.ActiveModeId
+						: _fanCurveModeId;
+					BaolongdaFanCurveSettings fallbackCurve = LoadBaolongdaFanCurve(targetModeId);
+					if (fallbackCurve != null && fallbackCurve.Enabled && !fallbackCurve.IsUnreadableArchive
+						&& !_fanCurveUnsupported && !_fanBoostActive)
+					{
+						_fanCurveRestoreAttempts = 0;
+						_fanCurveArmed = true;
+						_baolongdaCurveDecider0.Reset();
+						_baolongdaCurveDecider1.Reset();
+						Logger.WriteError("[fan] ⚠️ 交回固件连续 " + FanCurveRestoreMaxAttempts + " 次未确认 ⇒ 重新武装曲线闭环（档位="
+							+ targetModeId + "），风扇继续按曲线跑，⛔ 不停在固定转速");
+						ApplyBaolongdaFanCurveStep();
+					}
+					else
+					{
+						Logger.WriteError("[fan] ⚠️ 交回固件连续 " + FanCurveRestoreMaxAttempts
+							+ " 次未确认且没有可用曲线 ⇒ 风扇停在当前目标，需重启或切换档位恢复");
+					}
+				}
 			}
 		}
 		catch (Exception ex)

@@ -350,6 +350,46 @@
                     </StackPanel>
                 </Border>
 
+                <Border x:Name="SystemSnapshotCard" Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="系统设置恢复基准" Style="{StaticResource CardTitle}" />
+                        <TextBlock Text="切模式时先恢复下面这些值，再下发新模式；每项只在第一次要改它时记录一次，之后不再覆盖。"
+                                   Style="{StaticResource Hint}" TextWrapping="Wrap" />
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="电源计划" VerticalAlignment="Center" />
+                            <TextBlock x:Name="SysSnapPlanText" Grid.Column="1" Style="{StaticResource Hint}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="Windows 电源模式" VerticalAlignment="Center" />
+                            <TextBlock x:Name="SysSnapOverlayText" Grid.Column="1" Style="{StaticResource Hint}" />
+                        </Grid>
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="CPU 睿频模式" VerticalAlignment="Center" />
+                            <TextBlock x:Name="SysSnapBoostText" Grid.Column="1" Style="{StaticResource Hint}" />
+                        </Grid>
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="屏幕刷新率" VerticalAlignment="Center" />
+                            <TextBlock x:Name="SysSnapHzText" Grid.Column="1" Style="{StaticResource Hint}" />
+                        </Grid>
+                        <Grid Margin="0,4,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="处理器最大频率" VerticalAlignment="Center" />
+                            <TextBlock x:Name="SysSnapFreqText" Grid.Column="1" Style="{StaticResource Hint}" />
+                        </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                            <Button x:Name="SysSnapRecaptureButton" Content="以当前系统状态重新记录" Style="{StaticResource FlatButton}"
+                                    Click="SysSnapRecapture_Click" Margin="0,0,12,0" />
+                            <Button x:Name="SysSnapClearButton" Content="关闭自动恢复" Style="{StaticResource FlatButton}"
+                                    Click="SysSnapClear_Click" />
+                        </StackPanel>
+                        <TextBlock x:Name="SysSnapStatus" Style="{StaticResource Hint}" Margin="0,6,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
                 <Border x:Name="CustomButtonCard" Style="{StaticResource Card}" Visibility="Collapsed">
                     <StackPanel>
                         <TextBlock Text="性能模式按键" Style="{StaticResource CardTitle}" />

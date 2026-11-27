@@ -16,6 +16,14 @@ public static class PerfModeStore
 	// （开机档位重放）：用户最后一次明确选的档位，与 perf_active 分开保存。
 	internal const string BootIntentKey = "perf_boot_intent";
 
+	// 工作模式（办公档）的两个预设：标准 / 节能。两者在 EC 上写的是同一个档位值，
+	// 回读分不出来，所以"当前选的是哪个"只能记在配置里。
+	internal const string OfficePresetKey = "perf_office_preset";
+
+	internal const string OfficePresetStd = "std";
+
+	internal const string OfficePresetEco = "eco";
+
 	internal const string SchemaKey = "perf_schema";
 
 	internal const int CurrentSchema = 1;
@@ -42,6 +50,46 @@ public static class PerfModeStore
 	}
 
 	public static bool HasStoredActive => !string.IsNullOrWhiteSpace(AppConfig.GetString("perf_active"));
+
+	/// <summary>
+	/// 办公档预设：<c>eco</c> / <c>std</c>，未选过为 null。
+	/// EC 上办公档只有一个档位值，标准与节能的差别只在参数上，因此这一项是唯一能区分两者的依据。
+	/// </summary>
+	public static string? OfficePreset
+	{
+		get
+		{
+			string text = AppConfig.GetString(OfficePresetKey);
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				return null;
+			}
+			text = text.Trim();
+			return string.Equals(text, OfficePresetEco, StringComparison.OrdinalIgnoreCase) ? OfficePresetEco
+				: string.Equals(text, OfficePresetStd, StringComparison.OrdinalIgnoreCase) ? OfficePresetStd
+				: null;
+		}
+		set
+		{
+			string? normalized = value;
+			if (!string.IsNullOrWhiteSpace(normalized))
+			{
+				normalized = normalized!.Trim();
+				normalized = string.Equals(normalized, OfficePresetEco, StringComparison.OrdinalIgnoreCase) ? OfficePresetEco
+					: string.Equals(normalized, OfficePresetStd, StringComparison.OrdinalIgnoreCase) ? OfficePresetStd
+					: null;
+			}
+			if (normalized == null)
+			{
+				AppConfig.Remove(OfficePresetKey);
+			}
+			else
+			{
+				AppConfig.Set(OfficePresetKey, normalized);
+			}
+			AppConfig.Flush();
+		}
+	}
 
 	// （开机档位重放）：把"用户意图"与"当前状态"分开。启动对账会按固件回读改写 ActiveModeId，
 	// 若意图只存在那里，固件一旦回默认档，重启后就没有依据可重放了。
@@ -263,7 +311,9 @@ public static class PerfModeStore
 			WindowsPowerMode = GetInt(id, "power"),
 			CpuBoost = GetInt(id, "boost"),
 			PowerPlanGuid = (string.IsNullOrWhiteSpace(text) ? null : text),
-			RefreshHz = GetInt(id, "hz")
+			RefreshHz = GetInt(id, "hz"),
+			ProcessorMaxFreqAc = GetInt(id, "freqac"),
+			ProcessorMaxFreqDc = GetInt(id, "freqdc")
 		};
 	}
 
@@ -307,6 +357,8 @@ public static class PerfModeStore
 			AppConfig.Set(name, settings.PowerPlanGuid);
 		}
 		PutInt(id, "hz", settings.RefreshHz);
+		PutInt(id, "freqac", settings.ProcessorMaxFreqAc);
+		PutInt(id, "freqdc", settings.ProcessorMaxFreqDc);
 		AppConfig.Flush();
 	}
 

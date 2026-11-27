@@ -58,6 +58,7 @@ public partial class SettingsWindow : Window
   Loaded += (_, _) =>
   {
       LoadCustomButtonAction();
+      RefreshSysSnap();
       PositionAdjacentToOwner();
       SchedulePeripheralBatteryRefresh();
   };
@@ -552,6 +553,118 @@ public partial class SettingsWindow : Window
         {
         }
         Application.Current.Shutdown();
+    }
+
+    /// <summary>刷新"系统设置恢复基准"那张卡：显示已记录的原值，未记录的写明自动记录时机。</summary>
+    private void RefreshSysSnap()
+    {
+        try
+        {
+            if (SysSnapPlanText == null)
+            {
+                return;
+            }
+            SysSnapPlanText.Text = DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field.PowerPlan);
+            SysSnapOverlayText.Text = DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field.PowerOverlay);
+            SysSnapBoostText.Text = DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field.CpuBoost);
+            SysSnapHzText.Text = DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field.RefreshHz);
+            SysSnapFreqText.Text = DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field.ProcessorMaxFreq);
+            bool enabled = MechrevoLite.Mode.ModeSystemSnapshot.Enabled;
+            SysSnapStatus.Text = enabled
+                ? "自动恢复已开启：切模式时先恢复这里的值，再下发新模式的配置。"
+                : "自动恢复已关闭：切模式只改不恢复（等于旧行为）。要重新启用点「以当前系统状态重新记录」。";
+            SysSnapClearButton.Content = enabled ? "关闭自动恢复" : "已关闭";
+        }
+        catch (Exception ex)
+        {
+            if (SysSnapStatus != null)
+            {
+                SysSnapStatus.Text = "读取基准失败：" + ex.Message;
+            }
+        }
+    }
+
+    private static string DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field field)
+    {
+        string? saved = MechrevoLite.Mode.ModeSystemSnapshot.Get(field);
+        if (string.IsNullOrWhiteSpace(saved))
+        {
+            return "未记录（第一次要改它时自动记录当时的系统值）";
+        }
+        string text = saved;
+        if (field == MechrevoLite.Mode.ModeSystemSnapshot.Field.PowerPlan)
+        {
+            // 电源计划存的是 GUID，显示成中文名更好认；查不到就原样显示。
+            try
+            {
+                foreach (var plan in MechrevoLite.Hardware.WinPowerPlan.GetPlans())
+                {
+                    if (string.Equals(plan.Guid, saved, StringComparison.OrdinalIgnoreCase))
+                    {
+                        text = plan.Name;
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+        else if (field == MechrevoLite.Mode.ModeSystemSnapshot.Field.PowerOverlay)
+        {
+            text = saved switch
+            {
+                "0" => "最佳能效",
+                "2" => "最佳性能",
+                _ => "平衡"
+            };
+        }
+        else if (field == MechrevoLite.Mode.ModeSystemSnapshot.Field.RefreshHz)
+        {
+            text = saved + " Hz";
+        }
+        else if (field == MechrevoLite.Mode.ModeSystemSnapshot.Field.ProcessorMaxFreq)
+        {
+            // 存的是 "插电,离电"（MHz，0 = 不限制）。
+            string[] parts = saved.Split(',', StringSplitOptions.TrimEntries);
+            if (parts.Length == 2)
+            {
+                string Show(string v) => (v == "0") ? "不限制" : (v + " MHz");
+                text = "插电 " + Show(parts[0]) + " · 离电 " + Show(parts[1]);
+            }
+        }
+        return text + "（已记录）";
+    }
+
+    private void SysSnapRecapture_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            MechrevoLite.Mode.ModeSystemSnapshot.Enabled = true;
+            int count = MechrevoLite.Mode.ModeSystemSnapshot.RecaptureAll();
+            RefreshSysSnap();
+            SysSnapStatus.Text = count > 0
+                ? "已用当前系统状态重记 " + count + "/4 项基准。"
+                : "当前系统状态读不到（电源/刷新率接口无响应），未改动基准。";
+        }
+        catch (Exception ex)
+        {
+            SysSnapStatus.Text = "重新记录失败：" + ex.Message;
+        }
+    }
+
+    private void SysSnapClear_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            MechrevoLite.Mode.ModeSystemSnapshot.Clear();
+            RefreshSysSnap();
+            SysSnapStatus.Text = "已清除基准并关闭自动恢复。";
+        }
+        catch (Exception ex)
+        {
+            SysSnapStatus.Text = "关闭失败：" + ex.Message;
+        }
     }
 
     private void PerfOnBattery_Click(object sender, RoutedEventArgs e)
@@ -1116,9 +1229,17 @@ public partial class SettingsWindow : Window
         IsolationButton.Content = status.Isolated ? WpfStrings.CancelIsolation : WpfStrings.IsolateOfficial;
         if (status.Isolated)
         {
-            OfficialStatus.Text += status.GcuServicesDisabled
-                ? " · EC 模式：GCU 服务已停用（开机不自启）"
-                : " · GCU 模式：GCU 服务保留";
+            bool ecMode = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive;
+            if (status.GcuServicesDisabled)
+            {
+                OfficialStatus.Text += ecMode
+                    ? " · EC 模式：GCU 服务已停用（开机不自启）"
+                    : " · GCU 模式：GCU 服务尚未恢复（点「取消隔离」恢复）";
+            }
+            else if (!ecMode)
+            {
+                OfficialStatus.Text += " · GCU 模式：GCU 服务保留";
+            }
         }
     }
 

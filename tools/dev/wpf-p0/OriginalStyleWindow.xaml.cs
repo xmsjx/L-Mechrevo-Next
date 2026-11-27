@@ -78,10 +78,7 @@ public partial class OriginalStyleWindow : Window
     /// <para>GCU 未连接时后端能力位可能给不出结论，这里再按机器事实兜一层，避免卡片整块消失。</para>
     internal bool IsTongfangFamilyForSettings =>
         L_Mechrevo.WpfP0.Services.WpfBackend.ControlModeSwitchSupported
-        || (!L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
-            && (L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily
-                || L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram?.WujieSmuApu == true
-                || MechrevoLite.Hardware.MachineIdentity.Collect().TongfangFamily));
+        || MechrevoLite.Hardware.MachineIdentity.Collect().TongfangFamily;
 
     /// <summary>控制模式卡片的判定依据，仅用于诊断日志。</summary>
     internal string ControlModeCardReason => L_Mechrevo.WpfP0.Services.WpfBackend.ControlModeSwitchReason;
@@ -153,6 +150,8 @@ public partial class OriginalStyleWindow : Window
     private long _lastPerfKeyOsdTick;
     private long _lastSwitchModeOsdTick;
     private int _lastKeyboardBrightnessOsd = -2;
+    /// <summary>上一次已按模式套用过风扇档的模式 id（用于“切档时套用各自记忆”）。</summary>
+    private string? _fanTierModeApplied;
     private bool? _lastKeyboardPowerForOsd;
     private long _keyboardOsdSilentUntil = Environment.TickCount64 + 8000;
     private static long _keyboardBrightnessOsdSuppressUntil;
@@ -257,6 +256,9 @@ public partial class OriginalStyleWindow : Window
     private bool EcLocalControl =>
         IsEcLocalRoute || (IsEcModeActive && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected);
     private int _lastEcOnlyVisual = -1;
+
+    /// <summary>待确认的 EC 视觉档：连续两次读到同一个新值才认，防止写入中间态把档位打回去。</summary>
+    private int _pendingEcOnlyVisual = -1;
     private int _gcuConnectFailures;
     private const string QuickTilesConfigKey = "perf_quick_tiles";
     private const string QuickTilesEmptySentinel = "-";
@@ -1491,6 +1493,25 @@ public partial class OriginalStyleWindow : Window
     }
 
     /// <summary>
+    /// 限充为步进三档方案（位对式）⇒ 只给三档按钮，不给「无极限充」滑块/实验行。
+    /// <para>该方案只有固定档位，没有可写的百分比寄存器 ⇒ 滑块填任何值都只能折算成三档，留着反而误导。</para>
+    /// </summary>
+    internal static bool ChargeLimitUsesSteppedLevels
+    {
+        get
+        {
+            try
+            {
+                return MechrevoLite.Hardware.EcChargeLimit.UsesSteppedLevels;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
+
+    /// <summary>
     /// ⭐⭐ 2026-10-26（task-18）：电池「无极限充（实验行 ＋ 滑块）」是否应显示/创建 ✅
     /// <para>⭐ 判据与旧 WinForms <c>SettingsForm.ChargeSliderSupported()</c> 逐条对齐：</para>
     /// <list type="number">
@@ -1509,6 +1530,11 @@ public partial class OriginalStyleWindow : Window
         {
             try
             {
+                // 步进三档方案：没有百分比寄存器 ⇒ 无极限充滑块不建行（三档按钮照常）。
+                if (ChargeLimitUsesSteppedLevels)
+                {
+                    return false;
+                }
                 if (!WideChargeLimitVisible && !WideEcTransportSupported)
                 {
                     return false;
@@ -3223,7 +3249,7 @@ public partial class OriginalStyleWindow : Window
     private void InitBatteryControls()
     {
         ApplyBatteryLimitVisibility();
-        ChargeSliderToggle.IsChecked = AppConfig.Is("charge_limit_slider");
+        ChargeSliderToggle.IsChecked = !ChargeLimitUsesSteppedLevels && AppConfig.Is("charge_limit_slider");
         BatteryLimitSlider.Visibility = ChargeSliderToggle.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         if (BatteryLimitSliderText != null) BatteryLimitSliderText.Visibility = ChargeSliderToggle.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         RefreshChargeGatePinRow(ChargeSliderToggle.IsChecked == true);
@@ -3318,7 +3344,7 @@ public partial class OriginalStyleWindow : Window
         ChargeLimitRow.Visibility = thresholdRows;
         ChargeLimitInputRow.Visibility = thresholdRows;
         ChargeLimitStatus.Visibility = visibility;
-        ChargeSliderToggle.Visibility = (visibility == Visibility.Visible && !baolongda) ? Visibility.Visible : Visibility.Collapsed;
+        ChargeSliderToggle.Visibility = (visibility == Visibility.Visible && !baolongda && !ChargeLimitUsesSteppedLevels) ? Visibility.Visible : Visibility.Collapsed;
         RefreshXingyaoChargeLimitUi();
         if (!supported)
         {
@@ -4164,7 +4190,7 @@ public partial class OriginalStyleWindow : Window
                 {
                     // GCU 内置档由固件表接管：不要套用 NUC/UMI 那套默认功耗表，
                     // 那套会写 1963 低 4 位风扇模式，把 GCU 的模式字节写坏。
-                    Logger.WriteError("[gcu-ec] 实验通道接管模式 " + mode + "：" + ecDetail);
+                    Logger.WriteError("[gcu-ec] EC 通道接管模式 " + mode + "：" + ecDetail);
                     result = L_Mechrevo.WpfP0.Services.WpfBackend.ModeResultOk;
                 }
                 else
@@ -4537,14 +4563,43 @@ public partial class OriginalStyleWindow : Window
     private void ApplyKeyboardBrightnessHotkey(int level)
     {
         bool white = IsWhiteBacklightForOsd();
-        int clamped = Math.Clamp(level, 0, white ? 2 : 4);
+        // 白光键盘（EC 0x78C）只有关/暗/亮三态：按寄存器**真实档位**循环，不用软件计数器。
+        // 按键本身会先写一次寄存器（早于 ACPI 通知），软件计数会和硬件错开，
+        // 错开之后就会把"暗"写成"亮"，看起来像亮度键失灵。
+        // 声明 hotkey=0：亮度键由固件直接改 0x78C，软件**不回写**。
+        // 回写会和按键抢同一个字节：读到的是旧值、写的时候 EC 已被固件改过，
+        // 表现就是"按一下先变暗，闪一下又跳回亮"。
+        if (white && EcKeyboardActive && L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdHotkeyByFirmware)
+        {
+            // 上报档位与 EC 实际值都记下来：两边一致说明按键由固件完成步进；
+            // 若某方向不动（EC 值不变），就是固件没处理该方向，需要软件按方向补一步。
+            Logger.WriteError("[kbd-osd] 白光亮度键（固件自管）按键上报=" + level);
+            _ = ShowFirmwareBrightnessOsdAsync();
+            return;
+        }
+        if (white && EcKeyboardActive
+            && MechrevoLite.Hardware.EcKeyboardLight.TryGet(out bool ecKbdOn, out int ecKbdLevel))
+        {
+            // 先看电源位（bit1），再看档位位：关灯时固件会把档位位留下来记忆（例如 0x23 = 关 + 记着"暗"），
+            // 只按档位位递推就会把"已经关着"算成"亮"，OSD 显示 2/2 但灯是灭的。
+            int next = !ecKbdOn ? 1 : ((ecKbdLevel <= 1) ? 2 : 0);
+            bool ecWhiteOk = ApplyEcWhiteKeyboard(next);
+            _lastKbdHotkeyLevel = next;
+            // OSD 统一按 0~4 显示口径：关=0 / 暗=2 / 亮=4，内部再映射回 0/1/2。
+            ShowKeyboardBrightnessOsd(next == 0 ? 0 : ((next == 1) ? 2 : 4));
+            Logger.WriteError("[kbd-osd] 白光亮度键：0x78C 实际=" + (ecKbdOn ? ("亮/档" + ecKbdLevel) : "关")
+                + " → 下一档=" + next + " ⇒ " + ecWhiteOk);
+            return;
+        }
+        // 按键本身是 0..4；白光具体有几档由后端声明决定，这里只做按键范围裁剪。
+        int clamped = Math.Clamp(level, 0, white ? 4 : 4);
         _lastKbdHotkeyLevel = clamped;
         ShowKeyboardBrightnessOsd(clamped);
         try
         {
             if (EcKeyboardActive && !EcKeyboardHid)
             {
-                // EC 实验模式的单区/白光：没有 GCU 代写亮度，直接写 EC。
+                // EC 模式的单区/白光：没有 GCU 代写亮度，直接写 EC。
                 bool ecOk = ApplyEcHotkeyBrightness(clamped);
                 Logger.WriteError("[kbd-osd] ACPI 亮度走 EC " + clamped + (white ? "/2" : "/4") + " ⇒ " + ecOk);
                 return;
@@ -4651,9 +4706,37 @@ public partial class OriginalStyleWindow : Window
         int clamped = Math.Clamp(level, 0, 4);
         _lastKeyboardBrightnessOsd = clamped;
         bool white = IsWhiteBacklightForOsd();
+        // 白光只有关/暗/亮三态，而亮度键是 0~4 档：1~2 都算"暗"、3~4 都算"亮"。
+        // 直接把 0~4 夹到 0~2 会把"暗"显示成 2/2（实际只有 1 档）。
+        int whiteShown = (clamped <= 0) ? 0 : ((clamped >= 3) ? 2 : 1);
         OsdService.Show(LightChannelGlyph("Keyboard/Ctrl"), WpfStrings.OsdLighting,
-            white ? Math.Clamp(clamped, 0, 2) + "/2" : clamped + "/4");
+            white ? whiteShown + "/2" : clamped + "/4");
         Logger.WriteError("[kbd-osd] ACPI 亮度 → " + clamped + "/4");
+    }
+
+    /// <summary>
+    /// 亮度键由固件自管（声明 hotkey=0）时只显示结果：等固件把 0x78C 写完再读一次，
+    /// 不写任何寄存器。亮灭以电源位 bit1 判定，档位位只在亮着时参与显示。
+    /// </summary>
+    private async Task ShowFirmwareBrightnessOsdAsync()
+    {
+        try
+        {
+            await Task.Delay(120);
+            if (!MechrevoLite.Hardware.EcKeyboardLight.TryGet(out bool on, out int level))
+            {
+                return;
+            }
+            int shown = !on ? 0 : ((level >= 2) ? 4 : 2);
+            _lastKbdHotkeyLevel = shown;
+            ShowKeyboardBrightnessOsd(shown);
+            Logger.WriteError("[kbd-osd] 白光亮度键由固件自管 ⇒ 0x78C 实际="
+                + (on ? ("亮/档" + level) : "关") + " · 显示 " + shown);
+        }
+        catch (Exception ex)
+        {
+            Logger.WriteError("[kbd-osd] 固件自管亮度显示失败：" + ex.Message);
+        }
     }
 
     /// <summary>NUC/UMI 单键 RGB 键盘：Fn+F8 循环 0/25/50/75/100% 五档。</summary>
@@ -4971,6 +5054,13 @@ public partial class OriginalStyleWindow : Window
             {
                 return;
             }
+            // 声明 noVisualSync=1 的机型：EC 视觉档读不出真实档位（恒为 0），
+            // 拿它做"外部改档"回读会把刚点的高亮又打回平衡 ⇒ 直接不做同步。
+            if (MechrevoLite.Hardware.DeclarationRuntime.Flag("modeSpy", "noVisualSync"))
+            {
+                _lastEcOnlyVisual = -1;
+                return;
+            }
             if (!L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out int ecVisual))
             {
                 return;
@@ -4978,12 +5068,23 @@ public partial class OriginalStyleWindow : Window
             if (_lastEcOnlyVisual < 0)
             {
                 _lastEcOnlyVisual = ecVisual;
+                _pendingEcOnlyVisual = -1;
                 return;
             }
             if (_lastEcOnlyVisual == ecVisual)
             {
+                _pendingEcOnlyVisual = -1;
                 return;
             }
+            // ⚠️ 切档时 EC 视觉档会先跳到一个中间值再回落（这台机器回读恒为 0）；
+            //   ⛔ 不能一次不同就当成外部改档，否则刚点的高亮会被自己打回去。
+            //   ⇒ 必须连续两次读到同一个新值（约 2 秒）才承认变化。
+            if (_pendingEcOnlyVisual != ecVisual)
+            {
+                _pendingEcOnlyVisual = ecVisual;
+                return;
+            }
+            _pendingEcOnlyVisual = -1;
             _lastEcOnlyVisual = ecVisual;
             string? id = ecVisual switch
             {
@@ -5058,7 +5159,7 @@ public partial class OriginalStyleWindow : Window
 
     private static int ResolveDisplayModeRaw(BackendProbe probe)
     {
-        // 实验通道且 GCU 已让出控制权时，直接读 EC，不依赖 GCU 状态包。
+        // EC 通道且 GCU 已让出控制权时，直接读 EC，不依赖 GCU 状态包。
         // 这里判断 EC 模式，不是 EC 本地路由：GCU 未连接时优先读 EC。
         // SMU 机型（自定义档不落固件）不能走 EC 回读：GCU 掉线转 EC-only 时会把自定义档亮成内置档。
         if (L_Mechrevo.WpfP0.Services.WpfBackend.GcuActive
@@ -5478,7 +5579,7 @@ public partial class OriginalStyleWindow : Window
             _ = RestoreGpuOverclockOnStartupAsync();
             _backendRetryTimer.Stop();
             _backendTimer.Start();
-            Logger.WriteError("[gcu-ec] GCU 不可用 ⇒ 启动 EC-only 实验首页"
+            Logger.WriteError("[gcu-ec] GCU 不可用 ⇒ 启动 EC-only 首页"
                 + "（来源=" + L_Mechrevo.WpfP0.Services.WpfBackend.EcModeReason + "）");
             try { Logger.WriteLine("[hotkey] EC-only 启动 ⇒ 按键上报=" + L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryEnableHotkeyNotify()); } catch { }
             L_Mechrevo.WpfP0.Services.KeyboardKeyProbe.Start();
@@ -6590,6 +6691,29 @@ public partial class OriginalStyleWindow : Window
             && modeHw?.IsGcuConnected != true
             && modeHw?.IsNucUmiFamily != true
             && !IsXingyaoPlatform;
+        // 步进三档方案：三档直接写 EC（只有这一条路，没有滑块也没有固件档位通道）。
+        if (ChargeLimitUsesSteppedLevels)
+        {
+            bool steppedOk = MechrevoLite.Battery.BatteryControl.CaptureChargeLimitGesture()
+                && MechrevoLite.Battery.BatteryControl.ApplyChargeLimitFromUserGesture(percentForMode);
+            if (steppedOk)
+            {
+                MechrevoLite.Hardware.PlCustomService.ClearActive();
+                ApplyBatteryModeHighlight(mode);
+                StatusText.Text = mode switch
+                {
+                    1 => "平衡模式：充电 80%",
+                    2 => "健康模式：充电 60%",
+                    _ => "长效模式：不限制充电"
+                };
+            }
+            else
+            {
+                StatusText.Text = WpfStrings.BatteryModeFailed;
+                RefreshFromBackend();
+            }
+            return;
+        }
         if (modeBaolongda && _services != null)
         {
             bool enable = mode != 0;
@@ -7744,14 +7868,19 @@ public partial class OriginalStyleWindow : Window
         BatteryInfo.ToolTip = health;
         SyncNucExternalMode(probe);
         int mode = ResolveDisplayMode(probe);
+        // ⚠️ 声明 noVisualSync=1 的机型：EC 视觉档回读恒为 0，拿它当当前档会把高亮每轮改成平衡
+        //   （点狂暴完全不高亮的根因）⇒ 这类机型只用服务层记录的活动档。
+        bool ecVisualTrusted = !MechrevoLite.Hardware.DeclarationRuntime.Flag("modeSpy", "noVisualSync");
         if (_backendRoute == BackendRoute.Ec
+            && ecVisualTrusted
             && L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryReadVisualMode(out int ecCurrentMode))
         {
             mode = ecCurrentMode;
         }
         bool ecExperimentRoute = _backendRoute == BackendRoute.Ec;
-        GpuOverclockSwitch.Visibility = (mode == 1 && (probe.GpuOcSupported || ecExperimentRoute)
-    && (L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu || ecExperimentRoute))
+        // 显卡超频开关只在狂暴档显示，且必须真有独显：
+        // 以前这里用 ecExperimentRoute 兜底，会把无独显机型也放出来，改为只看后端的显卡事实。
+        GpuOverclockSwitch.Visibility = (mode == 1 && probe.GpuOcSupported)
     ? Visibility.Visible : Visibility.Collapsed;
         GpuOverclockSwitch.IsChecked = L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockEnabled || L_Mechrevo.WpfP0.Services.WpfBackend.GpuOverclockIntentOn;
         int currentGpu = probe.CurrentGpuMode;
@@ -7763,9 +7892,10 @@ public partial class OriginalStyleWindow : Window
             UpdateGpuButtons(displayGpu, pending);
         }
         bool skipModeUi = _modeSwitchInFlight;
-        if (_backendRoute == BackendRoute.Ec && mode != 3)
+        if (_backendRoute == BackendRoute.Ec && ecVisualTrusted && mode != 3)
         {
             // EC 已回到内置档时，清掉残留的自定义待切换态，避免界面钉在自定义 15 秒。
+            // ⛔ 回读不可信的机型不清：否则刚点的档位会被当轮刷新覆盖掉高亮。
             _pendingMode = -1;
         }
         bool silentTurboSupported = WideSilentTurboVisible;
@@ -7803,6 +7933,8 @@ public partial class OriginalStyleWindow : Window
             ExtremeModeButton.IsChecked = mode == NucExtremeVisualMode;
             CustomModeButton.IsChecked = mode is 3 or 4;
             RefreshModeHighlights();
+            // 档位按钮状态刚更新完，这里立刻重算风扇速度行的显隐，避免等下一轮刷新。
+            RefreshFanSpeedRow();
         }
         SyncLightSwitchesFromHardware();
         SyncRefreshRateState();
@@ -7855,12 +7987,13 @@ public partial class OriginalStyleWindow : Window
                 }
             }
         }
-        int batteryMode = ChargeSliderToggle.IsChecked == true
+        int batteryMode = (ChargeSliderToggle.IsChecked == true || ChargeLimitUsesSteppedLevels)
             ? ModeForPercent(resolvedLimit > 0 ? resolvedLimit : (int)Math.Round(BatteryLimitSlider.Value))
             : probe.BatteryMode;
         // 无 GCU 的本地 EC 档位：固件可能在刷新间隙把 0x7A6 清掉，后台刷新
         // 不能再用瞬时回读覆盖用户刚选中的档位，否则按钮会来回弹。
         if (ChargeSliderToggle.IsChecked != true
+            && !ChargeLimitUsesSteppedLevels
             && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
             && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
             && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily)
@@ -7982,17 +8115,24 @@ public partial class OriginalStyleWindow : Window
     /// </summary>
     private static string FanDutyText(bool cpu)
     {
+        if (!L_Mechrevo.WpfP0.Services.WpfBackend.FanDutyVisible())
+        {
+            return "";
+        }
         var hw = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
         if (!hw.IsFanInfoFresh(L_Mechrevo.WpfP0.Services.WpfBackend.FanInfoMaxAgeMs))
         {
             return "";
         }
         int? duty;
-        int rpmFullPercent = hw.FanRpmMaxForPercent;
+        int rpmFullPercent = hw.FanRpmPercentDisplayMax;
         if (rpmFullPercent > 0)
         {
             int rpm = cpu ? L_Mechrevo.WpfP0.Services.WpfBackend.CpuFanRpm : L_Mechrevo.WpfP0.Services.WpfBackend.GpuFanRpm;
-            duty = rpm > 0 ? (int)Math.Round(rpm * 100.0 / rpmFullPercent) : null;
+            // 转速 0 = 风扇真的停转（读不到会给 -1，界面按 — 显示）⇒ 占空比显示 0%，
+            // 与"占空比 0% 也是有效读数"保持一致；否则静音时整段百分比会消失。
+            // 满转按 6000 RPM 折算；转得比满转还高（读表过冲）压回 100%。
+            duty = rpm >= 0 ? Math.Min(100, (int)Math.Round(rpm * 100.0 / rpmFullPercent)) : null;
         }
         else
         {
@@ -8338,7 +8478,7 @@ public partial class OriginalStyleWindow : Window
         // 用户明确选择 EC 时才跳过 GCU 连接，直接启动 EC-only。
         if (IsEcModeActive
             && L_Mechrevo.WpfP0.Services.WpfBackend.GcuDirectMode
-            && TryStartExperimentalOfflineBackend("直接 EC 实验模式"))
+            && TryStartExperimentalOfflineBackend("直接 EC 模式"))
         {
             _connectAttempting = false;
             return;
@@ -8765,6 +8905,7 @@ public partial class OriginalStyleWindow : Window
             GpuModeRow.Visibility = gpuModeRowVisible ? Visibility.Visible : Visibility.Collapsed;
             GpuPendingText.Visibility = gpuModeRowVisible ? GpuPendingText.Visibility : Visibility.Collapsed;
             IgpuSavingHost.Visibility = gpuModeRowVisible ? Visibility.Visible : Visibility.Collapsed;
+            RefreshFanSpeedRow();
             GpuSectionHeader.Text = gpuModeSwitchable && !igpuOnlyMachine
                 ? WpfStrings.OriginalStyleWindow_Text_15
                 : WpfStrings.L("显卡", "Graphics");
@@ -8798,20 +8939,16 @@ public partial class OriginalStyleWindow : Window
   FillLightIdleOptions();
   _services?.Lighting.ApplyHardwareLightIdleTimer();
   SyncLightSwitchesFromHardware();
-  bool nucUmiModeUi = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily;
-            // Intel 星耀暂时屏蔽自定义模式；AMD 星耀/无界走本机 SMU 自定义。
-            bool smuCustom = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu;
-            // EC 实验模式/无 GCU 的同方独显机：本地 EC 也能跑自定义档，
-            // 不能因为 ItemSupport 能力位缺失就把自定义入口藏掉。
-            bool ecLocalCustom = IsEcModeActive
-                && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
-                && L_Mechrevo.WpfP0.Services.WpfBackend.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
+  // 机型/后端相关的那几项判据已挪到 FeatureVisibility.CustomMode，这里不再本地重算。
             bool allowPerfOnBattery = AppConfig.Is("perf_allow_on_battery")
                 && System.Windows.Forms.SystemInformation.PowerStatus.PowerLineStatus
                     != System.Windows.Forms.PowerLineStatus.Online;
-            bool customAllowed = nucUmiModeUi || smuCustom || ecLocalCustom || allowPerfOnBattery
-            || ((L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "FanSettings"))
-                    && !L_Mechrevo.WpfP0.Services.WpfBackend.ModeProfileBindingSupported);
+            // 自定义入口的判据在后端（FeatureVisibility.CustomMode），界面只取结论：
+            // 换界面时判据还在后端，不会因为重写界面把入口丢掉。
+            bool customAllowed = MechrevoLite.Hardware.FeatureVisibility.CustomMode(
+                L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram,
+                IsEcModeActive,
+                L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected);
             CustomModeButton.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
             ExtremeModeButton.Visibility = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsIntelNuc ? Visibility.Visible : Visibility.Collapsed;
             ApplyModeSegmentDensity();
@@ -9693,8 +9830,17 @@ public partial class OriginalStyleWindow : Window
 
     private string ResolveCustomModeId()
     {
+        // 记住上次在这个窗口里看的自定义配置：先看已存的 id 还是不是有效自定义档，
+        // 否则会一直回到第一个自定义档。
+        static bool IsLiveCustom(string? id) => id != null
+            && MechrevoLite.Mode.ModeSettings.Modes.Any(m => m.IsCustom && string.Equals(m.Id, id, StringComparison.Ordinal));
+        string? lastSeen = MechrevoLite.AppConfig.GetString("customwin_last_mode");
         if (IsEcLocalRoute)
         {
+            if (IsLiveCustom(lastSeen))
+            {
+                return lastSeen!;
+            }
             string? ecActive = MechrevoLite.Mode.ModeSettings.ActiveModeId;
             if (ecActive?.StartsWith("custom", StringComparison.OrdinalIgnoreCase) == true)
             {
@@ -9714,6 +9860,10 @@ public partial class OriginalStyleWindow : Window
                 {
                     return mode.Id;
                 }
+            }
+            if (IsLiveCustom(lastSeen))
+            {
+                return lastSeen!;
             }
             foreach (MechrevoLite.Mode.PerfModeDefinition mode in perf.Modes)
             {
@@ -9771,6 +9921,68 @@ public partial class OriginalStyleWindow : Window
             Logger.WriteError("[custom-open] 打开自定义模式失败：" + ex);
             StatusText.Text = WpfStrings.MainWindow_xaml_Text_20 + ex.Message;
         }
+    }
+
+    /// <summary>当前模式 id（与模式按钮高亮同源）。</summary>
+    private string? CurrentModeId()
+    {
+        if (TurboModeButton.IsChecked == true) return "turbo";
+        if (SilentModeButton.IsChecked == true) return "silent";
+        if (BalancedModeButton.IsChecked == true) return "balanced";
+        if (CustomModeButton.IsChecked == true) return "custom";
+        return null;
+    }
+
+    /// <summary>风扇速度行：显隐与档位都由后端判定，界面只做勾选与转发。</summary>
+    private void RefreshFanSpeedRow()
+    {
+        if (_backendProbe == null)
+        {
+            FanSpeedRow.Visibility = Visibility.Collapsed;
+            return;
+        }
+        string? modeId = CurrentModeId();
+        bool allowed = _backendProbe.FanTierSupported
+            && modeId != null
+            && modeId != "turbo";
+        FanSpeedRow.Visibility = allowed ? Visibility.Visible : Visibility.Collapsed;
+        if (!allowed)
+        {
+            _fanTierModeApplied = null;
+            return;
+        }
+        // 切到该模式时套用它自己记住的档位（静音默认慢、平衡/自定义默认中）。
+        if (!string.Equals(_fanTierModeApplied, modeId, StringComparison.Ordinal))
+        {
+            _fanTierModeApplied = modeId;
+            _backendProbe.ApplyFanTier(_backendProbe.FanTierRemembered(modeId), modeId);
+        }
+        int tier = _backendProbe.FanTierCurrent(modeId);
+        FanSlowButton.IsChecked = tier == 0;
+        FanMidButton.IsChecked = tier == 1;
+        FanFastButton.IsChecked = tier == 2;
+    }
+
+    private void FanSpeed_Click(object sender, RoutedEventArgs e)
+    {
+        if (_backendProbe == null)
+        {
+            return;
+        }
+        int tier = ReferenceEquals(sender, FanSlowButton) ? 0
+            : ReferenceEquals(sender, FanMidButton) ? 1
+            : ReferenceEquals(sender, FanFastButton) ? 2
+            : -1;
+        if (tier < 0)
+        {
+            return;
+        }
+        string? modeId = CurrentModeId();
+        bool ok = _backendProbe.ApplyFanTier(tier, modeId);
+        RefreshFanSpeedRow();
+        StatusText.Text = ok
+            ? ("风扇档位已切换：" + MechrevoLite.Hardware.EcFanTier.TierName(tier))
+            : "风扇档位写入失败";
     }
 
     private async void GpuOverclock_Click(object sender, RoutedEventArgs e)
@@ -10504,7 +10716,7 @@ public partial class OriginalStyleWindow : Window
         return LightingFacts.VisibleFirmwareKeyboardEffects(hw?.Capabilities.KeyboardType ?? 0).ToArray();
     }
 
-    /// <summary>EC 实验模式的固件键盘灯效：单区 4 项；白光只有电源/亮度；其它类型无本地灯效。</summary>
+    /// <summary>EC 模式的固件键盘灯效：单区 4 项；白光只有电源/亮度；其它类型无本地灯效。</summary>
     private static (string Effect, string Name)[] EcKeyboardEffects()
     {
         if (EcKeyboardSingleZone)
@@ -10594,7 +10806,7 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
-    /// <summary>EC 实验模式：键盘灯开关按 EC 实际状态回填（HID 由单键帧流自己维护）。</summary>
+    /// <summary>EC 模式：键盘灯开关按 EC 实际状态回填（HID 由单键帧流自己维护）。</summary>
     // ── EC 键盘通道：状态与下发都问服务层（⛔ 界面层不引用 EC 键盘驱动类型） ──
 
     private static bool EcKeyboardActive => EcKeyboardFacts.Active;
@@ -10903,7 +11115,7 @@ public partial class OriginalStyleWindow : Window
         {
             if (!EcKeyboardControllable)
             {
-                StatusText.Text = WpfStrings.L("EC 实验模式暂不支持本机键盘灯（", "EC experiment: keyboard light not supported (")
+                StatusText.Text = WpfStrings.L("EC 模式暂不支持本机键盘灯（", "EC mode: keyboard light not supported (")
                     + EcKeyboardKind + ")";
                 return;
             }
@@ -10963,6 +11175,22 @@ public partial class OriginalStyleWindow : Window
         }
         // 统一配置：宝龙达/同方/EC/NUC 都走同一把开关与同一个计时器，关了就是全通道都不关灯。
         int timeoutSeconds = _services?.Lighting.LightIdleSeconds ?? AppConfig.Get("lighting_idle_seconds", 0);
+        // GCU 模式：计时器在 GCU 固件里（Setting/Control 的 Mins 字段按秒计数，10 秒档也支持），
+        // LM 只把档位发下去，自己不再计时关灯，免得两边同时点火。
+        if (timeoutSeconds > 0
+            && L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected
+            && !MechrevoLite.Hardware.GcuEcMode.IsEcMode)
+        {
+            if (_lightingIdleSuspended)
+            {
+                _lightingIdleSuspended = false;
+                L_Mechrevo.WpfP0.Services.WpfBackend.LightingIdleSuspended = false;
+                _ = RestoreAllLightsAsync();
+            }
+            // 重启后 GCU 固件里的计时器可能和界面上显示的档位对不上 ⇒ 不一致就补发一次命令。
+            ReconcileGcuLightIdleTimer(timeoutSeconds);
+            return;
+        }
         // 亚分钟选项由 LM 软件计时；1s tick 保证“20秒”实际落在 20~21s，而不是 2s tick 拖到 22s+。
         TimeSpan desiredTick = timeoutSeconds > 0 && timeoutSeconds < 60
             ? TimeSpan.FromSeconds(1)
@@ -11009,6 +11237,40 @@ public partial class OriginalStyleWindow : Window
         }
     }
 
+    private long _gcuIdleTimerCheckedTick;
+    private bool _gcuIdleTimerPushedThisRun;
+
+    /// <summary>
+    /// GCU 模式下的自动关灯档位对齐：固件重启后它自己的计时器常常和界面不一致，
+    /// 这里比对读回来的档位，不一致（或本次还没发过且读不到）就补发一次，限频 10 秒。
+    /// </summary>
+    private void ReconcileGcuLightIdleTimer(int timeoutSeconds)
+    {
+        long now = Environment.TickCount64;
+        if (now - _gcuIdleTimerCheckedTick < 10000)
+        {
+            return;
+        }
+        _gcuIdleTimerCheckedTick = now;
+        int backendMinutes = _backendProbe?.Hw?.CloseTimerMinutes ?? -1;
+        bool unknown = backendMinutes < 0;
+        int backendSeconds = unknown ? -1 : backendMinutes * 60;
+        if (!unknown && backendSeconds == timeoutSeconds)
+        {
+            _gcuIdleTimerPushedThisRun = true;
+            return;
+        }
+        if (_gcuIdleTimerPushedThisRun && unknown)
+        {
+            // 本次已经发过、又读不到回值：不再反复发，等固件报上来。
+            return;
+        }
+        Logger.WriteError("[light-idle] GCU 计时器与界面不一致（后端 "
+            + (unknown ? "未知" : backendSeconds + " 秒") + " · 界面 " + timeoutSeconds + " 秒）⇒ 补发档位");
+        _services?.Lighting.ApplyHardwareLightIdleTimer();
+        _gcuIdleTimerPushedThisRun = true;
+    }
+
     private int _lightingKeepAliveTicks;
     private bool? _lightingKeepAliveLastOn;
     private bool _lightingKeepAliveHidLogged;
@@ -11027,6 +11289,13 @@ public partial class OriginalStyleWindow : Window
         _lightingKeepAliveTicks = 0;
         if (_backendProbe == null || _lightingIdleSuspended)
         {
+            return;
+        }
+        // 亮度键由固件自管（声明 hotkey=0）时，用户按快捷键关灯就是用户意图，
+        // 保活不能把它拉回来，否则表现是“关灯后 5~16 秒自己又亮了”。
+        if (MechrevoLite.Hardware.EcKeyboardLight.HotkeyByFirmware)
+        {
+            _lightingKeepAliveLastOn = null;
             return;
         }
         if (KeyboardLightSwitch.IsChecked != true)
@@ -11415,6 +11684,11 @@ public partial class OriginalStyleWindow : Window
             else
             {
                 await ApplyKeyboardLightAsync(showStatus: false);
+                if (IsHidKeyboard())
+                {
+                    // 离电关灯把 HID 帧流停了，插回电源只补电源不会重新点灯 ⇒ 按当前效果重发一次。
+                    await ResendHidKeyboardEffectAsync();
+                }
                 await ApplyLogoLightAsync();
                 await ApplyLightStripLightAsync();
                 await ApplyHingeLightAsync();
@@ -11428,6 +11702,34 @@ public partial class OriginalStyleWindow : Window
         {
             _lightingPowerBusy = false;
         }
+    }
+
+    /// <summary>离电关灯后插回电源：HID 帧流已停，只补电源不会重新点灯，按当前效果重发一次。</summary>
+    private async Task ResendHidKeyboardEffectAsync()
+    {
+        if (KeyboardLightSwitch.IsChecked != true)
+        {
+            return;
+        }
+        var rgb = L_Mechrevo.WpfP0.Services.WpfBackend.rgb;
+        if (rgb == null)
+        {
+            return;
+        }
+        int mode = rgb.KbHidMode;
+        if (mode <= 0
+            && (KeyboardEffectCombo.SelectedItem as ComboBoxItem)?.Tag is string tag
+            && tag.StartsWith("hid:", StringComparison.Ordinal)
+            && int.TryParse(tag.AsSpan(4), out int parsed))
+        {
+            mode = parsed;
+        }
+        if (mode <= 0)
+        {
+            return;
+        }
+        Logger.WriteLine("[light] 插电恢复：重发 HID 键盘效果 mode=" + mode);
+        await ApplyHidKeyboardAsync(mode, true, showStatus: false);
     }
 
     private async Task MaybeAutoWelcomeAsync(bool wake)
@@ -12161,7 +12463,7 @@ public partial class OriginalStyleWindow : Window
         }
         if (EcKeyboardActive)
         {
-            // EC 实验模式：没有 GCU 的 KeyboardPower 回读，开/关和灯效都直接按保存的设置写 EC。
+            // EC 模式：没有 GCU 的 KeyboardPower 回读，开/关和灯效都直接按保存的设置写 EC。
             if (on)
             {
                 EnsureKeyboardBrightnessOnPowerOn();

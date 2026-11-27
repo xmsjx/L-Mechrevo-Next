@@ -74,7 +74,7 @@ AcpiWmi
         FeatureDeclaration syncLight4 = probe.SyncCapability
             ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.AcpiWmi, "能力位上报同步灯", new[] { "registry:Capabilities.SyncLight" })
             : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位未上报同步灯", new string[0]);
-		return new BackendFeatureDeclaration(Kind,
+		return DeclarationGate.Wrap(new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
 				[FeatureId.LogoLight] = logo,
@@ -98,6 +98,6 @@ AcpiWmi
         [FeatureId.KeyboardLight] = keyboardLight4,
         [FeatureId.HingeLight] = hingeLight4,
         [FeatureId.SyncLight] = syncLight4
-			});
+			}));
 	}
 }

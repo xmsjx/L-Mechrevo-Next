@@ -241,6 +241,11 @@ _customModeInlineWindow = new CustomModeWindow();
                 _gpuFanInlineWindow = new FanCurveWindow(fanModeId, showCpu: false, showGpu: true);
                 ((FanCurveWindow)_gpuFanInlineWindow).PrepareInline();
                 MountWindowContent(_gpuFanInlineWindow, GpuFanCurveHost);
+                // 独立控制开关只在 CPU 那份里，GPU 那份建好后按它的状态对齐一次，避免开局停在置灰。
+                if (_cpuFanInlineWindow is FanCurveWindow cpuFan)
+                {
+                    ((FanCurveWindow)_gpuFanInlineWindow).ApplyRespectiveState(cpuFan.RespectiveOn);
+                }
             }
         }
         catch (Exception ex)

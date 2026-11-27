@@ -281,9 +281,10 @@ public static class CpuInfo
 	//   「7x4xH 和 8x4xH 的 zen4 APU 只有 R9 级才支持」
 	//   => Zen4 APU（Phoenix / Phoenix2 / HawkPoint）里只有 R9 级放行。
 	//
-	// ① + ② 归纳：**按"型号层级"判 UV 是否被厂商放行**——
-	//   层级 9（Ryzen 9 / Ryzen AI 9 / RYZEN AI MAX）放行；7 / 5 级不放行。
-	//   这与"旧字符串白名单隐含现代型号要 R9 级"的结论一致。
+	// ① + ② 归纳：**按"型号层级"判 UV 是否被厂商放行 —— 黑名单口径**：
+	//   名单只否决 Ryzen 7 / Ryzen AI 7 / Ryzen 5 / Ryzen AI 5 / Ryzen 3；
+	//   Ryzen 9 / Ryzen AI 9 / RYZEN AI MAX / 掌机 Z1、Z2 / **认不出层级的型号（Unknown）** 一律放行。
+	//   最终能不能写由第一层"该代号在 SMU 协议里有没有 curve 命令"决定 —— 层级只是否决项。
 	//
 	// 因此需要层级过滤的族（IsSkuTierFilteredApuFamily）为：
 	//   * Zen4 APU：Phoenix（7x4xH）/ Phoenix2（8x4xU 一档）/ HawkPoint（8x4xH）
@@ -302,12 +303,12 @@ public static class CpuInfo
 	//        需用户确认后再动，见本轮报告的"未确定项"。
 	//
 	// 命名匹配（大小写不敏感，作用于 CpuInfo.Name = ProcessorNameString）：
-	//   允许 9 级：`Ryzen 9` / `Ryzen AI 9` / `RYZEN AI MAX`
-	//   拒绝 7/5 级：`Ryzen 7` / `Ryzen AI 7` / `Ryzen 5` / `Ryzen AI 5`
+	//   放行档：`Ryzen 9` / `Ryzen AI 9` / `RYZEN AI MAX` / `RYZEN Z1` / `RYZEN Z2`
+	//   黑名单：`Ryzen 7` / `Ryzen AI 7` / `Ryzen 5` / `Ryzen AI 5` / `Ryzen 3` / `Ryzen AI 3`
+	//   其它（含 OEM 自定义命名、认不出层级的）：归 Unknown，**按放行处理**。
 	//   ⚠️ 陷阱与对策：`Ryzen AI 9` **不含**子串 `Ryzen 9`（中间隔着 "AI "），所以两条都得判；
-	//      并且必须**显式按顺序**判（AI MAX -> AI 9 -> Ryzen 9 -> 7 -> 5 -> 3），判到就返回，
-	//      **不做**"含 9 就放行"这类宽松匹配 —— 这样 `Ryzen AI 7` 不可能命中任何放行分支
-	//      （放行分支的字面量里都带 "9" 或 "AI MAX"）。自检样例见本轮报告"命名匹配自检表"。
+	//      判定顺序 AI MAX -> AI 9 -> Ryzen 9 -> Z1/Z2 -> 7 -> 5 -> 3，命中即返回，
+	//      保证 `Ryzen AI 7` 不会被任何放行分支误命中。
 	//
 	// 本小节只改"SkuTuningRejection 的族名单 + 层级判定写法"，
 	// **仍然只否决 amd-co**；amd-clock 的"第一层通过即可用"策略（fix2）原样保留 ✅。
@@ -326,7 +327,9 @@ public static class CpuInfo
 			return false;
 		}
 		// 第二层：SKU 层级必须放行（null = 放行）。
-		return SkuTuningRejection(cpu) == null;
+		// SKU 层级不再否决：协议里有 curve 命令就开放写入，不支持的 SKU 由固件自己拒绝，
+		// 界面只以「当前 SKU 不支持电压调节功能」提示（见 SkuTuningRejection 的显示用途）。
+		return true;
 	}
 
 	// ------------------------------------------------------------------------------------------
@@ -369,11 +372,57 @@ public static class CpuInfo
 			// 其它家族：保持旧版 CPUID 行为，不收紧。
 			return null;
 		}
-		if (ClassifyUvSkuTier(name) == UvSkuTier.Tier9)
+		// 桌面部件不进黑名单：桌面 APU（AM5 的 8700G / 8600G / 8500GE、AM4 的 5600G / 5700G 等）
+		// 与移动 APU 共用代号（Phoenix / Cezanne …），只能靠型号命名区分。
+		if (IsDesktopApuName(name))
 		{
 			return null;
 		}
-		return $"{TierLabel(name)} tier does not expose UV (tier 9 only: Ryzen 9 / Ryzen AI 9 / RYZEN AI MAX)";
+		// 黑名单口径：只有明确属于 7 / 5 / 3 档才否决，其余（含 Unknown）一律放行，
+		// 能不能真正写入交给第一层的协议能力判定。
+		switch (ClassifyUvSkuTier(name))
+		{
+		case UvSkuTier.Tier7:
+		case UvSkuTier.Tier5:
+		case UvSkuTier.Tier3:
+			return $"{TierLabel(name)} APU tier is blacklisted (blocked: Ryzen 7 / AI 7 / Ryzen 5 / AI 5 / Ryzen 3; allowed: Ryzen 9 / AI 9 / AI MAX / Z1-Z2 / unclassified names)";
+		default:
+			return null;
+		}
+	}
+
+	// 桌面 APU 命名判定：型号段为 4 位数字且紧跟 G（含 GE 变体），如 8700G / 8600G / 8500GE / 5700G。
+	// 桌面部件一律不进 APU 黑名单；移动 APU 不使用 G 后缀，因此这条不会放宽移动 R7 / R5。
+	private static bool IsDesktopApuName(string? name)
+	{
+		if (string.IsNullOrEmpty(name))
+		{
+			return false;
+		}
+		for (int i = 0; i + 4 < name.Length; i++)
+		{
+			if (!char.IsAsciiDigit(name[i]) || !char.IsAsciiDigit(name[i + 1])
+				|| !char.IsAsciiDigit(name[i + 2]) || !char.IsAsciiDigit(name[i + 3]))
+			{
+				continue;
+			}
+			// 型号段前必须是分隔符，避免命中更长的数字串中段。
+			if (i > 0 && char.IsLetterOrDigit(name[i - 1]))
+			{
+				continue;
+			}
+			int g = i + 4;
+			if (char.ToUpperInvariant(name[g]) != 'G')
+			{
+				continue;
+			}
+			// G 之后是 GE 的 E、或结束 / 非字母数字 ⇒ 认作桌面 APU 型号。
+			if (g + 1 >= name.Length || !char.IsLetterOrDigit(name[g + 1]) || name[g + 1] == 'E' || name[g + 1] == 'e')
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// 需要走 SKU 层级过滤的 APU 家族 = Zen4 APU ∪ Zen5 APU。
@@ -403,6 +452,8 @@ public static class CpuInfo
 	internal enum UvSkuTier
 	{
 		Tier9,
+		// 掌机 Z 系列（Z1 / Z1 Extreme / Z2 / Z2 Extreme）：整系放行，不按 Ryzen N 分级。
+		TierZ,
 		Tier7,
 		Tier5,
 		Tier3,
@@ -439,6 +490,13 @@ public static class CpuInfo
 		{
 			return UvSkuTier.Tier9;
 		}
+		// 掌机 Z 系列（AMD Ryzen Z1 / Z1 Extreme / Z2 / Z2 Extreme）：整系放行。
+		// 命名里没有 "Ryzen N" 分级，若不单独放行会落进 unknown 档被拒。
+		if (name.Contains("RYZEN Z1", StringComparison.OrdinalIgnoreCase)
+			|| name.Contains("RYZEN Z2", StringComparison.OrdinalIgnoreCase))
+		{
+			return UvSkuTier.TierZ;
+		}
 		// ---- 拒绝档（层级 7 / 5 / 3）----
 		if (name.Contains("RYZEN AI 7", StringComparison.OrdinalIgnoreCase) || name.Contains("RYZEN 7", StringComparison.OrdinalIgnoreCase))
 		{
@@ -452,8 +510,8 @@ public static class CpuInfo
 		{
 			return UvSkuTier.Tier3;
 		}
-		// 命中不了任何层级（例如 Ryzen Z1 Extreme 这类非 "Ryzen N" 命名）：按"不放行"处理，
-		// 因为层级过滤家族里厂商只对 9 级放行。
+		// 认不出层级（例如 OEM 自定义命名）：归 Unknown，由 SkuTuningRejection 按黑名单口径放行，
+		// 真正能不能写仍由协议层（该代号有没有 SMU curve 命令）决定。
 		return UvSkuTier.Unknown;
 	}
 
@@ -470,6 +528,8 @@ public static class CpuInfo
 		{
 		case UvSkuTier.Tier9:
 			return "R9";
+		case UvSkuTier.TierZ:
+			return "Z 系";
 		case UvSkuTier.Tier7:
 			return "R7";
 		case UvSkuTier.Tier5:

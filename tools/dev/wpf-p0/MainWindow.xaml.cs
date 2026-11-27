@@ -325,8 +325,9 @@ public partial class MainWindow : Window
         SetMetric(_gpuMetrics, 4, snapshot.GpuMemoryClockMhz ?? 0, "MHz");
         _cpuFanRing?.SetValue(snapshot.CpuFanRpm, fanMax, "rpm", cpuFanFraction);
         _gpuFanRing?.SetValue(snapshot.GpuFanRpm, fanMax, "rpm", gpuFanFraction);
-        if (_cpuDutyText != null) _cpuDutyText.Text = WpfStrings.MainWindow_xaml_Text_2 + snapshot.CpuFanDutyPercent + "%";
-        if (_gpuDutyText != null) _gpuDutyText.Text = WpfStrings.MainWindow_xaml_Text_2 + snapshot.GpuFanDutyPercent + "%";
+        bool dutyVisible = L_Mechrevo.WpfP0.Services.WpfBackend.FanDutyVisible();
+        if (_cpuDutyText != null) _cpuDutyText.Text = dutyVisible ? (WpfStrings.MainWindow_xaml_Text_2 + snapshot.CpuFanDutyPercent + "%") : "";
+        if (_gpuDutyText != null) _gpuDutyText.Text = dutyVisible ? (WpfStrings.MainWindow_xaml_Text_2 + snapshot.GpuFanDutyPercent + "%") : "";
         // ⭐ task-26：连接状态可能后变（GCU 服务重连/掉线）⇒ 每次传感器 tick 顺带校正一次屏幕页门控（有缓存，只在变化时改 UI）
         using (L_Mechrevo.WpfP0.Services.UiTrace.Phase("wide-gating"))
         {
@@ -2612,16 +2613,14 @@ public partial class MainWindow : Window
         {
             L_Mechrevo.WpfP0.Services.WpfBackend.Attach(_probe.Hw, _probe.Service);
         }
-        bool nucUmi = L_Mechrevo.WpfP0.Services.WpfBackend.NucGpuModeSupported(_probe?.Hw);
         bool nucNoGpu = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsIntelNuc;
         bool ecLocal = L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive;
-        // Intel 星耀暂时屏蔽自定义；AMD 星耀/无界走本机 SMU 自定义。
-        bool smuCustom = L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsSmuCustomApu;
-        bool customAllowed = nucUmi || smuCustom
-            || ((L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "CpuPerformanceTuning") || L_Mechrevo.WpfP0.Services.WpfBackend.SupportsFeatureWithCapability("PerfTuning", "FanSettings") || HasAnyCustomRange())
-                && !L_Mechrevo.WpfP0.Services.WpfBackend.ModeProfileBindingSupported)
-            || L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
-            || (ecLocal && _probe?.Hw?.DgpuGeneration != MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu);
+        // 宽屏这里原来自己拼了一套判据（按独显/按机型），和后端不一致 ⇒ 同一台机器窄屏看得到、宽屏看不到。
+        // 判据统一走 FeatureVisibility.CustomMode，界面只取结论。
+        bool customAllowed = MechrevoLite.Hardware.FeatureVisibility.CustomMode(
+            _probe?.Hw,
+            L_Mechrevo.WpfP0.Services.WpfBackend.EcModeActive,
+            L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected);
         HomePerf自定义.Visibility = customAllowed ? Visibility.Visible : Visibility.Collapsed;
         bool gpuRowHidden = _probe?.Hw?.GpuRowHiddenByGcuReports == true;
         bool gpuHotSwap = L_Mechrevo.WpfP0.Services.WpfBackend.FeatureOrHardware("GpuHotSwap", L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("GpuHotSwap"));
@@ -3308,7 +3307,11 @@ public partial class MainWindow : Window
                     whiteKeyboard: isKeyboard && whiteKeyboard));
             }
         }
-        LightingCardsGrid.Children.Add(BuildWelcomeLightCard());
+        // 迎宾灯效只有 GCU RGB 键盘支持：白光/EC 单分区机型整张卡片都不挂。
+        if (!whiteKeyboard)
+        {
+            LightingCardsGrid.Children.Add(BuildWelcomeLightCard());
+        }
     }
 
     private Border BuildWelcomeLightCard()
@@ -3406,7 +3409,7 @@ public partial class MainWindow : Window
         left.Children.Add(header);
         left.Children.Add(new TextBlock
         {
-            Text = WpfStrings.LightEditorWindow_xaml_Text,
+            Text = whiteBacklightOnly ? "键盘类型：白光" : WpfStrings.LightEditorWindow_xaml_Text,
             Style = (Style)FindResource("MutedText"),
             Margin = new Thickness(0, 8, 0, 0),
             TextWrapping = TextWrapping.Wrap
@@ -3970,7 +3973,7 @@ public partial class MainWindow : Window
         {
             if (L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardActiveNow)
             {
-                // EC 实验模式：以实际探测为准（与迷你窗 IsHidKeyboard 同口径）。
+                // EC 模式：以实际探测为准（与迷你窗 IsHidKeyboard 同口径）。
                 return L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardIsHidNow;
             }
             if (hw == null

@@ -142,9 +142,9 @@ internal interface ILightingService
     void LogChannelShadow(string topic, bool legacySupport, string callSite, string kind = "visibility");
     bool ChannelEffectIs(string topic, string effect);
 
-    // ── EC 实验模式的键盘通道（只读事实 + 下发入口）：界面层只问这里，⛔ 不直接引用 EC 键盘驱动类型 ──
+    // ── EC 模式的键盘通道（只读事实 + 下发入口）：界面层只问这里，⛔ 不直接引用 EC 键盘驱动类型 ──
 
-    /// <summary>EC 实验模式（无 GCU）是否接管键盘灯。</summary>
+    /// <summary>EC 模式（无 GCU）是否接管键盘灯。</summary>
     bool EcKeyboardActive { get; }
 
     /// <summary>EC 模式键盘灯是否为 HID 单键（有些机型是 EC 单区/白光）。</summary>
@@ -345,7 +345,10 @@ internal sealed class LightingService : ILightingService
 
     public void ApplyHardwareLightIdleTimer()
     {
-        SyncHardwareLightIdleTimer(userChanged: false);
+        // 启动/唤醒重放：自动关灯档位是用户设置过的（配置键存在）就以本地记忆为准下发，
+        // 包括“关闭”（0）也要下发，否则固件会用自己的默认值把灯关掉；从没设置过才保持不动。
+        bool hasSaved = AppConfig.Get(IdleSecondsKey, -1) >= 0;
+        SyncHardwareLightIdleTimer(userChanged: hasSaved);
     }
 
     /// <summary>
@@ -594,6 +597,18 @@ internal sealed class LightingService : ILightingService
             {
                 return ServiceResult.Fail(WpfStrings.LightPowerFailed);
             }
+            if (feature == FeatureId.LogoLight
+                && FeatureGate.Get(FeatureId.LogoLight, probe.Hw).Channel == BackendChannel.Ec)
+            {
+                int ecLight = intent.On ? Math.Max(1, intent.Light) : 0;
+                bool ecOk = EcLogoLight.TryApply(intent.Effect, intent.On, ecLight, intent.Speed, intent.ColorArgb,
+                    out string ecDetail, IteLightingLocal.LogoChannelOverride == 3);
+                Logger.WriteError("[ec-logo] 交互下发 " + intent.Topic + " on=" + intent.On
+                    + " ⇒ " + (ecOk ? "OK" : "失败：" + ecDetail));
+                return ecOk
+                    ? ServiceResult.Success(intent.On ? WpfStrings.LightSavedApplied : WpfStrings.LightPowerOff)
+                    : ServiceResult.Fail(WpfStrings.LightSavedUnconfirmed);
+            }
             if (!intent.On)
             {
                 bool off = await probe.SetLightPowerAsync(intent.Topic, false).ConfigureAwait(false);
@@ -820,6 +835,10 @@ internal sealed class LightingService : ILightingService
         }
         if (string.Equals(topic, LightingTopics.Logo, StringComparison.Ordinal))
         {
+            if (IteLightingLocal.LogoChannelOverride == 2)
+            {
+                return EcLogoLight.TryApply(effect, on, light, speed, colorArgb, out detail);
+            }
             return IteLightingLocal.TryApplyLogo(effect, on, light, speed, colorArgb, out detail);
         }
         if (string.Equals(topic, LightingTopics.Hinge, StringComparison.Ordinal))

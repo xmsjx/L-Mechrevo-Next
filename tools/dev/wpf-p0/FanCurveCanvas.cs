@@ -23,8 +23,53 @@ public sealed class FanCurveCanvas : FrameworkElement
 
     internal bool IsDragging => _dragIndex >= 0;
 
-    internal int[] Duties => RestoreDuties();
-    internal byte[] Temperatures => RestoreTemperatures();
+    private int _count = PointCount;
+
+    internal int[] Duties
+    {
+        get
+        {
+            int[] all = RestoreDuties();
+            if (_count >= all.Length)
+            {
+                return all;
+            }
+            int[] sliced = new int[_count];
+            Array.Copy(all, sliced, _count);
+            return sliced;
+        }
+    }
+
+    internal byte[] Temperatures
+    {
+        get
+        {
+            byte[] all = RestoreTemperatures();
+            if (_count >= all.Length)
+            {
+                return all;
+            }
+            byte[] sliced = new byte[_count];
+            Array.Copy(all, sliced, _count);
+            return sliced;
+        }
+    }
+
+    /// <summary>只画 n 个点（温度轴由固件固定，不显示温度数字）。</summary>
+    internal void LoadPoints(int count, int[] duties)
+    {
+        _prefix = 0;
+        _prefixTemps = Array.Empty<byte>();
+        _prefixDuties = Array.Empty<int>();
+        _count = Math.Clamp(count, 1, PointCount);
+        for (int i = 0; i < PointCount; i++)
+        {
+            _temps[i] = 0;
+            _duties[i] = i < _count && i < duties.Length ? Math.Clamp(duties[i], 0, 100) : 0;
+        }
+        _valid = _count;
+        InvalidateVisual();
+    }
 
     public FanCurveCanvas()
     {
@@ -37,6 +82,7 @@ public sealed class FanCurveCanvas : FrameworkElement
 
     internal void Load(byte[] temps, byte[] duties)
     {
+        _count = PointCount;
         // 跳过开头的空温度点（0/255），避免界面出现一个没有温度标签的点。
         int start = 0;
         while (start < temps.Length && (temps[start] == 0 || temps[start] == byte.MaxValue))

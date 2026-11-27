@@ -236,8 +236,18 @@ internal sealed record MachineIdentity(
 
 		bool hasTongfangNvram = false;
 		try { hasTongfangNvram = UefiGpuMux.HasMuxVariable; } catch { }
+		// 独显存在性只看**在线设备**：核显模式下 dGPU 会被停用或摘出设备树，而注册表里装过驱动的旧条目
+		// 会残留成"幽灵独显"（本机实测出现过：在线只有核显，注册表却报 RTX 3060）⇒ 不能代表本机现状。
 		bool hasNvidiaDgpu = false;
-		try { hasNvidiaDgpu = MechrevoLite.Gpu.GpuGenerationProvider.Current().HasDgpu; } catch { }
+		try
+		{
+			MechrevoLite.Gpu.DgpuPresence presence = MechrevoLite.Gpu.GpuRouteProbe.ReadPresence();
+			hasNvidiaDgpu = presence == MechrevoLite.Gpu.DgpuPresence.Present
+				|| presence == MechrevoLite.Gpu.DgpuPresence.Disabled;
+		}
+		catch { }
+		bool hasEcEvidence = false;
+		try { hasEcEvidence = TongfangEcEvidence.IsPresent; } catch { }
 		bool hasUwacpiService = false;
 		try
 		{
@@ -255,7 +265,7 @@ internal sealed record MachineIdentity(
 			|| xingyaoModel.Contains("XINGYAO", StringComparison.OrdinalIgnoreCase);
 		bool xingyao15 = xingyaoNamed && !xingyaoBoard;
 		bool tongfangFamily = ProbeTongfangFamily(board, model, generation, gcuInstalled, whitelisted,
-			hasTongfangNvram, hasNvidiaDgpu, hasUwacpiService, hasFunctionalMulong, out string tongfangSource);
+			hasTongfangNvram, hasNvidiaDgpu, hasUwacpiService, hasFunctionalMulong, hasEcEvidence, out string tongfangSource);
 		return new MachineIdentity(board, boardSource, whitelisted, generation, gcuInstalled,
 			model, modelSource, mifsClass, mifsPresent, mifsLegacyCompatible,
 			projectId, projectIdSource, gcuVariant, gcuVariantFamily,
@@ -316,7 +326,7 @@ internal sealed record MachineIdentity(
 			|| xingyaoModel.Contains("XINGYAO", StringComparison.OrdinalIgnoreCase);
 		bool xingyao15 = xingyaoNamed && !xingyaoBoard;
 		bool tongfangFamily = ProbeTongfangFamily(boardText, modelText, generationText, gcuInstalled, whitelisted,
-			hasTongfangNvram: false, hasNvidiaDgpu: false, hasUwacpiService: false, hasFunctionalMulong: false,
+			hasTongfangNvram: false, hasNvidiaDgpu: false, hasUwacpiService: false, hasFunctionalMulong: false, hasEcEvidence: false,
 			out string tongfangSource);
 		return new MachineIdentity(boardText, boardSource, whitelisted, generationText, gcuInstalled,
 			modelText, modelSource, mifsText, mifsClass, mifsClass,
@@ -339,12 +349,12 @@ internal sealed record MachineIdentity(
 		bool gcuInstalled, bool whitelisted, out string source)
 	{
 		return ProbeTongfangFamily(board, model, generation, gcuInstalled, whitelisted,
-			hasTongfangNvram: false, hasNvidiaDgpu: false, hasUwacpiService: false, hasFunctionalMulong: false, out source);
+			hasTongfangNvram: false, hasNvidiaDgpu: false, hasUwacpiService: false, hasFunctionalMulong: false, hasEcEvidence: false, out source);
 	}
 
 	private static bool ProbeTongfangFamily(string board, string model, string generation,
 		bool gcuInstalled, bool whitelisted, bool hasTongfangNvram, bool hasNvidiaDgpu,
-		bool hasUwacpiService, bool hasFunctionalMulong, out string source)
+		bool hasUwacpiService, bool hasFunctionalMulong, bool hasEcEvidence, out string source)
 	{
 		source = "";
 		if (whitelisted)
@@ -374,9 +384,16 @@ internal sealed record MachineIdentity(
 			source = "umi";
 			return true;
 		}
+		// 判据顺序：NVRAM（厂商自己写的变量）> EC 布局证据 > 在线独显 > 服务/板号。
+		// ⛔ 独显存在性排后面：核显模式下 dGPU 会被停用或摘出设备树，注册表残留更会凭空造出一张卡。
 		if (hasTongfangNvram)
 		{
 			source = "tongfang-nvram";
+			return true;
+		}
+		if (hasEcEvidence)
+		{
+			source = "tongfang-ec";
 			return true;
 		}
 		if (hasNvidiaDgpu)
@@ -397,6 +414,14 @@ internal sealed record MachineIdentity(
 		if (gcuInstalled)
 		{
 			source = "gcu-service";
+			return true;
+		}
+		// 机型名兜底：只有上面那些硬件事实全都没命中时才用。Code 01 这类商用机的型号串里
+		// 直接带系列名（"Code 01 Series PF5NU1G"），可以当最后一级证据。
+		if (modelText.Contains("CODE 01", StringComparison.OrdinalIgnoreCase)
+			|| modelText.Contains("CODE01", StringComparison.OrdinalIgnoreCase))
+		{
+			source = "code-01-name";
 			return true;
 		}
 		if (boardText.StartsWith("GM", StringComparison.Ordinal)

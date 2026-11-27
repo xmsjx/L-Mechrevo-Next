@@ -41,6 +41,11 @@ public partial class CustomModeWindow : Window
     {
         InitializeComponent();
         WireNumericBoxes();
+        // 后端判定这台机没有可写风扇曲线时不显示入口。
+        if (!L_Mechrevo.WpfP0.Services.WpfBackend.FanCurveSupported())
+        {
+            FanCurveButton.Visibility = Visibility.Collapsed;
+        }
         L_Mechrevo.WpfP0.Services.WindowWorkAreaPolicy.ClampOnLoaded(this);
         AddHandler(Slider.ValueChangedEvent,
             new RoutedPropertyChangedEventHandler<double>((_, _) => MarkDirty()), true);
@@ -70,8 +75,8 @@ public partial class CustomModeWindow : Window
     private void WireNumericBoxes()
     {
         Wire(Pl1Text, Pl1Slider);
-        Wire(Pl2Text, Pl2Slider);
-        Wire(Pl4Text, Pl4Slider);
+        Wire(Pl2Text, Pl2Slider, NormalizeAfterPl2Edit);
+        Wire(Pl4Text, Pl4Slider, NormalizeAfterPl4Edit);
         Wire(TccText, TccSlider);
         Wire(StapmTimeText, StapmTimeSlider);
         Wire(SmuSlowLimitText, SmuSlowLimitSlider);
@@ -85,17 +90,74 @@ public partial class CustomModeWindow : Window
         Wire(FanDelayText, FanDelaySlider);
     }
 
-    private static void Wire(TextBox box, Slider slider)
+    private void Wire(TextBox box, Slider slider, Action? afterCommit = null)
     {
-        box.LostFocus += (_, _) => CommitNumeric(box, slider);
+        box.LostFocus += (_, _) =>
+        {
+            CommitNumeric(box, slider);
+            afterCommit?.Invoke();
+        };
         box.KeyDown += (_, e) =>
         {
             if (e.Key == System.Windows.Input.Key.Enter)
             {
                 CommitNumeric(box, slider);
+                afterCommit?.Invoke();
                 e.Handled = true;
             }
         };
+    }
+
+    /// <summary>文本框填入 fPPT 后：按 sPPT + 20 的下限再校正一次。</summary>
+    private void NormalizeAfterPl4Edit()
+    {
+        if (_loadingUi || Pl2Slider == null || Pl4Slider == null)
+        {
+            return;
+        }
+        _syncingPowerWalls = true;
+        try
+        {
+            int floor = ApplyPl4Floor();
+            if ((int)Math.Round(Pl4Slider.Value) < floor)
+            {
+                Pl4Slider.Value = floor;
+            }
+            if (Pl4Text != null) Pl4Text.Text = ((int)Math.Round(Pl4Slider.Value)).ToString();
+        }
+        finally
+        {
+            _syncingPowerWalls = false;
+        }
+    }
+
+    /// <summary>文本框填入 sPPT 后：PL1 高于 sPPT 就压到与 sPPT 相同，并把 fPPT 抬到下限以上。</summary>
+    private void NormalizeAfterPl2Edit()
+    {
+        if (_loadingUi || Pl1Slider == null || Pl2Slider == null || Pl4Slider == null)
+        {
+            return;
+        }
+        _syncingPowerWalls = true;
+        try
+        {
+            int pl2 = (int)Math.Round(Pl2Slider.Value);
+            if ((int)Math.Round(Pl1Slider.Value) > pl2)
+            {
+                Pl1Slider.Value = pl2;
+            }
+            int floor = ApplyPl4Floor();
+            if ((int)Math.Round(Pl4Slider.Value) < floor)
+            {
+                Pl4Slider.Value = floor;
+            }
+            if (Pl1Text != null) Pl1Text.Text = ((int)Math.Round(Pl1Slider.Value)).ToString();
+            if (Pl4Text != null) Pl4Text.Text = ((int)Math.Round(Pl4Slider.Value)).ToString();
+        }
+        finally
+        {
+            _syncingPowerWalls = false;
+        }
     }
 
     private static void CommitNumeric(TextBox box, Slider slider)
@@ -105,7 +167,7 @@ public partial class CustomModeWindow : Window
             value = Math.Clamp(value, (int)slider.Minimum, (int)slider.Maximum);
             slider.Value = value;
         }
-        box.Text = ((int)slider.Value).ToString();
+        box.Text = ((int)Math.Round(slider.Value)).ToString();
     }
 
     private void ApplyCpuPowerLabels()
@@ -217,7 +279,9 @@ public partial class CustomModeWindow : Window
         ApplyButton.IsEnabled = true;
         _modes.Clear();
         _modes.AddRange(MechrevoLite.Mode.ModeSettings.Modes);
-        string target = selectedId ?? MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId
+        string target = selectedId
+            ?? MechrevoLite.AppConfig.GetString("customwin_last_mode")
+            ?? MechrevoLite.Mode.PerfModeService.Instance?.DisplayedModeId
             ?? MechrevoLite.Mode.ModeSettings.ActiveModeId;
         MechrevoLite.Mode.PerfModeDefinition? targetMode = _modes.FirstOrDefault(m => string.Equals(m.Id, target, StringComparison.Ordinal));
         if (targetMode == null)
@@ -301,7 +365,8 @@ public partial class CustomModeWindow : Window
             S(SmuSlowLimitSlider), S(SmuSlowTimeSlider), S(SmuFastTimeSlider), S(GpuPowerLimitSlider),
             TccSwitch.IsChecked == true, DbSwitch.IsChecked == true,
             FanSensitivitySwitch.IsChecked == true, GpuOcSwitch.IsChecked == true,
-            C(PowerModeCombo), C(PowerPlanCombo), C(CpuBoostCombo), C(FanBoostCombo), C(RefreshCombo));
+            C(PowerModeCombo), C(PowerPlanCombo), C(CpuBoostCombo), C(FanBoostCombo), C(RefreshCombo),
+            ProcFreqAcBox?.Text.Trim() ?? "", ProcFreqDcBox?.Text.Trim() ?? "");
     }
 
     private void MarkDirty()
@@ -330,7 +395,7 @@ public partial class CustomModeWindow : Window
         "GPU 功耗上限", "风扇灵敏度", "GPU 核心偏移", "GPU 显存偏移", "STAPM 时间",
         "SMU 慢速功率", "SMU 慢速时间", "SMU 快速时间", "GPU 功耗限制", "CPU 温度墙开关",
         "GPU 动态加速开关", "风扇灵敏度开关", "GPU 超频开关", "Windows 电源模式", "电源计划",
-        "CPU 睿频模式", "风扇档", "屏幕刷新率"
+        "CPU 睿频模式", "风扇档", "屏幕刷新率", "处理器最大频率（插电）", "处理器最大频率（离电）"
     };
 
     /// <summary>列出与"已应用配置"不一致的项；没有可比的快照时退回通用文案。</summary>
@@ -766,6 +831,9 @@ public partial class CustomModeWindow : Window
         UpdateRouteHint(mode);
         SyncModeComboToCurrent();
         QueueModeComboSync();
+        // 记住这个窗口里最后看的配置：关掉再打开要停在同一个（原来是回到第一个自定义档）。
+        MechrevoLite.AppConfig.Set("customwin_last_mode", id);
+        MechrevoLite.AppConfig.Flush();
     }
 
     private void LoadSettingsToUi(MechrevoLite.Mode.PerfModeSettings s)
@@ -776,6 +844,8 @@ public partial class CustomModeWindow : Window
         SetSlider(Pl1Slider, Pl1Text, s.Pl1 ?? 65);
         SetSlider(Pl2Slider, Pl2Text, s.Pl2 ?? 65);
         SetSlider(Pl4Slider, Pl4Text, s.Pl4 ?? 100);
+        ApplyPl4Floor();
+        if (Pl4Text != null) Pl4Text.Text = ((int)Math.Round(Pl4Slider.Value)).ToString();
         TccSwitch.IsChecked = s.TccOn == true;
         SetSlider(TccSlider, TccText, s.TccTarget ?? 95);
         DbSwitch.IsChecked = s.GpuDynamicBoostOn == true;
@@ -794,6 +864,14 @@ public partial class CustomModeWindow : Window
         CoreOffsetSlider.IsEnabled = GpuOcSwitch.IsChecked == true;
         MemoryOffsetSlider.IsEnabled = GpuOcSwitch.IsChecked == true;
         SelectComboInt(PowerModeCombo, s.WindowsPowerMode);
+        if (ProcFreqAcBox != null)
+        {
+            ProcFreqAcBox.Text = s.ProcessorMaxFreqAc?.ToString() ?? "";
+        }
+        if (ProcFreqDcBox != null)
+        {
+            ProcFreqDcBox.Text = s.ProcessorMaxFreqDc?.ToString() ?? "";
+        }
         SelectComboInt(CpuBoostCombo, s.CpuBoost);
         SelectComboBool(FanBoostCombo, s.FanBoost);
         RefreshOptions(s.RefreshHz);
@@ -843,9 +921,8 @@ public partial class CustomModeWindow : Window
         // 参数区锁定时仍允许「应用」：Apply_Click 只提交系统项（见那里的 parameterEditable 分段）。
         ApplyButton.IsEnabled = true;
         var hwForRows = L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram;
-        bool apuOrNoDgpu = hwForRows != null
-            && (hwForRows.SmuCustomApu || hwForRows.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu);
-        bool noDgpu = hwForRows?.DgpuGeneration == MechrevoLite.Gpu.DgpuGenerationKind.NoDgpu;
+        // 显卡行的显示判据在后端（FeatureVisibility），界面只取结论。
+        bool apuOrNoDgpu = !MechrevoLite.Hardware.FeatureVisibility.DgpuRows(hwForRows);
         // Intel 星耀只开放 PL1/PL2：fPPT、温度/GPU、风扇/超频都不显示。
         bool intelXingyaoMsr = hwForRows != null
             && L_Mechrevo.WpfP0.Services.WpfBackend.IsIntelCpu()
@@ -858,15 +935,10 @@ public partial class CustomModeWindow : Window
             hwForRows.IsBaolongda30Series,
             L_Mechrevo.WpfP0.Services.WpfBackend.SmuReady(),
             smuCustomApu);
-        bool pl4Supported = hwForRows != null && hwForRows.Pl4Minimum >= 0 && hwForRows.Pl4Maximum > hwForRows.Pl4Minimum;
         bool gcuTongfangMachine = IsGcuTongfangMachine();
         bool gcuTongfangIntel = IsGcuTongfangIntel();
-        bool forceEcPl4 = L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig()
-            && hwForRows != null
-            && !hwForRows.UsesBaolongda
-            && !hwForRows.IsNucUmiFamily
-            && !apuOrNoDgpu;
-        Pl4Row.Visibility = !intelXingyaoMsr && !apuOrNoDgpu && (pl4Supported || gcuTongfangMachine || forceEcPl4)
+        // fPPT（PL4）行同样由后端判：只看本机有没有可写的 PL4 通道，不看有没有独显。
+        Pl4Row.Visibility = MechrevoLite.Hardware.FeatureVisibility.Pl4Row(hwForRows)
             ? Visibility.Visible : Visibility.Collapsed;
         DbRow.Visibility = (apuOrNoDgpu || intelXingyaoMsr) ? Visibility.Collapsed : Visibility.Visible;
         // 没有独显（无界办公本等）不显示 GPU 超频/动态加速卡片。
@@ -944,16 +1016,16 @@ public partial class CustomModeWindow : Window
             && (hwForRows.GpuTgpAdjustable || hwForRows.IsNucUmiFamily);
         GpuTgpRow.Visibility = (apuOrNoDgpu || fixedBaseTgp || intelXingyaoMsr || !tgpAdjustable)
             ? Visibility.Collapsed : Visibility.Visible;
-        FanBoostRow.Visibility = (noDgpu || intelXingyaoMsr) ? Visibility.Collapsed : Visibility.Visible;
-        FanCard.Visibility = (noDgpu || intelXingyaoMsr) ? Visibility.Collapsed : Visibility.Visible;
+        // 强冷与风扇卡的显示判据同样在后端：按本机有没有这一路，不看有没有独显。
+        FanBoostRow.Visibility = MechrevoLite.Hardware.FeatureVisibility.FanBoost(hwForRows)
+            ? Visibility.Visible : Visibility.Collapsed;
+        FanCard.Visibility = MechrevoLite.Hardware.FeatureVisibility.FanCard(hwForRows)
+            ? Visibility.Visible : Visibility.Collapsed;
         StapmTimeRow.Visibility = (smuPowerRows && !wujieApu && PawnIO.CpuInfo.IsAMD) ? Visibility.Visible : Visibility.Collapsed;
         SmuSlowLimitRow.Visibility = (smuPowerRows && !wujieApu && PawnIO.CpuInfo.IsAMD) ? Visibility.Visible : Visibility.Collapsed;
         SmuSlowTimeRow.Visibility = smuPowerRows && !wujieApu ? Visibility.Visible : Visibility.Collapsed;
         SmuFastTimeRow.Visibility = Visibility.Collapsed;
-        if (L_Mechrevo.WpfP0.Services.WpfBackend.LocalPowerConfig() && !apuOrNoDgpu)
-        {
-            Pl4Row.Visibility = Visibility.Visible;
-        }
+        // PL4 行的显示已由 FeatureVisibility.Pl4Row 一次判完，这里不再补判。
         DbSlider.IsEnabled = DbSwitch.IsChecked == true;
         DbSlider.IsHitTestVisible = DbSlider.IsEnabled;
         DbSlider.Opacity = DbSlider.IsEnabled ? 1.0 : 0.45;
@@ -1286,6 +1358,29 @@ public partial class CustomModeWindow : Window
         FanDelaySlider.Value = Math.Clamp(FanDelaySlider.Value, FanDelaySlider.Minimum, FanDelaySlider.Maximum);
     }
 
+    /// <summary>读"处理器最大频率"输入框：空 = 不改变；0 或 400~6000 之间才算有效。</summary>
+    private static int? ParseProcFreq(TextBox? box)
+    {
+        if (box == null)
+        {
+            return null;
+        }
+        string text = box.Text.Trim();
+        if (text.Length == 0)
+        {
+            return null;
+        }
+        if (!int.TryParse(text, out int value))
+        {
+            return null;
+        }
+        if (value == 0)
+        {
+            return 0;
+        }
+        return (value >= 400 && value <= 6000) ? value : (int?)null;
+    }
+
     private void RefreshOptions(int? current)
     {
         RefreshCombo.Items.Clear();
@@ -1364,21 +1459,30 @@ public partial class CustomModeWindow : Window
         }
     }
 
+    // 三个功耗滑块都按整数步进；这里再按四舍五入取值，保证显示值、保存值、下发值始终一致
+    //（此前按截断取整，滑块落在 89.x 时会把 90 存成 89）。
     private void Pl1_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (Pl1Text != null) Pl1Text.Text = ((int)e.NewValue).ToString();
+        int pl1 = (int)Math.Round(e.NewValue);
+        if (Pl1Text != null) Pl1Text.Text = pl1.ToString();
+        // PL2 ≥ PL1：抬 PL1 时把 PL2 一起带上（只夹数值，不动滑块量程）。
+        if (!_loadingUi && Pl2Slider != null && (int)Math.Round(Pl2Slider.Value) < pl1)
+        {
+            Pl2Slider.Value = pl1;
+        }
         SyncPowerWalls("pl1");
     }
 
     private void Pl2_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (Pl2Text != null) Pl2Text.Text = ((int)e.NewValue).ToString();
+        int pl2 = (int)Math.Round(e.NewValue);
+        if (Pl2Text != null) Pl2Text.Text = pl2.ToString();
         SyncPowerWalls("pl2");
     }
 
     private void Pl4_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (Pl4Text != null) Pl4Text.Text = ((int)e.NewValue).ToString();
+        if (Pl4Text != null) Pl4Text.Text = ((int)Math.Round(e.NewValue)).ToString();
         SyncPowerWalls("fppt");
     }
 
@@ -1417,7 +1521,7 @@ public partial class CustomModeWindow : Window
                 // EC 门控为权威，防止 GCU 回报把 Pl4Scale 改回去。
                 L_Mechrevo.WpfP0.Services.WpfBackend.HwOrProgram?.SetPl4UnitDouble(doubleUnit);
                 Pl4Slider.Value = Math.Clamp(watts, (int)Pl4Slider.Minimum, (int)Pl4Slider.Maximum);
-                Pl4Text.Text = ((int)Pl4Slider.Value).ToString();
+                Pl4Text.Text = ((int)Math.Round(Pl4Slider.Value)).ToString();
             }
             finally
             {
@@ -1629,7 +1733,28 @@ public partial class CustomModeWindow : Window
         UpdatePl4SavedHint();
     }
 
-    /// <summary>FPPT >= PL2 >= PL1；拖动任意一个时把另一端推到合法范围。</summary>
+    /// <summary>fPPT 的下限随 sPPT 联动（下限 = sPPT + 20），由滑块自身拦住；PL1 与 PL2 各自独立。</summary>
+    private int ApplyPl4Floor()
+    {
+        if (Pl2Slider == null || Pl4Slider == null)
+        {
+            return 0;
+        }
+        int pl2 = (int)Math.Round(Pl2Slider.Value);
+        int floor = Math.Min((int)Pl4Slider.Maximum, pl2 + 20);
+        if (floor > (int)Pl4Slider.Maximum)
+        {
+            floor = (int)Pl4Slider.Maximum;
+        }
+        // 只抬数值，不动滑块量程：改 Minimum 会把整条滑轨的比例一起改掉，
+        // 降低 sPPT 时 fPPT 的填充反而变高，看着像反向联动。
+        if ((int)Math.Round(Pl4Slider.Value) < floor)
+        {
+            Pl4Slider.Value = floor;
+        }
+        return floor;
+    }
+
     private void SyncPowerWalls(string source)
     {
         if (_loadingUi || _syncingPowerWalls
@@ -1642,25 +1767,36 @@ public partial class CustomModeWindow : Window
         {
             int pl1 = (int)Math.Round(Pl1Slider.Value);
             int pl2 = (int)Math.Round(Pl2Slider.Value);
+            // PL1 ≤ PL2：sPPT 压到 SPL 以下时把 SPL 一起压低（只夹数值，不改量程）。
+            if (pl1 > pl2)
+            {
+                pl1 = pl2;
+                Pl1Slider.Value = pl1;
+                if (Pl1Text != null) Pl1Text.Text = pl1.ToString();
+            }
             int fppt = (int)Math.Round(Pl4Slider.Value);
-            if (string.Equals(source, "pl1", StringComparison.Ordinal))
+            // 压低 fPPT 时反向联动：sPPT 压到 fPPT-20，sPPT 不够的话 SPL 也一起压。
+            // 只在用户动 fPPT 时做，定时刷新/读回不走这条，避免自己把档位改小。
+            if (source == "fppt" && fppt < pl2 + 20)
             {
-                pl2 = Math.Max(pl2, pl1);
-                fppt = Math.Max(fppt, pl2);
+                int newPl2 = Math.Max((int)Math.Round(Pl2Slider.Minimum), fppt - 20);
+                if (newPl2 < pl2)
+                {
+                    pl2 = newPl2;
+                    Pl2Slider.Value = pl2;
+                    if (pl1 > pl2)
+                    {
+                        pl1 = pl2;
+                        Pl1Slider.Value = pl1;
+                    }
+                }
             }
-            else if (string.Equals(source, "pl2", StringComparison.Ordinal))
+            int pl4Floor = ApplyPl4Floor();
+            if (fppt < pl4Floor)
             {
-                pl1 = Math.Min(pl1, pl2);
-                fppt = Math.Max(fppt, pl2);
+                fppt = pl4Floor;
             }
-            else if (string.Equals(source, "fppt", StringComparison.Ordinal))
-            {
-                pl2 = Math.Min(pl2, fppt);
-                pl1 = Math.Min(pl1, pl2);
-            }
-            if ((int)Math.Round(Pl2Slider.Value) != pl2) Pl2Slider.Value = pl2;
             if ((int)Math.Round(Pl4Slider.Value) != fppt) Pl4Slider.Value = fppt;
-            if ((int)Math.Round(Pl1Slider.Value) != pl1) Pl1Slider.Value = pl1;
             if (Pl1Text != null) Pl1Text.Text = pl1.ToString();
             if (Pl2Text != null) Pl2Text.Text = pl2.ToString();
             if (Pl4Text != null) Pl4Text.Text = fppt.ToString();
@@ -1750,9 +1886,9 @@ public partial class CustomModeWindow : Window
         ApplyButton.IsEnabled = false;
         try
         {
-            int pl1 = (int)Pl1Slider.Value;
-            int pl2 = (int)Pl2Slider.Value;
-            int pl4 = (int)Pl4Slider.Value;
+            int pl1 = (int)Math.Round(Pl1Slider.Value);
+            int pl2 = (int)Math.Round(Pl2Slider.Value);
+            int pl4 = (int)Math.Round(Pl4Slider.Value);
             int? tcc = TccSwitch.IsChecked == true ? (int)TccSlider.Value : null;
             MechrevoLite.Mode.PerfModeSettings edited = _settings with
             {
@@ -1777,7 +1913,10 @@ public partial class CustomModeWindow : Window
                 PowerPlanGuid = PowerPlanCombo.SelectedItem is ComboBoxItem plan && plan.Tag is string planTag && !string.IsNullOrWhiteSpace(planTag) ? planTag : null,
                 CpuBoost = CpuBoostCombo.SelectedItem is ComboBoxItem cb && cb.Tag is string cbText && int.TryParse(cbText, out int cbValue) ? cbValue : (int?)null,
                 FanBoost = FanBoostCombo.SelectedItem is ComboBoxItem fb && fb.Tag is string fbText && int.TryParse(fbText, out int fbValue) ? fbValue == 1 : (bool?)null,
-                RefreshHz = RefreshCombo.SelectedItem is ComboBoxItem rr && rr.Tag is string rrText && int.TryParse(rrText, out int rrValue) ? rrValue : (int?)null
+                RefreshHz = RefreshCombo.SelectedItem is ComboBoxItem rr && rr.Tag is string rrText && int.TryParse(rrText, out int rrValue) ? rrValue : (int?)null,
+                // 处理器最大频率：留空 = 不改变（null），0 = 不限制；超出合理范围直接丢弃，避免把 1MHz 这种值写进去。
+                ProcessorMaxFreqAc = ParseProcFreq(ProcFreqAcBox),
+                ProcessorMaxFreqDc = ParseProcFreq(ProcFreqDcBox)
             };
             if (edited.GpuOverclockOn == true)
             {
@@ -1959,9 +2098,9 @@ public partial class CustomModeWindow : Window
             }
             MechrevoLite.Mode.PerfModeSettings edited = _settings with
             {
-                Pl1 = (int)Pl1Slider.Value,
-                Pl2 = (int)Pl2Slider.Value,
-                Pl4 = (int)Pl4Slider.Value,
+                Pl1 = (int)Math.Round(Pl1Slider.Value),
+                Pl2 = (int)Math.Round(Pl2Slider.Value),
+                Pl4 = (int)Math.Round(Pl4Slider.Value),
                 TccOn = TccSwitch.IsChecked == true,
                 TccTarget = (int)TccSlider.Value,
                 GpuDynamicBoostOn = DbSwitch.IsChecked == true,

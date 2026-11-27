@@ -1,0 +1,6 @@
+{
+  "_note": "machine_code is only a fallback; the script reads it from SMBIOS type 45 first.",
+  "machine_code": "51821b7e",
+  "app_type": 17,
+  "cm": "MRO"
+}

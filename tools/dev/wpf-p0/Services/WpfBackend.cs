@@ -1013,7 +1013,7 @@ internal static class WpfBackend
     internal static bool GcuTryApplyMode(int visualMode, out string detail) =>
         GcuEcExperimental.TryApplyMode(visualMode, out detail);
 
-    /// <summary>实验性 EC 模式是否在用（与 EcModeActive 同源，取后端判据）。</summary>
+    /// <summary>EC 模式是否在用（与 EcModeActive 同源，取后端判据）。</summary>
     internal static bool GcuActive => GcuEcExperimental.Enabled;
 
     /// <summary>该机型是否支持「模式 × 配置」绑定。</summary>
@@ -1053,15 +1053,9 @@ internal static class WpfBackend
     /// <summary>读工厂 Turbo 的 PL4/fPPT 原始值（单位由 EcPl4Unit 决定）。</summary>
     internal static bool TryReadTurboPl4(out byte raw) => AcpiDriverEc.TryReadByte(1961, out raw);
 
-    /// <summary>自定义功耗前先落模式字节（保留高 3 位与最低位，置 0x10）。</summary>
+    /// <summary>自定义功耗前先落模式字节；实现在硬件层。</summary>
     internal static bool TrySetCustomModeGate()
-    {
-        if (!AcpiDriverEc.TryReadByte(1963, out byte mode))
-        {
-            return false;
-        }
-        return AcpiDriverEc.TryWriteByte(1963, (byte)((mode & 0xE0) | 0x10 | (mode & 0x01)));
-    }
+        => MechrevoLite.Hardware.GcuEcExperimental.TrySetCustomModeGate();
 
     internal static List<(string Guid, string Name)> WinPowerPlanPlans() => WinPowerPlan.GetPlans();
 
@@ -1454,7 +1448,7 @@ internal static class WpfBackend
     /// <summary>键盘档位上限（宝龙达有效上限与常规 4 档的取舍由 Core 决定）。</summary>
     internal static int KeyboardBrightnessMax() => MechrevoHw.EffectiveKeyboardBrightnessMax();
 
-    /// <summary>EC 键盘实验通道的判据与下发（与 GCU 通道相互独立）。</summary>
+    /// <summary>EC 键盘通道的判据与下发（与 GCU 通道相互独立）。</summary>
     internal static bool EcKbdActive => GcuEcKeyboard.Active;
 
     internal static bool EcKbdIsSingleZone => GcuEcKeyboard.IsEcSingleZone;
@@ -1462,6 +1456,25 @@ internal static class WpfBackend
     internal static bool EcKbdTryReadPower(out bool on) => GcuEcKeyboard.TryReadPower(out on);
 
     internal static bool EcKbdIsWhite => GcuEcKeyboard.IsEcWhite;
+
+    /// <summary>该机型是否显示风扇占空比（读不到的机型隐藏，不显示假 0%）。</summary>
+    internal static bool FanDutyVisible() => !MechrevoLite.Hardware.DeclarationRuntime.Flag("fanTelemetry", "hideDuty");
+
+    /// <summary>该机型是否显示风扇转速。</summary>
+    internal static bool FanRpmVisible() => !MechrevoLite.Hardware.DeclarationRuntime.Flag("fanTelemetry", "hideRpm");
+
+    /// <summary>该机型是否可以改风扇曲线（判定在后端能力，界面只读结果）。</summary>
+    internal static bool FanCurveSupported()
+    {
+        MechrevoHw? hw = HwOrProgram;
+        return hw != null && MechrevoLite.Mode.PerfModeBackend.CapabilitiesFrom(hw).SupportsFanCurve;
+    }
+
+    /// <summary>该机型是否隐藏亮度调节（只有开/关）。</summary>
+    internal static bool EcKbdBrightnessHidden => MechrevoLite.Hardware.EcKeyboardLight.BrightnessHidden;
+
+    /// <summary>亮度键由固件自管（声明 hotkey=0）：界面只显示真实档位，不回写 EC。</summary>
+    internal static bool EcKbdHotkeyByFirmware => MechrevoLite.Hardware.EcKeyboardLight.HotkeyByFirmware;
 
     internal static bool EcKbdIsHid => GcuEcKeyboard.IsHid;
 

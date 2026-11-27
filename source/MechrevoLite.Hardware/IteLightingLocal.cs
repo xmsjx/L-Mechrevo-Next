@@ -7,7 +7,7 @@ namespace MechrevoLite.Hardware;
 
 /// <summary>
 /// 同方 ITE 灯带 / 铰链 / Logo 的本地 HID 通道。
-/// EC 实验模式（GCU 离线）下不经过 GCUService，直接按设备报文下发。
+/// EC 模式（GCU 离线）下不经过 GCUService，直接按设备报文下发。
 /// 报文长度固定 9 字节（report id 0 + 8 字节负载）。
 /// </summary>
 internal static class IteLightingLocal
@@ -44,6 +44,18 @@ internal static class IteLightingLocal
     }
     internal static bool HasLightbar => _hasLightbar ??= HasUsbLightbar || EcDirectLightbarSupported;
     internal static bool HasHinge => _hasHinge ??= HasUsbDevice(HingePid, 0);
+
+    /// <summary>
+    /// 独立 Logo 通道的证据：能力字节里有 Logo 位，或存在 7000 设备（Logo 控制口与它共用）。
+    /// <para>灯带 7001 本身不算证据——灯带在而 Logo 不在的机型很常见。</para>
+    /// </summary>
+    internal static bool HasLogoChannel => IteCapabilityProbe.Current?.AnyLogo == true || HasHinge;
+
+    /// <summary>
+    /// 用户对 Logo 通道的显式指定：0 = 按证据（默认），1 = 强制 USB 通道，2 = 强制 A 面 EC 直写。
+    /// <para>没装官方控制台、注册表也没有值的机型，判定只能是「不知道」，此时由用户指定。</para>
+    /// </summary>
+    internal static int LogoChannelOverride => AppConfig.Get("logo_channel", 0);
 
     /// <summary>读取已缓存的 USB Logo 证据；未采集过返回 false，不触发 HID 枚举。</summary>
     internal static bool TryGetUsbLogoCached(out bool value)
@@ -224,9 +236,14 @@ internal static class IteLightingLocal
         try
         {
             using HidDeviceWin? dev = FindDevice(pid, usage);
-            if (dev == null || !dev.Open())
+            if (dev == null)
             {
                 detail = "未找到 ITE 设备 PID=0x" + pid.ToString("X4");
+                return false;
+            }
+            if (!dev.Open())
+            {
+                detail = "ITE 设备打不开（PID=0x" + pid.ToString("X4") + "，可能被占用）";
                 return false;
             }
             if (!on || light <= 0)

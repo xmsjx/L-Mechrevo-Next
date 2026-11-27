@@ -279,6 +279,13 @@ public static class PerfModeApplyPlanner
 		{
 			list.Add(new PerfApplyStep(PerfApplyStepKind.ApplyCpuBoost, null, null, settings.CpuBoost.Value, IsCpuCurve: false, null, PerfApplyVerify.CpuBoost));
 		}
+		if (settings.ProcessorMaxFreqAc.HasValue || settings.ProcessorMaxFreqDc.HasValue)
+		{
+			// -1 = 该侧不动：只填了插电侧时不要顺手把电池侧改成 0。
+			int acFreq = settings.ProcessorMaxFreqAc ?? (-1);
+			int dcFreq = settings.ProcessorMaxFreqDc ?? (-1);
+			list.Add(new PerfApplyStep(PerfApplyStepKind.ApplyProcessorMaxFreq, null, null, acFreq, IsCpuCurve: false, new int[1] { dcFreq }, PerfApplyVerify.ProcessorMaxFreq));
+		}
 		int? refreshHz = settings.RefreshHz;
 		if (caps.SupportsRefreshRate && refreshHz.HasValue && refreshHz.GetValueOrDefault() > 0)
 		{

@@ -68,7 +68,7 @@ internal sealed class SensorService : ISensorService
                 GpuFanDutyPercent: gpuDutyPercent,
                 CpuFrequencyMhz: Prefer(connected ? hw!.CpuFrequency : -1, snap.CpuFrequency),
                 GpuCoreFrequencyMhz: Prefer(connected ? hw!.GpuCoreFreq : -1, snap.GpuCoreFreq),
-                FanRpmMaxForPercent: connected ? hw!.FanRpmMaxForPercent : 5000,
+                FanRpmMaxForPercent: connected ? hw!.FanRpmPercentDisplayMax : 6000,
                 CpuPowerWatts: snap.CpuPower,
                 GpuPowerWatts: snap.GpuPower,
                 GpuMemoryClockMhz: snap.GpuMemoryClockMhz > 0 ? snap.GpuMemoryClockMhz : null,

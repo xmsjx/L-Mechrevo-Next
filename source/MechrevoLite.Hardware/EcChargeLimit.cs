@@ -6,11 +6,12 @@ namespace MechrevoLite.Hardware;
 
 internal static class EcChargeLimit
 {
-	public const int UpperRegister = 1977;
+	// 地址可被声明表覆盖（channelProfiles 里的 chargeLimit.params）；没声明就用这里的默认值。
+	public static int UpperRegister => DeclarationRuntime.RegisterAddress("chargeLimit", "upper", 1977);
 
 	// 复充下限 0x07D0：上限写成功后会 best-effort 补写一次（= 上限 − 5），⛔ 不参与成败判定。
 	// 另有一条只读观察（ScheduleLowerBoundObservation），用来核对固件是否自己推导出了同一个值。
-	public const int LowerRegister = 2000;
+	public static int LowerRegister => DeclarationRuntime.RegisterAddress("chargeLimit", "lower", 2000);
 
 	public const int RechargeHysteresis = 5;
 
@@ -18,12 +19,15 @@ internal static class EcChargeLimit
 
 	public const int MaximumPercent = 100;
 
+	/// <summary>本机限充是否为步进三档（位对式）：只有固定档位，没有任意百分比。</summary>
+	internal static bool UsesSteppedLevels => EcChargeLimitBitPair.InUse;
+
 	// 2026-10-10（限充门控持久化 · 移植 Leo-stro/mechrevo-charge-limit）：Uniwill EC 固件的充电控制循环
 	// 开头有产品线门控（0x07C3 平台值或 0x0770 ROMID 首字节为 4/5 才执行限充），且持久化靠固件把实时上限
 	// 抄进存储区 0x087F（主机不可写的 H2RAM 盲区）。门控默认不成立的机器上，直接写 0x7B9 往往无效或重启即丢。
 	// 方案：写入前若门控未开，临时把 0x07C3 写成 4，保持数秒让固件循环执行 store_limit() 把上限抄进存储区
 	// （跨重启/断电持久），随后还原原值（用完即还、零残留、不碰 ROMID 身份字节）。
-	public const int GateRegister = 1987;
+	public static int GateRegister => DeclarationRuntime.RegisterAddress("chargeLimit", "gate", 1987);
 
 	public const int GateOpenValue = 4;
 
@@ -35,13 +39,13 @@ internal static class EcChargeLimit
 	// 只看 0x07B9 回读只能证明"写进去了"，不能证明"生效了"（上层判据见 ChargeLimitEffectEvidence）。
 	// 0x0770 = ROMID 首字节（旧版用它做 4/5 产品线门控判断）；
 	// 0x087F = 固件存储区（跨重启持久）；旧版明确指出它是 H2RAM 盲区，主机通常**读不到**。
-	public const int EffectRegister = 1858;
+	public static int EffectRegister => DeclarationRuntime.RegisterAddress("chargeLimit", "effect", 1858);
 
 	public const int EffectBitMask = 4;
 
 	public const int EffectCheckDelayMs = 7000;
 
-	public const int RomIdRegister = 1904;
+	public static int RomIdRegister => DeclarationRuntime.RegisterAddress("chargeLimit", "romId", 1904);
 
 	public const int StoredLimitRegister = 2175;
 
@@ -262,6 +266,20 @@ internal static class EcChargeLimit
 		{
 			return true;
 		}
+		// 声明表优先：本机型明确没有限充（写成 none），或声明走别的通道而本版本没实现 ⇒ 直接判不可用。
+		// ⚠️ 放在审计模式之后、既有判据之前：没声明时这里什么都不做，下面那些判据逐位不变。
+		ChannelDecision declared = DeclarationRuntime.Decide("chargeLimit", "ec");
+		if (declared.Blocks)
+		{
+			Logger.WriteLineIfChanged("charge-limit-declaration",
+				"限充可用性：声明表判定不可用（" + declared + "）⇒ 判定不可用（未写任何 EC）");
+			return false;
+		}
+		// 位对式方案（部分平台固件用两位表示档位）：能力判据换成读能力标志位，不再走下面的百分数判据。
+		if (EcChargeLimitBitPair.InUse)
+		{
+			return EcChargeLimitBitPair.IsSupported();
+		}
 		// ⭐⭐ 2026-10-16（0.291.9 · 修"宝龙达机上限充没隐藏"）：
 		//   ⚠️ 根因：⭐ 下面那条 ⭐ **机型白名单**（⭐ `IsSupportedMachine(...)` ✅）⭐ 的语义是"或" ✅，
 		//      本来是为"⭐ 有 GCU 但没装 ACPIDriver"⭐ 的同方机型放宽用的 ✅。
@@ -402,7 +420,14 @@ internal static class EcChargeLimit
 	/// </summary>
 	internal static bool IsEcDirectWriteAllowed()
 	{
-		return IsAvailableOnThisMachine() && !IsLegacyGenerationBlocked();
+		// 声明表把限充方案写成位对式时以声明为准：「没有独显 ⇒ 保守拦截」是拿不到正面证据时的兜底，
+		// 而位对式方案本身就带固件支持位（0x78E bit3）——真机上它读到「支持」却被这条兜底整条挡掉，
+		// 表现就是界面能选档、日志有选档记录，但一次都不写。
+		if (EcChargeLimitBitPair.InUse)
+		{
+			return !DeclarationRuntime.FeatureBlocked("chargeLimit", "ec");
+		}
+		return IsAvailableOnThisMachine() && !IsLegacyGenerationBlocked() && !IsNoDgpuConservativeBlock();
 	}
 
 	/// <summary>本机是否属 10/16/20/30 系（GcuVariant 为 "1020" 或 "30"）—— 规则 B 的唯一判据。</summary>
@@ -434,6 +459,35 @@ internal static class EcChargeLimit
 				Logger.WriteLine($"限充代系门控：GcuVariant={family} 属 10/16/20 系 ⇒ EC 直写方式判为不可用（规则 B：可能损坏硬件，只保留 GCU 路；⛔ 未写任何寄存器/注册表）");
 			}
 			return blocked;
+		}
+	}
+
+	/// <summary>
+	/// 本机当前**没有在线独显**时，EC 直写限充按保守处理（不写 0x7B9）。
+	/// <para>依据：代际/载荷选择曾经被注册表里的残留显卡记录带偏（真机实例：在线只有核显，
+	/// 却按"幽灵独显"判成 30 系并放行 EC 直写），而这类机器的 EC 未必有限充控制环路，
+	/// 写了只是把百分数存下来、使能位永远不成立。</para>
+	/// <para>⚠️ 逃生口：<c>ec_charge_limit=1</c> 强制放行；核显模式（dGPU 停用）不算"没有独显"。</para>
+	/// </summary>
+	internal static bool IsNoDgpuConservativeBlock()
+	{
+		if (AppConfig.GetString("ec_charge_limit") == "1")
+		{
+			return false;
+		}
+		// 声明表显式放行（例如已实测可用的机型）：参数 chargeLimit.allowNoDgpu=1。
+		if (DeclarationRuntime.Flag("chargeLimit", "allowNoDgpu"))
+		{
+			return false;
+		}
+		try
+		{
+			MechrevoLite.Gpu.DgpuPresence presence = MechrevoLite.Gpu.GpuRouteProbe.ReadPresence();
+			return presence == MechrevoLite.Gpu.DgpuPresence.Absent;
+		}
+		catch
+		{
+			return false;
 		}
 	}
 
@@ -496,6 +550,25 @@ internal static class EcChargeLimit
 		if (IsLegacyGenerationBlocked())
 		{
 			Logger.WriteLine($"限充写入被拒绝：本机 GcuVariant 属 10/16/20/30 系 ⇒ EC 直写方式整体禁用（可能损坏硬件，只保留 GCU 路）；请求 {percent}% 未下发，⛔ 未写任何寄存器");
+			return false;
+		}
+		// 声明表优先（同 IsAvailableOnThisMachine）：声明明文写 none 或走未实现的通道时，连写都不尝试。
+		ChannelDecision declaredChannel = DeclarationRuntime.Decide("chargeLimit", "ec");
+		if (declaredChannel.Blocks)
+		{
+			refusedByFirmware = true;
+			Logger.WriteLine($"限充写入被拒绝：声明表判定本机无此功能（{declaredChannel}）⇒ 请求 {percent}% 未下发，⛔ 未写任何寄存器");
+			return false;
+		}
+		// 位对式方案：不走百分数写入路径（没有门控/持久化/7s 生效位这套），单独一套读-改-写。
+		if (EcChargeLimitBitPair.InUse)
+		{
+			return EcChargeLimitBitPair.TrySet(percent, out appliedPercent, out refusedByFirmware);
+		}
+		if (IsNoDgpuConservativeBlock())
+		{
+			refusedByFirmware = true;
+			Logger.WriteLine($"限充写入被拒绝：本机没有在线独显（设备列表里查不到 NVIDIA 显示设备）⇒ 走保守分支，请求 {percent}% 未下发，⛔ 未写任何寄存器；需要限充请安装 GCU 走 MQTT，或用 ec_charge_limit=1 强制放行");
 			return false;
 		}
 		lock (Gate)
@@ -587,7 +660,7 @@ internal static class EcChargeLimit
 				try
 				{
 					int num2 = ValueFor(percent);
-					if (!Write(num, 1977, (byte)num2))
+					if (!Write(num, UpperRegister, (byte)num2))
 					{
 						return false;
 					}
@@ -596,7 +669,7 @@ internal static class EcChargeLimit
 					// bit7 只是"已启用"标志、不携带百分数信息 ⇒ 容忍它不会放过真失败（写丢了或
 					// 固件改回时低 7 位就不是目标值，例如目标是 60 而回读仍是 0x50=80）；
 					// 相反要求逐位相等会把"写成功 + 固件置标志"误报成"写入未确认"并弹失败提示。
-					int upperReadback = Read(num, 1977);
+					int upperReadback = Read(num, UpperRegister);
 					if (upperReadback < 0 || (upperReadback & PercentMask) != (num2 & PercentMask))
 					{
 						return false;
@@ -769,6 +842,11 @@ internal static class EcChargeLimit
 		{
 			return readPercentOverride();
 		}
+		// 位对式方案：档位从两位解码，不回读百分数寄存器。
+		if (EcChargeLimitBitPair.InUse)
+		{
+			return EcChargeLimitBitPair.ReadPercent();
+		}
 		lock (Gate)
 		{
 			nint num = CreateFile("\\\\.\\ACPIDriver", 3221225472u, 3u, IntPtr.Zero, 3u, 0u, IntPtr.Zero);
@@ -778,7 +856,7 @@ internal static class EcChargeLimit
 			}
 			try
 			{
-				int num2 = Read(num, 1977);
+				int num2 = Read(num, UpperRegister);
 				return (num2 < 0) ? (-1) : PercentFor(num2);
 			}
 			finally
@@ -858,6 +936,35 @@ internal static class EcChargeLimit
 			}
 		}
 	}
+	/// <summary>按地址写单字节（\.\ACPIDriver 窗口通道）；只写一个字节，不做任何门控/持久化动作。</summary>
+	internal static bool TryWriteByteAt(int address, int value)
+	{
+		if (address < 0)
+		{
+			return false;
+		}
+		if (value < 0 || value > 255)
+		{
+			return false;
+		}
+		lock (Gate)
+		{
+			nint handle = CreateFile("\\\\.\\ACPIDriver", 3221225472u, 3u, IntPtr.Zero, 3u, 0u, IntPtr.Zero);
+			if (handle == new IntPtr(-1))
+			{
+				return false;
+			}
+			try
+			{
+				return Write(handle, address, (byte)value);
+			}
+			finally
+			{
+				CloseHandle(handle);
+			}
+		}
+	}
+
 	private static void EnsureGateExitHook()
 	{
 		if (System.Threading.Interlocked.Exchange(ref _gateExitHookRegistered, 1) != 0)

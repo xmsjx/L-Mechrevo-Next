@@ -208,11 +208,22 @@ public static class BatteryControl
 			bool refusedByFirmware;
 			if (EcChargeLimit.TrySet(setLimit, out var appliedPercent, out refusedByFirmware))
 			{
-				Logger.WriteLine($"EC 充电阈值已确认：上限 {appliedPercent}%（0x{1977:X3} 已写并回读确认，含 bit7 掩码）；复充下限 0x{2000:X3} 按上游口径**不再写入**、交由固件推导（期望值 {EcChargeLimit.LowerValueFor(appliedPercent)}%，只读比对见紧随的观察日志）");
+				if (EcChargeLimitBitPair.InUse)
+				{
+					Logger.WriteLine($"EC 充电阈值已确认（位对式）：档位 {appliedPercent}%（0x{EcChargeLimitBitPair.Register:X3} 已写并回读确认，只改档位位）");
+				}
+				else
+				{
+					Logger.WriteLine($"EC 充电阈值已确认：上限 {appliedPercent}%（0x{EcChargeLimit.UpperRegister:X3} 已写并回读确认，含 bit7 掩码）；复充下限 0x{EcChargeLimit.LowerRegister:X3} 按上游口径**不再写入**、交由固件推导（期望值 {EcChargeLimit.LowerValueFor(appliedPercent)}%，只读比对见紧随的观察日志）");
+				}
 				CommitChargeLimit(appliedPercent);
 				// 2026-10-10（限充真效果判据 · 按旧版口径）：上面只证明"寄存器写进去了"（旧判据）。
 				// 真效果 = 门控还原完成后再等 7s，读 0x0742 bit2=1。异步执行，不阻塞 UI，也不改任何状态。
-				ChargeLimitEffectEvidence.Begin(appliedPercent);
+				// 位对式方案没有这套门控/生效位，档位回读即结论 ⇒ 不做生效判定（否则会误报"无效"）。
+				if (!EcChargeLimitBitPair.InUse)
+				{
+					ChargeLimitEffectEvidence.Begin(appliedPercent);
+				}
 			}
 			else
 			{
@@ -221,7 +232,10 @@ public static class BatteryControl
 				{
 					Logger.WriteLine($"EC 充电上限回读确认延迟：请求 {setLimit}%，实际阈值已是 {num}%，按成功收尾");
 					CommitChargeLimit(num);
-					ChargeLimitEffectEvidence.Begin(num);
+					if (!EcChargeLimitBitPair.InUse)
+					{
+						ChargeLimitEffectEvidence.Begin(num);
+					}
 				}
 				else if (refusedByFirmware)
 				{

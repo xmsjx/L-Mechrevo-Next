@@ -14,19 +14,19 @@ internal readonly record struct IteLightingCapability(byte Raw, bool IsIdxFamily
 	/// <summary>铰链灯（电源指示灯 / 风道灯同一路）。</summary>
 	internal bool Hinge => IsIdxFamily ? Raw is 0 or 1 or 4 or 5 or 6 : Raw is 0 or 2 or 3 or 4 or 6 or 7 or 10 or 11;
 
-	/// <summary>旧 Logo 通道。</summary>
+	/// <summary>图标形 Logo（原通道）。</summary>
 	internal bool Logo => IsIdxFamily ? Raw is 1 or 4 : Raw is 4 or 6 or 7;
 
-	/// <summary>新 Logo（lettering）通道；另一套项目码上没有这一路。</summary>
-	internal bool NewLogo => !IsIdxFamily && Raw is 5 or 8 or 9 or 10 or 11;
+	/// <summary>字母形 Logo（lettering）通道；另一套项目码上没有这一路。</summary>
+	internal bool LetteringLogo => !IsIdxFamily && Raw is 5 or 8 or 9 or 10 or 11;
 
-	internal bool AnyLogo => Logo || NewLogo;
+	internal bool AnyLogo => Logo || LetteringLogo;
 
 	internal string TableName => IsIdxFamily ? "IDX/IDZ" : "IDA/IDB";
 
 	internal string Describe()
 	{
-		string logo = AnyLogo ? (NewLogo ? "有(新)" : "有(旧)") : "无";
+		string logo = AnyLogo ? (LetteringLogo ? "字母形" : "图标形") : "无";
 		return $"0xA2=0x{Raw:X2} · 表={TableName} ⇒ 灯带={(Lightbar ? "有" : "无")} · 铰链={(Hinge ? "有" : "无")} · Logo={logo}";
 	}
 }
@@ -68,6 +68,9 @@ internal static class IteCapabilityProbe
 			return _cache;
 		}
 	}
+
+	/// <summary>已解析的能力字节（未查到或项目码不在表内时为 null）。</summary>
+	internal static IteLightingCapability? Current => _cache;
 
 	internal static string Describe() => _detail.Length > 0 ? _detail : "未查询";
 

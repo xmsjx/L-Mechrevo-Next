@@ -36,7 +36,7 @@ public partial class LightEditorWindow : Window
     /// <summary>⭐ 2026-10-26（task-17 · 宽屏白色背光入口）：白色背光键盘只有 电源 + 2 档亮度，没有灯效/颜色/速度 ✅。</summary>
     private readonly bool _whiteBacklightOnly;
     private readonly bool _nucSingleZone;
-    /// <summary>EC 实验模式（GCU 离线）下的键盘编辑器：不走 GCU 服务，直接写 EC。</summary>
+    /// <summary>EC 模式（GCU 离线）下的键盘编辑器：不走 GCU 服务，直接写 EC。</summary>
     private readonly bool _ecExperimentKeyboard;
     private readonly Func<string, string, int, int, int, bool, Task<bool>>? _applyIntent;
 
@@ -69,7 +69,7 @@ public partial class LightEditorWindow : Window
             && (((keyboardHw?.IsNucOnly == true)
                     && L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.IsConnected != true
                     && L_Mechrevo.WpfP0.Services.WpfBackend.NucKbdIsSingleZone())
-                // EC 实验模式的同方单区键盘与 NUC 单区同一套 EC 写法。
+                // EC 模式的同方单区键盘与 NUC 单区同一套 EC 写法。
                 || L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdIsSingleZone);
         _hideSpeedForNucLightbar = string.Equals(topic, "HidLightbar/Ctrl", StringComparison.Ordinal)
             && L_Mechrevo.WpfP0.Services.WpfBackend.Hw is { } lightbarHw
@@ -134,6 +134,17 @@ public partial class LightEditorWindow : Window
                 LightSlider.Maximum = _lightMax;
             }
         }
+        // 按档位的通道（亮度 0~4 / 1~2、速度 0~8）滑块必须按整档走，不能停在两档之间；
+        // 连续百分比通道（HID 单键 0~100）保持自由拖动。
+        bool lightSnapsToTick = LightSlider.Maximum <= 20;
+        LightSlider.IsSnapToTickEnabled = lightSnapsToTick;
+        LightSlider.TickFrequency = 1;
+        LightSlider.SmallChange = 1;
+        LightSlider.LargeChange = 1;
+        SpeedSlider.IsSnapToTickEnabled = true;
+        SpeedSlider.TickFrequency = 1;
+        SpeedSlider.SmallChange = 1;
+        SpeedSlider.LargeChange = 1;
         _settings = L_Mechrevo.WpfP0.Services.WpfBackend.LoadLightChannelSettings(topic, effects.Length > 0 ? effects[0].Effect : "Single");
         _light = _hidContinuousLight
             ? Math.Clamp(_settings.RestoreBrightnessPercent, 0, 100)
@@ -177,9 +188,12 @@ public partial class LightEditorWindow : Window
         PowerCheck.IsChecked = _settings.PowerOn;
         if (_ecExperimentKeyboard && L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdTryReadPower(out bool ecPowerOn))
         {
-            // EC 实验模式没有 GCU 状态包，电源/白光亮度以 EC 回读为准。
+            // EC 模式没有 GCU 状态包，电源/白光亮度以 EC 回读为准。
             PowerCheck.IsChecked = ecPowerOn;
-            if (_whiteBacklightOnly && L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardTryGet(out _, out int whiteLevel) && whiteLevel >= 1 && whiteLevel <= 2)
+            // 必须连电源位一起判：关灯时固件把档位位留着记忆（如 0x23 = 关 + 记着"暗"），
+            // 只看档位会让编辑窗口在灯已熄灭时仍显示亮度档。
+            if (_whiteBacklightOnly && L_Mechrevo.WpfP0.Services.WpfBackend.EcKeyboardTryGet(out bool whiteOn, out int whiteLevel)
+                && whiteOn && whiteLevel >= 1 && whiteLevel <= 2)
             {
                 _light = whiteLevel;
             }
@@ -200,10 +214,24 @@ public partial class LightEditorWindow : Window
             {
             }
         }
+        // 后端说这台机型没有可用的亮度档（只能开/关）时不显示亮度行，避免给一个不起作用的滑块。
+        if (_keyboard && L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdBrightnessHidden)
+        {
+            BrightnessRow.Visibility = Visibility.Collapsed;
+        }
         if (_keyboard)
         {
-            HintText.Text = WpfStrings.LightEditorWindow_xaml_Text;
-            StatusText.Text = WpfStrings.LightEditorWindow_xaml_Text_2;
+            if (_whiteBacklightOnly)
+            {
+                // 白光键盘没有分区/彩虹，⛔ 不能再挂单分区那套说明和模式标题（会误导）。
+                HintText.Text = "键盘类型：白光";
+                StatusText.Text = "";
+            }
+            else
+            {
+                HintText.Text = WpfStrings.LightEditorWindow_xaml_Text;
+                StatusText.Text = WpfStrings.LightEditorWindow_xaml_Text_2;
+            }
         }
         _suppressAutoApply = true;
         NetSliderValues();
@@ -678,6 +706,11 @@ public partial class LightEditorWindow : Window
 
     private void Light_Changed(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
+        // 埋点：拖动滑块到底有没有进到这里（白光键盘常见"拖了没反应"，先分清事件是否到达）。
+        Logger.WriteErrorIfChanged("light-slider-" + (int)Math.Round(e.NewValue),
+            "[light-editor] 亮度滑块=" + (int)Math.Round(e.NewValue) + " · 白光=" + _whiteBacklightOnly
+            + " · EC实验=" + _ecExperimentKeyboard + " · 键盘=" + _keyboard
+            + " · 电源勾选=" + (PowerCheck?.IsChecked == true) + " · 已加载=" + IsLoaded);
         if (_keyboard)
         {
             _light = Math.Clamp((int)Math.Round(e.NewValue), (int)LightSlider.Minimum, _lightMax);
@@ -873,7 +906,7 @@ public partial class LightEditorWindow : Window
             {
                 if (_ecExperimentKeyboard && L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdIsWhite)
                 {
-                    // EC 实验模式白光：只有电源 + 2 档亮度。
+                    // EC 模式白光：只有电源 + 2 档亮度。
                     return L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdApplyWhite(power, _light >= 2 ? 2 : 1);
                 }
                 if (_ecExperimentKeyboard && (L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdIsHid || !L_Mechrevo.WpfP0.Services.WpfBackend.EcKbdControllable))

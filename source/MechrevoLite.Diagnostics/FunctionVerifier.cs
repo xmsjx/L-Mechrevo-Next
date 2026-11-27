@@ -178,7 +178,17 @@ internal static class FunctionVerifier
 			bool value;
 			return hw.QuickSwitches.TryGetValue(key, out value) ? new bool?(value) : ((bool?)null);
 		}
-		return hw.UsbChargerSeen ? new bool?(hw.UsbCharger) : ((bool?)null);
+		if (hw.UsbChargerSeen)
+		{
+			return new bool?(hw.UsbCharger);
+		}
+		// 常驻电平位：状态以软件记忆为准。
+		// 这一位重启就丢，EC 回读只用来确认这次有没有落下，不能当状态。
+		if (MechrevoLite.Hardware.NucQuickSwitches.TryGetUsbChargeMemory(out bool usbSaved))
+		{
+			return new bool?(usbSaved);
+		}
+		return hw.QuickSwitches.TryGetValue("usb", out bool usbMemory) ? new bool?(usbMemory) : ((bool?)null);
 	}
 
 	private static string Describe(bool? value)

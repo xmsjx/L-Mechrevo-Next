@@ -484,16 +484,29 @@ public class MechrevoService
 					await ApplyTurboGpuOverclockDefaults().ConfigureAwait(continueOnCapturedContext: false);
 				}
 			}
+			// 声明了「静音=节能 / 平衡=标准 / 狂暴=渲染」的机型：平衡与静音都下发办公档（差别只在预设参数），
+			// 狂暴下发渲染档；并把本次选中的预设记下来 —— 工作档在硬件上"标准/节能"同值，只能靠这条记忆区分。
+			// 未声明的机型走原来那套（mode 直映射），逐位一致。
+			bool officePresetMapping = PowerModeMapping.UsesOfficePresetMapping;
+			if (officePresetMapping)
+			{
+				string? preset = PowerModeMapping.PresetForVisualMode(mode);
+				if (!string.Equals(MechrevoLite.Mode.PerfModeStore.OfficePreset, preset, StringComparison.Ordinal))
+				{
+					MechrevoLite.Mode.PerfModeStore.OfficePreset = preset;
+				}
+				Logger.WriteLine($"[perf-preset] SwitchMode({mode}) 办公预设={preset ?? "无"}");
+			}
 			string text = mode switch
 			{
 				2 => "OPERATING_OFFICE_MODE", 
-				0 => "OPERATING_GAMING_MODE", 
-				1 => "OPERATING_TURBO_MODE", 
+				0 => officePresetMapping ? "OPERATING_OFFICE_MODE" : "OPERATING_GAMING_MODE", 
+				1 => officePresetMapping ? "OPERATING_GAMING_MODE" : "OPERATING_TURBO_MODE", 
 				3 => "OPERATING_CUSTOM_MODE", 
 				_ => "OPERATING_GAMING_MODE", 
 			};
 			Logger.WriteLine($"MechrevoService.SwitchMode({mode}) -> {text}");
-			int num = (int)((mode < 0 || mode > 3) ? ConsoleOperatingMode.Gaming : PowerModeMapping.FromVisualMode(mode));
+			int num = (int)((mode < 0 || mode > 3) ? ConsoleOperatingMode.Gaming : PowerModeMapping.FromVisualModeWithPreset(mode));
 			_hw.MarkModeSwitchPending(num);
 			Dictionary<string, object> payload;
 			Dictionary<string, object> overclockPayload;
@@ -3114,6 +3127,26 @@ public class MechrevoService
 		}
 	}
 
+	/// <summary>
+	/// 关机 USB 给电：0x767 bit4 按常驻电平写——写目标值后回读确认，状态以软件记忆（usb_charge）为准。
+	/// 只对没有 GCU 的同方机型走这里；NUC/UMI 与 GCU 机型保持原有通道。
+	/// </summary>
+	internal bool SwitchUsbViaEc(bool on)
+	{
+		NucQuickSwitches.TryGetUsbChargeMemory(out bool previous);
+		bool levelOk = NucQuickSwitches.TrySetUsbChargingLevel(on, out bool levelConfirmed);
+		bool readOk = NucQuickSwitches.TryReadUsbCharging(out bool levelState);
+		// 记忆只在真正落地时改；写失败就保持原状，别让界面显示成成功。
+		_hw.QuickSwitches["usb"] = levelConfirmed ? on : previous;
+		if (levelConfirmed)
+		{
+			AppConfig.Set("usb_charge", on ? 1 : 0);
+			AppConfig.Flush();
+		}
+		Logger.WriteLine($"SwitchQuick(usb,{on}) ⭐ EC bit4 电平写 ⇒ 写={levelOk} 确认={levelConfirmed} 回读={(readOk ? (levelState ? "开" : "关") : "读不到")}");
+		return levelConfirmed;
+	}
+
 	public async Task<bool> SwitchQuick(string key, bool on)
 	{
 		try
@@ -3121,6 +3154,13 @@ public class MechrevoService
 			if (!_hw.SupportsQuickSwitch(key))
 			{
 				return false;
+			}
+			// 没有 GCU 的机型（声明表指定 usbCharge 走 ec）同样走这条 EC 脉冲，不再依赖 MQTT 通道。
+			// 未声明的机型一行不变。
+			if (!_hw.IsNucUmiFamily && string.Equals(key, "usb", StringComparison.Ordinal)
+				&& (NucQuickSwitches.UsesEcUsbCharge || string.IsNullOrWhiteSpace(GcuIdentity.Variant)))
+			{
+				return SwitchUsbViaEc(on);
 			}
 			// NUC/UMI 的 Fn 锁 / 摄像头 / Win 键锁走 ACPI EC，不经过 GCU 能力位。
 			if (_hw.IsNucUmiFamily)
@@ -3134,16 +3174,7 @@ public class MechrevoService
 				}
 				if (string.Equals(key, "usb", StringComparison.Ordinal))
 				{
-					bool usbCurrent = _hw.QuickSwitches.TryGetValue("usb", out bool usbOld) && usbOld;
-					bool usbOk = NucQuickSwitches.TryPulseUsbCharging(on, usbCurrent, out bool usbConfirmed);
-					_hw.QuickSwitches["usb"] = usbConfirmed ? on : usbCurrent;
-					if (usbConfirmed)
-					{
-						AppConfig.Set("usb_charge", on ? 1 : 0);
-						AppConfig.Flush();
-					}
-					Logger.WriteLine($"SwitchQuick(usb,{on}) ⭐ NUC/UMI EC trigger bit4 脉冲 ⇒ 确认={usbConfirmed}");
-					return usbOk;
+					return SwitchUsbViaEc(on);
 				}
 				if (string.Equals(key, "acrecovery", StringComparison.Ordinal))
 				{
@@ -4959,7 +4990,12 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 
 	public Task<bool> SetKeyboardBrightnessPreservingEffect(int level0to4)
 	{
-		if (ShouldUseEcKeyboardLight())
+		// 通道判定只记"变化"：界面拨亮度时一眼能看出到底走的是 EC（0x78C）还是别的通道。
+		bool useEcForBrightness = ShouldUseEcKeyboardLight();
+		Logger.WriteErrorIfChanged("kbd-route-" + (useEcForBrightness ? "ec" : "other"),
+			"[kbd-svc] 键盘亮度请求=" + level0to4 + " ⇒ 通道=" + (useEcForBrightness ? "EC(0x78C)" : "非 EC")
+			+ " · whiteOnly=" + EcKeyboardLight.IsWhiteOnly + " · scheme=" + (DeclarationRuntime.Param("keyboardBacklight", "scheme") ?? "默认"));
+		if (useEcForBrightness)
 		{
 			// 2026-10-22（实测：白键盘 EC 亮度码 0=关、1=暗、2=亮，只有两档亮度）：
 			// UI 0~4 档映射：0 => 关；1~2 => 暗；3~4 => 亮。
@@ -5626,6 +5662,14 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 	/// 键盘背光在 EC 0x78C（bit1=开关、bit4~7=亮度）⇒ 走 EC 直控；其它机型/暴风雪 RGB 版仍走原链路。</summary>
 	private bool ShouldUseEcKeyboardLight()
 	{
+		// 声明表把键盘背光判成 EC 白光键盘（whiteOnly）时直接走 EC，这是唯一判据。
+		// 这类机型原厂侧不报键盘通道（KeyboardStatusSeen=否、solution 为空），
+		// 原来还要求「无界 APU + 通道上报 + solution=UNKNOWN」三条同时成立，
+		// 结果是界面里的开关与亮度一个字节都写不进 EC（只有按键那条路径能动）。
+		if (EcKeyboardLight.IsWhiteOnly)
+		{
+			return true;
+		}
 		if (_hw == null || !_hw.WujieSmuApu || !_hw.KeyboardStatusSeen)
 		{
 			return false;
@@ -5640,7 +5684,11 @@ public Task<bool> SetKeyboardEffect(string effect, int light = 4, int speed = 1,
 			// 任何通道的关灯都先停掉 EC 单区轮播（它是软件定时循环，不写 0x78C 也照样在跑）。
 			NucKeyboardLighting.StopCarousel();
 		}
-		if (ShouldUseEcKeyboardLight())
+		bool useEcForPower = ShouldUseEcKeyboardLight();
+		Logger.WriteErrorIfChanged("kbd-route-power-" + (useEcForPower ? "ec" : "other"),
+			"[kbd-svc] 键盘电源请求 on=" + on + " ⇒ 通道=" + (useEcForPower ? "EC(0x78C)" : "非 EC")
+			+ " · whiteOnly=" + EcKeyboardLight.IsWhiteOnly);
+		if (useEcForPower)
 		{
 			bool ok = EcKeyboardLight.TrySetPower(on);
 			Logger.WriteError("[kbd-ec] 白键盘电源 on=" + on + " ⇒ " + (ok ? "已生效" : "失败"));

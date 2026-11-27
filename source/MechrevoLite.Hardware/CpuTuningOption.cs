@@ -24,4 +24,7 @@ internal sealed record CpuTuningOption(
 	bool CanWrite,
 	IReadOnlyList<int>? CoreReadback = null,
 	string? ReadbackNoteKey = null,
-	bool PerCoreWrite = false);
+	bool PerCoreWrite = false,
+	// 只在界面上显示的提示（不参与门控）。目前用于「当前 SKU 不支持电压调节功能」这类说明：
+	// 写不写由协议能力决定，SKU 只解释现象，不再拦写入。
+	string? Note = null);

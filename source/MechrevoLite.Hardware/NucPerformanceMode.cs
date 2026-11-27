@@ -20,14 +20,49 @@ public static class NucPerformanceMode
     /// <summary>NUC 原厂 Benchmark/极致狂暴档；EC 风扇模式与狂暴同为性能表，靠本标志区分。</summary>
     public const int ExtremeVisualMode = 5;
 
+    // 极致狂暴标记：EC 上这一档与普通狂暴写同一个值，回读分不出来，所以记在配置里（跨重启有效）。
+    private const string ExtremeMarkerKey = "nuc_extreme_marker";
+
     private static int _lastAppliedVisualMode = -1;
 
-    /// <summary>当前是否由本进程切到极致狂暴（EC 1963 与普通狂暴同为 1，无法靠回读区分）。</summary>
-    public static bool IsExtremeActive => _lastAppliedVisualMode == ExtremeVisualMode;
+    /// <summary>当前是否切到极致狂暴（EC 1963 与普通狂暴同为 1，无法靠回读区分）。</summary>
+    public static bool IsExtremeActive
+    {
+        get
+        {
+            if (_lastAppliedVisualMode == ExtremeVisualMode)
+            {
+                return true;
+            }
+            return AppConfig.Get(ExtremeMarkerKey, -1) == ExtremeVisualMode;
+        }
+    }
+
+    private static void SetExtremeMarker(int visualMode)
+    {
+        bool was = IsExtremeActive;
+        _lastAppliedVisualMode = visualMode;
+        bool now = visualMode == ExtremeVisualMode;
+        if (now)
+        {
+            AppConfig.Set(ExtremeMarkerKey, visualMode);
+        }
+        else if (was)
+        {
+            AppConfig.Remove(ExtremeMarkerKey);
+        }
+        if (now != was)
+        {
+            AppConfig.Flush();
+        }
+    }
 
     internal static void ClearExtremeMarker()
     {
-        if (_lastAppliedVisualMode == ExtremeVisualMode) _lastAppliedVisualMode = -1;
+        if (IsExtremeActive)
+        {
+            SetExtremeMarker(-1);
+        }
     }
 
     // 各档在 EC 中的默认 PL1/PL2 来源地址
@@ -55,7 +90,7 @@ public static class NucPerformanceMode
     public static bool TryApply(int visualMode, out string detail)
     {
         detail = "";
-        _lastAppliedVisualMode = visualMode;
+        SetExtremeMarker(visualMode);
         byte pl1;
         byte pl2;
         bool extreme = visualMode == ExtremeVisualMode;
@@ -118,10 +153,6 @@ public static class NucPerformanceMode
         }
         int p1 = Math.Clamp(pl1.Value, 5, 200);
         int p2 = Math.Clamp(pl2.Value, 5, 250);
-        if (p1 > p2)
-        {
-            (p1, p2) = (p2, p1);
-        }
         int p4 = Math.Clamp(pl4.Value, Math.Min(250, p2 + 20), 250);
         bool w1 = TryWrite(Pl1WriteAddress, p1);
         bool w2 = TryWrite(Pl2WriteAddress, p2);
@@ -135,6 +166,22 @@ public static class NucPerformanceMode
         //   关闭 = 清除 bit7，保留/回落到安全 offset（95℃）
         bool tccOk = true;
         int tccRaw = 0;
+        // 关闭温度墙时算出来的就是 EC 里原有的值：记下读到的原值，回读一致就不重复写。
+        int tccCurrent = 0;
+        bool tccHaveCurrent = false;
+        // 温度墙走哪条通道由机型声明给：tcc.smu=1 ⇒ 走 SMU（Tctl 上限），EC 的 0x786 一律不碰；
+        // tcc.disabled=1 ⇒ EC 侧完全不写（该地址在这些机型上是风扇曲线区）。
+        bool tccViaSmu = DeclarationRuntime.Flag("tcc", "smu");
+        bool tccDisabled = DeclarationRuntime.Flag("tcc", "disabled");
+        int tccBack = 0;
+        bool tccSkip = false;
+        if (tccViaSmu)
+        {
+            tccOk = TryApplyTempWallViaSmu(tcc, out string wallDetail);
+            detail += wallDetail;
+        }
+        else if (!tccDisabled)
+        {
         if (CpuVendor.IsIntel)
         {
             if (tcc.HasValue)
@@ -147,6 +194,8 @@ public static class NucPerformanceMode
             {
                 int current = 0;
                 bool read = TryRead(1926, out current);
+                tccHaveCurrent = read;
+                tccCurrent = current;
                 int factoryOffset = read ? (current & 0x7F) : -1;
                 // 0 是合法值（默认温度墙 100℃），不能把 0 当成无效值改成 5。
                 tccRaw = (factoryOffset is >= 0 and <= 30) ? factoryOffset : 5;
@@ -163,26 +212,80 @@ public static class NucPerformanceMode
             {
                 int current = 0;
                 bool read = TryRead(1926, out current);
+                tccHaveCurrent = read;
+                tccCurrent = current;
                 int factoryCelsius = read ? (current & 0x7F) : -1;
                 tccRaw = (factoryCelsius is >= 60 and <= 105) ? factoryCelsius : 95;
             }
         }
-        tccOk = TryWrite(1926, tccRaw);
+        tccSkip = !tcc.HasValue && tccHaveCurrent && tccCurrent == tccRaw;
+        tccOk = tccSkip || TryWrite(1926, tccRaw);
         // 触发字节 bit5=0x20 让 EC 重新锁存自定义功耗配置；bit0-2 与 bit4 由统一入口原样保留。
         EcTriggerByte.TryApply(EcTriggerByte.Latch, 0);
         TryWrite(1798, 65);
-        bool tccRead = TryRead(1926, out int tccBack);
+        bool tccRead = TryRead(1926, out tccBack);
         // 官方只要求写入成功；EC 对 TCC 的回读可能是掩码后的值，不能因此判整个自定义档失败。
         tccOk = tccOk && tccRead;
+        }
         bool allOk = w1 && w2 && w3 && r1 && r2 && r3 && tccOk && rb1 == p1 && rb2 == p2 && rb3 == p4;
         // 技术明细只进日志；返回给界面的只说明"设了多少、成没成"。
         Logger.WriteLine("[ec-power] 自定义 PL1=" + p1 + " PL2=" + p2 + " PL4=" + p4
             + " 写入=" + (w1 && w2 && w3) + " 回读=" + rb1 + "/" + rb2 + "/" + rb3
-            + " · TCC=0x" + tccRaw.ToString("X2") + "(" + (tcc.HasValue ? "开" : "关") + ") 写入=" + tccOk
+            + " · TCC=" + (tccViaSmu ? "SMU" : "0x" + tccRaw.ToString("X2")) + "(" + (tcc.HasValue ? "开" : "关") + ")"
+            + (tccViaSmu ? "SMU 通道" : (tccDisabled ? "本机是风扇表跳过" : (tccSkip ? "回读一致跳过" : ""))) + " 写入=" + tccOk
             + " 回读=0x" + tccBack.ToString("X2"));
         detail = "CPU 功耗 " + p1 + "/" + p2 + "/" + p4 + " W · 温度墙 " + (tcc.HasValue ? "开启" : "关闭")
             + " · " + (allOk ? "已生效" : ((w1 && w2 && w3 && tccOk) ? "已应用（未验证）" : "未生效"));
         return allOk;
+    }
+
+    /// <summary>
+    /// 温度墙走 SMU（Tctl 上限）：与功耗墙分开，EC 侧一个字节都不写。
+    /// 命令被接受后再读一次 PM 表确认；SMU 会话不可用时如实报失败，不退回去写 EC。
+    /// </summary>
+    private static bool TryApplyTempWallViaSmu(int? tcc, out string detail)
+    {
+        detail = "";
+        if (!tcc.HasValue)
+        {
+            detail += "温度墙=未设置 ";
+            return true;
+        }
+        int target = Math.Clamp(tcc.Value, 60, 105);
+        PawnIO.RyzenSmuService smu = null;
+        try
+        {
+            smu = MechrevoLite.Mode.ModeControl.SharedSmu;
+        }
+        catch
+        {
+        }
+        if (smu == null || !smu.IsInitialized)
+        {
+            detail += "温度墙=" + target + "℃(SMU 不可用) ";
+            Logger.WriteError("[smu-wall] 温度墙未下发：SMU 会话不可用");
+            return false;
+        }
+        PawnIO.SmuStatus status = smu.SetTctlTemp(target);
+        int readback = -1;
+        try
+        {
+            PawnIO.PowerLimits limits = smu.GetPowerLimits();
+            if (limits != null)
+            {
+                readback = (int)Math.Round(limits.TctlTemp);
+            }
+        }
+        catch
+        {
+        }
+        bool writeOk = status == PawnIO.SmuStatus.OK;
+        // 有回读就按回读判，读不到时以命令被接受为准（不同固件对 Tctl 回读口径不一致）。
+        bool verified = writeOk && (readback < 0 || readback == target);
+        detail += "温度墙=" + target + "℃(SMU " + status + (readback >= 0 ? " · 回读=" + readback + "℃" : " · 无回读") + ") ";
+        Logger.WriteLine("[smu-wall] 温度墙下发 target=" + target + "℃ ⇒ " + status + "(0x" + ((uint)status).ToString("X2")
+            + ") 回读=" + (readback < 0 ? "读不到" : readback + "℃") + " 确认=" + verified);
+        return verified;
     }
 
     private static bool TryApplyModeLed(int visualMode, out string detail)

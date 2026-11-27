@@ -455,22 +455,7 @@ internal sealed class BackendProbe : IDisposable
                     ok = NucQuickSwitches.TrySetAcRecovery(on, out confirmed);
                     break;
                 case "copilot":
-                    ok = AcpiDriverEc.TryReadByte(1832, out byte copilotBits)
-                        && AcpiDriverEc.TryWriteByte(1832, on ? (byte)(copilotBits | 0x04) : (byte)(copilotBits & ~0x04));
-                    confirmed = ok && AcpiDriverEc.TryReadByte(1832, out byte copilotAfter)
-                        && ((copilotAfter & 0x04) != 0) == on;
-                    break;
-                case "usb":
-                    // 1895 bit4 是脉冲触发位，不是常驻状态位；不能在写后拿它回读，
-                    // 否则脉冲清零后界面会永远显示关闭。状态落盘，供下次回读。
-                    bool usbCurrent = QuickState("usb");
-                    ok = NucQuickSwitches.TryPulseUsbCharging(on, usbCurrent, out confirmed);
-                    if (ok && confirmed)
-                    {
-                        MechrevoLite.AppConfig.Set("usb_charge", on ? 1 : 0);
-                        MechrevoLite.AppConfig.Flush();
-                        if (_hw != null) _hw.QuickSwitches["usb"] = on;
-                    }
+                    ok = NucQuickSwitches.TrySetCopilot(on, out confirmed);
                     break;
                 default:
                     return false;
@@ -675,13 +660,31 @@ internal sealed class BackendProbe : IDisposable
                 return true;
             }
             // 关机 USB 供电：GCU 在线时走绝对 ON/OFF 命令，拿得到设备状态；
-            // EC 本地只有翻转脉冲，配置缓存过期时会出现“点了关不掉”。
+            // 没有 GCU 时走 EC 电平写并回读确认，开关状态以软件记忆（usb_charge）为准。
             bool usbCharger = string.Equals(key, "usb", StringComparison.OrdinalIgnoreCase);
             if (usbCharger && _service != null && _hw?.IsGcuConnected == true)
             {
                 bool usbOk = await _service.SwitchUsbCharger(on).ConfigureAwait(false);
                 Logger.WriteError("[usb] GCU 绝对开关 " + (on ? "开" : "关") + " ⇒ " + usbOk);
                 return usbOk;
+            }
+            if (usbCharger)
+            {
+                if (_service != null)
+                {
+                    bool ecUsbOk = _service.SwitchUsbViaEc(on);
+                    Logger.WriteError("[usb] EC 电平写 " + (on ? "开" : "关") + " ⇒ " + ecUsbOk);
+                    return ecUsbOk;
+                }
+                bool levelOk = NucQuickSwitches.TrySetUsbChargingLevel(on, out bool levelConfirmed);
+                if (levelConfirmed)
+                {
+                    MechrevoLite.AppConfig.Set("usb_charge", on ? 1 : 0);
+                    MechrevoLite.AppConfig.Flush();
+                    if (_hw != null) _hw.QuickSwitches["usb"] = on;
+                }
+                Logger.WriteError("[usb] EC 电平写（无服务实例）" + (on ? "开" : "关") + " ⇒ 写=" + levelOk + " 确认=" + levelConfirmed);
+                return levelConfirmed;
             }
             if (TrySetEcQuickSwitch(key, on, out string ecDetail))
             {
@@ -731,7 +734,7 @@ internal sealed class BackendProbe : IDisposable
                 || _service == null
                 || _hw?.IsGcuConnected != true)
             {
-                // EC 实验模式没有 GCU：档位映射到云端/本地标准 ICC 文件，不走 GCU。
+                // EC 模式没有 GCU：档位映射到云端/本地标准 ICC 文件，不走 GCU。
                 if (mode <= 1)
                 {
                     await Task.Run(MechrevoLite.Display.IccHelper.ClearAllIcc).ConfigureAwait(false);
@@ -757,13 +760,32 @@ internal sealed class BackendProbe : IDisposable
         }
     }
 
+    internal bool FanTierSupported => EcFanTier.InUse;
+
+    /// <summary>该性能模式是否允许改风扇三档（判定在后端声明里，界面只读结果）。</summary>
+    internal bool FanTierAllows(string? modeId) => EcFanTier.InUse;
+
+    /// <summary>读回当前风扇档（0=慢 1=中 2=快，读不到返回 -1）。</summary>
+    internal int FanTierCurrent(string? modeId) => EcFanTier.ResolveForUi(modeId);
+
+    /// <summary>该模式下记住的风扇档（0..2）。</summary>
+    internal int FanTierRemembered(string? modeId) => EcFanTier.LastTierFor(modeId);
+
+    /// <summary>切换风扇档，并按当前模式分别记忆。</summary>
+    internal bool ApplyFanTier(int tier, string? modeId) => EcFanTier.TrySet(tier, modeId);
+
     internal bool GpuOcSupported
     {
         get
         {
             MechrevoHw? hw = _hw;
             // 0.293.5.1 基线：只要 GCU 能力位承认超频就显示，不按载荷变体号硬屏蔽。
-            return hw != null && (L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected || _service == null)
+            // 没有独显的机型不显示显卡超频（能力位缺省为「可用」时的兜底要靠硬件事实，不能只看服务在不在）。
+            if (hw == null || !hw.HasDiscreteGpu)
+            {
+                return false;
+            }
+            return (L_Mechrevo.WpfP0.Services.WpfBackend.MachineGcuConnected || _service == null)
                 && (hw.SupportsGpuOverclock || L_Mechrevo.WpfP0.Services.WpfBackend.CapabilityFlag("OverclockSettings") || hw.GcuGpuOverclockAvailable
                     || _service == null);
         }
@@ -1088,7 +1110,7 @@ internal sealed class BackendProbe : IDisposable
             }
             if (GcuEcKeyboard.Active)
             {
-                // EC 实验模式：按探测到的键盘类型分流；HID 由 KeyboardRgb 路径处理，这里不碰 EC。
+                // EC 模式：按探测到的键盘类型分流；HID 由 KeyboardRgb 路径处理，这里不碰 EC。
                 return GcuEcKeyboard.ApplyFromSettings(null, on);
             }
             if (_hw?.IsUmiMachine != true && NucKeyboardLighting.IsSingleZone())

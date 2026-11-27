@@ -9,10 +9,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>L-Mechrevo</AssemblyName>
-    <Version>23.8.3.0</Version>
-    <AssemblyVersion>23.8.3.0</AssemblyVersion>
-    <FileVersion>23.8.3.0</FileVersion>
-    <InformationalVersion>beta23.8.3</InformationalVersion>
+    <Version>23.8.4.0</Version>
+    <AssemblyVersion>23.8.4.0</AssemblyVersion>
+    <FileVersion>23.8.4.0</FileVersion>
+    <InformationalVersion>beta23.8.4</InformationalVersion>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <RootNamespace>L_Mechrevo.WpfP0</RootNamespace>
     <StartupObject>L_Mechrevo.WpfP0.App</StartupObject>

@@ -137,6 +137,23 @@
                             <TextBlock Text="{x:Static loc:WpfStrings.CustomModeWindow_Text_17}" VerticalAlignment="Center" />
                             <ComboBox x:Name="RefreshCombo" Grid.Column="1" Style="{StaticResource RoundCombo}" />
                         </Grid>
+                        <!-- 宽屏内联时卡片很窄：标签和两个输入框用 WrapPanel，放不下自动换行，不会被裁切。 -->
+                        <StackPanel Margin="0,6,0,0">
+                            <TextBlock Text="处理器最大频率" />
+                            <WrapPanel Margin="0,4,0,0">
+                                <TextBlock Text="插电" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBox x:Name="ProcFreqAcBox" Width="80" TextAlignment="Right" VerticalAlignment="Center"
+                                         Background="{DynamicResource ControlBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                                         BorderThickness="1" Padding="6,2" Foreground="{DynamicResource TextBrush}" />
+                                <TextBlock Text="MHz" VerticalAlignment="Center" Margin="6,0,16,0" Style="{StaticResource MutedText}" />
+                                <TextBlock Text="离电" VerticalAlignment="Center" Margin="0,0,6,0" />
+                                <TextBox x:Name="ProcFreqDcBox" Width="80" TextAlignment="Right" VerticalAlignment="Center"
+                                         Background="{DynamicResource ControlBrush}" BorderBrush="{DynamicResource CardBorderBrush}"
+                                         BorderThickness="1" Padding="6,2" Foreground="{DynamicResource TextBrush}" />
+                                <TextBlock Text="MHz" VerticalAlignment="Center" Margin="6,0,16,0" Style="{StaticResource MutedText}" />
+                                <TextBlock Text="留空 = 不改变 · 0 = 不限制" VerticalAlignment="Center" Style="{StaticResource MutedText}" />
+                            </WrapPanel>
+                        </StackPanel>
 
                     </StackPanel>
                 </Border>
@@ -154,19 +171,19 @@
                         <Grid Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock x:Name="Pl1Label" Text="{x:Static loc:WpfStrings.Pl1Label_Text}" VerticalAlignment="Center" />
-                            <Slider x:Name="Pl1Slider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="200" Value="65" ValueChanged="Pl1_Changed" />
+                            <Slider x:Name="Pl1Slider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="200" Value="65" IsSnapToTickEnabled="True" TickFrequency="1" ValueChanged="Pl1_Changed" />
                             <TextBox x:Name="Pl1Text" Grid.Column="2" Text="65" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock x:Name="Pl2Label" Text="{x:Static loc:WpfStrings.Pl2Label_Text}" VerticalAlignment="Center" />
-                            <Slider x:Name="Pl2Slider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="200" Value="65" ValueChanged="Pl2_Changed" />
+                            <Slider x:Name="Pl2Slider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="200" Value="65" IsSnapToTickEnabled="True" TickFrequency="1" ValueChanged="Pl2_Changed" />
                             <TextBox x:Name="Pl2Text" Grid.Column="2" Text="65" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid x:Name="Pl4Row" Margin="0,4,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /><ColumnDefinition Width="56" /></Grid.ColumnDefinitions>
                             <TextBlock x:Name="Pl4Label" Text="PL4" VerticalAlignment="Center" />
-                            <Slider x:Name="Pl4Slider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="250" Value="100" ValueChanged="Pl4_Changed" />
+                            <Slider x:Name="Pl4Slider" Grid.Column="1" Style="{StaticResource RoundSlider}" Minimum="5" Maximum="250" Value="100" IsSnapToTickEnabled="True" TickFrequency="1" ValueChanged="Pl4_Changed" />
                             <TextBox x:Name="Pl4Text" Grid.Column="2" Text="100" TextAlignment="Right" VerticalAlignment="Center"  Background="Transparent" BorderThickness="0" Padding="0" Foreground="{DynamicResource TextBrush}" />
                         </Grid>
                         <Grid x:Name="Pl4UnitRow" Margin="0,8,0,0" Visibility="Visible">

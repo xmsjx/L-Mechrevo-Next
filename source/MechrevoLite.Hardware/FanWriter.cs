@@ -41,6 +41,27 @@ internal enum FanWriteChannel
 internal static class FanWriter
 {
 	private static FanWriteChannel _preferred = FanWriteChannel.None;
+
+	/// <summary>交回后的转速观察窗口（只用于诊断日志，不参与成败判定）。</summary>
+	private const int HealthyConfirmWindowMs = 3000;
+
+	/// <summary>怠速下限：只用于日志里说明“采样到低于怠速”。</summary>
+	private const int IdleFloorRpm = 800;
+
+	/// <summary>交回前预热：转速低于它就先提一口气再交回去（RPM）。</summary>
+	private const int PreSpinBelowRpm = 1200;
+
+	/// <summary>交回前预热的临时占空比（%）。</summary>
+	private const int PreSpinPercent = 50;
+
+	/// <summary>预热保持时间（ms）：宝龙达风扇加减速都慢，给一点时间把转速带起来。</summary>
+	private const int PreSpinHoldMs = 1200;
+
+	/// <summary>低温停转判据：CPU 与 GPU 都不高于它时零转速属 EC 正常策略（℃）。</summary>
+	private const int LowTempIdleC = 45;
+
+	/// <summary>高温零转判据：任一温度不低于它却零转速 ⇒ 异常（℃）。</summary>
+	private const int HotNoSpinC = 55;
 	private static volatile bool _vendorEnabled;
 
 	/// <summary>跨调用串行化：交回固件的"先清掩码→再写 0"必须在同一把锁内完成，
@@ -194,9 +215,10 @@ internal static class FanWriter
 	/// <summary>
 	/// ⭐⭐ 交回固件（**安全顺序**）：⭐ 先清 `0xB20` bit1/bit3（交出控制权并回读确认）→ **再**清目标 0 ✅。
 	/// <para>⚠️⚠️ 2026-10-18（机主安全提问）：⛔ 绝不在掩码仍置位时写 0 目标 —— 否则 EC 可能把风扇拉到 0 转 ✅</para>
-	/// <para>⭐ 交回后读 WMI 13 观察 ≤3 s：若 <b>低于怠速 800 RPM</b> ⇒ 记 error 并**立即恢复接管**（回写原掩码/目标）✅</para>
+	/// <para>⭐ 交回前若转速偏低，先把风扇提到一个中间目标保持气流，再交回（宝龙达加减速都慢）✅</para>
+	/// <para>⭐ 交回后只按 EC 侧状态判定（掩码位已清 + 目标 0）；转速此后归 EC 自己的策略，低温降速/停转属正常，⛔ 不再据此抢回控制权 ✅</para>
 	/// </summary>
-	private static bool TryReleaseToFirmwareCore(out string detail)
+	private static bool TryReleaseToFirmwareCore(out string detail, int cpuTempC = -1, int gpuTempC = -1)
 	{
 		detail = "";
 		// ⭐ 记录交回前状态（低转速保护用）
@@ -209,6 +231,8 @@ internal static class FanWriter
 			EcPortIo.TryReadByteStable(0xC83C, out preFan1, out _);
 			EcPortIo.TryReadByteStable(0xC83D, out preFan2, out _);
 		}
+		// ⭐ 交回前预热：掩码还置位（说明是我们接管中）且转速偏低 ⇒ 先提一口气，别让风扇在交回瞬间就空掉。
+		PreSpinBeforeRelease(preMask);
 		foreach (FanWriteChannel channel in Candidates())
 		{
 			bool ok;
@@ -241,18 +265,18 @@ internal static class FanWriter
 				continue;
 			}
 			_preferred = channel;
-			bool safe = VerifyReleased(channel, out string verifyDetail, out int minRpm, out int maxRpm, out double waitedSeconds);
+			bool safe = VerifyReleased(channel, cpuTempC, gpuTempC, out string verifyDetail, out int minRpm, out int maxRpm, out double waitedSeconds);
 			detail = "通道=" + ChannelName(channel) + " · " + channelDetail
 				+ " · 13=" + (minRpm < 0 ? "读不到" : minRpm + "~" + maxRpm + " RPM")
 				+ "（等待 " + waitedSeconds.ToString("0.0") + "s）· " + verifyDetail;
 			Logger.WriteLine("[fan] 交回固件：先清掩码（" + ExtractMaskPart(channelDetail)
 				+ "）· 再清目标（" + ExtractTargetPart(channelDetail) + "）· 13="
 				+ (minRpm < 0 ? "读不到" : minRpm + "~" + maxRpm + " RPM")
-				+ " · 低转速保护=" + (safe ? "未触发 ✅" : "⚠️ 已触发"));
+				+ " · 回读确认=" + (safe ? "✅" : "⚠️ 未确认"));
 			if (!safe)
 			{
-				Logger.WriteError("[fan] ⚠️ 交回固件后转速低于怠速或释放未确认（13="
-					+ (minRpm < 0 ? "读不到" : minRpm + " RPM") + "）⇒ 立即恢复接管（回写原 0xB20/目标）");
+				Logger.WriteError("[fan] ⚠️ 交回固件回读未确认（掩码位/目标没清干净 · 观察 "
+					+ waitedSeconds.ToString("0.0") + "s）⇒ 恢复接管（回写原 0xB20/目标）");
 				bool recovered = false;
 				try
 				{
@@ -274,7 +298,7 @@ internal static class FanWriter
 	}
 
 	/// <summary>⭐ 交回后校验：掩码位已清 + 目标 0 + WMI 13 观察 ≤3 s；低于 800 RPM ⇒ 不安全 ✅。</summary>
-	private static bool VerifyReleased(FanWriteChannel channel, out string verifyDetail, out int minRpm, out int maxRpm, out double waitedSeconds)
+	private static bool VerifyReleased(FanWriteChannel channel, int cpuTempC, int gpuTempC, out string verifyDetail, out int minRpm, out int maxRpm, out double waitedSeconds)
 	{
 		minRpm = -1;
 		maxRpm = -1;
@@ -304,7 +328,10 @@ internal static class FanWriter
 
 		long start = Environment.TickCount64;
 		bool rpmReadOk = false;
-		while (Environment.TickCount64 - start <= 3000)
+		int lowSamples = 0;
+		int lastRpm = -1;
+		// 转速只作诊断：交回是否成立由掩码位/目标回读判定。
+		while (Environment.TickCount64 - start <= HealthyConfirmWindowMs)
 		{
 			int rpm = ReadWmiRpmForRelease();
 			if (rpm >= 0)
@@ -318,16 +345,86 @@ internal static class FanWriter
 				{
 					maxRpm = rpm;
 				}
+				lastRpm = rpm;
+				if (rpm < IdleFloorRpm)
+				{
+					lowSamples++;
+				}
 			}
 			Thread.Sleep(500);
 		}
 		waitedSeconds = (Environment.TickCount64 - start) / 1000.0;
-		bool rpmSafe = !rpmReadOk || minRpm >= 800;
-		// 13 读不到 ⇒ 转速无法确认：按"已接受风险"放行，但结果里写明，避免被当成已确认。
+		// 交回成立与否只看 EC 侧状态：掩码位已清 + 目标归零 ⇒ 风扇已归 EC 管。
+		// 此后的转速由 EC 自己的策略决定（低温本来就会降到怠速以下甚至停转），不再据此抢回控制权。
 		verifyDetail = "掩码位已清=" + maskClear + " · 目标0=" + targetsZero
-			+ " · 13可读=" + rpmReadOk + " · 转速安全=" + rpmSafe
-			+ (rpmReadOk ? "" : "（13 读不到 ⇒ 转速未确认，按已接受风险放行）");
-		return maskClear && targetsZero && rpmSafe;
+			+ " · 13=" + (rpmReadOk
+				? minRpm + "~" + maxRpm + " RPM（低于怠速采样 " + lowSamples + " 次，归 EC 策略）"
+				: "读不到")
+			+ JudgeZeroSpin(lastRpm, cpuTempC, gpuTempC);
+		return maskClear && targetsZero;
+	}
+
+	/// <summary>
+	/// 零转速定性：同一个“0 RPM”既可能是 EC 按低温正常停转，也可能是没被接住或堵转。
+	/// CPU 与 GPU 都不高于 <see cref="LowTempIdleC" /> ⇒ 低温停转（EC 的既定策略，不必干预）；
+	/// 任一温度不低于 <see cref="HotNoSpinC" /> ⇒ 异常，记 error；温度读不到/中间区间只记录不下结论。
+	/// </summary>
+	private static string JudgeZeroSpin(int lastRpm, int cpuTempC, int gpuTempC)
+	{
+		if (lastRpm != 0)
+		{
+			return "";
+		}
+		bool cpuKnown = cpuTempC > 0;
+		bool gpuKnown = gpuTempC > 0;
+		int hottest = Math.Max(cpuKnown ? cpuTempC : -1, gpuKnown ? gpuTempC : -1);
+		string tempText = "CPU " + (cpuKnown ? cpuTempC + "℃" : "读不到")
+			+ " / GPU " + (gpuKnown ? gpuTempC + "℃" : "读不到");
+		bool allCool = cpuKnown && gpuKnown
+			? (cpuTempC <= LowTempIdleC && gpuTempC <= LowTempIdleC)
+			: (hottest >= 0 && hottest <= LowTempIdleC);
+		if (allCool)
+		{
+			return " · 零转速＝低温停转（" + tempText + "，EC 正常策略）";
+		}
+		if (hottest >= HotNoSpinC)
+		{
+			Logger.WriteError("[fan] ⚠️ 交回后零转速但温度不低（" + tempText + "）⇒ 疑似未接管或风扇堵转；仅记录，⛔ 未自动抢回控制权");
+			return " · ⚠️ 零转速但温度 " + hottest + "℃ ⇒ 异常（未接管/堵转）";
+		}
+		return " · 零转速 · " + tempText + "（中间区间，仅记录）";
+	}
+
+	/// <summary>
+	/// 交回前的预热：掩码仍置位（我们正接管）且转速低于 1200 RPM 时，先写一个 50% 目标把风扇带起来，
+	/// 保持 PreSpinHoldMs 后再走交回流程。掩码本来就没置位（风扇一直在 EC 手上）⇒ 一个字节都不写。
+	/// </summary>
+	private static void PreSpinBeforeRelease(int preMask)
+	{
+		try
+		{
+			if (preMask < 0 || (preMask & 0x0A) == 0)
+			{
+				return;
+			}
+			int rpm = ReadWmiRpmForRelease();
+			if (rpm < 0 || rpm >= PreSpinBelowRpm)
+			{
+				return;
+			}
+			int units = PreSpinPercent * 68 / 100;
+			if (!TrySetFanTargetsCore(units, units, out string spinDetail))
+			{
+				Logger.WriteLine("[fan] 交回前预热跳过：写目标失败（" + spinDetail + "）");
+				return;
+			}
+			Logger.WriteLine("[fan] 交回前预热：13=" + rpm + " RPM ⇒ 提到 " + PreSpinPercent + "% 保持气流，" + PreSpinHoldMs + "ms 后再交回（" + spinDetail + "）");
+			Thread.Sleep(PreSpinHoldMs);
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[fan] 交回前预热失败（已忽略，继续交回）：" + ex.Message);
+		}
 	}
 
 	private static int ReadWmiRpmForRelease()
@@ -463,11 +560,11 @@ internal static class FanWriter
 	}
 
 	/// <summary>交回固件（先清掩码→再清目标）：整段加锁，保证两步之间不会被插写。</summary>
-	internal static bool TryReleaseToFirmware(out string detail)
+	internal static bool TryReleaseToFirmware(out string detail, int cpuTempC = -1, int gpuTempC = -1)
 	{
 		lock (WriteGate)
 		{
-			return TryReleaseToFirmwareCore(out detail);
+			return TryReleaseToFirmwareCore(out detail, cpuTempC, gpuTempC);
 		}
 	}
 	private static System.Collections.Generic.IEnumerable<FanWriteChannel> Candidates(bool allowAcpiEc = true)

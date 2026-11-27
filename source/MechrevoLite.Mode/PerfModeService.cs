@@ -240,7 +240,15 @@ internal sealed class PerfModeService
 		PerfApplyOutcome perfApplyOutcome;
 		try
 		{
+			// 切档时：**离开**带系统项自定义的模式才清理（恢复用户基线），再下发本次配置；
+			// 上一个模式没改过系统项 ⇒ 什么都不做。同模式内重应用不带 switch 步 ⇒ 原样返回。
+			steps = ModeSystemSnapshot.PrepareForSwitch(steps, out HashSet<ModeSystemSnapshot.Field>? sysOwnAfter);
 			perfApplyOutcome = await PerfModeRunner.RunAsync(modeId, steps, _backend, ct).ConfigureAwait(continueOnCapturedContext: false);
+			if (sysOwnAfter != null && !perfApplyOutcome.AnyFailed)
+			{
+				// 确实下发成功了才登记，失败不记 ⇒ 下次切换不会去恢复根本没改过的项。
+				ModeSystemSnapshot.CommitOwned(sysOwnAfter);
+			}
 			// 但 PL1/PL2/温度墙会走 WMI 23 真下发 ⇒ 标记 LocalApply，让 ModeSwitched 按"字段全成功"判定
 			if (_hw != null && (_hw.UsesBaolongda || _hw.SmuCustomApu))
 			{
@@ -2175,12 +2183,13 @@ internal sealed class PerfModeService
 	}
 
 	// （机主：「恢复出厂设置」风扇转速/曲线表没恢复 · 强冷也要复位）
-	internal void ResetBaolongdaFanToFirmwareDefault()
+	/// <returns>交回固件是否逐项确认（强冷已关 / 闭环已停 / EC 交回 / 目标归零 / 接管位已清 / 曲线已重置）。</returns>
+	internal bool ResetBaolongdaFanToFirmwareDefault()
 	{
 		MechrevoHw hw = _hw;
 		if (hw == null || !hw.UsesBaolongda)
 		{
-			return;
+			return false;
 		}
 		// ── ① 强冷复位：开着 ⇒ 先走关闭流程（恢复快照 / FanBoostActive=false / 清临时状态）──
 		bool boostWasActive = MechrevoHw.FanBoostActive;
@@ -2245,11 +2254,13 @@ internal sealed class PerfModeService
 			+ $" · 0xB20={(mask < 0 ? "读不到" : "0x" + mask.ToString("X2"))} ⇒ 目标归零={targetsZero} · 接管位(0x02|0x08)已清={maskClean}"
 			+ $" · 诊断标记 FanCurveVerified={hw.FanCurveVerified}（仅诊断；UI/写入已直接开放）"
 			+ (string.IsNullOrEmpty(releaseDetail) ? "" : " · " + releaseDetail));
-		if (!boostClosed || !curveDisabled || !released || !targetsZero || !maskClean)
+		bool allConfirmed = boostClosed && curveDisabled && released && targetsZero && maskClean && curveSaved;
+		if (!allConfirmed)
 		{
 			Logger.WriteError("[reset] ⚠️ 风扇恢复默认**未全部确认**（如实记录，⛔ 不假装成功）："
-				+ $"强冷已关={boostClosed} · 闭环已停={curveDisabled} · EC交回={released} · 目标归零={targetsZero} · 接管位已清={maskClean}");
+				+ $"强冷已关={boostClosed} · 闭环已停={curveDisabled} · EC交回={released} · 目标归零={targetsZero} · 接管位已清={maskClean} · 曲线已重置={curveSaved}");
 		}
+		return allConfirmed;
 	}
 
 	private async Task<bool> RestoreVendorProfileAsync()
@@ -2513,7 +2524,9 @@ internal sealed class PerfModeService
 			WindowsPowerMode = settings.WindowsPowerMode,
 			CpuBoost = settings.CpuBoost,
 			PowerPlanGuid = settings.PowerPlanGuid,
-			RefreshHz = settings.RefreshHz
+			RefreshHz = settings.RefreshHz,
+			ProcessorMaxFreqAc = settings.ProcessorMaxFreqAc,
+			ProcessorMaxFreqDc = settings.ProcessorMaxFreqDc
 		};
 		IReadOnlyList<PerfApplyStep> steps = PerfModeApplyPlanner.Build(mode with
 		{

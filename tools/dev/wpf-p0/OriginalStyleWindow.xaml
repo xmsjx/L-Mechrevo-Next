@@ -501,6 +501,25 @@
                                            FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />
                             </ToggleButton>
                         </local:AdaptivePanel>
+                        <!-- 风扇速度（声明了 fanTier 的机型才显示；允许哪些性能模式也由后端判定） -->
+                        <StackPanel x:Name="FanSpeedRow" Orientation="Horizontal" HorizontalAlignment="Left" Margin="2,6,0,0" Visibility="Collapsed">
+                            <TextBlock Text="风扇速度" Style="{StaticResource MutedText}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <ToggleButton x:Name="FanSlowButton" Style="{StaticResource ModeSegment}" MinWidth="64" Height="34" FontSize="14" Padding="0" Margin="0,0,6,0" Click="FanSpeed_Click">
+                                <TextBlock Text="慢" Height="18" VerticalAlignment="Center" LineHeight="18" LineStackingStrategy="BlockLineHeight" TextAlignment="Center"
+                                           FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
+                                           FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />
+                            </ToggleButton>
+                            <ToggleButton x:Name="FanMidButton" Style="{StaticResource ModeSegment}" MinWidth="64" Height="34" FontSize="14" Padding="0" Margin="0,0,6,0" Click="FanSpeed_Click">
+                                <TextBlock Text="中" Height="18" VerticalAlignment="Center" LineHeight="18" LineStackingStrategy="BlockLineHeight" TextAlignment="Center"
+                                           FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
+                                           FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />
+                            </ToggleButton>
+                            <ToggleButton x:Name="FanFastButton" Style="{StaticResource ModeSegment}" MinWidth="64" Height="34" FontSize="14" Padding="0" Margin="0,0,6,0" Click="FanSpeed_Click">
+                                <TextBlock Text="快" Height="18" VerticalAlignment="Center" LineHeight="18" LineStackingStrategy="BlockLineHeight" TextAlignment="Center"
+                                           FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
+                                           FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />
+                            </ToggleButton>
+                        </StackPanel>
                         <StackPanel x:Name="PerfConfigPanel" Margin="0,4,0,0" Visibility="Collapsed">
                             <local:AdaptivePanel x:Name="PerfConfigRow">
                                 <StackPanel x:Name="PerfConfigSilentGroup" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,4,2">

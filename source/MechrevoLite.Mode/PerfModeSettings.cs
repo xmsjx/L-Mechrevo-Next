@@ -65,6 +65,12 @@ public sealed record PerfModeSettings
 
 	public int? RefreshHz { get; set; }
 
+	/// <summary>处理器最大频率（MHz）· 插电侧：0 = 不限制，未设置 = 不改变。</summary>
+	public int? ProcessorMaxFreqAc { get; init; }
+
+	/// <summary>处理器最大频率（MHz）· 电池侧：0 = 不限制，未设置 = 不改变。</summary>
+	public int? ProcessorMaxFreqDc { get; init; }
+
 	public bool IsUntouched
 	{
 		get
@@ -106,7 +112,8 @@ public sealed record PerfModeSettings
 		get
 		{
 			if (!WindowsPowerMode.HasValue && !CpuBoost.HasValue && string.IsNullOrEmpty(PowerPlanGuid)
-			&& !SmuSlowLimit.HasValue && !SmuSlowTimeSeconds.HasValue && !SmuFastTimeSeconds.HasValue)
+			&& !SmuSlowLimit.HasValue && !SmuSlowTimeSeconds.HasValue && !SmuFastTimeSeconds.HasValue
+			&& !ProcessorMaxFreqAc.HasValue && !ProcessorMaxFreqDc.HasValue)
 			{
 				return RefreshHz.HasValue;
 			}

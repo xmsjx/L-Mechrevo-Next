@@ -11,5 +11,6 @@ public enum PerfApplyVerify
 	PowerOverlay,
 	PowerPlan,
 	CpuBoost,
-	RefreshRate
+	RefreshRate,
+	ProcessorMaxFreq
 }

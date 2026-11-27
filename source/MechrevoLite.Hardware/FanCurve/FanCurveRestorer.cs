@@ -43,9 +43,11 @@ namespace MechrevoLite.Hardware
 				switch (kind)
 				{
 					case FanCurveBackendKind.Baolongda:
-						PerfModeService.Instance?.ResetBaolongdaFanToFirmwareDefault();
-						return new FanCurveRestoreResult(true, true, true, true,
-							FanCurveRestoreKind.BaolongdaFirmware, "", null, null, null, null);
+						// 交回固件是否逐项确认由后端给结论：没确认就不清存档、也不报“已恢复默认”。
+						bool firmwareDefault = PerfModeService.Instance?.ResetBaolongdaFanToFirmwareDefault() ?? false;
+						return new FanCurveRestoreResult(true, firmwareDefault, firmwareDefault, true,
+							firmwareDefault ? FanCurveRestoreKind.BaolongdaFirmware : FanCurveRestoreKind.None,
+							firmwareDefault ? "" : "交回固件未全部确认（详见 [reset] 日志）", null, null, null, null);
 					case FanCurveBackendKind.NucUmi:
 						return RestoreEcTable(FanCurveRestoreKind.NucTable, clearSaved: false);
 					case FanCurveBackendKind.Ec:

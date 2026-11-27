@@ -32,7 +32,7 @@ internal static class LogoLightDetector
 				Logger.WriteLineIfChanged("logo-kind", "[logo] 形态判定：无 7001 能力字节 ⇒ 未知（沿用旧判据）");
 				return LogoLightKind.Unknown;
 			}
-			LogoLightKind kind = capability.Value.NewLogo ? LogoLightKind.Lettering : LogoLightKind.Icon;
+			LogoLightKind kind = capability.Value.LetteringLogo ? LogoLightKind.Lettering : LogoLightKind.Icon;
 			Logger.WriteLineIfChanged("logo-kind", "[logo] 形态判定：" + Describe(kind) + " · " + capability.Value.Describe());
 			return kind;
 		}

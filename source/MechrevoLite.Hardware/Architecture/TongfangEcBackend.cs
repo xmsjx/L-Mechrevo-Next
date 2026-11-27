@@ -12,32 +12,35 @@ internal sealed class TongfangEcBackend : IBackendModule
 	public BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe)
 	{
 		FeatureDeclaration logo;
-		if (probe.GcuConnected)
+		int logoOverride = IteLightingLocal.LogoChannelOverride;
+		if (logoOverride == 1)
+		{
+			logo = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+				"用户指定 USB Logo 通道", new[] { "settings:logo_channel=usb" });
+		}
+		else if (logoOverride == 2)
+		{
+			logo = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Ec,
+				"用户指定 A 面 EC Logo", new[] { "settings:logo_channel=ec" });
+		}
+		else if (probe.GcuConnected)
 		{
 			logo = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				"GCU 已连接，EC 路未接管", new string[0]);
 		}
-		else if (probe.IteCapability is { } iteLogoCap)
+		else if (probe.IteCapability is { } iteLogoCap && (iteLogoCap.LetteringLogo || iteLogoCap.Logo))
 		{
 			// 有 7001 时以能力字节为准：设备在 ≠ Logo 通道在。
-			logo = iteLogoCap.NewLogo
+			logo = iteLogoCap.LetteringLogo
 				? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
-					"独立 USB Logo（lettering 新通道）", new[] { "usb:IteCapability.NewLogo" })
-				: iteLogoCap.Logo
-					? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
-						"独立 USB Logo（旧通道）", new[] { "usb:IteCapability.Logo" })
-					: new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None,
-						"ITE 能力字节无 Logo 通道", new[] { "usb:IteCapability" });
+					"独立 USB Logo（字母形）", new[] { "usb:IteCapability.LetteringLogo" })
+				: new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+					"独立 USB Logo（旧通道）", new[] { "usb:IteCapability.Logo" });
 		}
 		else if (probe.MbaLogoSupport == true)
 		{
 			logo = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Ec,
 				"A 面 EC Logo（与灯带同一路）", new[] { "registry:OEM.GamingCenter2.Support.MBALogo" });
-		}
-		else if (probe.EcLogoEvidence == true)
-		{
-			logo = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
-				"本地 EC 有 Logo 证据", new[] { "usb:IteLightingLocal.HasUsbLogo" });
 		}
 		else
 		{
@@ -254,7 +257,7 @@ internal sealed class TongfangEcBackend : IBackendModule
             MechrevoLite.Hardware.FeatureAvailability.Unsupported => new FeatureDeclaration(FeatureAvailability.Unsupported, BackendChannel.None, "能力位三态=不支持", new string[0]),
             _ => new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None, "能力位三态未采集", new string[0])
         };
-		return new BackendFeatureDeclaration(Kind,
+		return DeclarationGate.Wrap(new BackendFeatureDeclaration(Kind,
 			new Dictionary<FeatureId, FeatureDeclaration>
 			{
 				[FeatureId.LogoLight] = logo,
@@ -278,6 +281,6 @@ internal sealed class TongfangEcBackend : IBackendModule
         [FeatureId.TurboMode] = turboMode,
         [FeatureId.SilentTurbo] = silentTurbo,
         [FeatureId.PerfTuning] = perfTuning
-			});
+			}));
 	}
 }

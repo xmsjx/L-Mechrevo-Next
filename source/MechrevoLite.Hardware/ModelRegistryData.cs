@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -47,7 +48,19 @@ public sealed class ModelRegistryData
 
 	public IReadOnlySet<string> PlatformCodeSet { get; }
 
-	private ModelRegistryData(IReadOnlyList<PlatformCodeIdentity> platformCodes, IReadOnlyDictionary<int, string> biosProjectBytes, IReadOnlyDictionary<string, IReadOnlyList<string>> vendorLists, IReadOnlyDictionary<string, IReadOnlyList<string>> gpuSkus, IReadOnlyList<FanTableGrouping> fanTableGroups, IReadOnlyList<int> dgpuGenerations)
+	/// <summary>共享通道档案（<c>channelProfiles</c>）：同方系通用的读/写位置只在这里写一次。</summary>
+	public IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChannelBinding>> ChannelProfiles { get; }
+
+	/// <summary>机型声明（<c>machineManifests</c>）：按声明顺序匹配，首条命中即用。</summary>
+	public IReadOnlyList<MachineManifest> Manifests { get; }
+
+	/// <summary>同方通用默认档案名：一般同方机型不写声明，直接用它。</summary>
+	public const string GenericProfileName = "tongfang.ec.core";
+
+	/// <summary>一般同方（同方家族、且没有专门声明）使用的默认通道；没有该档案时为 null。</summary>
+	public MachineManifest? GenericManifest { get; }
+
+	private ModelRegistryData(IReadOnlyList<PlatformCodeIdentity> platformCodes, IReadOnlyDictionary<int, string> biosProjectBytes, IReadOnlyDictionary<string, IReadOnlyList<string>> vendorLists, IReadOnlyDictionary<string, IReadOnlyList<string>> gpuSkus, IReadOnlyList<FanTableGrouping> fanTableGroups, IReadOnlyList<int> dgpuGenerations, IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChannelBinding>> channelProfiles, IReadOnlyList<MachineManifest> manifests)
 	{
 		PlatformCodes = platformCodes;
 		BiosProjectBytes = biosProjectBytes;
@@ -56,6 +69,11 @@ public sealed class ModelRegistryData
 		FanTableGroups = fanTableGroups;
 		DgpuGenerations = dgpuGenerations;
 		PlatformCodeSet = new HashSet<string>(platformCodes.Select((PlatformCodeIdentity code) => code.Code), StringComparer.Ordinal);
+		ChannelProfiles = channelProfiles;
+		Manifests = manifests;
+		GenericManifest = channelProfiles.TryGetValue("tongfang.ec.core", out IReadOnlyDictionary<string, ChannelBinding> value)
+			? new MachineManifest("tongfang-generic", "tongfang.ec.core", new ManifestMatch(), null, value)
+			: null;
 	}
 
 	public static ModelRegistryData Load()
@@ -66,7 +84,16 @@ public sealed class ModelRegistryData
 			throw new ModelRegistryDataException("embedded resource 'LMechrevo.model-registry.json' is missing");
 		}
 		using StreamReader streamReader = new StreamReader(stream);
-		return Parse(streamReader.ReadToEnd());
+		ModelRegistryData modelRegistryData = Parse(streamReader.ReadToEnd());
+		try
+		{
+			Logger.WriteLine("[model-manifest] " + modelRegistryData.DescribeManifests());
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("[model-manifest] 摘要写入失败：" + ex.Message);
+		}
+		return modelRegistryData;
 	}
 
 	public static ModelRegistryData Parse(string json)
@@ -93,7 +120,9 @@ public sealed class ModelRegistryData
 			{
 				throw new ModelRegistryDataException($"unsupported schemaVersion {num} (want {1})");
 			}
-			return new ModelRegistryData(ReadPlatformCodes(rootElement), ReadBiosProjectBytes(rootElement), ReadStringLists(rootElement, "vendorLists", ExpectedVendorListCounts), ReadStringLists(rootElement, "gpuSkus", ExpectedGpuSkuCounts), ReadFanTableGroups(rootElement), ReadDgpuGenerations(rootElement));
+			IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChannelBinding>> channelProfiles = ReadChannelProfiles(rootElement);
+			IReadOnlyList<MachineManifest> manifests = ReadMachineManifests(rootElement, channelProfiles);
+			return new ModelRegistryData(ReadPlatformCodes(rootElement), ReadBiosProjectBytes(rootElement), ReadStringLists(rootElement, "vendorLists", ExpectedVendorListCounts), ReadStringLists(rootElement, "gpuSkus", ExpectedGpuSkuCounts), ReadFanTableGroups(rootElement), ReadDgpuGenerations(rootElement), channelProfiles, manifests);
 		}
 	}
 
@@ -164,9 +193,11 @@ public sealed class ModelRegistryData
 			}
 			list.Add(new PlatformCodeIdentity(text, projectId));
 		}
-		if (list.Count != 24)
+		// 至少覆盖这 24 个带风扇表的机型编码；允许追加新机型（如只做本地 EC 的商用机），
+		// 但删减仍然报错 —— 这条断言的本意是防止声明表被误删。
+		if (list.Count < 24)
 		{
-			throw new ModelRegistryDataException($"platformCodes must cover the {24} fan-table codes, got {list.Count}");
+			throw new ModelRegistryDataException($"platformCodes must cover at least the {24} fan-table codes, got {list.Count}");
 		}
 		return list;
 	}
@@ -265,6 +296,292 @@ public sealed class ModelRegistryData
 			throw new ModelRegistryDataException($"fanTableGroups models must sum to {24}, got {num}");
 		}
 		return list;
+	}
+
+	/// <summary>
+	/// 读 <c>channelProfiles</c>：同方系各机型共用的通道定义写一份，机型只引用。
+	/// 没有该节点时返回空表（老声明表照样能加载）。
+	/// </summary>
+	private static IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChannelBinding>> ReadChannelProfiles(JsonElement root)
+	{
+		Dictionary<string, IReadOnlyDictionary<string, ChannelBinding>> dictionary =
+			new Dictionary<string, IReadOnlyDictionary<string, ChannelBinding>>(StringComparer.Ordinal);
+		if (!root.TryGetProperty("channelProfiles", out var value))
+		{
+			return new ReadOnlyDictionary<string, IReadOnlyDictionary<string, ChannelBinding>>(dictionary);
+		}
+		if (value.ValueKind != JsonValueKind.Object)
+		{
+			throw new ModelRegistryDataException("channelProfiles must be an object");
+		}
+		foreach (JsonProperty item in value.EnumerateObject())
+		{
+			string name = item.Name;
+			if (string.IsNullOrWhiteSpace(name))
+			{
+				throw new ModelRegistryDataException("channelProfiles contains an empty profile name");
+			}
+			if (dictionary.ContainsKey(name))
+			{
+				throw new ModelRegistryDataException("duplicate channelProfiles entry '" + name + "'");
+			}
+			dictionary[name] = ReadChannelMap(item.Value, "channelProfiles." + name);
+		}
+		return new ReadOnlyDictionary<string, IReadOnlyDictionary<string, ChannelBinding>>(dictionary);
+	}
+
+	private static IReadOnlyDictionary<string, ChannelBinding> ReadChannelMap(JsonElement element, string context)
+	{
+		if (element.ValueKind != JsonValueKind.Object)
+		{
+			throw new ModelRegistryDataException(context + " must be an object");
+		}
+		Dictionary<string, ChannelBinding> dictionary = new Dictionary<string, ChannelBinding>(StringComparer.Ordinal);
+		foreach (JsonProperty item in element.EnumerateObject())
+		{
+			if (dictionary.ContainsKey(item.Name))
+			{
+				throw new ModelRegistryDataException(context + " has duplicate feature '" + item.Name + "'");
+			}
+			dictionary[item.Name] = ReadChannelBinding(item.Value, context + "." + item.Name);
+		}
+		return new ReadOnlyDictionary<string, ChannelBinding>(dictionary);
+	}
+
+	private static ChannelBinding ReadChannelBinding(JsonElement element, string context)
+	{
+		if (element.ValueKind == JsonValueKind.String)
+		{
+			string text = element.GetString();
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				throw new ModelRegistryDataException(context + " has an empty channel name");
+			}
+			return new ChannelBinding(text.Trim(), null, declaredAsString: true);
+		}
+		if (element.ValueKind != JsonValueKind.Object)
+		{
+			throw new ModelRegistryDataException(context + " must be a string or an object");
+		}
+		string channel = Require(element, "channel", JsonValueKind.String).GetString();
+		if (string.IsNullOrWhiteSpace(channel))
+		{
+			throw new ModelRegistryDataException(context + " has an empty channel name");
+		}
+		Dictionary<string, string> parameters = new Dictionary<string, string>(StringComparer.Ordinal);
+		if (element.TryGetProperty("params", out var value))
+		{
+			if (value.ValueKind != JsonValueKind.Object)
+			{
+				throw new ModelRegistryDataException(context + ".params must be an object");
+			}
+			foreach (JsonProperty item in value.EnumerateObject())
+			{
+				if (item.Value.ValueKind != JsonValueKind.String)
+				{
+					throw new ModelRegistryDataException(context + ".params." + item.Name + " must be a string");
+				}
+				parameters[item.Name] = item.Value.GetString() ?? "";
+			}
+		}
+		return new ChannelBinding(channel.Trim(), new ReadOnlyDictionary<string, string>(parameters));
+	}
+
+	private static IReadOnlyList<MachineManifest> ReadMachineManifests(JsonElement root, IReadOnlyDictionary<string, IReadOnlyDictionary<string, ChannelBinding>> channelProfiles)
+	{
+		List<MachineManifest> list = new List<MachineManifest>();
+		if (!root.TryGetProperty("machineManifests", out var value))
+		{
+			return list;
+		}
+		if (value.ValueKind != JsonValueKind.Array)
+		{
+			throw new ModelRegistryDataException("machineManifests must be an array");
+		}
+		HashSet<string> hashSet = new HashSet<string>(StringComparer.Ordinal);
+		foreach (JsonElement item in value.EnumerateArray())
+		{
+			if (item.ValueKind != JsonValueKind.Object)
+			{
+				throw new ModelRegistryDataException("machineManifests entries must be objects");
+			}
+			string text = Require(item, "id", JsonValueKind.String).GetString();
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				throw new ModelRegistryDataException("machineManifests has an empty id");
+			}
+			if (!hashSet.Add(text))
+			{
+				throw new ModelRegistryDataException("duplicate machineManifests id '" + text + "'");
+			}
+			string profile = null;
+			if (item.TryGetProperty("profile", out var value2))
+			{
+				if (value2.ValueKind != JsonValueKind.String)
+				{
+					throw new ModelRegistryDataException("machineManifests '" + text + "' has a non-string profile");
+				}
+				profile = value2.GetString();
+				if (string.IsNullOrWhiteSpace(profile) || !channelProfiles.ContainsKey(profile))
+				{
+					throw new ModelRegistryDataException("machineManifests '" + text + "' references unknown profile '" + profile + "'");
+				}
+			}
+			ManifestMatch manifestMatch = ReadManifestMatch(item, text);
+			IReadOnlyDictionary<string, ChannelBinding> readOnlyDictionary = null;
+			if (item.TryGetProperty("channels", out var value3))
+			{
+				readOnlyDictionary = ReadChannelMap(value3, "machineManifests '" + text + "'.channels");
+			}
+			if (profile == null && readOnlyDictionary == null)
+			{
+				throw new ModelRegistryDataException("machineManifests '" + text + "' declares neither profile nor channels");
+			}
+			Dictionary<string, ChannelBinding> dictionary = new Dictionary<string, ChannelBinding>(StringComparer.Ordinal);
+			IReadOnlyDictionary<string, ChannelBinding> value4 = null;
+			if (profile != null && channelProfiles.TryGetValue(profile, out value4))
+			{
+				foreach (KeyValuePair<string, ChannelBinding> item2 in value4)
+				{
+					dictionary[item2.Key] = item2.Value;
+				}
+			}
+			if (readOnlyDictionary != null)
+			{
+				foreach (KeyValuePair<string, ChannelBinding> item3 in readOnlyDictionary)
+				{
+					// 覆盖项要么是档案里已有的功能（改走别的通道），要么是显式写 none（本机型没有这个功能）。
+					// 其余情况多半是功能名拼错，直接报错而不是悄悄多出一个没人读的键。
+					if (value4 != null && !value4.ContainsKey(item3.Key) && !item3.Value.IsNone && item3.Value.DeclaredAsString)
+					{
+						throw new ModelRegistryDataException("machineManifests '" + text + "'.channels." + item3.Key + " is not in profile '" + profile + "' (use an object { \"channel\": \"…\" } for an own implementation, or \"none\" to declare the feature absent)");
+					}
+					// 参数合并：覆盖项只写要改的参数，其余沿用档案（否则少写一个参数就会悄悄回默认值）。
+					if (value4 != null && value4.TryGetValue(item3.Key, out ChannelBinding profileBinding))
+					{
+						dictionary[item3.Key] = MachineManifest.Merge(profileBinding, item3.Value);
+					}
+					else
+					{
+						dictionary[item3.Key] = item3.Value;
+					}
+				}
+			}
+			list.Add(new MachineManifest(text, profile, manifestMatch, readOnlyDictionary, new ReadOnlyDictionary<string, ChannelBinding>(dictionary)));
+		}
+		return list;
+	}
+
+	private static ManifestMatch ReadManifestMatch(JsonElement item, string id)
+	{
+		if (!item.TryGetProperty("match", out var value))
+		{
+			throw new ModelRegistryDataException("machineManifests '" + id + "' must declare match");
+		}
+		if (value.ValueKind != JsonValueKind.Object)
+		{
+			throw new ModelRegistryDataException("machineManifests '" + id + "'.match must be an object");
+		}
+		ManifestMatch manifestMatch = new ManifestMatch(ReadOptionalStringArray(value, "platformCodes", id), ReadOptionalStringArray(value, "boardPrefixes", id), ReadOptionalStringArray(value, "modelKeywords", id));
+		if (manifestMatch.IsEmpty)
+		{
+			throw new ModelRegistryDataException("machineManifests '" + id + "'.match is empty");
+		}
+		return manifestMatch;
+	}
+
+	private static IReadOnlyList<string> ReadOptionalStringArray(JsonElement parent, string name, string id)
+	{
+		if (!parent.TryGetProperty(name, out var value))
+		{
+			return null;
+		}
+		if (value.ValueKind != JsonValueKind.Array)
+		{
+			throw new ModelRegistryDataException("machineManifests '" + id + "'.match." + name + " must be an array");
+		}
+		List<string> list = new List<string>();
+		foreach (JsonElement item in value.EnumerateArray())
+		{
+			if (item.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(item.GetString()))
+			{
+				throw new ModelRegistryDataException("machineManifests '" + id + "'.match." + name + " must contain non-empty strings");
+			}
+			list.Add(item.GetString());
+		}
+		return list;
+	}
+
+	/// <summary>按声明顺序匹配机型；命中返回该条声明（含合并后的通道），未命中返回 null（= 走各功能自己的实时探测）。</summary>
+	public MachineManifest MatchManifest(string board, string model, string platformCode, out string reason)
+	{
+		reason = null;
+		foreach (MachineManifest manifest in Manifests)
+		{
+			reason = manifest.Match.Hit(board, model, platformCode);
+			if (reason != null)
+			{
+				return manifest;
+			}
+		}
+		return null;
+	}
+
+	public MachineManifest MatchManifest(string board, string model, string platformCode)
+	{
+		return MatchManifest(board, model, platformCode, out string _);
+	}
+
+	/// <summary>
+	/// 取本机该用哪份通道定义。
+	/// <para>顺序：先排除宝龙达白名单与非同方产品线（星耀 14/15、无界 LNL）→ 按声明顺序找专门声明
+	/// → 同方家族且确实开放本地 EC 才回落到 <c>tongfang.ec.core</c> 通用默认 → 否则 null。</para>
+	/// </summary>
+	public MachineManifest? MatchOrDefault(ManifestQuery query, out string reason)
+	{
+		if (query.BaolongdaWhitelisted)
+		{
+			reason = "baolongda-whitelist";
+			return null;
+		}
+		if (query.NonTongfangFamily)
+		{
+			reason = "non-tongfang-family";
+			return null;
+		}
+		MachineManifest machineManifest = MatchManifest(query.Board, query.Model, query.PlatformCode, out reason);
+		if (machineManifest != null)
+		{
+			return machineManifest;
+		}
+		if (!query.TongfangFamily)
+		{
+			reason = "not-tongfang";
+			return null;
+		}
+		if (!query.LocalEcAvailable)
+		{
+			reason = "local-ec-unavailable";
+			return null;
+		}
+		if (GenericManifest == null)
+		{
+			reason = "no-generic-profile";
+			return null;
+		}
+		reason = "tongfang-generic";
+		return GenericManifest;
+	}
+
+	/// <summary>声明表解析结果的可读摘要（写日志/诊断用）。</summary>
+	public string DescribeManifests()
+	{
+		List<string> list = new List<string>();
+		foreach (MachineManifest manifest in Manifests)
+		{
+			list.Add(manifest.ToString());
+		}
+		return "profiles=" + ChannelProfiles.Count + " manifests=" + Manifests.Count + (list.Count == 0 ? "" : " | " + string.Join(" ; ", list));
 	}
 
 	private static IReadOnlyList<int> ReadDgpuGenerations(JsonElement root)

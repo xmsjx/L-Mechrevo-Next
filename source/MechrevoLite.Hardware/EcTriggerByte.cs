@@ -11,8 +11,42 @@ namespace MechrevoLite.Hardware;
 /// </summary>
 internal static class EcTriggerByte
 {
-	internal const int Address = 1895;
+	/// <summary>
+	/// 0x767 锁存/触发字节：可被声明表覆盖（keyboardBacklight.trigger，其次 logoLight.trigger），默认 1895。
+	/// </summary>
+	internal static int Address
+	{
+		get
+		{
+			string? text = DeclarationRuntime.Param("keyboardBacklight", "trigger");
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				text = DeclarationRuntime.Param("logoLight", "trigger");
+			}
+			if (!Enabled)
+			{
+				return 0;
+			}
+			return DeclarationRuntime.RegisterAddress("keyboardBacklight", "trigger",
+				DeclarationRuntime.RegisterAddress("logoLight", "trigger", 1895));
+		}
+	}
+
+	/// <summary>本机是否用锁存字节（声明 trigger="0" 表示该机型没有这个命令口，一律不写）。</summary>
+	internal static bool Enabled
+	{
+		get
+		{
+			string? text = DeclarationRuntime.Param("keyboardBacklight", "trigger");
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				text = DeclarationRuntime.Param("logoLight", "trigger");
+			}
+			return !string.Equals(text?.Trim(), "0", StringComparison.Ordinal);
+		}
+	}
 	internal const byte Latch = 0x20;
+	internal const byte Logo = 0x40;
 	internal const byte Rainbow = 0x80;
 	internal const byte UsbPulse = 0x10;
 	internal const byte QuickSwitchLatch = 0x01;
@@ -45,6 +79,10 @@ internal static class EcTriggerByte
 	/// <summary>按当前值算出目标值并写回（读-改-写整对加锁）。</summary>
 	internal static bool TryApply(byte setBits, byte clearBits, bool ownUsbPulse = false, bool ownQuickSwitch = false)
 	{
+		if (!Enabled)
+		{
+			return true;
+		}
 		lock (Gate)
 		{
 			if (!AcpiDriverEc.TryReadByte(Address, out byte current))

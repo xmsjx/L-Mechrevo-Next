@@ -35,6 +35,9 @@ public interface IPerfModeBackend
 
 	bool SetPowerOverlay(int mode);
 
+	/// <summary>处理器最大频率（MHz，0 = 不限制，-1 = 该侧不动）。</summary>
+	bool SetProcessorMaxFreq(int acMhz, int dcMhz);
+
 	Task DelayAsync(int milliseconds, CancellationToken ct);
 
 	Task<bool?> VerifyAsync(PerfApplyStep step, CancellationToken ct);

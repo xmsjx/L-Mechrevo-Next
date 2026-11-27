@@ -1,9 +1,55 @@
 {
   "schemaVersion": 1,
   "_comment": "T2 identity data only. No capability bits and no per-code dGPU generation: capabilities are derived live (T6) and the generation is a runtime GPU probe (axis 2). BIOS_PROJECT_ID is a different ID space and is never a generation source.",
+  "_commentChannels": "channelProfiles = 同方系共用的通道定义，写一次；机型用 profile 引用它，只在 channels 里写差异。绑定只说明读写走哪条通道，能不能用仍由实时探测决定；值写 none 表示本机型明确没有该功能（例如 PF/Code 01 的 Logo 灯）。机型要覆盖单个功能时直接写，例如 UMI/NUC 的性能模式写成 channels.performanceMode = { channel: wmi, params: {...} }，其余功能继续用档案里的同方通用定义。",
+  "channelProfiles": {
+    "tongfang.ec.core": {
+      "chargeLimit": { "channel": "ec", "params": { "upper": "0x7B9", "lower": "0x7D0", "gate": "0x7C3", "romId": "0x770", "effect": "0x742" } },
+      "keyboardBacklight": { "channel": "ec", "params": { "white": "0x78C", "trigger": "0x767", "rgbControl": "0x7C5", "modeIndex": "0x7AB", "support": "0x766" } },
+      "fanCurve": { "channel": "ec" },
+      "fanBoost": { "channel": "ec" },
+      "fanRpm": { "channel": "ec", "params": { "mainHigh": "0x464", "mainLow": "0x465", "secondHigh": "0x46C", "secondLow": "0x46B" } },
+      "quickSwitch": { "channel": "ec" },
+      "logoLight": { "channel": "ec", "params": { "trigger": "0x767", "modeIndex": "0x7AB", "white": "0x78C", "rgbControl": "0x7C5" } }
+    }
+  },
+  "machineManifests": [
+    {
+      "id": "code-01-pf",
+      "profile": "tongfang.ec.core",
+      "match": { "platformCodes": ["PF"], "modelKeywords": ["CODE 01", "CODE01"] },
+      "channels": {
+        "plCustom": { "channel": "ec", "params": { "pl1": "0x783", "pl2": "0x784", "pl4": "0x785", "min": "5", "maxPl1": "85", "maxPl2": "85", "maxPl4": "85", "trigger": "0", "turbo": "0", "customFlag": "0", "modeIndex": "0", "ramp": "0", "customByMemory": "1", "customClamp": "0", "builtInPl": "1", "plBalance": "45/54", "plTurbo": "54/60", "plSilent": "25/25" } },
+        "officePreset": { "channel": "ec", "params": { "enabled": "1", "quietBit": "0" } },
+        "fanTelemetry": { "channel": "ec" },
+        "modeSpy": { "channel": "ec", "params": { "officePlAddr": "0x783", "officePlSilent": "0x19", "officePlBalance": "0x2D", "officeFanTier": "0x744", "fanTierBalance": "0x46", "fanTierSilent": "0x40" } },
+        "tcc": { "channel": "ec", "params": { "disabled": "1", "smu": "1" } },
+        "chargeLimit": { "channel": "ec", "params": { "upper": "0x7B9", "lower": "0x7D0", "gate": "0x7C3", "romId": "0x770", "effect": "0x742", "allowNoDgpu": "1" } },
+        "usbCharge": { "channel": "ec", "params": { "ec": "1" } },
+        "fanCurve": { "channel": "ec", "params": { "gpuCurve": "0", "disabled": "1" } },
+        "fanTier": { "channel": "ec", "params": { "base": "0x744", "tiers": "3", "slow": "64/72/82", "mid": "70/80/90", "fast": "78/88/100", "modes": "silent,balanced,custom" } },
+        "keyboardBacklight": { "channel": "ec", "params": { "white": "0x78C", "trigger": "0x767", "levels": "2", "whiteOnly": "1", "scheme": "pf", "hotkey": "0", "latch": "0", "rgbControl": "0x7C5", "modeIndex": "0x7AB", "support": "0x766" } },
+        "logoLight": "none",
+        "acRecovery": "none"
+      }
+    },
+    {
+      "id": "wujie-x",
+      "profile": "tongfang.ec.core",
+      "match": { "boardPrefixes": ["WJ"], "modelKeywords": ["无界14X", "无界15X", "无界 14X", "无界 15X", "WUJIE14X", "WUJIE15X", "WUJIE 14X", "WUJIE 15X"] },
+      "channels": { "performanceMode": { "channel": "wujie-smu" }, "logoLight": "none", "lightbar": "none", "fanRpm": "none" }
+    },
+    {
+      "id": "umi-nuc",
+      "profile": "tongfang.ec.core",
+      "match": { "boardPrefixes": ["LAPKC"], "modelKeywords": ["NUC X15"] },
+      "channels": { "performanceMode": { "channel": "wmi-umi" }, "lightbar": { "channel": "umi-hdram" } }
+    }
+  ],
   "platformCodes": [
     { "code": "PH4AQE3", "projectId": 6154 },
     { "code": "PH4AQxx", "projectId": null },
+    { "code": "PF", "projectId": 9 },
     { "code": "PH4ARxx", "projectId": 5889 },
     { "code": "PH4AUxf", "projectId": 5895 },
     { "code": "PH4AUxx", "projectId": 5890 },

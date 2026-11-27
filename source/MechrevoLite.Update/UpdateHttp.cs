@@ -1,8 +1,11 @@
 using System;
+using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using MechrevoLite.Helpers;
 
 namespace MechrevoLite.Update;
 
@@ -69,12 +72,57 @@ internal static class UpdateHttp
 
 	private static HttpClient Create(TimeSpan timeout)
 	{
-		HttpClient httpClient = new HttpClient(new HttpClientHandler
+		HttpClient httpClient = new HttpClient(new SocketsHttpHandler
 		{
-			AllowAutoRedirect = false
+			AllowAutoRedirect = false,
+			ConnectCallback = ConnectWithDnsFallbackAsync
 		});
 		httpClient.Timeout = timeout;
 		httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("L-Mechrevo/" + Program.ReleaseLabel);
 		return httpClient;
+	}
+
+	/// <summary>先按常规方式连接；域名解析不到时改用备用 DNS 查地址再连，TLS 仍按原域名校验。</summary>
+	private static async ValueTask<Stream> ConnectWithDnsFallbackAsync(SocketsHttpConnectionContext context, CancellationToken ct)
+	{
+		DnsEndPoint endPoint = context.DnsEndPoint;
+		Socket socket = new Socket(SocketType.Stream, ProtocolType.Tcp)
+		{
+			NoDelay = true
+		};
+		try
+		{
+			await socket.ConnectAsync(endPoint, ct).ConfigureAwait(continueOnCapturedContext: false);
+			return new NetworkStream(socket, ownsSocket: true);
+		}
+		catch (SocketException ex) when (ex.SocketErrorCode == SocketError.HostNotFound || ex.SocketErrorCode == SocketError.NoData || ex.SocketErrorCode == SocketError.TryAgain)
+		{
+			socket.Dispose();
+		}
+		catch
+		{
+			socket.Dispose();
+			throw;
+		}
+		IPAddress? address = await DohResolver.ResolveAsync(endPoint.Host, ct).ConfigureAwait(continueOnCapturedContext: false);
+		if (address == null)
+		{
+			throw new HttpRequestException("域名解析失败：" + endPoint.Host);
+		}
+		Logger.WriteLine("更新域名系统解析失败，改用备用 DNS 解析 " + endPoint.Host + "=" + address);
+		Socket byAddress = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
+		{
+			NoDelay = true
+		};
+		try
+		{
+			await byAddress.ConnectAsync(new IPEndPoint(address, endPoint.Port), ct).ConfigureAwait(continueOnCapturedContext: false);
+			return new NetworkStream(byAddress, ownsSocket: true);
+		}
+		catch
+		{
+			byAddress.Dispose();
+			throw;
+		}
 	}
 }

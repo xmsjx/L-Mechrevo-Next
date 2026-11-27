@@ -45,6 +45,9 @@ internal class PowerNative
 
 	private static readonly Guid GUID_BOOST = new Guid("be337238-0d82-4146-a960-4f3749d470c7");
 
+	/// <summary>处理器电源管理 → 处理器最大频率（MHz，0 = 不限制）。</summary>
+	private static readonly Guid GUID_PROCESSOR_THROTTLE_MAX = new Guid("75b0ae3f-bce0-45a7-8c89-c9611c25e100");
+
 	private static Guid GUID_SLEEP_SUBGROUP = new Guid("238c9fa8-0aad-41ed-83f4-97be242c8f20");
 
 	private static Guid GUID_HIBERNATEIDLE = new Guid("9d7815a6-7ee4-497e-8888-515a05f02364");
@@ -145,6 +148,74 @@ internal class PowerNative
 			PowerWriteDCValueIndex(IntPtr.Zero, activeScheme, GUID_CPU, GUID_BOOST, boost);
 			PowerSetActiveScheme(IntPtr.Zero, activeScheme);
 			Logger.WriteLine("Boost " + boost);
+		}
+	}
+
+	/// <summary>读插电（AC）/电池（DC）两侧的处理器最大频率（MHz，0 = 不限制）。</summary>
+	internal static bool TryGetProcessorMaxFreq(out int ac, out int dc)
+	{
+		ac = 0;
+		dc = 0;
+		try
+		{
+			Guid activeScheme = GetActiveScheme();
+			if (PowerReadACValueIndex(IntPtr.Zero, activeScheme, GUID_CPU, GUID_PROCESSOR_THROTTLE_MAX, out var AcValueIndex) != 0)
+			{
+				return false;
+			}
+			if (PowerReadDCValueIndex(IntPtr.Zero, activeScheme, GUID_CPU, GUID_PROCESSOR_THROTTLE_MAX, out var DcValueIndex) != 0)
+			{
+				return false;
+			}
+			ac = ((IntPtr)AcValueIndex).ToInt32();
+			dc = ((IntPtr)DcValueIndex).ToInt32();
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("Processor max freq read failed: " + ex.Message);
+			return false;
+		}
+	}
+
+	/// <summary>
+	/// 写处理器最大频率（MHz，0 = 不限制）。传 -1 表示"这一侧不动"（例如只填了插电侧）。
+	/// 写完后把当前方案重新激活一次，让设置立即生效。
+	/// </summary>
+	internal static bool SetProcessorMaxFreq(int acMhz, int dcMhz)
+	{
+		try
+		{
+			Guid activeScheme = GetActiveScheme();
+			bool flag = false;
+			if (acMhz >= 0)
+			{
+				if (PowerWriteACValueIndex(IntPtr.Zero, activeScheme, GUID_CPU, GUID_PROCESSOR_THROTTLE_MAX, acMhz) != 0)
+				{
+					return false;
+				}
+				flag = true;
+			}
+			if (dcMhz >= 0)
+			{
+				if (PowerWriteDCValueIndex(IntPtr.Zero, activeScheme, GUID_CPU, GUID_PROCESSOR_THROTTLE_MAX, dcMhz) != 0)
+				{
+					return false;
+				}
+				flag = true;
+			}
+			if (!flag)
+			{
+				return false;
+			}
+			PowerSetActiveScheme(IntPtr.Zero, activeScheme);
+			Logger.WriteLine("Processor max freq -> AC=" + acMhz + "MHz DC=" + dcMhz + "MHz");
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("Processor max freq write failed: " + ex.Message);
+			return false;
 		}
 	}
 
@@ -428,6 +499,35 @@ internal class PowerNative
 		{
 			Logger.WriteLine("Power overlay apply failed: " + ex.Message);
 			return PowerOverlayResult.Failed;
+		}
+	}
+
+	/// <summary>
+	/// 当前生效的电源模式覆盖层索引（0=最佳能效 · 1=平衡/未设置 · 2=最佳性能）。
+	/// 和 <see cref="IsOverlayActive" /> 同一判据，只是返回值而不是比较。
+	/// </summary>
+	internal static int? GetOverlayIndex()
+	{
+		try
+		{
+			if (PowerGetEffectiveOverlayScheme(out var EffectiveOverlayGuid) != 0)
+			{
+				return null;
+			}
+			if (EffectiveOverlayGuid == new Guid("961cc777-2547-4f9d-8174-7d86181b8a7a"))
+			{
+				return 0;
+			}
+			if (EffectiveOverlayGuid == new Guid("ded574b5-45a0-4f42-8737-46345c09c238"))
+			{
+				return 2;
+			}
+			return 1;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteLine("Power overlay index read failed: " + ex.Message);
+			return null;
 		}
 	}
 }

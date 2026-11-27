@@ -222,7 +222,11 @@ public partial class App : Application
         }
         OriginalStyleWindow window = new();
         MainWindow = window;
-        if (string.Equals(MechrevoLite.AppConfig.GetString("last_window_mode"), "wide", StringComparison.OrdinalIgnoreCase))
+        // 主窗口"创建但不可见"的两种情形：宽屏模式（界面在宽屏窗口里）和自启动驻留。
+        // 两种都离屏 + 全透明创建，避免自启动时窗口先在右下角画出来再被隐藏。
+        bool hiddenCreate = startupLaunch
+            || string.Equals(MechrevoLite.AppConfig.GetString("last_window_mode"), "wide", StringComparison.OrdinalIgnoreCase);
+        if (hiddenCreate)
         {
             window.Opacity = 0;
             window.ShowInTaskbar = false;
@@ -256,6 +260,9 @@ public partial class App : Application
                         openWindow.ShowInTaskbar = false;
                         openWindow.Hide();
                     }
+                    // 离屏 + 透明的创建属性只服务于启动这一次；隐藏后还原透明度，
+                    // 之后从托盘或外部唤起都走 ShowCompactWindow，不会再带着隐藏属性显示。
+                    window.Opacity = 1;
                     Logger.WriteLine("[startup] startup 参数：已静默驻留托盘（启动恢复继续后台执行）");
                 }
                 catch (Exception ex)

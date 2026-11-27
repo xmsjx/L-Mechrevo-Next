@@ -112,6 +112,12 @@ public partial class FanCurveWindow : Window
         {
             GpuSection.Visibility = Visibility.Collapsed;
         }
+        // 声明表说本机只有一路 PWM（fanCurve.params.gpuCurve=0）时同样不展示 GPU 曲线：
+        // 那种机型第二个风扇由同一个 PWM 表驱动，编辑 GPU 表既无通道也不会有任何效果。
+        if (FanCurveTarget.Hw?.SupportsGpuFanCurve == false || MechrevoLite.Hardware.EcFanFivePoint.InUse)
+        {
+            GpuSection.Visibility = Visibility.Collapsed;
+        }
         ApplyRespectiveVisual(GcuRespectiveCheck.IsChecked == true);
         RespectiveStateChanged += OnRespectiveStateChanged;
         if (Mold == FanCurveMold.Baolongda)
@@ -262,6 +268,15 @@ public partial class FanCurveWindow : Window
         {
             BaolongdaSyncCheck.IsChecked = outcome.BaolongdaSync.Value;
         }
+        // 五点机型：温度轴由固件固定，只显示与编辑 5 个占空比。
+        if (MechrevoLite.Hardware.EcFanFivePoint.InUse)
+        {
+            if (MechrevoLite.Hardware.EcFanFivePoint.TryRead(out int[] fiveDuties))
+            {
+                CpuCurve.LoadPoints(MechrevoLite.Hardware.EcFanFivePoint.Count, fiveDuties);
+            }
+            return;
+        }
         CpuCurve.Load(outcome.CpuTemps, outcome.CpuDuties);
         GpuCurve.Load(outcome.GpuTemps, outcome.GpuDuties);
         if (outcome.PersistIfMissing)
@@ -280,11 +295,21 @@ public partial class FanCurveWindow : Window
 
     private void OnRespectiveStateChanged(bool on)
     {
-        if (!IsLoaded)
-        {
-            return;
-        }
-        Dispatcher.BeginInvoke(new Action(() => ApplyRespectiveVisual(on)));
+        // CPU / GPU 拆成两份内嵌实例时，窗口本体没有被 Show 过，IsLoaded 恒为 false：
+        // 不能因为没装载就丢掉同步，否则 GPU 那份会一直停在置灰状态。
+        Dispatcher.BeginInvoke(new Action(() => ApplyRespectiveState(on)));
+    }
+
+    /// <summary>当前独立控制开关状态（CPU 实例是权威来源）。</summary>
+    internal bool RespectiveOn => GcuRespectiveCheck.IsChecked == true;
+
+    /// <summary>按给定状态同步开关与 GPU 表可编辑性，不访问固件。</summary>
+    internal void ApplyRespectiveState(bool on)
+    {
+        _syncingRespective = true;
+        GcuRespectiveCheck.IsChecked = on;
+        _syncingRespective = false;
+        ApplyRespectiveVisual(on);
     }
 
     /// <summary>独立控制关闭时 GPU 曲线不参与输出，置灰只读。</summary>

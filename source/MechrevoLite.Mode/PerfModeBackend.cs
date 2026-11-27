@@ -82,7 +82,9 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			SupportsDynamicBoost = hw.GpuDynamicBoostAdjustable,
 			SupportsGpuOverclock = hw.SupportsGpuOverclock,
 			// 无界 APU：强冷走 GCU 同通道 ⇒ 先按支持处理（曲线窗口再用 IsGcuConnected 兜底）
-			SupportsFanCurve = hw.FanCurveSeen || hw.WujieSmuApu,
+			// 声明里 disabled=1 的机型不提供风扇曲线入口（没有可写曲线表时界面不该露出按钮）。
+			SupportsFanCurve = !MechrevoLite.Hardware.DeclarationRuntime.Flag("fanCurve", "disabled")
+				&& (hw.FanCurveSeen || hw.WujieSmuApu || MechrevoLite.Hardware.EcFanFivePoint.InUse),
 			// 强冷是否支持由后端声明决定；具体走哪一路由 SwitchFanBoost 按后端分派。
 			SupportsFanBoost = FeatureGate.ResolveSupportOrLegacy(FeatureId.FanBoost, hw, hw.SupportsFanBoost),
 			SupportsFanSwitchSpeed = hw.SupportsFanSwitchSpeed,
@@ -564,7 +566,9 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 	public Task<bool> SetFanBoostAsync(bool on, CancellationToken ct)
 	{
 		// 宝龙达没有 GCU FanBoost 状态位，不能拿 _hw.FanBoost 判断是否已应用。
-		if (_hw.UsesBaolongda || _hw.FanBoost != on)
+		// 同理：本地 EC 通道（无 GCU）的强冷状态由 EC 位自己回答，用 GCU 的 FanBoost 字段比对
+		// 会把「要关」判成「已经是关」而整条不下发，外面的强冷就一直不灭。
+		if (_hw.UsesBaolongda || !_hw.IsGcuConnected || _hw.FanBoost != on)
 		{
 			return _service.SwitchFanBoost(on);
 		}
@@ -611,6 +615,11 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		return WinPowerPlan.SetBoost(index);
 	}
 
+	public bool SetProcessorMaxFreq(int acMhz, int dcMhz)
+	{
+		return PowerNative.SetProcessorMaxFreq(acMhz, dcMhz);
+	}
+
 	public bool SetPowerOverlay(int mode)
 	{
 		PowerOverlayResult powerOverlayResult = PowerNative.SetOverlayConfirmed(mode);
@@ -644,6 +653,18 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			int ac;
 			int dc;
 			return WinPowerPlan.TryGetBoost(out ac, out dc) ? new bool?(ac == step.Number && dc == step.Number) : ((bool?)null);
+		}
+		case PerfApplyVerify.ProcessorMaxFreq:
+		{
+			if (!PowerNative.TryGetProcessorMaxFreq(out int acNow, out int dcNow))
+			{
+				return null;
+			}
+			int wantAc = step.Number;
+			int wantDc = ((step.Curve != null && step.Curve.Length != 0) ? step.Curve[0] : step.Number);
+			bool acOk = (wantAc < 0) || (acNow == wantAc);
+			bool dcOk = (wantDc < 0) || (dcNow == wantDc);
+			return acOk && dcOk;
 		}
 		case PerfApplyVerify.RefreshRate:
 		{
@@ -691,6 +712,14 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 		if (step.Kind == PerfApplyStepKind.SwitchFirmwareSlot)
 		{
 			return await _hw.WaitForStateAsync(() => _hw.OperatingMode == 3 && _hw.CustomProfileIndex == step.Number, TimeSpan.FromMilliseconds(1200L), ct).ConfigureAwait(continueOnCapturedContext: false) || (_hw.OperatingMode == 3 && _hw.CustomProfileIndex == step.Number);
+		}
+		// 声明 noVisualSync=1 的机型：EC 视觉档回读不出真实档位（恒为 0），
+		// 拿它做验收会在每次切换等 1.2 秒后必然判"读回来对不上"⇒ 整单未切换成功、界面不高亮。
+		// ⇒ 这类机型写入成功即视为已下发（未确认），不拿回读判失败。
+		if (MechrevoLite.Hardware.DeclarationRuntime.Flag("modeSpy", "noVisualSync"))
+		{
+			Logger.WriteLine("[perfmode] 档位验收：本机声明视觉档不可读 ⇒ 写入即视为已下发（不回读判失败）");
+			return null;
 		}
 		// EC 直连：档位回读走本地 EC（GCU 不在时 OperatingMode 读不到，用它会假失败）。
 		if (_hw != null && MechrevoLite.Hardware.GcuEcMode.IsEcMode && !_hw.IsGcuConnected)

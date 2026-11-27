@@ -171,7 +171,7 @@ public static class IccHelper
 		return stem.ToLowerInvariant() switch
 		{
 			"srgb" => "sRGB",
-			"displayp3" or "p3" => "P3",
+			"displayp3" or "p3" or "dcip3" => "P3",
 			"adobergb" => "AdobeRGB",
 			_ => name
 		};
@@ -186,7 +186,7 @@ public static class IccHelper
 		return stem.ToLowerInvariant() switch
 		{
 			"srgb" => 2,
-			"displayp3" or "p3" => 3,
+			"displayp3" or "p3" or "dcip3" => 3,
 			"adobergb" => 4,
 			_ => 0
 		};
@@ -454,7 +454,7 @@ public static class IccHelper
 		}
 		catch (Exception ex)
 		{
-			Logger.WriteLine("自定义 ICC 应用异常: " + ex.Message);
+			Logger.WriteLine("ICC 应用异常: " + ex.Message);
 			return false;
 		}
 	}
@@ -496,7 +496,7 @@ public static class IccHelper
 		}
 		catch (Exception ex)
 		{
-			Logger.WriteLine("自定义 ICC 用户配置标记写入异常: " + ex.Message);
+			Logger.WriteLine("ICC 用户配置标记写入异常: " + ex.Message);
 		}
 		// 注册表自洽：注册项键名=文件名 -> spool 完整路径，并写入传统 DISPLAY 关联槽，
 		// 否则 Windows 设置-颜色配置文件按关联的文件名找不到注册项，判定无配置文件
@@ -518,7 +518,7 @@ public static class IccHelper
 		}
 		catch (Exception ex)
 		{
-			Logger.WriteLine("自定义 ICC 注册表写入异常: " + ex.Message);
+			Logger.WriteLine("ICC 注册表写入异常: " + ex.Message);
 		}
 		// 直接写 HKCU 显示器关联槽（MultiString 完整文件名）——设置-颜色管理页显示配置的关键。
 		// WcsAssociate 会把槽写成逐字符数组导致设置页丢失配置文件，故弃用。
@@ -534,19 +534,19 @@ public static class IccHelper
 					}
 				}
 			}
-			Logger.WriteLine("自定义 ICC 已应用: " + fileName);
+			Logger.WriteLine((IsFactoryIcc(fileName) ? "官方校色文件已应用: " : "自定义 ICC 已应用: ") + fileName);
 			AppConfig.Set("calib_applied_icc", fileName);
 			AppConfig.Flush();
 			return true;
 		}
 		catch (Exception ex)
 		{
-			Logger.WriteLine("自定义 ICC 关联槽写入异常: " + ex.Message);
+			Logger.WriteLine("ICC 关联槽写入异常: " + ex.Message);
 			return false;
 		}
 	}
 
-	/// <summary>取消所有自定义 ICC：对 customICC 目录内每个配置文件逐个解除关联。</summary>
+	/// <summary>取消当前关联的 ICC：清理关联槽、注册项与用户颜色目录里的副本。</summary>
 	public static void ClearAllIcc()
 	{
 		try
@@ -555,7 +555,7 @@ public static class IccHelper
 		}
 		catch (Exception ex)
 		{
-			Logger.WriteLine("取消自定义 ICC 异常: " + ex.Message);
+			Logger.WriteLine("取消 ICC 关联异常: " + ex.Message);
 		}
 	}
 
@@ -602,7 +602,7 @@ public static class IccHelper
 		}
 		catch (Exception ex)
 		{
-			Logger.WriteLine("取消自定义 ICC 注册表清理异常: " + ex.Message);
+			Logger.WriteLine("取消 ICC 关联时注册表清理异常: " + ex.Message);
 		}
 		// 清掉显示器下所有 LM 写过的关联槽；不能只按 appliedName 匹配，
 		// 否则配置里的 applied marker 丢失后会残留 000* 槽。
@@ -637,10 +637,10 @@ public static class IccHelper
 		}
 		catch (Exception ex)
 		{
-			Logger.WriteLine("取消自定义 ICC 关联槽清理异常: " + ex.Message);
+			Logger.WriteLine("取消 ICC 关联时关联槽清理异常: " + ex.Message);
 		}
 		AppConfig.Remove("calib_applied_icc");
 		AppConfig.Flush();
-		Logger.WriteLine("取消自定义 ICC 完成");
+		Logger.WriteLine("ICC 关联已取消");
 	}
 }

@@ -22,7 +22,23 @@ namespace MechrevoLite.Hardware
 				});
 				return new FanCurveApplyOutcome(FanCurveApplyStatus.SavedNotPushed);
 			}
-			bool ok = NucFanTable.TryApply(cpuTemps, cpu, gpuTemps, gpu, "应用", out string detail);
+			// 五点机型（温度轴由固件固定）：只写五个占空比字节，不碰隔离位与斜坡。
+			if (EcFanFivePoint.InUse)
+			{
+				int[] fiveDuties = EcFanFivePoint.Sample(cpuTemps, cpu);
+				bool fiveOk = EcFanFivePoint.TrySet(fiveDuties, out string fiveDetail);
+				Logger.WriteError("[gcu-ec] 五点风扇" + (fiveOk ? "已写入：" : "写入失败：") + fiveDetail);
+				PerfModeSettings fiveBefore = PerfModeStore.LoadSettings(modeId);
+				PerfModeStore.SaveSettings(modeId, fiveBefore with
+				{
+					CpuFanDuty = cpu,
+					GpuFanDuty = gpu,
+					FanCurveOn = fiveOk ? true : (fiveBefore.FanCurveOn ?? false)
+				});
+				RememberTemps(modeId, cpuTemps, gpuTemps);
+				return new FanCurveApplyOutcome(fiveOk ? FanCurveApplyStatus.Applied : FanCurveApplyStatus.SaveFailed, fiveDetail);
+			}
+			bool ok = NucFanTable.TryApply(cpuTemps, cpu, gpuTemps, gpu, "应用", out string detail, NucFanTable.GpuCurveSupported);
 			// 曲线没写进去就别再动隔离位/斜坡，避免留下半截状态（隔离位已置、表还是旧的）。
 			string isoDetail = "隔离位未改（曲线未写入）";
 			string rampDetail = "斜坡未改（曲线未写入）";

@@ -98,7 +98,9 @@ public static class PerfModeResolver
 			WindowsPowerMode = Pick<int>(before.WindowsPowerMode, after.WindowsPowerMode),
 			CpuBoost = Pick<int>(before.CpuBoost, after.CpuBoost),
 			PowerPlanGuid = (string.Equals(before.PowerPlanGuid, after.PowerPlanGuid, StringComparison.OrdinalIgnoreCase) ? null : after.PowerPlanGuid),
-			RefreshHz = Pick<int>(before.RefreshHz, after.RefreshHz)
+			RefreshHz = Pick<int>(before.RefreshHz, after.RefreshHz),
+			ProcessorMaxFreqAc = Pick<int>(before.ProcessorMaxFreqAc, after.ProcessorMaxFreqAc),
+			ProcessorMaxFreqDc = Pick<int>(before.ProcessorMaxFreqDc, after.ProcessorMaxFreqDc)
 		};
 		static T? Pick<T>(T? a, T? b) where T : struct
 		{

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -146,7 +146,40 @@ internal static class UefiGpuMux
         }
     }
 
-    /// <summary>visualMode: 0=纯核显, 1=混合, 2=独显直连。AMD/Intel 编码不同。</summary>
+        private static bool? _legacyDualModeConfirmed;
+
+    /// <summary>
+    /// 已确认为老双模模具：NVRAM 变量读到了，但 payload 小于 80 字节。
+    /// 读不到变量（权限/机型不支持）时返回 false —— ⛔ 不凭“读不到”去拦截任何写入。
+    /// </summary>
+    internal static bool IsLegacyDualModeConfirmed
+    {
+        get
+        {
+            lock (_muxGate)
+            {
+                if (_legacyDualModeConfirmed.HasValue)
+                {
+                    return _legacyDualModeConfirmed.Value;
+                }
+                bool read = TryGetPayloadInfo(out int size, out _);
+                bool confirmed = read && size > 0 && size < 80;
+                _legacyDualModeConfirmed = confirmed;
+                if (confirmed)
+                {
+                    Logger.WriteLine("[platform] NVRAM payload " + size + " 字节（<80）⇒ 按老双模模具处理：风扇表不注入，交给固件曲线");
+                }
+                else if (!read)
+                {
+                    // 没有显卡切换开关的模具本来就没有这个变量，不代表不接受风扇曲线 ⇒ 照常下发。
+                    Logger.WriteLine("[platform] 读不到 NVRAM 变量（常见于无显卡切换的模具）⇒ 按现代平台处理，风扇表照常下发");
+                }
+                return confirmed;
+            }
+        }
+    }
+
+/// <summary>visualMode: 0=纯核显, 1=混合, 2=独显直连。AMD/Intel 编码不同。</summary>
     internal static bool TryWriteColdMode(int visualMode, out string detail)
     {
         detail = "";

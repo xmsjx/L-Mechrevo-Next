@@ -154,8 +154,14 @@ internal static class FeatureGate
             new FeatureProbe(false, false, false, null, false),
             FeatureAvailability.Unsupported, BackendChannel.None, FeatureId.LogoLight);
         Check(lines, "ec-logo-usb-evidence", Facts(BackendKind.TongfangEc),
-            new FeatureProbe(false, false, false, null, true),
+            new FeatureProbe(false, false, false, null, true, IteCapability: new IteLightingCapability(0x04, false)),
             FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.LogoLight);
+        Check(lines, "ec-logo-lightbar-only", Facts(BackendKind.TongfangEc),
+            new FeatureProbe(false, false, false, null, true),
+            FeatureAvailability.Unknown, BackendChannel.None, FeatureId.LogoLight);
+        Check(lines, "gcu-logo-lightbar-only", Facts(BackendKind.TongfangGcu),
+            new FeatureProbe(false, false, false, null, true),
+            FeatureAvailability.Unknown, BackendChannel.None, FeatureId.LogoLight);
         Check(lines, "ec-lightbar-usb-evidence", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false, false, false, true),
             FeatureAvailability.Supported, BackendChannel.LocalHid, FeatureId.Lightbar);
@@ -256,7 +262,7 @@ internal static class FeatureGate
         // 同方两类 Logo：USB lettering/旧通道 vs A 面 EC Logo（MBALogo）。
         CheckReason(lines, "tongfang-logo-usb-lettering", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false, IteCapability: new IteLightingCapability(8, false)),
-            FeatureAvailability.Supported, FeatureId.LogoLight, "独立 USB Logo（lettering");
+            FeatureAvailability.Supported, FeatureId.LogoLight, "独立 USB Logo（字母形");
         CheckReason(lines, "tongfang-logo-ec-mba", Facts(BackendKind.TongfangEc),
             new FeatureProbe(false, false, false, null, false, MbaLogoSupport: true),
             FeatureAvailability.Supported, FeatureId.LogoLight, "A 面 EC Logo");
@@ -340,7 +346,7 @@ internal static class FeatureGate
 			FeatureAvailability.Unknown, BackendChannel.None);
 		Check(lines, "gcu-disconnected", Facts(BackendKind.TongfangGcu), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None);
-		Check(lines, "ec-supported", Facts(BackendKind.TongfangEc), new FeatureProbe(false, false, false, null, true),
+		Check(lines, "ec-supported", Facts(BackendKind.TongfangEc), new FeatureProbe(false, false, false, null, true, IteCapability: new IteLightingCapability(0x04, false)),
 			FeatureAvailability.Supported, BackendChannel.LocalHid);
 		Check(lines, "ec-registry-only", Facts(BackendKind.TongfangEc), new FeatureProbe(false, true, false, null, false),
 			FeatureAvailability.Unknown, BackendChannel.None);

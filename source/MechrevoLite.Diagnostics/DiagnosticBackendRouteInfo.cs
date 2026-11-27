@@ -16,6 +16,65 @@ namespace MechrevoLite.Diagnostics;
 /// </summary>
 internal static class DiagnosticBackendRouteInfo
 {
+	/// <summary>
+	/// A 面 EC Logo 线索探测：只读 0x740 项目码、0x766 支持位、0x78C 背光字节、0x7AB 模式索引，不写任何字节。
+	/// <para>单区键盘或单色白键盘可确定没有独立 A 面 Logo；其余字节只输出原始值供比对，
+	/// 不据此断言有 Logo（0x7AB bit0 的语义尚未确认，曾被误当 LED 位导致灯态异常）。</para>
+	/// </summary>
+	private static string DescribeEcLogoProbe()
+	{
+		bool okProject = AcpiDriverEc.TryReadByte(ProjectIdAddress, out byte project);
+		bool okSupport = AcpiDriverEc.TryReadByte(KeyboardSupportAddress, out byte support);
+		bool okWhite = AcpiDriverEc.TryReadByte(BacklightWhiteAddress, out byte white);
+		bool okMode = AcpiDriverEc.TryReadByte(ModeIndexAddress, out byte mode);
+		if (!okProject && !okSupport && !okWhite && !okMode)
+		{
+			return "读取失败（EC 通道不可用）";
+		}
+
+		bool singleZone = (support & 0x04) != 0;
+		bool singleColor = (white & 0x01) != 0;
+		bool projectLogo = project == 25 || project == 26;
+		bool modeLogoBit = (mode & 0x01) != 0;
+		int brightness = (mode >> 5) & 0x07;
+
+		StringBuilder sb = new StringBuilder();
+		sb.Append("0x740=").Append(okProject ? project.ToString("X2") : "??").Append("(项目码=").Append(okProject ? project.ToString() : "?")
+			.Append(") · 0x766=").Append(okSupport ? support.ToString("X2") : "??").Append("(bit2 单区键盘=").Append(okSupport && singleZone ? "是" : "否")
+			.Append(") · 0x78C=").Append(okWhite ? white.ToString("X2") : "??").Append("(bit0 单色白=").Append(okWhite && singleColor ? "是" : "否")
+			.Append(" bit1 电源轨=").Append(okWhite && (white & 0x02) != 0 ? "置位" : "清零")
+			.Append(" bit4 提交=").Append(okWhite && (white & 0x10) != 0 ? "置位" : "清零")
+			.Append(") · 0x7AB=").Append(okMode ? mode.ToString("X2") : "??").Append("(bit0 EC Logo 能力=").Append(okMode && modeLogoBit ? "有" : "无")
+			.Append(" · 亮度档=").Append(okMode ? brightness.ToString() : "?")
+			.Append(")");
+
+		string verdict;
+		if (!okSupport || !okWhite)
+		{
+			verdict = "判据不全（0x766/0x78C 读取失败）";
+		}
+		else if (singleZone || singleColor)
+		{
+			verdict = "无独立 A 面 Logo（单区或单色键盘）";
+		}
+		else if (projectLogo)
+		{
+			verdict = "项目码落在 25/26，需实机确认";
+		}
+		else
+		{
+			verdict = "0x7AB bit0=" + (modeLogoBit ? "1" : "0") + "（语义未定论，仅供参考）";
+		}
+		sb.Append(" ⇒ ").Append(verdict);
+		return sb.ToString();
+	}
+
+	// 只读探测用的 EC 地址。
+	private const int ProjectIdAddress = 0x740;
+	private const int KeyboardSupportAddress = 0x766;
+	private const int BacklightWhiteAddress = 0x78C;
+	private const int ModeIndexAddress = 0x7AB;
+
 	internal static string Build()
 	{
 		StringBuilder sb = new StringBuilder();
@@ -93,12 +152,18 @@ internal static class DiagnosticBackendRouteInfo
 			sb.AppendLine("  功能通道："
 				+ " 限充=" + FeatureGate.Get(FeatureId.ChargeLimit, hw).Channel
 				+ " · 强冷=" + FeatureGate.Get(FeatureId.FanBoost, hw).Channel
-				+ " · 风扇曲线=" + FeatureGate.Get(FeatureId.FanCurve, hw).Channel);
+				+ " · 风扇曲线=" + FeatureGate.Get(FeatureId.FanCurve, hw).Channel
+				+ " · Logo=" + FeatureGate.Get(FeatureId.LogoLight, hw).Channel);
+			FeatureDecision logoDecision = FeatureGate.Get(FeatureId.LogoLight, hw);
+			sb.AppendLine("  Logo 灯判定：" + logoDecision.State + " / " + logoDecision.Channel
+				+ " · " + logoDecision.Reason
+				+ (logoDecision.Sources != null && logoDecision.Sources.Length > 0 ? " · 证据=" + string.Join(",", logoDecision.Sources) : ""));
 			if (hw != null)
 			{
 				_ = hw.IteCapability;
 			}
 			sb.AppendLine("  ITE 能力字节：" + (hw == null ? "未查询（本次未挂载硬件）" : IteCapabilityProbe.Describe()));
+			sb.AppendLine("  EC Logo 探测（只读）：" + DescribeEcLogoProbe());
 			sb.AppendLine("  GCU 预热窗口：" + (MechrevoLite.Hardware.GcuWarmup.IsActive
 				? "进行中 · " + MechrevoLite.Hardware.GcuWarmup.Reason + " · 剩余 " + MechrevoLite.Hardware.GcuWarmup.RemainingSeconds + " 秒（期间不把 GCU 未就绪当故障）"
 				: "未激活"));

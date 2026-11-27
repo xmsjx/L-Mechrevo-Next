@@ -51,7 +51,7 @@ public partial class CpuTuningWindow : Window
         return key switch
         {
             "CpuTuneSmuReady" => "可调",
-            "CpuTuneSmuPartial" => "部分选项被 SKU 锁定",
+            "CpuTuneSmuPartial" => "部分选项受硬件限制",
             "CpuTuneUnsupported" => "本机暂不支持",
             "CpuTuneDriverMissing" => "缺少 PawnIO 驱动",
             "CpuTuneDisabled" => "Intel 调节已屏蔽（XTU 独占 MSR）",
@@ -160,6 +160,15 @@ public partial class CpuTuningWindow : Window
         row.Children.Add(apply);
 
         OptionsPanel.Children.Add(row);
+        if (!string.IsNullOrWhiteSpace(option.Note))
+        {
+            OptionsPanel.Children.Add(new TextBlock
+            {
+                Text = option.Note,
+                Style = (Style)FindResource("MutedText"),
+                Margin = new Thickness(170, 2, 0, 6)
+            });
+        }
         _rows.Add((option, slider, valueText));
     }
 
@@ -270,7 +279,7 @@ public partial class CpuTuningWindow : Window
         {
             OptionsPanel.Children.Add(new TextBlock
             {
-                Text = WpfStrings.L("每核 CO 当前被 SKU 锁定，仅显示回读值。", "Per-core CO is locked by the current SKU; readback only."),
+                Text = WpfStrings.L("当前 SKU 不支持电压调节功能，仅显示回读值。", "The current SKU does not support voltage tuning; readback only."),
                 Style = (Style)FindResource("MutedText"),
                 Margin = new Thickness(0, 4, 0, 4)
             });

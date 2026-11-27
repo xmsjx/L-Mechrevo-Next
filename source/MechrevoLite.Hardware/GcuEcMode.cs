@@ -152,7 +152,7 @@ public static class GcuEcMode
                 MechrevoLite.AppConfig.Set(DirectKey, 1);
                 MechrevoLite.AppConfig.Flush();
                 await Task.Run(() => IteLightingLocal.RefreshFromHid());
-                // 若当前处于隔离状态：EC 模式下把 GCU 服务启动类型一并禁用，开机不再自启。
+                // EC 模式下 GCU 服务停机并把启动类型改为禁用，开机不再自启。
                 try { System.ValueTuple<bool, string> pause = MechrevoLite.Helpers.OfficialConsoleIsolation.EnsureEcModeIsolation(); Logger.WriteLine("[gcu-svc] 切 EC 模式 ⇒ " + pause.Item2); } catch { }
                 try { bool notify = GcuEcExperimental.TryEnableHotkeyNotify(); Logger.WriteLine("[hotkey] 切 EC 模式 ⇒ 按键上报=" + notify); } catch { }
                 return (true, "已切换 EC 控制模式：" + (gcuStopped
@@ -167,6 +167,8 @@ public static class GcuEcMode
             MechrevoLite.AppConfig.Remove("gcu_ec_experiment");
             MechrevoLite.AppConfig.Set(DirectKey, 0);
             MechrevoLite.AppConfig.Flush();
+            // 必须先把启动类型恢复回来，否则服务仍是禁用状态，net start 会被 1058 拒掉。
+            try { System.ValueTuple<bool, string> resumeFirst = MechrevoLite.Helpers.OfficialConsoleIsolation.ResumeGcuServicesForEcMode(); Logger.WriteLine("[gcu-svc] 回 GCU 模式 ⇒ 恢复服务启动类型 " + resumeFirst.Item2); } catch { }
             // EC 模式曾停止/结束 GCUService；回 GCU 必须先拉起服务端，再拉起 Bridge。
             Run("net", "start GCUService");
             Run("net", "start GCUBridge");
@@ -185,8 +187,8 @@ public static class GcuEcMode
             });
             Logger.WriteLine("[gcu-svc] GCU 端口 13688 就绪=" + ready);
             IteLightingLocal.Invalidate();
-            // 回 GCU 模式：隔离状态下把 GCU 服务启动类型恢复回去。
-            try { System.ValueTuple<bool, string> resume = MechrevoLite.Helpers.OfficialConsoleIsolation.ResumeGcuServicesForEcMode(); MechrevoLite.Helpers.OfficialConsoleIsolation.EnsureGcuModeUiIsolation(); Logger.WriteLine("[gcu-svc] 回 GCU 模式 ⇒ " + resume.Item2); } catch { }
+            // 回 GCU 模式：已开启隔离时只关官方界面进程，服务保持运行。
+            try { MechrevoLite.Helpers.OfficialConsoleIsolation.EnsureGcuModeUiIsolation(); } catch { }
             return (true, "已切换 GCU 模式：已请求启动 GCUService / GCUBridge");
         }
         catch (Exception ex)

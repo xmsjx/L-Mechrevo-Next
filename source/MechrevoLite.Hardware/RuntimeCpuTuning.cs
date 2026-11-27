@@ -29,7 +29,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 {
 	internal static readonly object SyncRoot = new object();
 
-	private readonly PawnIOWrapper _io = new PawnIOWrapper();
+	private PawnIOWrapper _io = new PawnIOWrapper();
 
 	private RyzenSmuService? _smu;
 
@@ -269,7 +269,10 @@ internal sealed class RuntimeCpuTuning : IDisposable
 						//     "写前基线 + 逐核回读 + 不一致则全量回写"兜住（那是安全网，不是档位）。
 						// ==========================================================================
 						(bool, uint)? perCoreCommand = RyzenSmuService.CurvePerCoreCommand(_smu.CpuCodeName);
-						bool perCoreWrite = skuRejection == null && perCoreCommand.HasValue;
+						// SKU 层级只作为界面提示，不再否决写入：不支持电压调节的 SKU 由固件自己拒绝，
+// 软件照常下发，避免把「厂商声明不支持」当成「一定不能写」。
+					bool perCoreWrite = perCoreCommand.HasValue;
+					string? skuNote = (skuRejection == null) ? null : "当前 SKU 不支持电压调节功能";
 						bool perCoreReadback = RyzenSmuService.SupportsPerCoreReadback(_smu.CpuCodeName);
 						if (perCoreWrite)
 						{
@@ -282,7 +285,7 @@ internal sealed class RuntimeCpuTuning : IDisposable
 						}
 						else if (perCoreCommand.HasValue)
 						{
-							text2 += "; per-core CO write: present in the SMU reference but locked on this SKU";
+							text2 += "; per-core CO write: available (the current SKU does not declare voltage tuning support; writes are still sent)";
 						}
 						else
 						{
@@ -295,9 +298,12 @@ internal sealed class RuntimeCpuTuning : IDisposable
 						// 2026-10-10 percorenolog：CanWrite 现在还接受**每核**写路径 —— 只写每核
 						// （CurveCommand 无值）的代号也能在 UI 上给出 CO 输入口，否则"删掉全核框"之后
 						// 那些代号会连一个输入口都没有。SKU 层级仍然是否决项（与改前同一把锁）。
-						bool coWritable = skuRejection == null && (curveCommandPresent || perCoreCommand.HasValue);
+						bool coWritable = curveCommandPresent || perCoreCommand.HasValue;
         (int coMin, int coMax) = CoRange();
-        optionList.Add(new CpuTuningOption("amd-co", "CpuTuneCurve", coMin, coMax, "CO", current, CanWrite: coWritable));
+        // perCoreWrite 必须真的传进选项对象：漏传时 PerCoreWrite 恒 false，
+        // 窗口会把矩阵判成"被 SKU 锁定"、写入路径也拒绝下发每核 CO。
+        optionList.Add(new CpuTuningOption("amd-co", "CpuTuneCurve", coMin, coMax, "CO", current,
+            CanWrite: coWritable, CoreReadback: coreMargins, PerCoreWrite: perCoreWrite, Note: skuNote));
 					}
 					bool clockAvailable = RyzenSmuService.SupportsClock(_smu.CpuCodeName);
 					if (clockAvailable)
@@ -1073,8 +1079,10 @@ internal sealed class RuntimeCpuTuning : IDisposable
 		{
 			// 2026-10-10 percorenolog：只可能因为**两条之一**——(a) 该代号在 SMU 参考里没有每核写命令，
 			// 或 (b) SKU 层级没放行。⛔ 不再是"未实测/未批准"的意思（那个分档已按用户要求删除）。
+			// 两种可能都要写清：代号在协议里有每核命令，但能力对象上的每核写标志没被置上
+			// （SKU 否决，或探测时没把该标志传进能力对象）。不区分就会把"漏传标志"误报成"被 SKU 锁"。
 			reason = RyzenSmuService.SupportsPerCoreCurve(_smu.CpuCodeName)
-				? "amd-co is not writable on this SKU (per-core CO route locked by the SKU tier)"
+				? "amd-co per-core write is not enabled for this probe (SKU tier rejected it, or the probe did not pass the per-core flag)"
 				: "this codename has no per-core CO write command in the SMU reference";
 			return false;
 		}
@@ -1552,7 +1560,10 @@ internal sealed class RuntimeCpuTuning : IDisposable
 	//   * 没保存过任何值 ⇒ 一条命令都不发；
 	//   * 能力检查不过（Intel / 无可写路径）⇒ 一条命令都不发，只记日志；
 	//   * FMax 段复用 AutoApplyFMax：回读值与保存值相同时它自己就不写；
-	//   * 只重放用户保存过的值，不做任何推算。
+	//   * 只重放用户保存过的值，不做任何推算；
+	//   * 每次重放前先重建 PawnIO 句柄与 SMU 会话（休眠恢复后旧句柄不可用）；
+	//   * 第一次写失败时等 15 s 重连再试一次，两次都不行才如实报失败；
+	//   * 结论按"全部成功才算成功"合并，避免每核 CO 失败被 FMax 成功掩盖。
 	// ⚠️ 关机守卫（上次非正常关机）不参与：唤醒不是重启，不会形成"不稳定值→重启"的循环。
 	// ------------------------------------------------------------------------------------------
 	internal static CpuTuningResult ReapplyAfterResume()
@@ -1560,8 +1571,58 @@ internal sealed class RuntimeCpuTuning : IDisposable
 		return Instance.ReapplySavedAfterResume();
 	}
 
+	// 唤醒重放的尝试次数与间隔：休眠恢复后驱动/固件初始化可能滞后于第一次写，
+	// 因此第一次失败不算结论，等一会儿重连再试一次。
+	private const int ResumeReapplyAttempts = 2;
+	private const int ResumeReapplyRetryDelayMs = 15000;
+
+	// 重建驱动句柄与 SMU 会话：休眠 / 睡眠恢复后硬件重新初始化，旧句柄不再可用，
+	// 而连接与初始化都带"已连接就直接返回"的短路，所以必须显式释放后再重建。
+	internal void ResetDeviceConnection()
+	{
+		lock (SyncRoot)
+		{
+			try
+			{
+				_smu?.Dispose();
+			}
+			catch
+			{
+			}
+			_smu = null;
+			try
+			{
+				_io.Dispose();
+			}
+			catch
+			{
+			}
+			_io = new PawnIOWrapper();
+			_intel = null;
+			_fmax = null;
+			Logger.WriteLine("[cpu-co] 驱动连接已重置（唤醒重放前重建 PawnIO 句柄与 SMU 会话）");
+		}
+	}
+
 	private CpuTuningResult ReapplySavedAfterResume()
 	{
+		CpuTuningResult result = new CpuTuningResult(Success: false, Verified: false, "resume re-apply did not run.");
+		for (int attempt = 1; attempt <= ResumeReapplyAttempts; attempt++)
+		{
+			result = ReapplySavedAfterResumeOnce(out bool attempted);
+			if (result.Success || !attempted || attempt >= ResumeReapplyAttempts)
+			{
+				return result;
+			}
+			Logger.WriteError($"[cpu-co] 唤醒重放第 {attempt} 次未成功，{ResumeReapplyRetryDelayMs} ms 后重连再试：{result.Detail}");
+			Thread.Sleep(ResumeReapplyRetryDelayMs);
+		}
+		return result;
+	}
+
+	private CpuTuningResult ReapplySavedAfterResumeOnce(out bool attempted)
+	{
+		attempted = false;
 		lock (SyncRoot)
 		{
 			if (!AppConfig.Is(PerCoreAutoApplyKey))
@@ -1577,6 +1638,8 @@ internal sealed class RuntimeCpuTuning : IDisposable
 			Stopwatch stopwatch = Stopwatch.StartNew();
 			try
 			{
+				// 休眠 / 睡眠恢复后旧句柄不可用，先重建再探并写。
+				ResetDeviceConnection();
 				Probe();
 				int coreCount = PerCoreCapacity;
 				IReadOnlyList<int?> saved = LoadSavedPerCore(coreCount);
@@ -1588,8 +1651,9 @@ internal sealed class RuntimeCpuTuning : IDisposable
 					anySavedCore |= margin.HasValue;
 				}
 				string detail = "";
-				bool success = false;
-				bool verified = false;
+				bool anyWrite = false;
+				bool success = true;
+				bool verified = true;
 				if (!anySavedCore)
 				{
 					Logger.WriteLine("[cpu-co] 唤醒重放：没有保存过每核值 ⇒ 不下发");
@@ -1604,20 +1668,28 @@ internal sealed class RuntimeCpuTuning : IDisposable
 					Logger.WriteLine($"[cpu-co] 唤醒重放：写回每核 CO [{string.Join(", ", values)}]");
 					CpuTuningResult coResult = ApplyPerCore(values);
 					Logger.WriteLine($"[cpu-co] 唤醒重放：每核 CO -> success={coResult.Success} verified={coResult.Verified} detail={coResult.Detail}");
-					success |= coResult.Success;
-					verified |= coResult.Verified;
+					anyWrite = true;
+					success &= coResult.Success;
+					verified &= coResult.Verified;
 					detail = coResult.Detail;
 				}
 				int? savedFMax = LoadSavedFMax();
 				if (savedFMax.HasValue)
 				{
 					CpuTuningResult fmaxResult = AutoApplyFMax(savedFMax.Value, simulate: false, stopwatch, out string fmaxSummary, out bool fmaxAttempted, "唤醒重放");
-					success |= fmaxResult.Success;
-					verified |= fmaxResult.Verified;
+					anyWrite |= fmaxAttempted;
+					success &= fmaxResult.Success;
+					verified &= fmaxResult.Verified;
 					detail = (detail.Length == 0 ? "" : detail + " || ") + fmaxSummary + (fmaxAttempted ? "" : " (未下发)");
 				}
 				stopwatch.Stop();
-				Logger.WriteLine($"[cpu-co] 唤醒重放完成：success={success} verified={verified} elapsed={stopwatch.ElapsedMilliseconds} ms detail={detail}");
+				attempted = anyWrite;
+				if (!anyWrite)
+				{
+					success = false;
+					verified = false;
+				}
+				Logger.WriteLine($"[cpu-co] 唤醒重放完成：success={success} verified={verified} written={anyWrite} elapsed={stopwatch.ElapsedMilliseconds} ms detail={detail}");
 				return new CpuTuningResult(success, verified, detail.Length == 0 ? "resume re-apply: nothing to write." : detail);
 			}
 			catch (Exception ex)

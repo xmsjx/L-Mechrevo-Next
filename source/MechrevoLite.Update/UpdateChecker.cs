@@ -216,6 +216,15 @@ internal static class UpdateChecker
 		});
 		// 优先更新包；没有更新包才回退安装包。
 		JObject? chosenAsset = updateAsset ?? setupAsset;
+		string? setupName = Clean(setupAsset?.Value<string>("name"));
+		string? setupUrl = Clean(setupAsset?.Value<string>("browser_download_url"));
+		long? setupSize = setupAsset?.Value<long?>("size");
+		string? setupSha = null;
+		string? setupDigest = Clean(setupAsset?.Value<string>("digest"));
+		if (setupDigest != null && setupDigest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase))
+		{
+			setupSha = setupDigest.Substring(7);
+		}
 		string? downloadUrl = Clean(chosenAsset?.Value<string>("browser_download_url"));
 		string? digest = Clean(chosenAsset?.Value<string>("digest"));
 		string? sha256 = null;
@@ -252,7 +261,8 @@ internal static class UpdateChecker
 		bool available = IsNewerGitHub(latest, currentVersion);
 		return new UpdateInfo(currentVersion, latest, "github", false, available, date, notes,
 			chosenName, size, sha256, downloadUrl, page, null,
-			externalGcuName, externalGcuUrl, externalGcuSize, externalGcuSha256);
+			externalGcuName, externalGcuUrl, externalGcuSize, externalGcuSha256,
+			setupName, setupUrl, setupSize, setupSha);
 	}
 
 	internal static async Task<UpdateInfo?> CheckAsync(bool force = false, string? versionOverride = null)

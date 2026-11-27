@@ -375,7 +375,14 @@ public static class OfficialConsoleIsolation
 				Logger.WriteLine($"Official console restore: restored={restoreOutcome.Restored} skipped={restoreOutcome.Skipped} failed={restoreOutcome.Failed} expected={restoreOutcome.Expected}");
 				if (restoreOutcome.IsSilentNoOp)
 				{
-					return new OperationResult(Success: false, string.Format(Strings.OffConsoleNothingRestored, restoreOutcome.Expected, restoreOutcome.Skipped, restoreOutcome.Failed), 0);
+					// 已经没有实际被改动的项（原厂控制台重装过、启动项自己回来了等）时，隔离标记必须一起清掉：
+					// 否则按钮永远停在「取消隔离」，用户再也点不掉，状态文案也会一直挂着「GCU 服务已停用」。
+					snapshot.Isolated = false;
+					snapshot.Services.Clear();
+					snapshot.UpdatedUtc = DateTime.UtcNow;
+					SaveSnapshot(snapshot);
+					Logger.WriteLine("Official console restore: nothing to restore, isolation flag cleared (expected=" + restoreOutcome.Expected + " skipped=" + restoreOutcome.Skipped + ")");
+					return new OperationResult(Success: true, Strings.OffConsoleRestoreComplete, 0);
 				}
 				if (restoreOutcome.Failed > 0)
 				{
@@ -384,6 +391,9 @@ public static class OfficialConsoleIsolation
 					return new OperationResult(Success: false, string.Format(Strings.OffConsolePartialRestoreFailed, restoreOutcome.Restored, restoreOutcome.Failed), restoreOutcome.Restored);
 				}
 				snapshot.Isolated = false;
+				// 服务已经按记录的启动类型还原过，条目必须一起清掉：
+				// 否则 GetStatus 仍按「Services 有记录」报告「GCU 服务已停用」，界面文案永远挂在隔离状态。
+				snapshot.Services.Clear();
 				snapshot.UpdatedUtc = DateTime.UtcNow;
 				SaveSnapshot(snapshot);
 				return new OperationResult(Success: true, Strings.OffConsoleRestoreComplete, restoreOutcome.Restored);
@@ -1484,7 +1494,7 @@ public static class OfficialConsoleIsolation
 	public static bool IsIsolated => TryReadSnapshot()?.Isolated ?? false;
 
 	/// <summary>
-	/// EC 模式对齐（启动与运行期都可调用）：关掉官方界面进程，GCU 服务停止并改手动。
+	/// EC 模式对齐（启动与运行期都可调用）：关掉官方界面进程，GCU 服务停止并把启动类型改为禁用（开机不再自启）。
 	/// <para>⛔ 不看"已经处理过"的标记：官方控制台会自己重启，这里每次都按实际状态核对。</para>
 	/// </summary>
 	public static (bool Ok, string Detail) EnsureEcModeIsolation()
@@ -1498,13 +1508,14 @@ public static class OfficialConsoleIsolation
 				if (entries.Count == 0)
 				{
 					CaptureServices(entries);
-					entries.RemoveAll((ServiceEntry e) => e.StartMode < 0 || e.StartMode == 3);
+					// 已是禁用(4)的不记录：那是隔离动作留下的状态，它的原始启动类型由隔离快照负责还原。
+					entries.RemoveAll((ServiceEntry e) => e.StartMode < 0 || e.StartMode == 4);
 				}
 				int touched = 0;
 				foreach (ServiceEntry entry in entries)
 				{
 					RunSc("stop " + entry.Name);
-					if (SetServiceStartMode(entry.Name, 3))
+					if (SetServiceStartMode(entry.Name, 4))
 					{
 						touched++;
 					}
@@ -1578,7 +1589,7 @@ public static class OfficialConsoleIsolation
 			return string.Empty;
 		}
 	}
-	/// <summary>EC 模式：把 GCU 服务改为手动并停止，避免其抢按键与 EC 寄存器；原启动类型记录在文件里以便恢复。</summary>
+	/// <summary>EC 模式：把 GCU 服务改为禁用并停止，避免其开机自启、抢按键与 EC 寄存器；原启动类型记录在文件里以便恢复。</summary>
 	public static (bool Ok, string Detail) PauseGcuServicesForEcMode()
 	{
 		lock (StateLock)
@@ -1588,19 +1599,19 @@ public static class OfficialConsoleIsolation
 				// 不因"处理过"就直接返回：官方控制台可能自己重开，这里按实际状态重新对齐。
 				if (File.Exists(EcPausePath) && !IsOfficialUiRunning() && !GcuRuntimeRunning())
 				{
-					return (true, "已是手动并停止");
+					return (true, "已是禁用并停止");
 				}
 				List<ServiceEntry> entries = new List<ServiceEntry>();
 				CaptureServices(entries);
-				entries.RemoveAll((ServiceEntry e) => e.StartMode < 0 || e.StartMode == 3);
+				entries.RemoveAll((ServiceEntry e) => e.StartMode < 0 || e.StartMode == 4);
 				int changed = 0;
 				foreach (ServiceEntry entry in entries)
 				{
 					RunSc("stop " + entry.Name);
-					if (SetServiceStartMode(entry.Name, 3))
+					if (SetServiceStartMode(entry.Name, 4))
 					{
 						changed++;
-						Logger.WriteLine("[gcu-svc] EC 模式 ⇒ 服务 " + entry.Name + " 改为手动并停止（原=" + entry.StartMode + "）");
+						Logger.WriteLine("[gcu-svc] EC 模式 ⇒ 服务 " + entry.Name + " 改为禁用并停止（原=" + entry.StartMode + "）");
 					}
 				}
 				SaveEcPauseState(entries);

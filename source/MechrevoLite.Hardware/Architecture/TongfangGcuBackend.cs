@@ -12,7 +12,18 @@ internal sealed class TongfangGcuBackend : IBackendModule
 	public BackendFeatureDeclaration Declare(MachineFacts facts, FeatureProbe probe)
 	{
 		FeatureDeclaration logo;
-		if (!probe.GcuConnected)
+		int logoOverride = IteLightingLocal.LogoChannelOverride;
+		if (logoOverride == 1)
+		{
+			logo = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+				"用户指定 USB Logo 通道", new[] { "settings:logo_channel=usb" });
+		}
+		else if (logoOverride == 2)
+		{
+			logo = new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.Ec,
+				"用户指定 A 面 EC Logo", new[] { "settings:logo_channel=ec" });
+		}
+		else if (!probe.GcuConnected)
 		{
 			logo = new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
 				"GCU 未连接", new string[0]);
@@ -20,16 +31,13 @@ internal sealed class TongfangGcuBackend : IBackendModule
 		else
 		{
     // 同方两类 Logo：USB lettering/旧 Logo 通道属独立灯；MBALogo 属 A 面 EC Logo（与灯带同一路）。
-    if (probe.IteCapability is { } gcuIteLogo)
+    if (probe.IteCapability is { } gcuIteLogo && (gcuIteLogo.LetteringLogo || gcuIteLogo.Logo))
     {
-        logo = gcuIteLogo.NewLogo
+        logo = gcuIteLogo.LetteringLogo
             ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
-                "独立 USB Logo（lettering 新通道）", new[] { "usb:IteCapability.NewLogo" })
-            : gcuIteLogo.Logo
-                ? new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
-                    "独立 USB Logo（旧通道）", new[] { "usb:IteCapability.Logo" })
-                : new FeatureDeclaration(FeatureAvailability.Unknown, BackendChannel.None,
-                    "ITE 能力字节无 Logo 通道", new string[0]);
+                "独立 USB Logo（字母形）", new[] { "usb:IteCapability.LetteringLogo" })
+            : new FeatureDeclaration(FeatureAvailability.Supported, BackendChannel.LocalHid,
+                "独立 USB Logo（旧通道）", new[] { "usb:IteCapability.Logo" });
     }
     else if (probe.MbaLogoSupport == true)
     {

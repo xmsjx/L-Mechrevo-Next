@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace MechrevoLite.Hardware;
 
-/// <summary>EC 实验模式下的键盘灯类型。</summary>
+/// <summary>EC 模式下的键盘灯类型。</summary>
 internal enum GcuEcKeyboardKind
 {
     None,
@@ -14,9 +14,9 @@ internal enum GcuEcKeyboardKind
 }
 
 /// <summary>
-/// 同方 GCU 机型 EC 实验模式（GCU 离线）的键盘灯分流。
+/// 同方 GCU 机型 EC 模式（GCU 离线）的键盘灯分流。
 /// 判定顺序：HID 单键 → HID 四分区 → EC 单区（0x766 bit2）→ EC 白光 → 无。
-/// <para>只有 EC 实验首页启动后（<see cref="MarkActive"/>）才生效；GCU 路由下 <see cref="Active"/> 恒为 false，
+/// <para>只有 EC 首页启动后（<see cref="MarkActive"/>）才生效；GCU 路由下 <see cref="Active"/> 恒为 false，
 /// 所有调用方都先判 Active，GCU 的键盘灯逻辑不受影响。</para>
 /// <para>HID 单键与 GCU 模式共用 KeyboardRgb 路径（本来就不经过 GCU）。</para>
 /// </summary>
@@ -35,7 +35,7 @@ internal static class GcuEcKeyboard
     private static volatile bool _active;
     private static GcuEcKeyboardKind _kind = GcuEcKeyboardKind.None;
 
-    /// <summary>EC 实验首页已接管（GCU 离线）。</summary>
+    /// <summary>EC 首页已接管（GCU 离线）。</summary>
     internal static bool Active => _active && GcuEcExperimental.Enabled;
 
     internal static GcuEcKeyboardKind Kind => _kind;
@@ -50,14 +50,14 @@ internal static class GcuEcKeyboard
     internal static bool HasControllableKeyboard => Active
         && _kind is GcuEcKeyboardKind.HidPerKey or GcuEcKeyboardKind.EcSingleZone or GcuEcKeyboardKind.EcWhite;
 
-    /// <summary>键盘类型已探测过（不看 EC 实验开关）⇒ 门控可据此给出确定结论。</summary>
+    /// <summary>键盘类型已探测过（不看 EC 模式开关）⇒ 门控可据此给出确定结论。</summary>
     internal static bool KindProbed => _active;
 
-    /// <summary>已探测且本程序能控制键盘灯（不看 EC 实验开关）。</summary>
+    /// <summary>已探测且本程序能控制键盘灯（不看 EC 模式开关）。</summary>
     internal static bool ControllableProbed => _active
         && _kind is GcuEcKeyboardKind.HidPerKey or GcuEcKeyboardKind.EcSingleZone or GcuEcKeyboardKind.EcWhite;
 
-    /// <summary>EC 实验首页启动时调用一次：探测键盘类型并打开分流。</summary>
+    /// <summary>EC 首页启动时调用一次：探测键盘类型并打开分流。</summary>
     internal static void MarkActive()
     {
         lock (Gate)
@@ -191,9 +191,10 @@ internal static class GcuEcKeyboard
         on = false;
         if (IsEcSingleZone)
         {
-            if (NucKeyboardLighting.TryReadBrightness(out int level))
+            // 亮度字节和颜色通道一起判：只看亮度字节时，灯亮着也可能读到 0 ⇒ 开关显示成关。
+            if (NucKeyboardLighting.TryReadState(out bool onNow, out _))
             {
-                on = level > 0;
+                on = onNow;
                 return true;
             }
             return false;
@@ -259,9 +260,17 @@ internal static class GcuEcKeyboard
     /// <summary>Fn 亮度键：EC 单区 0~4 档；EC 白光 0~2 档。</summary>
     internal static bool ApplyHotkeyBrightness(int level)
     {
+        // 声明 hotkey=0 的机型：亮度键交给固件自己处理，软件不介入（避免覆盖固件已写好的亮度）。
+        if (string.Equals(DeclarationRuntime.Param("keyboardBacklight", "hotkey")?.Trim(), "0", StringComparison.Ordinal))
+        {
+            Logger.WriteErrorIfChanged("kbd-hotkey-skip", "[kbd-ec] 亮度键跳过（该机型由固件自管）→ 上报档位 " + level);
+            return true;
+        }
         if (IsEcWhite)
         {
-            int white = Math.Clamp(level, 0, 2);
+            // 亮度键是 0~4 档，白光只有关/暗/亮三态：0 => 关，1~2 => 暗，3~4 => 亮。
+            // （原来直接夹到 0~2，导致 2/4 被当成"亮"，中间那一档看起来没反应。）
+            int white = (level <= 0) ? 0 : ((level >= 3) ? 2 : 1);
             bool ok = ApplyWhite(white > 0, Math.Max(1, white));
             if (ok && white > 0)
             {
@@ -289,9 +298,12 @@ internal static class GcuEcKeyboard
             return false;
         }
         bool ok = on
-            ? EcKeyboardLight.TryApply(true, Math.Clamp(level1to2, 1, 2))
+            ? EcKeyboardLight.TryApply(true, Math.Clamp(level1to2, 1, EcKeyboardLight.MaxBrightnessLevel))
             : EcKeyboardLight.TrySetPower(false);
-        EcTriggerByte.TryApply(EcTriggerByte.Latch, 0);
+        if (EcKeyboardLight.LatchEnabled)
+        {
+            EcTriggerByte.TryApply(EcTriggerByte.Latch, 0);
+        }
         Logger.WriteError("[gcu-ec-kbd] EC 白光 on=" + on + " level=" + level1to2 + " ⇒ " + (ok ? "OK" : "FAIL"));
         return ok;
     }

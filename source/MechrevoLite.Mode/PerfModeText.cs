@@ -56,6 +56,8 @@ internal static class PerfModeText
 			return Strings.ModeTunePowerMode;
 		case PerfApplyStepKind.ApplyRefreshRate:
 			return Strings.ModeTuneRefresh;
+		case PerfApplyStepKind.ApplyProcessorMaxFreq:
+			return "处理器最大频率";
 		case PerfApplyStepKind.WriteFirmwareField:
 			return step.WireKey switch
 			{

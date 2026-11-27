@@ -489,6 +489,25 @@ public static class HardwareControl
 
 	public static int cpuFrequency;
 
+	/// <summary>本轮采样是否已由性能计数器给出实时频率（厂商报文不该覆盖它）。</summary>
+	private static bool cpuFreqLiveThisRound;
+
+	/// <summary>上次记录的频率来源，用于"换源才写日志"。</summary>
+	private static string _cpuFreqSource = "";
+
+	/// <summary>频率来源/数值日志：换源立刻写，同源同值时每分钟一条，避免每秒刷屏。</summary>
+	private static void NoteCpuFreqSource(string source, int mhz)
+	{
+		string line = "[cpu-freq] 源=" + source + " " + mhz + "MHz";
+		if (!string.Equals(_cpuFreqSource, source, StringComparison.Ordinal))
+		{
+			_cpuFreqSource = source;
+			Logger.WriteLine(line);
+			return;
+		}
+		Logger.WriteLineThrottled("cpu-freq", line, 60000);
+	}
+
 	public static int gpuCoreFreq;
 
 	/// <summary>显存频率（MHz；0 = 未知）。由本地采样泵刷新，界面只读快照。</summary>
@@ -1845,16 +1864,25 @@ public static class HardwareControl
 		{
 		}
 		// ── ⑤ CPU 频率：⭐ LHM 优先（⭐ 本方法上方已有同源采样 ✅）⇒ ⭐ 读不到才用厂商 ✅ ──
+		//   ⚠️ 厂商给的是"状态报文里的值"，不一定跟着负载走（EC 直连机型会停住）；
+		//      ⇒ ⭐ 本轮已有性能计数器实时值（任务管理器同源）时，不让厂商值盖掉它 ✅
 		try
 		{
 			float? lhmCpuClock = lhmMonitor.CpuClockMhz;
-			if (lhmCpuClock.HasValue && lhmCpuClock.Value > 0f)
+			if (cpuFreqLiveThisRound)
+			{
+				// ⭐ 性能计数器（任务管理器同源）本轮已给值 ⇒ 保留它：
+				//   LHM 的 CPU 时钟在部分平台上是个不跟着负载走的固定值，盖上去就"卡住"了。
+			}
+			else if (lhmCpuClock.HasValue && lhmCpuClock.Value > 0f)
 			{
 				cpuFrequency = (int)Math.Round(lhmCpuClock.Value);
+				NoteCpuFreqSource("LHM", cpuFrequency);
 			}
 			else if (hw.CpuFrequency > 0)
 			{
 				cpuFrequency = hw.CpuFrequency;
+				NoteCpuFreqSource("厂商报文", cpuFrequency);
 			}
 		}
 		catch
@@ -2619,10 +2647,13 @@ public static class HardwareControl
 		// 由 Overlay 的 1000ms Timer 驱动（每次 Tick 都经 ReadSensorsOverlay → SampleLocalPower）。
 		TryStep(delegate
 		{
+			cpuFreqLiveThisRound = false;
 			int? perfFreq = cpuFreqSampler?.Sample();
 			if (perfFreq.HasValue && perfFreq.Value > 0)
 			{
 				cpuFrequency = perfFreq.Value;
+				cpuFreqLiveThisRound = true;
+				NoteCpuFreqSource("性能计数器", cpuFrequency);
 			}
 		}, "cpu-freq-sample");
 		// ⭐⭐ 2026-10-18（机主：CPU/GPU 占用率显示不对）：⭐ **CPU 占用率本地采样** ✅
@@ -2755,9 +2786,11 @@ public static class HardwareControl
 		//      「⭐ 接 传感器如果 LM 自带的那个 dll 能读温度**优先用 LM 的传感器**，⭐ 不能的再接」
 		//      ⇒ ⭐ **先试 LHM**（⭐ 我们自带的 LibreHardwareMonitor ✅）⇒ ⭐ 读不到才用宝龙达功能号 22 ✅
 		ApplySensorPriority(lhmMonitor);
-		if (num5.HasValue && num5.Value > 0f)
+		// 同上：性能计数器已给实时值就不再让 LHM 覆盖（调顺序会绕开上面的优先级判断）。
+		if (!cpuFreqLiveThisRound && num5.HasValue && num5.Value > 0f)
 		{
 			cpuFrequency = (int)num5.Value;
+			NoteCpuFreqSource("LHM", cpuFrequency);
 		}
 		float? gpuPowerViaNvml = null;
 		(long, long)? memoryViaNvml = null;
@@ -2831,27 +2864,24 @@ public static class HardwareControl
 		{
 			if (AdlPowerReader.TryRead(out float adlPower, out string adlSource))
 			{
-				// 部分 ADL 版本在 APU 上按 0.1W 上报（例如 400 实为 40.0W）；核显功耗不可能 >200W
-				string adlUnitNote = "";
-				if (adlPower > 200f)
+				// 上限只用来挡「明显不是功耗」的读数（如 400/975 这类原始值），不是核显功耗上限：
+				// 核显短时冲高是正常的（780M 一类可短暂到 ~65W），留足余量到 150W。
+				// ⛔ 不做单位换算猜测：按 0.1W 折算会折出 40/60/97.5W 这种伪值，宁可显示「—」。
+				bool adlDiscarded = false;
+				if (adlPower > 150f)
 				{
-					float converted = adlPower / 10f;
-					if (converted <= 200f)
-					{
-						adlUnitNote = "（原始值疑似 0.1W 单位 ⇒ 除以 10）";
-						adlPower = converted;
-					}
-					else
-					{
-						Logger.WriteLine("[gpu-power] ⛔ ADL 核显功耗读数不可信（" + adlPower.ToString("F1") + "W，超出核显合理上限）⇒ 丢弃");
-						adlPower = 0f;
-					}
+					Logger.WriteLine("[gpu-power] ⛔ ADL 核显功耗读数不可信（" + adlPower.ToString("F1") + "W，超出核显合理上限）⇒ 丢弃，不参与显示");
+					adlDiscarded = true;
+					adlPower = 0f;
 				}
 				if (adlPower > 0f)
 				{
 					gpuPower = adlPower;
 				}
-				string adlSelected = "[gpu-power] AMD 核显功耗来源=" + adlSource + " ⇒ " + adlPower.ToString("F1") + "W" + adlUnitNote + "（优先于 LHM）";
+				// 丢弃时不要打「⇒ 0.0W」，那看起来像一个读数；直接写明没被采用。
+				string adlSelected = adlDiscarded
+					? "[gpu-power] AMD 核显功耗：ADL 读数未采用（" + adlSource + "，超出核显合理上限）⇒ 功耗显示「—」"
+					: "[gpu-power] AMD 核显功耗来源=" + adlSource + " ⇒ " + adlPower.ToString("F1") + "W（LHM 无值时的兜底）";
 				if (Logger.TryMarkChanged("gpu-power-adl-selected", adlSelected))
 				{
 					Logger.WriteError(adlSelected);

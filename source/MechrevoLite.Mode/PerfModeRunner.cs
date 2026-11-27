@@ -125,7 +125,9 @@ public static class PerfModeRunner
 			PerfApplyStepKind.ApplyFanBoost => backend.SetFanBoostAsync(step.Number == 1, ct), 
 			PerfApplyStepKind.ApplyRefreshRate => backend.SetRefreshRateAsync(step.Number, ct), 
 			PerfApplyStepKind.ApplyPowerPlan => Task.FromResult(backend.SetPowerPlan(step.Value)), 
-			PerfApplyStepKind.ApplyCpuBoost => Task.FromResult(backend.SetCpuBoost(step.Number)), 
+			PerfApplyStepKind.ApplyCpuBoost => Task.FromResult(backend.SetCpuBoost(step.Number)),
+			PerfApplyStepKind.ApplyProcessorMaxFreq => Task.FromResult(backend.SetProcessorMaxFreq(step.Number,
+				(step.Curve != null && step.Curve.Length != 0) ? step.Curve[0] : step.Number)), 
 			PerfApplyStepKind.ApplyPowerOverlay => Task.FromResult(backend.SetPowerOverlay(step.Number)), 
 			_ => throw new ArgumentOutOfRangeException("step", step.Kind, "unknown apply step"), 
 		};

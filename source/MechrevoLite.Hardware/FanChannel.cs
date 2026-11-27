@@ -79,6 +79,13 @@ namespace MechrevoLite.Hardware
             }
             try
             {
+                // 声明表给了本机转速字地址就按它读；读不到再走下面的机型分支（不改变既有通路）。
+                if (EcFanRpm.TryRead(out int declaredMain, out int declaredSecond))
+                {
+                    mainRpm = declaredMain;
+                    secondaryRpm = declaredSecond;
+                    return true;
+                }
                 switch (FamilyOf(hw))
                 {
                     case Family.BaolongdaLocal:

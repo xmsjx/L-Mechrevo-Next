@@ -62,6 +62,54 @@ internal static class NucKeyboardLighting
         return true;
     }
 
+    /// <summary>
+    /// 读单区键盘的真实灯态：亮度字节和颜色通道合起来判断。
+    /// <para>有些机器上亮度字节不跟随灯态（灯明明亮着，0x78C 却读到 0x00），
+    /// 单看亮度会把开着的灯判成关；电源禁用位没置时，颜色通道非零即视为亮。</para>
+    /// </summary>
+    internal static bool TryReadState(out bool on, out int level)
+    {
+        on = false;
+        level = 0;
+        if (!AcpiDriverEc.TryReadByte(AddressBacklightWhite, out byte value))
+        {
+            return false;
+        }
+        if ((value & 0x02) != 0)
+        {
+            // 电源禁用位：固件明确表示灯是关的，不再看颜色。
+            return true;
+        }
+        level = (value >> 4) switch
+        {
+            0x02 or 0x03 => 1,
+            0x04 or 0x05 => 2,
+            0x06 or 0x07 => 3,
+            0x08 or 0x09 => 4,
+            _ => 0
+        };
+        on = level > 0 || HasColorOutput();
+        return true;
+    }
+
+    /// <summary>颜色通道是否还有内容（RGB 分量或呼吸色码非零）。</summary>
+    private static bool HasColorOutput()
+    {
+        if (AcpiDriverEc.TryReadByte(AddressRgbRed, out byte red) && red != 0)
+        {
+            return true;
+        }
+        if (AcpiDriverEc.TryReadByte(AddressRgbGreen, out byte green) && green != 0)
+        {
+            return true;
+        }
+        if (AcpiDriverEc.TryReadByte(AddressRgbBlue, out byte blue) && blue != 0)
+        {
+            return true;
+        }
+        return AcpiDriverEc.TryReadByte(AddressRgbControl, out byte control) && (control & 0x07) != 0;
+    }
+
     internal static void Apply(string effect, bool on, int brightness, int speed, int colorArgb, int[] cycleColors)
     {
         lock (Gate)
@@ -89,7 +137,8 @@ internal static class NucKeyboardLighting
                 3 => 0x70,
                 _ => 0x90
             };
-            byte next = (byte)((current & 0x0D) | highNibble);
+            // 开灯必须同时清 bit1（电源禁用）和 bit0（单色白模式），只写亮度档会出现「关过一次就再也点不亮」。
+            byte next = (byte)((current & 0x0C) | highNibble);
             AcpiDriverEc.TryWriteByte(AddressBacklightWhite, next);
 
             // 顺序按 EC 官方实现：

@@ -97,6 +97,16 @@ internal static class LightingStartupRestore
             Logger.WriteLine("[light-restore] 键盘：没有保存过开关状态 ⇒ 不覆盖固件状态");
             return;
         }
+        if (MechrevoLite.Hardware.EcKeyboardLight.IsWhiteOnly)
+        {
+            // 白光键盘只有 1~2 档亮度，不能拿单区/RGB 那套（效果 + 0~4 档 + 颜色）去重放，
+            // 否则会把颜色通道和亮度字节一起写坏，白光反而点不亮。
+            int whiteLevel = Math.Clamp(saved.Light <= 0 ? 2 : saved.Light, 1, 2);
+            bool whiteOk = MechrevoLite.Hardware.EcKeyboardLight.TryApply(saved.PowerOn, whiteLevel);
+            Logger.WriteError("[light-restore] 白光键盘按保存设置重放" + (whiteOk ? "成功" : "失败（不重试）")
+                + "（档位=" + whiteLevel + " 电源=" + (saved.PowerOn ? "开" : "关") + "）");
+            return;
+        }
         if (KeyboardChannelPolicy.IsHidKeyboard(hw))
         {
             bool hidOk = WpfBackend.ReapplySavedKeyboardRgb(saved.PowerOn, saved.Effect, saved.Light, saved.BrightnessPct);
@@ -109,6 +119,14 @@ internal static class LightingStartupRestore
         // ⭐ 固件重启后「读回来的开关态」不可信（常常恒 false）⇒ 按保存态**无条件重发一次**；
         //   不再像旧版那样 hw.KeyboardPower == saved.PowerOn 就跳过（机主反馈的「点了没反应/效果丢失」就出在这）。
         bool ok;
+        // ⭐ EC 单区键盘：关灯要连同颜色通道一起清，只写亮度字节会留下“灯还亮着”的颜色。
+        //   开机时灯控还没初始化完（Active 可能还是 false），这里先按单区判据把通道路径定下来，
+        //   保证记住的是“关”时启动也真的把灯关掉。
+        bool singleZoneKeyboard = NucKeyboardLighting.IsSingleZone();
+        if (singleZoneKeyboard && !GcuEcKeyboard.Active)
+        {
+            GcuEcKeyboard.MarkActive();
+        }
         if (GcuEcKeyboard.Active)
         {
             ok = GcuEcKeyboard.ApplyFromSettings(saved.Effect, saved.PowerOn, WpfBackend.MapPercentToLevel(saved.RestoreBrightnessPercent));
@@ -170,6 +188,15 @@ internal static class LightingStartupRestore
             + "（效果=" + saved.Effect + " 亮度=" + saved.Light + " 电源=" + (saved.PowerOn ? "开" : "关") + "）");
     }
 
+    /// <summary>本地 HID 通道失败时把原因写进日志（成功只留主日志，保持精简）。</summary>
+    private static void LogLocalDetail(string label, bool ok, string detail)
+    {
+        if (!ok && !string.IsNullOrEmpty(detail))
+        {
+            Logger.WriteLine("[light-restore] " + label + " 本地通道失败原因：" + detail);
+        }
+    }
+
     private static async Task<bool> ApplyChannelAsync(MechrevoHw hw, string topic, BackendChannel channel, LightChannelSettings saved, string label)
     {
         try
@@ -184,20 +211,33 @@ internal static class LightingStartupRestore
                 }
                 return powerOk;
             }
+            if (channel == BackendChannel.Ec && string.Equals(topic, LogoTopic, StringComparison.Ordinal))
+            {
+                bool ecOk = EcLogoLight.TryApply(saved.Effect, saved.PowerOn, saved.Light, saved.Speed, saved.ColorArgb,
+                    out string ecDetail, IteLightingLocal.LogoChannelOverride == 3);
+                LogLocalDetail(label, ecOk, ecDetail);
+                return ecOk;
+            }
             if (channel == BackendChannel.LocalHid)
             {
                 int colorArgb = saved.ColorArgb;
                 if (string.Equals(topic, LightbarTopic, StringComparison.Ordinal))
                 {
-                    return IteLightingLocal.TryApplyLightbar(saved.Effect, saved.PowerOn, saved.Light, saved.Speed, colorArgb, out _);
+                    bool barOk = IteLightingLocal.TryApplyLightbar(saved.Effect, saved.PowerOn, saved.Light, saved.Speed, colorArgb, out string barDetail);
+                    LogLocalDetail(label, barOk, barDetail);
+                    return barOk;
                 }
                 if (string.Equals(topic, LogoTopic, StringComparison.Ordinal))
                 {
-                    return IteLightingLocal.TryApplyLogo(saved.Effect, saved.PowerOn, saved.Light, saved.Speed, colorArgb, out _);
+                    bool logoOk = IteLightingLocal.TryApplyLogo(saved.Effect, saved.PowerOn, saved.Light, saved.Speed, colorArgb, out string logoDetail);
+                    LogLocalDetail(label, logoOk, logoDetail);
+                    return logoOk;
                 }
                 if (string.Equals(topic, HingeTopic, StringComparison.Ordinal))
                 {
-                    return IteLightingLocal.TryApplyHinge(saved.Effect, saved.PowerOn, saved.Light, saved.Speed, colorArgb, out _);
+                    bool hingeOk = IteLightingLocal.TryApplyHinge(saved.Effect, saved.PowerOn, saved.Light, saved.Speed, colorArgb, out string hingeDetail);
+                    LogLocalDetail(label, hingeOk, hingeDetail);
+                    return hingeOk;
                 }
                 Logger.WriteLine("[light-restore] " + label + "：本地通道没有同步灯下发入口 ⇒ 跳过");
                 return false;
