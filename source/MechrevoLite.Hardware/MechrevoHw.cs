@@ -1987,6 +1987,14 @@ private bool IsLighbar4Lightbar => !string.IsNullOrWhiteSpace(LightbarStatusType
 	{
 		try
 		{
+			// EC 直连机器没有 GCU 回报 ⇒ 上面这几个字段会一直是 -1。这时改读本地 EC 槽，
+			// 否则诊断包只能看到"读不到"，看不出 PL4 到底是多少。
+			if (_pl4Raw < 0 && EcPlCustom.InUse && EcPlCustom.TryRead(out int ecPl1, out int ecPl2, out int ecPl4))
+			{
+				return "pl4=" + ecPl4 + "（EC 回读 · PL1=" + ecPl1 + " PL2=" + ecPl2 + "）"
+					+ " · min=" + EcPlCustom.Minimum + " · max=" + EcPlCustom.MaxPl4 + "（EC 声明口径）"
+					+ " · 来源=EC 直连（GCU 无回报，raw 未上报）";
+			}
 			int scale = Pl4ReadScale();
 			return "pl4=" + Pl4 + "（raw=" + _pl4Raw + "）"
 				+ " · min=" + Pl4Minimum + "（raw=" + _pl4RawMinimum + "）"

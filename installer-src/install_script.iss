@@ -4,27 +4,27 @@
 
 [Setup]
 AppName=L-Mechrevo
-AppVerName=L-Mechrevo beta23.8.5
+AppVerName=L-Mechrevo beta23.8.6
 AppId={{8F4E2C71-9B3A-4D6E-A1C2-7E5B9D0F3A64}
-AppVersion=beta23.8.5
+AppVersion=beta23.8.6
 AppPublisher=L-Mechrevo contributors
 AppCopyright=Copyright (C) 2026 L-Mechrevo contributors. GPL-3.0-only.
 DefaultDirName={autopf}\L-Mechrevo
 DefaultGroupName=L-Mechrevo
 #ifdef NOGCU
-OutputBaseFilename=LM-beta23.8.5-setup
+OutputBaseFilename=LM-beta23.8.6-setup
 #else
 #ifdef NOGCU_PAYLOAD
-OutputBaseFilename=LM-beta23.8.5-nopayload-setup
+OutputBaseFilename=LM-beta23.8.6-nopayload-setup
 #else
-OutputBaseFilename=LM-beta23.8.5-full-setup
+OutputBaseFilename=LM-beta23.8.6-full-setup
 #endif
 #endif
 UninstallDisplayIcon={app}\L-Mechrevo.exe
 SetupIconFile=files\favicon.ico
-VersionInfoVersion=23.8.5.0
-VersionInfoProductVersion=23.8.5.0
-UninstallDisplayName=L-Mechrevo beta23.8.5
+VersionInfoVersion=23.8.6.0
+VersionInfoProductVersion=23.8.6.0
+UninstallDisplayName=L-Mechrevo beta23.8.6
 Compression=lzma2
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible

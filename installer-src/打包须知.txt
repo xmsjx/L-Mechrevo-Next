@@ -30,13 +30,6 @@ L-Mechrevo 打包须知（约定）
   `LM-<版本>-update.zip`：内含 `L-Mechrevo.dll`、`MechrevoLite.Core.dll`、`更新说明.txt`。
 - 若误产出多余的包，请把它从 `installer-src\Output\` 挪到 `D:\openLM\backup\`，
   保持 Output 目录只留本次要发布的包。
-- ⚠️ 以下为历史约定，仅作背景（已被上面 2026-11-16 的决定取代）：
-  「NOGPU(应为 NoGCU)我不提就不要打包这个版本」「nogcu 包暂不随主包升版」。
-- ⚠️ **nogcu 包暂不随主包升版：目前只更新 GCU 版本的包**（主 / GCU 包 = 0.291.8-beta22.8）。
-  `install_script_nogcu.iss` **保持不动**，现停在 **0.291.5 / beta22.5**；
-  `install_script_LMEXP_gen30on40b.iss`（0.291.4 / beta22.4）同样不跟改。
-  ——不要再试图"同步"nogcu 的版本号（2026-10-12 用户指示更正）。
-  2026-10-09 已把 `install_script_nogcu.iss` 同步为 **0.291.5 / beta22.5**（本轮**未打**该包）。
 - ⚠️⚠️ **`install_script_30gcu.iss` 已废弃归档，不要再打包它、也不要再同步它的版本号。**
   2026-10-09 按用户指示「30GCU专用那个实验归档废弃」移到
   `D:\openLM\archive\refs\30gcu_iss_20261009\install_script_30gcu.iss`（归档前 127,221 B，
@@ -47,7 +40,6 @@ L-Mechrevo 打包须知（约定）
   ⚠️ 复活它之前必须先把它 `[Files]` 里 payload\40 的 **73 行旧独立树**（g40full 形态，已撤销）与磁盘对齐
   —— 现在磁盘 `payload\40` 只剩 **4** 个覆盖层文件，该 iss 有更多 Source 路径不存在，直接 ISCC 会失败。
   详细复活条件见归档文件顶部横幅。
-  ⚠️ `install_script_LMEXP_gen30on40b.iss` 是另一次实验的产物，**不要跟着改**（版本号与文案保持原样）。
 - 打包命令（仅在被要求时执行）：
     & 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe' 'D:\openLM\installer-src\install_script_nogcu.iss'
 

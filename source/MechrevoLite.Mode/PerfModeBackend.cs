@@ -69,6 +69,24 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			&& !hw.IsNucUmiFamily;
 		// 宝龙达 30 系保持原「只读缓存」口径（行为逐位不变）
 		bool smuReady = (hw.IsBaolongda30Series && SmuAvailability.IsReadyCached) || (smuCustomApu && SmuAvailability.IsReady);
+		// 风扇曲线入口：GCU 回传过风扇表、无界 SMU、五点表、或同方 EC 直连（曲线走本机风扇表，不需要 GCU 在线）。
+		// 原来只判前三条 ⇒ EC 直连机器在 GCU 不可用后入口直接消失（曲线其实写得进去）。
+		// ⚠️ 不能用 hw.IsConnected：它判的是 GCU/MQTT 连着，EC 直控机器恰好是 false。
+		bool fanCurveEcLocal = !hw.UsesBaolongda && MechrevoLite.Hardware.GcuEcMode.IsEcMode
+			&& MechrevoLite.Hardware.AcpiDriverEc.IsAvailable();
+		bool fanCurveDeclared = !MechrevoLite.Hardware.DeclarationRuntime.Flag("fanCurve", "disabled");
+		bool fanCurveSupported = fanCurveDeclared
+			&& (hw.FanCurveSeen || hw.WujieSmuApu || MechrevoLite.Hardware.EcFanFivePoint.InUse || fanCurveEcLocal);
+		string fanGateText = "[fan] 曲线入口判定：声明未禁用=" + fanCurveDeclared + " · GCU 风扇表=" + hw.FanCurveSeen
+			+ " · 无界SMU=" + hw.WujieSmuApu + " · 五点表=" + MechrevoLite.Hardware.EcFanFivePoint.InUse
+			+ " · EC模式=" + MechrevoLite.Hardware.GcuEcMode.IsEcMode
+			+ " · EC可访问=" + MechrevoLite.Hardware.AcpiDriverEc.IsAvailable()
+			+ " · 非宝龙达=" + !hw.UsesBaolongda
+			+ " ⇒ 显示入口=" + fanCurveSupported;
+		if (Logger.TryMarkChanged("fancurve-gate", fanGateText))
+		{
+			Logger.WriteError(fanGateText);
+		}
 		return new PerfModeCapabilities
 		{
 			UsesAmdPowerFields = hw.UsesAmdPowerFields,
@@ -83,8 +101,7 @@ internal sealed class PerfModeBackend : IPerfModeBackend
 			SupportsGpuOverclock = hw.SupportsGpuOverclock,
 			// 无界 APU：强冷走 GCU 同通道 ⇒ 先按支持处理（曲线窗口再用 IsGcuConnected 兜底）
 			// 声明里 disabled=1 的机型不提供风扇曲线入口（没有可写曲线表时界面不该露出按钮）。
-			SupportsFanCurve = !MechrevoLite.Hardware.DeclarationRuntime.Flag("fanCurve", "disabled")
-				&& (hw.FanCurveSeen || hw.WujieSmuApu || MechrevoLite.Hardware.EcFanFivePoint.InUse),
+			SupportsFanCurve = fanCurveSupported,
 			// 强冷是否支持由后端声明决定；具体走哪一路由 SwitchFanBoost 按后端分派。
 			// ⚠️ 必须与界面可见性同一判据：入口露出来（含 EC 直连强冷位）就必须能下发，
 			//    否则表现为「打开没反应」——档位里存了强冷，应用时这一步被整条跳过。

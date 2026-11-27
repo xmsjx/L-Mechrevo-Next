@@ -173,8 +173,8 @@ public static class ModeSystemSnapshot
 		return num;
 	}
 
-	/// <summary>清除基线并关闭自动恢复。</summary>
-	public static void Clear()
+	/// <summary>只清基准记忆与归属，不动"自动恢复"开关（开关由界面单独控制）。</summary>
+	public static void ClearBaseline()
 	{
 		Field[] restoreOrder = RestoreOrder;
 		foreach (Field field in restoreOrder)
@@ -182,8 +182,14 @@ public static class ModeSystemSnapshot
 			AppConfig.Remove(KeyOf(field));
 		}
 		AppConfig.Remove(OwnedKey);
+		Logger.WriteLine("[syssnap] 已清理基准记忆（自动恢复开关未变）");
+	}
+
+	/// <summary>清除基线并关闭自动恢复。</summary>
+	public static void Clear()
+	{
+		ClearBaseline();
 		AppConfig.Set(EnabledKey, 0);
-		Logger.WriteLine("[syssnap] 已清除基线并关闭自动恢复");
 	}
 
 	/// <summary>上一个模式改动过的项（逗号分隔的 Field 名）。</summary>
@@ -203,15 +209,51 @@ public static class ModeSystemSnapshot
 				hashSet.Add(result);
 			}
 		}
+		if (ApuGuardOwnsBoost())
+		{
+			hashSet.Remove(Field.CpuBoost);
+		}
+		if (OverlayOwnedOutside())
+		{
+			hashSet.Remove(Field.PowerOverlay);
+		}
 		return hashSet;
 	}
 
 	/// <summary>下发成功后才登记"当前模式改过哪些系统项"；失败不登记，下次切换就不会去恢复没动过的项。</summary>
-	internal static void CommitOwned(HashSet<Field>? owned)
+	internal static void CommitOwned(string modeId, HashSet<Field>? owned)
 	{
-		if (owned != null)
+		if (owned == null)
 		{
-			SaveOwned(owned);
+			return;
+		}
+		SaveOwned(owned);
+	}
+
+	/// <summary>「高性能电源」开关开着时，Windows 电源模式由它统一决定（GCU 由 GCU 下发、EC 由 LM 按档位下发），
+	/// 快照不登记也不恢复这一项 —— 否则两边都会去写同一个值，谁后到谁赢。</summary>
+	private static bool OverlayOwnedOutside()
+	{
+		try
+		{
+			return AppConfig.Get("bd_power_overlay", 0) != 0;
+		}
+		catch
+		{
+			return false;
+		}
+	}
+
+	/// <summary>APU 防缩缸开着时，处理器性能提升模式由它独占（优先于基准），快照不登记也不恢复这一项。</summary>
+	private static bool ApuGuardOwnsBoost()
+	{
+		try
+		{
+			return AppConfig.Get("apuboost", 0) == 1;
+		}
+		catch
+		{
+			return false;
 		}
 	}
 
@@ -240,6 +282,29 @@ public static class ModeSystemSnapshot
 	}
 
 	/// <summary>这批步骤将要改动哪些系统项（写覆盖层时会把电源计划压成平衡，所以连带计划）。</summary>
+	/// <summary>这一步本身会改哪些系统项（登记用；覆盖层不连带电源计划）。</summary>
+	internal static IEnumerable<Field> FieldsOfStep(PerfApplyStep step)
+	{
+		switch (step.Kind)
+		{
+		case PerfApplyStepKind.ApplyPowerPlan:
+			yield return Field.PowerPlan;
+			break;
+		case PerfApplyStepKind.ApplyPowerOverlay:
+			yield return Field.PowerOverlay;
+			break;
+		case PerfApplyStepKind.ApplyCpuBoost:
+			yield return Field.CpuBoost;
+			break;
+		case PerfApplyStepKind.ApplyProcessorMaxFreq:
+			yield return Field.ProcessorMaxFreq;
+			break;
+		case PerfApplyStepKind.ApplyRefreshRate:
+			yield return Field.RefreshHz;
+			break;
+		}
+	}
+
 	private static HashSet<Field> DeclaredFields(IReadOnlyList<PerfApplyStep> steps)
 	{
 		HashSet<Field> hashSet = new HashSet<Field>();
@@ -264,6 +329,14 @@ public static class ModeSystemSnapshot
 				hashSet.Add(Field.RefreshHz);
 				break;
 			}
+		}
+		if (ApuGuardOwnsBoost())
+		{
+			hashSet.Remove(Field.CpuBoost);
+		}
+		if (OverlayOwnedOutside())
+		{
+			hashSet.Remove(Field.PowerOverlay);
 		}
 		return hashSet;
 	}
@@ -329,11 +402,50 @@ public static class ModeSystemSnapshot
 	/// <para>不是切档（同模式内重应用 / 漂移修正）时原样返回。</para>
 	/// </summary>
 	/// <param name="ownAfter">本次模式将要改动的系统项；下发成功后再 <see cref="CommitOwned" />，失败不登记。</param>
-	internal static IReadOnlyList<PerfApplyStep> PrepareForSwitch(IReadOnlyList<PerfApplyStep> steps, out HashSet<Field>? ownAfter)
+
+	/// <param name="forceRestore">调用方只带恢复步（EC 直连点内置档）时置 true：没有切档步也照常恢复。</param>
+	internal static IReadOnlyList<PerfApplyStep> PrepareForSwitch(string modeId, IReadOnlyList<PerfApplyStep> steps, out HashSet<Field>? ownAfter, bool forceRestore = false)
 	{
 		ownAfter = null;
-		if (!Enabled || !HasSwitch(steps))
+		// 判"同档重应用"必须用**当前已生效档位**（ActiveModeId，切档成功后才更新）：
+		// 内置档切换不经过本方法，用"上次处理过的档位"会一直停在旧值，
+		// 结果回到自定义档被误判成"同档重应用"⇒ 归属永远登记不上、也就永不恢复。
+		string activeModeId = PerfModeStore.ActiveModeId ?? "";
+		bool sameModeAgain = !string.IsNullOrEmpty(activeModeId)
+			&& string.Equals(activeModeId, modeId, StringComparison.Ordinal);
+		bool declaresBoost = false;
+		for (int i = 0; i < steps.Count; i++)
 		{
+			if (steps[i].Kind == PerfApplyStepKind.ApplyCpuBoost)
+			{
+				declaresBoost = true;
+				break;
+			}
+		}
+		bool declaresOverlay = false;
+		for (int j = 0; j < steps.Count; j++)
+		{
+			if (steps[j].Kind == PerfApplyStepKind.ApplyPowerOverlay)
+			{
+				declaresOverlay = true;
+				break;
+			}
+		}
+		if (declaresOverlay && OverlayOwnedOutside())
+		{
+			Logger.WriteErrorIfChanged("syssnap-overlay-gcu", "[syssnap] 高性能电源开关已开 ⇒ Windows 电源模式由它统一决定（GCU/按档位下发），快照不登记也不恢复这一项");
+		}
+		if (declaresBoost && ApuGuardOwnsBoost())
+		{
+			Logger.WriteErrorIfChanged("syssnap-apuboost", "[syssnap] APU 防缩缸开启 ⇒ 处理器性能提升模式由它独占（优先于基准），快照不登记也不恢复这一项");
+		}
+		if (!Enabled || (!forceRestore && !HasSwitch(steps)) || sameModeAgain)
+		{
+			// 没参与恢复时留一行可见记录：否则"改了系统项、切档却没恢复"在默认日志级别下查不到原因。
+			Logger.WriteErrorIfChanged("syssnap-skip:" + modeId + ":" + activeModeId, "[syssnap] 本次未参与切档恢复：开关="
+				+ (Enabled ? "开" : "关") + " · 有切档步=" + (HasSwitch(steps) ? "是" : "否")
+				+ " · 同档重应用=" + (sameModeAgain ? "是" : "否") + "（当前档=" + activeModeId + "，本次=" + modeId + "）"
+				+ " · 已登记归属=" + LoadOwned().Count + " 项");
 			return steps;
 		}
 		HashSet<Field> hashSet = DeclaredFields(steps);
@@ -373,7 +485,7 @@ public static class ModeSystemSnapshot
 				+ (hashSet.Count == 0 ? "无" : string.Join("、", hashSet)) + "）");
 			return steps;
 		}
-		Logger.WriteLine("[syssnap] 离开带系统项的模式 ⇒ 先恢复基线：" + string.Join("、", list2)
+		Logger.WriteErrorIfChanged("syssnap-restore", "[syssnap] 离开带系统项的模式 ⇒ 恢复基线：" + string.Join("、", list2)
 			+ "（本次将改：" + (hashSet.Count == 0 ? "无" : string.Join("、", hashSet)) + "）");
 		List<PerfApplyStep> list3 = new List<PerfApplyStep>(list.Count + steps.Count);
 		list3.AddRange(list);

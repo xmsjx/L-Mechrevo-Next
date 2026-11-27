@@ -344,6 +344,15 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // HID 单键键盘：动态刷帧效果在退出前切回「单色常亮」，
+        // 否则帧流一停键盘就停在半帧/乱色。非 HID 通道内部直接跳过。
+        try
+        {
+            L_Mechrevo.WpfP0.Services.WpfBackend.rgb?.ParkOnStaticBeforeExit();
+        }
+        catch
+        {
+        }
         // ⭐ task-24：退出恢复显示 + 解挂电源事件（等价旧 SettingsForm.DisposeRuntimeResources 的 RestoreImmediate；
         //   幂等：未息屏时内部直接返回，不改变用户可见行为）。
         try

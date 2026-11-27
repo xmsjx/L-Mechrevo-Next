@@ -20,6 +20,7 @@ public partial class SettingsWindow : Window
     private bool _peripheralRefreshScheduled;
     private bool _syncing = true;
     private bool _overlaySyncing;
+    private bool _sysSnapUiRefreshing;
     private bool _isolated;
 
     public SettingsWindow(OriginalStyleWindow owner)
@@ -600,14 +601,24 @@ public partial class SettingsWindow : Window
             SysSnapHzText.Text = DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field.RefreshHz);
             SysSnapFreqText.Text = DescribeSysSnap(MechrevoLite.Mode.ModeSystemSnapshot.Field.ProcessorMaxFreq);
             bool enabled = MechrevoLite.Mode.ModeSystemSnapshot.Enabled;
+            _sysSnapUiRefreshing = true;
+            try
+            {
+                if (SysSnapEnableCheck != null)
+                {
+                    SysSnapEnableCheck.IsChecked = enabled;
+                }
+            }
+            finally
+            {
+                _sysSnapUiRefreshing = false;
+            }
             SysSnapStatus.Text = enabled
                 ? WpfStrings.L("自动恢复已开启：切模式时先恢复这里的值，再下发新模式的配置。",
                     "Auto restore is on: switching modes restores these values before applying the new mode.")
                 : WpfStrings.L("自动恢复已关闭：切模式只改不恢复（等于旧行为）。要重新启用点「以当前系统状态重新记录」。",
                     "Auto restore is off: switching modes only applies settings. Use \"Capture current system state\" to enable it again.");
-            SysSnapClearButton.Content = enabled
-                ? WpfStrings.L("关闭自动恢复", "Turn off auto restore")
-                : WpfStrings.L("已关闭", "Off");
+            SysSnapClearButton.Content = WpfStrings.L("清理基准记忆", "Clear captured baseline");
             SysSnapRecaptureButton.Content = WpfStrings.L("以当前系统状态重新记录", "Capture current system state");
         }
         catch (Exception ex)
@@ -684,7 +695,6 @@ public partial class SettingsWindow : Window
     {
         try
         {
-            MechrevoLite.Mode.ModeSystemSnapshot.Enabled = true;
             int count = MechrevoLite.Mode.ModeSystemSnapshot.RecaptureAll();
             RefreshSysSnap();
             SysSnapStatus.Text = count > 0
@@ -699,17 +709,35 @@ public partial class SettingsWindow : Window
         }
     }
 
+    private void SysSnapEnable_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_sysSnapUiRefreshing)
+        {
+            return;
+        }
+        try
+        {
+            MechrevoLite.Mode.ModeSystemSnapshot.Enabled = SysSnapEnableCheck.IsChecked == true;
+            AppConfig.Flush();
+            RefreshSysSnap();
+        }
+        catch (Exception ex)
+        {
+            SysSnapStatus.Text = "保存失败：" + ex.Message;
+        }
+    }
+
     private void SysSnapClear_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            MechrevoLite.Mode.ModeSystemSnapshot.Clear();
+            MechrevoLite.Mode.ModeSystemSnapshot.ClearBaseline();
             RefreshSysSnap();
-            SysSnapStatus.Text = "已清除基准并关闭自动恢复。";
+            SysSnapStatus.Text = "已清理基准记忆（自动恢复开关未变）。";
         }
         catch (Exception ex)
         {
-            SysSnapStatus.Text = "关闭失败：" + ex.Message;
+            SysSnapStatus.Text = "清理失败：" + ex.Message;
         }
     }
 

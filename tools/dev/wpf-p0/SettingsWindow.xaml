@@ -357,6 +357,8 @@
                     <StackPanel>
                         <TextBlock x:Name="SysSnapTitle" Style="{StaticResource CardTitle}" />
                         <TextBlock x:Name="SysSnapHint" Style="{StaticResource Hint}" TextWrapping="Wrap" />
+                        <CheckBox x:Name="SysSnapEnableCheck" Content="自动恢复基准" Style="{StaticResource SwitchBox}"
+                                  Margin="0,8,0,0" Checked="SysSnapEnable_Changed" Unchecked="SysSnapEnable_Changed" />
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="150" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                             <TextBlock Text="电源计划" VerticalAlignment="Center" />
@@ -385,7 +387,7 @@
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <Button x:Name="SysSnapRecaptureButton" Content="以当前系统状态重新记录" Style="{StaticResource FlatButton}"
                                     Click="SysSnapRecapture_Click" Margin="0,0,12,0" />
-                            <Button x:Name="SysSnapClearButton" Content="关闭自动恢复" Style="{StaticResource FlatButton}"
+                            <Button x:Name="SysSnapClearButton" Content="清理基准记忆" Style="{StaticResource FlatButton}"
                                     Click="SysSnapClear_Click" />
                         </StackPanel>
                         <TextBlock x:Name="SysSnapStatus" Style="{StaticResource Hint}" Margin="0,6,0,0" TextWrapping="Wrap" />

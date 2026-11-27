@@ -1163,6 +1163,37 @@ public class KeyboardRgb : IDisposable
 		}
 	}
 
+	/// <summary>
+	/// 程序退出前的收尾：动态刷帧效果切回「单色常亮」，避免帧流一停就停在半帧/乱色。
+	/// 非 HID 单键通道（没有帧流）直接跳过，不碰 EC / 单区固件灯效。
+	/// </summary>
+	/// <returns>是否真的做了切换。</returns>
+	public bool ParkOnStaticBeforeExit()
+	{
+		try
+		{
+			if (_stream == null)
+			{
+				return false;
+			}
+			int num = _activeMode;
+			if (num < 0 || num == 9)
+			{
+				return false;
+			}
+			StartMode(9);
+			// 等静态帧真的写出去：帧循环第一圈就会发，这里只做一次短等待，不拖慢退出。
+			Thread.Sleep(150);
+			Logger.WriteError("[hid-fx] 退出前切回单色常亮（原效果=" + num + "）");
+			return true;
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteError("[hid-fx] 退出前切回单色常亮失败：" + ex.Message);
+			return false;
+		}
+	}
+
 	public void StopCurrentEffect()
 	{
 		LogBootHid($"stop(stream={(this._stream != null ? "connected" : "null")} · activeMode={_activeMode} · threadAlive={_effectThread?.IsAlive ?? false})");

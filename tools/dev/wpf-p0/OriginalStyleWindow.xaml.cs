@@ -178,6 +178,16 @@ public partial class OriginalStyleWindow : Window
     private readonly HashSet<MechrevoLite.Helpers.RadioSwitchKind> _radioOsdPrimed = new();
     private bool _modeSwitchInFlight;
     private int _modeRequestId;
+    private string _ecLocalModeDetail = "";
+
+    /// <summary>EC 直连点内置档：先按基线恢复上一个档改过的系统项，再写 EC 档位。</summary>
+    private async Task<bool> ApplyEcLocalModeAsync(int mode)
+    {
+        await MechrevoLite.Mode.PerfModeService.RestoreSystemsForEcLocalSwitchAsync(mode);
+        bool applied = L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryApplyMode(mode, out string detail);
+        _ecLocalModeDetail = detail ?? "";
+        return applied;
+    }
     private long _pendingModeTick;
     private int _lastDbVisualMode = int.MinValue;
     private bool _powerSessionEventsHooked;
@@ -4250,11 +4260,11 @@ internal (bool Enabled, (string Label, object? Tag)[] Options, int Selected) Wid
                     && _backendProbe?.Hw != null
                     && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsBaolongda
                     && !L_Mechrevo.WpfP0.Services.WpfBackend.MachineIsNucUmiFamily
-                    && L_Mechrevo.WpfP0.Services.WpfBackend.GcuTryApplyMode(mode, out string ecDetail))
+                    && await ApplyEcLocalModeAsync(mode))
                 {
                     // GCU 内置档由固件表接管：不要套用 NUC/UMI 那套默认功耗表，
                     // 那套会写 1963 低 4 位风扇模式，把 GCU 的模式字节写坏。
-                    Logger.WriteError("[gcu-ec] EC 通道接管模式 " + mode + "：" + ecDetail);
+                    Logger.WriteError("[gcu-ec] EC 通道接管模式 " + mode + "：" + _ecLocalModeDetail);
                     result = L_Mechrevo.WpfP0.Services.WpfBackend.ModeResultOk;
                 }
                 else
@@ -5945,11 +5955,12 @@ internal (bool Enabled, (string Label, object? Tag)[] Options, int Selected) Wid
     {
         bool locked = PerfBatteryLockActive;
         ApplyModeButtonLock(TurboModeButton, locked);
-        ApplyModeButtonLock(CustomModeButton, locked);
+        ApplyModeButtonLock(CustomModeButton, locked,
+            WpfStrings.L("右键直接打开自定义窗口", "Right-click to open the custom window"));
         ApplyModeButtonLock(SilentTurboModeButton, locked);
     }
 
-    private static void ApplyModeButtonLock(ToggleButton? button, bool locked)
+    private static void ApplyModeButtonLock(ToggleButton? button, bool locked, string? idleToolTip = null)
     {
         if (button == null)
         {
@@ -5957,9 +5968,11 @@ internal (bool Enabled, (string Label, object? Tag)[] Options, int Selected) Wid
         }
         button.IsEnabled = !locked;
         button.Opacity = locked ? 0.45 : 1.0;
+        // 解锁时不要清成 null：自定义按钮平时要带"右键直接打开自定义窗口"的提示，
+        // 这里清空会把那条提示一起抹掉（这个方法是随判据反复刷新的）。
         button.ToolTip = locked
             ? WpfStrings.L("已关闭：设置里「允许离电使用狂暴/自定义模式」", "Disabled: allow Turbo/Custom on battery is off")
-            : null;
+            : idleToolTip;
     }
 
     /// <summary>

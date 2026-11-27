@@ -64,6 +64,8 @@ internal sealed class PerfModeService
 	private int _reconcileRetryScheduled;
 
 	private const string SelfKeyPowerOverlay = "app:WindowsPowerMode";
+	/// <summary>Windows 电源模式写入代际号：只有最新一次请求允许落盘，晚到的旧请求丢弃。</summary>
+	private int _overlayGeneration;
 
 	private const string SelfKeyCpuBoost = "app:CpuBoost";
 
@@ -231,6 +233,57 @@ internal sealed class PerfModeService
 	/// ⚠️ _applyInFlight 计数：有下发在飞行中时，reconcile/guard 一律不得并发重应用。
 	/// ⚠️ 下发链本身（PerfModeApplyPlanner → PerfModeRunner → MechrevoService.SetCustomDetail）一字未改。
 	/// </summary>
+	/// <summary>EC 直连点内置档：先按基线把上一个档改过的系统项恢复，再让界面写 EC 档位（不碰档位本身）。</summary>
+	public static async Task RestoreSystemsForEcLocalSwitchAsync(int visualMode)
+	{
+		PerfModeService perfModeService = Instance;
+		if (perfModeService == null)
+		{
+			return;
+		}
+		string? modeId = visualMode switch
+		{
+			0 => PerfModeDefinition.BuiltInId(PerfModeKind.Balanced),
+			1 => PerfModeDefinition.BuiltInId(PerfModeKind.Turbo),
+			2 => PerfModeDefinition.BuiltInId(PerfModeKind.Silent),
+			3 => PerfModeStore.LastCustomId,
+			_ => null
+		};
+		if (string.IsNullOrEmpty(modeId))
+		{
+			return;
+		}
+		await perfModeService.RestoreSystemsLockedAsync(modeId).ConfigureAwait(continueOnCapturedContext: false);
+	}
+
+	private async Task RestoreSystemsLockedAsync(string modeId)
+	{
+		try
+		{
+			IReadOnlyList<PerfApplyStep> steps = ModeSystemSnapshot.PrepareForSwitch(modeId, System.Array.Empty<PerfApplyStep>(), out HashSet<ModeSystemSnapshot.Field>? ownAfter, forceRestore: true);
+			if (ownAfter != null && steps.Count != 0)
+			{
+				PerfApplyOutcome perfApplyOutcome = await PerfModeRunner.RunAsync(modeId, steps, _backend, CancellationToken.None).ConfigureAwait(continueOnCapturedContext: false);
+				HashSet<ModeSystemSnapshot.Field> hashSet = new HashSet<ModeSystemSnapshot.Field>(ownAfter);
+				foreach (PerfApplyStepOutcome item in perfApplyOutcome.Steps)
+				{
+					if (item.Result == PerfApplyResult.Failed)
+					{
+						foreach (ModeSystemSnapshot.Field item2 in ModeSystemSnapshot.FieldsOfStep(item.Step))
+						{
+							hashSet.Remove(item2);
+						}
+					}
+				}
+				ModeSystemSnapshot.CommitOwned(modeId, hashSet);
+			}
+		}
+		catch (Exception ex)
+		{
+			Logger.WriteError("[syssnap] EC 直连恢复系统项失败：" + ex.Message);
+		}
+	}
+
 	private async Task<PerfApplyOutcome> RunStepsAsync(string modeId, IReadOnlyList<PerfApplyStep> steps, CancellationToken ct = default(CancellationToken), bool willActivate = false)
 	{
 		if (_backend is PerfModeBackend perfBackend)
@@ -244,12 +297,41 @@ internal sealed class PerfModeService
 		{
 			// 切档时：**离开**带系统项自定义的模式才清理（恢复用户基线），再下发本次配置；
 			// 上一个模式没改过系统项 ⇒ 什么都不做。同模式内重应用不带 switch 步 ⇒ 原样返回。
-			steps = ModeSystemSnapshot.PrepareForSwitch(steps, out HashSet<ModeSystemSnapshot.Field>? sysOwnAfter);
+			steps = ModeSystemSnapshot.PrepareForSwitch(modeId, steps, out HashSet<ModeSystemSnapshot.Field>? sysOwnAfter);
 			perfApplyOutcome = await PerfModeRunner.RunAsync(modeId, steps, _backend, ct).ConfigureAwait(continueOnCapturedContext: false);
-			if (sysOwnAfter != null && !perfApplyOutcome.AnyFailed)
+			if (sysOwnAfter != null)
 			{
-				// 确实下发成功了才登记，失败不记 ⇒ 下次切换不会去恢复根本没改过的项。
-				ModeSystemSnapshot.CommitOwned(sysOwnAfter);
+				// 登记失败才作废：系统项各写各的，风扇曲线/显卡超频这类无关步骤失败不该连累归属，
+				// 否则改过电源计划也永远登记不上，切走时就不会恢复基准。
+				bool switchFailed = perfApplyOutcome.Steps.Any((PerfApplyStepOutcome s) => PerfApplyOutcome.IsSwitch(s.Step) && s.Result == PerfApplyResult.Failed);
+				if (switchFailed)
+				{
+					Logger.WriteErrorIfChanged("syssnap-commit-skip", "[syssnap] 切档步骤失败 ⇒ 本次不登记系统项归属（下次离开该档不会恢复基准）");
+				}
+				else
+				{
+					HashSet<ModeSystemSnapshot.Field> hashSet = new HashSet<ModeSystemSnapshot.Field>(sysOwnAfter);
+					foreach (PerfApplyStepOutcome step in perfApplyOutcome.Steps)
+					{
+						if (step.Result != PerfApplyResult.Failed)
+						{
+							continue;
+						}
+						foreach (ModeSystemSnapshot.Field item in ModeSystemSnapshot.FieldsOfStep(step.Step))
+						{
+							hashSet.Remove(item);
+						}
+					}
+					string sysSnapFields = (hashSet.Count == 0) ? "无" : string.Join(",", hashSet);
+					string sysSnapDropped = string.Join("、", sysOwnAfter.Except(hashSet).Select((ModeSystemSnapshot.Field f) => f.ToString()));
+					string sysSnapText = "[syssnap] 登记归属：" + sysSnapFields
+						+ (sysSnapDropped.Length == 0 ? "" : " · 因下发失败不登记：" + sysSnapDropped);
+					if (Logger.TryMarkChanged("syssnap-commit", sysSnapText))
+					{
+						Logger.WriteError(sysSnapText);
+					}
+					ModeSystemSnapshot.CommitOwned(modeId, hashSet);
+				}
 			}
 			// 但 PL1/PL2/温度墙会走 WMI 23 真下发 ⇒ 标记 LocalApply，让 ModeSwitched 按"字段全成功"判定
 			if (_hw != null && (_hw.UsesBaolongda || _hw.SmuCustomApu))
@@ -691,12 +773,19 @@ internal sealed class PerfModeService
 			return;
 		}
 		// ⭐ 后台执行：里面有"回读 + 重试（最多 ~1.4 s）"，⛔ 不能卡 UI 线程 ✅
-		_ = Task.Run(() => ApplyWindowsPowerOverlayValue(overlay));
+		// 同时也领一个代际号：晚到的旧请求一律丢弃，避免把新档/恢复后的值写回去。
+		int generation = Interlocked.Increment(ref _overlayGeneration);
+		_ = Task.Run(() => ApplyWindowsPowerOverlayValue(overlay, generation));
 	}
 
 	/// <summary>⭐ 把 Windows 电源模式设成给定 overlay（0=平衡 / 1=最佳性能 / 2=最佳能效），失败只记日志。</summary>
-	private void ApplyWindowsPowerOverlayValue(int overlay)
+	private void ApplyWindowsPowerOverlayValue(int overlay, int generation)
 	{
+		if (generation != Volatile.Read(ref _overlayGeneration))
+		{
+			Logger.WriteLine("[power] Windows 电源模式写入过期（overlay=" + overlay + "）⇒ 丢弃");
+			return;
+		}
 		// （机主口径：「代码顺序 —— 直接跟着 GCU 发命令同时，不要等回读」）
 		string name = (overlay == 1) ? "最佳性能" : ((overlay == 2) ? "最佳能效" : "平衡");
 		try
@@ -743,6 +832,8 @@ internal sealed class PerfModeService
 		{
 			return;
 		}
+		// 同步路径是最新的权威值 ⇒ 领新代际，作废所有还在飞的异步写入。
+		Interlocked.Increment(ref _overlayGeneration);
 		try
 		{
 			string name = (overlay == 1) ? "最佳性能" : ((overlay == 2) ? "最佳能效" : "平衡");
@@ -868,6 +959,13 @@ internal sealed class PerfModeService
 		{
 			Logger.WriteLine("PerfModes: activate(" + modeId + ") ignored, mode does not exist");
 			return null;
+		}
+		// 可见性：每次切档入口都留一行（按 模式×当前档 去重），用来确认按钮点击有没有真的进到下发链。
+		string sysSnapEntry = "[syssnap] 切档入口：" + mode.Id + "（" + reason + "）· 当前档="
+			+ (PerfModeStore.ActiveModeId ?? "") + " · 自动恢复=" + (ModeSystemSnapshot.Enabled ? "开" : "关");
+		if (Logger.TryMarkChanged("syssnap-entry:" + mode.Id + ":" + PerfModeStore.ActiveModeId, sysSnapEntry))
+		{
+			Logger.WriteError(sysSnapEntry);
 		}
 		// Intel 星耀 PTL 的自定义 PL1/PL2 已通过本机 MSR 验证，允许继续走自定义应用。
 		PerfModeSettings expectedSettings = mode.Settings;
@@ -1080,6 +1178,9 @@ internal sealed class PerfModeService
 			{
 				RaiseActiveChanged();
 			}
+			// 收尾按最终档位再写一次 Windows 电源模式（幂等）：切档早期的写入可能被
+			// 恢复步或过期的异步写入盖掉，这里保证最终值只由当前档决定。
+			ApplyWindowsPowerOverlay(mode.Id);
 		}
 		else if (modeMemoryFollow)
 		{

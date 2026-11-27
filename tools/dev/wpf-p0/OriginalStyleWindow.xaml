@@ -495,7 +495,7 @@
                                            FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
                                            FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />
                             </ToggleButton>
-                            <ToggleButton x:Name="CustomModeButton" Tag="#A78BFA" Style="{StaticResource ModeSegment}" Click="ModeButton_Click" MouseRightButtonUp="CustomModeButton_MouseRightButtonUp" Margin="0" >
+                            <ToggleButton x:Name="CustomModeButton" Tag="#A78BFA" Style="{StaticResource ModeSegment}" Click="ModeButton_Click" MouseRightButtonUp="CustomModeButton_MouseRightButtonUp" ToolTip="右键直接打开自定义窗口" ToolTipService.InitialShowDelay="350" Margin="0" >
                                 <TextBlock Text="{x:Static loc:WpfStrings.NavCustom_Content}" Height="18" VerticalAlignment="Center" LineHeight="18" LineStackingStrategy="BlockLineHeight" TextAlignment="Center"
                                            FontFamily="{Binding FontFamily, RelativeSource={RelativeSource AncestorType=ToggleButton}}"
                                            FontWeight="{Binding FontWeight, RelativeSource={RelativeSource AncestorType=ToggleButton}}" />

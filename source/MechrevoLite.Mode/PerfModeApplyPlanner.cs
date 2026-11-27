@@ -271,7 +271,15 @@ public static class PerfModeApplyPlanner
 		{
 			list.Add(new PerfApplyStep(PerfApplyStepKind.ApplyPowerPlan, null, settings.PowerPlanGuid, 0, IsCpuCurve: false, null, PerfApplyVerify.PowerPlan));
 		}
-		if (settings.WindowsPowerMode.HasValue && (!flag4 || IsBalancedPlan(settings.PowerPlanGuid)))
+		// 「高性能电源」开关开着时，非自定义档的 Windows 电源模式由开关按档位决定 ⇒
+		// 本档不再下发（也不生成步骤，所以不会被判失败）。
+		bool overlayHeldBySwitch = !mode.IsCustom && AppConfig.Get("bd_power_overlay", 0) != 0;
+		if (settings.WindowsPowerMode.HasValue && overlayHeldBySwitch)
+		{
+			Logger.WriteLineIfChanged("overlay-held-" + mode.Id,
+				"[power] 高性能电源开关已开 ⇒ " + mode.Id + " 的 Windows 电源模式不下发（由开关按档位决定）");
+		}
+		if (settings.WindowsPowerMode.HasValue && (!flag4 || IsBalancedPlan(settings.PowerPlanGuid)) && !overlayHeldBySwitch)
 		{
 			list.Add(new PerfApplyStep(PerfApplyStepKind.ApplyPowerOverlay, null, null, settings.WindowsPowerMode.Value, IsCpuCurve: false, null, PerfApplyVerify.PowerOverlay));
 		}
