@@ -134,7 +134,10 @@ tools/dgpu-silence/
 
 # 仓库只放 LM 软件本体：源码(source) · 界面工程(tools/dev/wpf-p0) · 自测(tools/dev/layer-guard, route-probe) · 安装脚本(installer-src) · 许可 · CI
 # 以下目录/文件不入库（本地保留即可）
-docs/
+docs/*
+!docs/images/
+!docs/refs/
+!docs/hardware/
 lm_pkg_files/
 UWACPIDriver/
 抓包工具-宝龙达/
@@ -185,3 +188,7 @@ installer-src/files/修改日志.txt.bak*
 # 本地临时/诊断目录（不发布）
 /tmp*/
 /.plan-mode/
+
+# 机型/硬件观测笔记属于本地记录，不入库
+docs/notes/
+docs/screenshots/
